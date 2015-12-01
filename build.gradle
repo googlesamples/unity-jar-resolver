@@ -1,0 +1,166 @@
+/*
+*   Gradle file to build the Unity plugin for Google Play Game Services.
+*/
+
+buildscript {
+    repositories {
+        jcenter()
+        mavenLocal()
+    }
+}
+
+/*
+    Project level variables
+*/
+project.ext {
+    sdk_root = System.getProperty("ANDROID_HOME")
+    if (sdk_root == null || sdk_root.isEmpty()) {
+        sdk_root = System.getenv("ANDROID_HOME")
+    }
+    unity_exe = System.getProperty("UNITY_EXE")
+    if (unity_exe == null || unity_exe.isEmpty()) {
+        unity_exe = System.getenv("UNITY_EXE")
+    }
+    if (unity_exe == null || unity_exe.isEmpty()) {
+        unity_exe ='/Applications/Unity/Unity.app/Contents/MacOS/Unity'
+    }
+
+    mdtool_exe = System.getProperty("MDTOOL_EXE")
+    if (mdtool_exe == null || mdtool_exe.isEmpty()) {
+        mdtool_exe = System.getenv("MDTOOL_EXE")
+    }
+    if (mdtool_exe == null || mdtool_exe.isEmpty()) {
+        mdtool_exe ='/Applications/Xamarin Studio.app/Contents/MacOS/mdtool'
+    }
+
+    pluginSrc = file('plugin').absolutePath
+    pluginProj = file('build/PluginSrc').absolutePath
+    buildPath = file('build').absolutePath
+    exportPath = file('build/plugin.unitypackage').absolutePath
+    currentPluginPath = file('.').absolutePath
+    currentPluginName = 'play-services-resolver-0.1.unitypackage'
+}
+
+if (!tasks.findByName('prebuild')) {
+    task prebuild() {
+        println('Local prebuild')
+    }
+    prebuild.dependsOn {
+        project.tasks.findAll { task -> task.ext.has('remoteTaskPhase') && task.ext.remoteTaskPhase == 'prebuild' }
+    }
+}
+if (!tasks.findByName('build')) {
+    task build() {
+        println('Local build')
+    }
+    build.dependsOn {
+        project.tasks.findAll { task -> task.ext.has('remoteTaskPhase') && task.ext.remoteTaskPhase == 'build' }
+    }
+}
+if (!tasks.findByName('postbuild')) {
+    task postbuild() {
+        println('Local postbuild')
+    }
+    postbuild.dependsOn {
+        project.tasks.findAll { task -> task.ext.has('remoteTaskPhase') && task.ext.remoteTaskPhase == 'postbuild' }
+    }
+}
+
+project.defaultTasks = ['prebuild', 'build', 'postbuild']
+
+
+/**
+    Final task of building all the unity packages.
+**/
+task unity_package(dependsOn:'export_package') {
+
+    description = "Top level task for building the unity packages"
+
+    doLast {
+        println "Packaging Complete!"
+    }
+
+    // Mark this a build phase task for remoteTask support.
+    ext.remoteTaskPhase = 'build'
+
+    // Depends on packaging all the samples
+    dependsOn {
+        tasks.findAll { task -> task.name.startsWith('PackageSample') }
+    }
+}
+
+task export_package () {
+    description = "Creates and exports the Plugin unity package"
+
+    doLast {
+        def argv = [
+                "-g.building",
+                "-buildTarget",
+                "android",
+                "-batchmode",
+                "-projectPath",
+                "${pluginProj}",
+                "-logFile",
+                "build/unity.log",
+                "-exportPackage",
+                "Assets/PlayServicesResolver",
+                "${exportPath}",
+                "-quit"
+                ]
+        exec {
+            executable "${unity_exe}"
+                args argv
+        }
+    }
+}
+export_package.ext.remoteTaskPhase = 'build'
+
+/*
+    Copy the plugin to the current-build directory
+*/
+task copy_plugin() {
+    description = 'Copy plugin to the current-build directory'
+    doFirst {
+            copy {
+                from file(exportPath)
+                into file(currentPluginPath)
+                rename ('plugin.unitypackage', currentPluginName)
+            }
+        }
+
+    doLast {
+        println "Copied  ${exportPath}  to   ${currentPluginPath}"
+    }
+
+        ext.remoteTaskPhase = 'postbuild'
+
+}
+
+
+task copy_plugin_source << {
+    copy {
+        from {"${pluginSrc}"}
+        into {"${pluginProj}"}
+    }
+}
+copy_plugin_source.description = "Copies plugin source into build directory"
+copy_plugin_source.ext.remoteTaskPhase = 'prebuild'
+
+task compile_sharpen(type: org.gradle.api.tasks.Exec) {
+    doFirst {
+        println "Running $mdtool_exe"
+    }
+    workingDir  'source'
+    commandLine "${mdtool_exe}", '--verbose', 'build'
+    ext.remoteTaskPhase = 'prebuild'
+}
+
+task copy_csharp_dll() << {
+    copy {
+        from "source/JarResolverLib/bin/Debug/JarResolverLib.dll"
+        into "${buildDir}/PluginSrc/Assets/PlayServicesResolver/Editor"
+    }
+}
+copy_csharp_dll.dependsOn compile_sharpen
+copy_csharp_dll.ext.remoteTaskPhase = 'prebuild'
+

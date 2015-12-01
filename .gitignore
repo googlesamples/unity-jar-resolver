@@ -1,0 +1,17 @@
+build/
+
+.gradle/
+
+plugin/Assembly-CSharp-Editor.csproj
+plugin/Assets/PlayServicesResolver/Editor/JarResolverLib.dll
+plugin/Assets/Plugins/
+plugin/Assets/Plugins.meta
+plugin/Assets/StyleCop.Cache
+plugin/Assets/StyleCop.Cache.meta
+plugin/Library/
+plugin/ProjectSettings/
+plugin/Temp/
+plugin/obj/
+plugin/plugin.sln
+
+
