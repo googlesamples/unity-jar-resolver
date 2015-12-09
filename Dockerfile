@@ -1,7 +1,7 @@
 FROM java:jdk
 ENV DEBIAN_FRONTEND noninteractive
 # Dependencies
-RUN dpkg --add-architecture i386 && apt-get update && apt-get install -yq libstdc++6:i386 zlib1g:i386 libncurses5:i386 lib32z1 ant maven monodevelop nunit --no-install-recommends
+RUN dpkg --add-architecture i386 && apt-get update && apt-get install -yq libstdc++6:i386 zlib1g:i386 libncurses5:i386 lib32z1 ant maven monodevelop mono-gmcs nunit --no-install-recommends
 ENV GRADLE_URL http://services.gradle.org/distributions/gradle-2.2.1-all.zip
 RUN curl -L ${GRADLE_URL} -o /tmp/gradle-2.2.1-all.zip && unzip /tmp/gradle-2.2.1-all.zip -d /usr/local && rm /tmp/gradle-2.2.1-all.zip
 ENV GRADLE_HOME /usr/local/gradle-2.2.1
