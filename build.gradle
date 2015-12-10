@@ -25,12 +25,12 @@ project.ext {
         unity_exe ='/Applications/Unity/Unity.app/Contents/MacOS/Unity'
     }
 
-    mdtool_exe = System.getProperty("MDTOOL_EXE")
-    if (mdtool_exe == null || mdtool_exe.isEmpty()) {
-        mdtool_exe = System.getenv("MDTOOL_EXE")
+    xbuild_exe = System.getProperty("XBUILD_EXE")
+    if (xbuild_exe == null || xbuild_exe.isEmpty()) {
+        xbuild_exe = System.getenv("XBUILD_EXE")
     }
-    if (mdtool_exe == null || mdtool_exe.isEmpty()) {
-        mdtool_exe ='/Applications/Xamarin Studio.app/Contents/MacOS/mdtool'
+    if (xbuild_exe == null || xbuild_exe.isEmpty()) {
+        xbuild_exe = 'xbuild'
     }
 
     pluginSrc = file('plugin').absolutePath
@@ -148,10 +148,10 @@ copy_plugin_source.ext.remoteTaskPhase = 'prebuild'
 
 task compile_sharpen(type: org.gradle.api.tasks.Exec) {
     doFirst {
-        println "Running $mdtool_exe"
+        println "Running $xbuild_exe"
     }
     workingDir  'source'
-    commandLine "${mdtool_exe}", '--verbose', 'build'
+    commandLine "${xbuild_exe}"
     ext.remoteTaskPhase = 'prebuild'
 }
 
