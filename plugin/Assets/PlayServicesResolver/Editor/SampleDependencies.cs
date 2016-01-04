@@ -36,6 +36,7 @@ public static class SampleDependencies
     /// </summary>
     static SampleDependencies()
     {
+/*
         PlayServicesSupport svcSupport = PlayServicesSupport.CreateInstance(
                                              PluginName,
                                              EditorPrefs.GetString("AndroidSdkRoot"),
@@ -44,5 +45,7 @@ public static class SampleDependencies
         // add your dependencies here
 
         // svcSupport.DependOn("com.google.android.gms", "play-services-base", "8.1+");
+
+*/
     }
 }

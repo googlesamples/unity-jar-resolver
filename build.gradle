@@ -154,6 +154,15 @@ task compile_sharpen(type: org.gradle.api.tasks.Exec) {
     commandLine "${xbuild_exe}"
     ext.remoteTaskPhase = 'prebuild'
 }
+ 
+task test_resolverlib(type: org.gradle.api.tasks.Exec) {
+  workingDir 'source'
+  commandLine "nunit-console", "JarResolverTests/bin/Debug/JarResolverTests.dll"
+  ext.remoteTaskPhase = 'prebuild'
+}
+test_resolverlib.dependsOn compile_sharpen
+
+
 
 task copy_csharp_dll() << {
     copy {

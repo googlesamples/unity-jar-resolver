@@ -49,11 +49,11 @@ namespace Google.JarResolver
         /// <summary>
         /// The client dependencies map.  This is a proper subset of dependencyMap.
         /// </summary>
-        private Dictionary<string, Dependency> clientDependenciesMap = 
+        private Dictionary<string, Dependency> clientDependenciesMap =
             new Dictionary<string, Dependency>();
 
         /// <summary>
-        /// Delegate used to prompt or notify the developer that an existing 
+        /// Delegate used to prompt or notify the developer that an existing
         /// dependency file is being overwritten.
         /// </summary>
         /// <param name="oldDep">The dependency being replaced</param>
@@ -98,13 +98,13 @@ namespace Google.JarResolver
         /// used to add dependencies for the calling client and invoke the resolution.
         /// </summary>
         /// <returns>The instance.</returns>
-        /// <param name="clientName">Client name.  Must be a valid filename.  
+        /// <param name="clientName">Client name.  Must be a valid filename.
         /// This is used to uniquely identify
         /// the calling client so that dependencies can be associated with a specific
         /// client to help in resetting dependencies.</param>
         /// <param name="sdkPath">Sdk path for Android SDK.</param>
         /// <param name="settingsDirectory">The relative path to the directory
-        /// to save the settings.  For Unity projects this is "ProjectSettings"</param> 
+        /// to save the settings.  For Unity projects this is "ProjectSettings"</param>
         public static PlayServicesSupport CreateInstance(
             string clientName,
             string sdkPath,
@@ -136,12 +136,12 @@ namespace Google.JarResolver
         /// The version string can be contain a trailing + to indicate " or greater".
         /// Trailing 0s are implied.  For example:
         /// </para>
-        /// <para>  1.0 means only version 1.0, but 
-        /// also matches 1.0.0. 
+        /// <para>  1.0 means only version 1.0, but
+        /// also matches 1.0.0.
         /// </para>
         /// <para>1.2.3+ means version 1.2.3 or 1.2.4, etc. but not 1.3.
         /// </para>
-        /// <para> 
+        /// <para>
         /// 0+ means any version.
         /// </para>
         /// <para>
@@ -200,9 +200,9 @@ namespace Google.JarResolver
 
             do
             {
-                Dictionary<string, Dependency> nextUnresolved = 
+                Dictionary<string, Dependency> nextUnresolved =
                     new Dictionary<string, Dependency>();
-                
+
                 foreach (Dependency dep in unresolved)
                 {
                     bool remove = true;
@@ -332,8 +332,10 @@ namespace Google.JarResolver
 
             foreach (Dependency dep in dependencies.Values)
             {
-                string[] dups = 
-                    Directory.GetFiles(destDirectory, dep.Artifact + "*");
+                // match artifact-*.  The - is important to distinguish art-1.0.0
+                // from artifact-1.0.0 (or base and basement).
+                string[] dups =
+                    Directory.GetFiles(destDirectory, dep.Artifact + "-*");
                 bool doCopy = true;
                 bool doCleanup = false;
                 foreach (string s in dups)
@@ -344,7 +346,7 @@ namespace Google.JarResolver
                         continue;
                     }
 
-                    string existing = 
+                    string existing =
                         Path.GetFileNameWithoutExtension(s);
 
                     // the version is after the last -
@@ -396,13 +398,16 @@ namespace Google.JarResolver
                     if (aarFile != null)
                     {
                         string destName = Path.Combine(destDirectory, baseName);
-                            if (File.Exists(destName))
-                            {
-                                File.Delete(destName);
-                            }
-
-                            File.Copy(aarFile, destName);
-
+                        if (File.Exists(destName))
+                        {
+                            File.Delete(destName);
+                        }
+                        File.Copy(aarFile, destName);
+                    }
+                    else
+                    {
+                        throw new ResolutionException("Cannot find artifact for " +
+                            dep);
                     }
                 }
             }
@@ -455,7 +460,7 @@ namespace Google.JarResolver
                     "extras/android/m2repository",
                     "extras/google/m2repository"
                 };
-            
+
             foreach (string s in repos)
             {
                 string fname = SDK + "/" + s + "/" + path + "/maven-metadata.xml";
@@ -596,7 +601,7 @@ namespace Google.JarResolver
         {
             Dictionary<string, Dependency> dependencyMap =
                 new Dictionary<string, Dependency>();
-            
+
             string[] clientFiles;
 
             if (allClients)
@@ -691,7 +696,7 @@ namespace Google.JarResolver
                 writer.WriteStartElement("groupId");
                 writer.WriteString(dep.Group);
                 writer.WriteEndElement();
-            
+
                 writer.WriteStartElement("artifactId");
                 writer.WriteString(dep.Artifact);
                 writer.WriteEndElement();
