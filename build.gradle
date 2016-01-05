@@ -129,6 +129,14 @@ task copy_plugin() {
         }
 
     doLast {
+        copy {
+            from file("${buildDir}/PluginSrc")
+            into file(currentPluginPath +"/exploded")
+            include "Assets/PlayServicesResolver/**/*"
+        }
+    }
+
+    doLast {
         println "Copied  ${exportPath}  to   ${currentPluginPath}"
     }
 
