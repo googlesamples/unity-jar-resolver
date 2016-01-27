@@ -8,6 +8,7 @@ Google play-services or Android support libraries on Android.  The goal is to
 minimize the risk of having multiple or conflicting versions of client
 libraries included in the Unity project.
 
+
 With this library, a plugin declares the dependencies needed and these are
 resolved by using the play-services and support repositories that are part of
 the Android SDK.  These repositories are used to store .aar files in a Maven
@@ -15,6 +16,34 @@ the Android SDK.  These repositories are used to store .aar files in a Maven
 
 This library implements a subset of the resolution logic used by these build
 tools so the same functionality is available in Unity.
+
+# Background
+Many Unity plugins have dependencies on Google Play Services.
+Dependencies on Google Play Services can cause version conflicts and
+duplicate resource definitions.  In some cases, including the entire
+Google Play Services client library makes it difficult to keep the number
+of methods in your app (including framework APIs, library methods,
+and your own code) under the 65,536 limit.
+
+Android Studio addressed this starting with version 6.5 of Play Services.
+Starting then, you can include the individual components of Play Services in
+your project instead of the entire library.  This makes the project overhead
+smaller.  The result is more resources for your application,
+and maybe even a smaller application.
+
+The unity-jar-resolver project brings this capability to Unity projects.
+Each plugin or application declare the dependency needed e.g. play-services-games,
+and the version 8.4+. Then the resolver library copies over the best
+version of the play services libraries needed by all the plugins in the project.
+
+To use this plugin, developers need to install the "Support Repository"
+and the "Google Repository" in the Android SDK Manager.
+
+Developers can clone this project from GitHub and include it in their project.
+Plugin creators are encouraged to adopt this library as well, easing integration for their customers.
+
+The list of the Play Services components on https://developers.google.com/android/guides/setup.
+
 
 # Requirements
 
