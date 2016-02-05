@@ -94,6 +94,18 @@ the portion of the number preceding the period.  For example 8.1.+ would match
 equal to 8.0. The meta version  'LATEST' is also supported meaning the greatest
 version available, and "0+" indicates any version.
 
+# Android manifest variable processing
+
+Some aar files (notably play-services-measurement) contain variables that
+are processed by the Android Gradle plugin.  Unfortunately, Unity does not perform
+the same processing, so this plugin handles known cases of this variable substition
+by exploding the aar and replacing ${applicationId} with the bundleID.
+
+# Disabling automatic resolution
+
+Automatic resolution can be disabled in the Settings dialog,
+Assets > Google Play Services > Settings.
+
 # How it works
 
 When the dependency is added, the maven-metadata.xml file is read for this
