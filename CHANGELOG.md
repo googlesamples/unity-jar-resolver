@@ -1,3 +1,7 @@
+# Version 1.1.1 - 25 Feb 2016
+## Bug Fixes 
+    * #1 Spaces in project path not handled when exploding Aar file.
+    * #2 Script compilation error: TypeLoadException.
 # Version 1.1.0 - 5 Feb 2016
 ## New Features
   * Adds friendly alert when JAVA_HOME is not set on Windows platforms.
