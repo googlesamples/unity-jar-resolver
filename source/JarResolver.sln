@@ -188,6 +188,8 @@ Global
 		$27.NamingStyle = PascalCase
 		$27.IncludeInstanceMembers = True
 		$27.IncludeStaticEntities = True
-		version = 1.0
+		$0.VersionControlPolicy = $29
+		$29.inheritsSet = Mono
+		version = 2.0
 	EndGlobalSection
 EndGlobal

@@ -38,7 +38,7 @@ project.ext {
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
     currentPluginPath = file('.').absolutePath
-    currentPluginName = 'play-services-resolver-1.1.1.unitypackage'
+    currentPluginName = 'play-services-resolver-1.2.0.unitypackage'
 }
 
 if (!tasks.findByName('prebuild')) {

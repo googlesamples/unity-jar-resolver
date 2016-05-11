@@ -17,6 +17,7 @@
 namespace Google.JarResolver
 {
     using System;
+    using System.Diagnostics;
     using System.Collections.Generic;
     using System.IO;
     using System.Xml;
@@ -45,6 +46,11 @@ namespace Google.JarResolver
         /// The settings directory.  Used to store the dependencies.
         /// </summary>
         private string settingsDirectory;
+
+        /// <summary>
+        /// The repository paths.
+        /// </summary>
+        private List<string> repositoryPaths = new List<string>();
 
         /// <summary>
         /// The client dependencies map.  This is a proper subset of dependencyMap.
@@ -110,6 +116,28 @@ namespace Google.JarResolver
             string sdkPath,
             string settingsDirectory)
         {
+            return CreateInstance(clientName, sdkPath, null, settingsDirectory);
+        }
+
+        /// <summary>
+        /// Creates an instance of PlayServicesSupport.  This instance is
+        /// used to add dependencies for the calling client and invoke the resolution.
+        /// </summary>
+        /// <returns>The instance.</returns>
+        /// <param name="clientName">Client name.  Must be a valid filename.
+        /// This is used to uniquely identify
+        /// the calling client so that dependencies can be associated with a specific
+        /// client to help in resetting dependencies.</param>
+        /// <param name="sdkPath">Sdk path for Android SDK.</param>
+        /// <param name="additionalRepositories">Array of additional repository paths. can be null</param>
+        /// <param name="settingsDirectory">The relative path to the directory
+        /// to save the settings.  For Unity projects this is "ProjectSettings"</param>
+        internal static PlayServicesSupport CreateInstance(
+            string clientName,
+            string sdkPath,
+            string[] additionalRepositories,
+            string settingsDirectory)
+        {
             PlayServicesSupport instance = new PlayServicesSupport();
             instance.sdk = sdkPath;
             string badchars = new string(Path.GetInvalidFileNameChars());
@@ -124,12 +152,25 @@ namespace Google.JarResolver
 
             instance.clientName = clientName;
             instance.settingsDirectory = settingsDirectory;
+
+            // Add the standard repo paths from the Android SDK
+            string sdkExtrasDir = Path.Combine("$SDK", "extras");
+            instance.repositoryPaths.Add(Path.Combine(sdkExtrasDir,
+                Path.Combine("android","m2repository")));
+            instance.repositoryPaths.Add(Path.Combine(sdkExtrasDir,
+                Path.Combine("google","m2repository")));
+            if (additionalRepositories != null)
+            {
+                instance.repositoryPaths.AddRange(additionalRepositories);
+            }
             instance.clientDependenciesMap = instance.LoadDependencies(false);
             return instance;
         }
 
         /// <summary>
-        /// Adds a dependency to the project.  This method should be called for
+        /// Adds a dependency to the project.
+        /// </summary>
+        /// <remarks>This method should be called for
         /// each library that is required.  Transitive dependencies are processed
         /// so only directly referenced libraries need to be added.
         /// <para>
@@ -147,7 +188,7 @@ namespace Google.JarResolver
         /// <para>
         /// LATEST means the only the latest version.
         /// </para>
-        /// </summary>
+        /// </remarks>
         /// <param name="group">Group - the Group Id of the artiface</param>
         /// <param name="artifact">Artifact - Artifact Id</param>
         /// <param name="version">Version - the version constraint</param>
@@ -387,7 +428,8 @@ namespace Google.JarResolver
                     string baseName = null;
                     foreach (string ext in packaging)
                     {
-                        string fname = SDK + "/" + dep.BestVersionPath + "/" + dep.Artifact + "-" + dep.BestVersion + ext;
+                        string fname = Path.Combine(dep.BestVersionPath,
+                            dep.Artifact + "-" + dep.BestVersion + ext);
                         if (File.Exists(fname))
                         {
                             baseName = dep.Artifact + "-" + dep.BestVersion + ext;
@@ -437,47 +479,63 @@ namespace Google.JarResolver
             }
         }
 
+        internal Dependency FindCandidate(Dependency dep)
+        {
+            foreach(string repo in repositoryPaths)
+            {
+                string repoPath;
+                if (repo.StartsWith("$SDK")) {
+                    if (SDK == null)
+                    {
+                        throw new ResolutionException(
+                            "Android SDK path not set." +
+                            "  Set the SDK property or the ANDROID_HOME environment variable");
+                    }
+                    repoPath = repo.Replace("$SDK",SDK);
+                }
+                else {
+                    repoPath = repo;
+                }
+                if (Directory.Exists(repoPath))
+                {
+                    Dependency d = FindCandidate(repoPath, dep);
+                    if (d != null)
+                    {
+                        return d;
+                    }
+                }
+                else
+                {
+                    Debug.Print("Repo not found: " + Path.GetFullPath(repoPath));
+                }
+            }
+            return null;
+        }
+
         /// <summary>
         /// Finds an acceptable candidate for the given dependency.
         /// </summary>
         /// <returns>The dependency modified so BestVersion returns the best version.</returns>
+        /// <param name="repoPath">The path to the artifact repository.</param>
         /// <param name="dep">The dependency to find a specific version for.</param>
-        internal Dependency FindCandidate(Dependency dep)
+        internal Dependency FindCandidate(string repoPath, Dependency dep)
         {
-            // look in the repositories.
-            string path = dep.Group + "/" + dep.Artifact;
-            if (SDK == null)
+            string basePath = Path.Combine(dep.Group, dep.Artifact);
+            basePath = basePath.Replace(".", Path.DirectorySeparatorChar.ToString());
+
+            string metadataFile = Path.Combine(Path.Combine(repoPath, basePath), "maven-metadata.xml");
+            if (File.Exists(metadataFile))
             {
-                throw new ResolutionException(
-                    "Android SDK path not set." +
-                    "  Set the SDK property or the ANDROID_HOME environment variable");
+                ProcessMetadata(dep, metadataFile);
+                dep.RepoPath = repoPath;
             }
-
-            path = path.Replace(".", Path.DirectorySeparatorChar.ToString());
-
-            string[] repos =
-                {
-                    "extras/android/m2repository",
-                    "extras/google/m2repository"
-                };
-
-            foreach (string s in repos)
+            else
             {
-                string fname = SDK + "/" + s + "/" + path + "/maven-metadata.xml";
-                if (File.Exists(fname))
-                {
-                    ProcessMetadata(dep, fname);
-                    dep.RepoPath = s;
-                    break;
-                }
+                return null;
             }
 
             while (dep.HasPossibleVersions)
             {
-                // look for an existing artifact
-                path = dep.Group + "/" + dep.Artifact;
-                path = path.Replace(".", Path.DirectorySeparatorChar.ToString());
-                path += "/" + dep.BestVersion;
 
                 // TODO(wilkinsonclay): get the packaging from the pom.
                 string[] packaging = { ".aar", ".jar" };
@@ -486,9 +544,7 @@ namespace Google.JarResolver
                 foreach (string ext in packaging)
                 {
                     string basename = dep.Artifact + "-" + dep.BestVersion + ext;
-                    string fname = Path.Combine(
-                                       SDK,
-                                       Path.Combine(dep.BestVersionPath, basename));
+                    string fname = Path.Combine(dep.BestVersionPath, basename);
 
                     if (File.Exists(fname))
                     {
@@ -512,17 +568,9 @@ namespace Google.JarResolver
         internal IEnumerable<Dependency> GetDependencies(Dependency dep)
         {
             List<Dependency> dependencyList = new List<Dependency>();
-            if (SDK == null)
-            {
-                throw new ResolutionException(
-                    "Android SDK path not set." +
-                    "  Set the SDK property or the ANDROID_HOME environment variable");
-            }
 
             string basename = dep.Artifact + "-" + dep.BestVersion + ".pom";
-            string pomFile = Path.Combine(
-                                 SDK,
-                                 Path.Combine(dep.BestVersionPath, basename));
+            string pomFile = Path.Combine(dep.BestVersionPath, basename);
 
             XmlTextReader reader = new XmlTextReader(new StreamReader(pomFile));
             bool inDependencies = false;

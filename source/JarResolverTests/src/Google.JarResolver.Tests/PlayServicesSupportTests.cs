@@ -55,6 +55,37 @@ namespace Google.Editor.Tests
         }
 
         /// <summary>
+        /// Tests adding another repo path.  This is simulated by giving
+        /// the incorrect SDK path, and adding the correct repo path as
+        /// an additional one.
+        /// </summary>
+        [Test]
+        public void TestCustomRepoPath()
+        {
+            string[] repos = {"../../testData/extras/google/m2repository"};
+            PlayServicesSupport support = PlayServicesSupport.CreateInstance(
+                "testInstance",
+                "..",
+               repos,
+                Path.GetTempPath());
+
+            Assert.True(Directory.Exists(support.SDK));
+
+            // happy path
+            support.ResetDependencies();
+            support.DependOn("test", "artifact", "LATEST");
+
+            Dictionary<string, Dependency> deps = support.ResolveDependencies(false);
+            Assert.NotNull(deps);
+
+            // should be only 1 and version 8.1
+            Assert.True(deps.Count == 1);
+            IEnumerator<Dependency> iter = deps.Values.GetEnumerator();
+            iter.MoveNext();
+            Assert.True(iter.Current.BestVersion == "8.1.0");
+        }
+
+        /// <summary>
         /// Tests resolving transitive dependencies.
         /// </summary>
         [Test]
