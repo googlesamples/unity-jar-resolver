@@ -64,7 +64,8 @@ namespace Google.JarResolver
         private List<string> possibleVersions;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="Google.JarResolver.Dependency"/> class.
+        /// Initializes a new instance of the
+        ///  <see cref="Google.JarResolver.Dependency"/> class.
         /// </summary>
         /// <param name="group">Group ID</param>
         /// <param name="artifact">Artifact ID</param>
@@ -117,7 +118,8 @@ namespace Google.JarResolver
         /// Gets the best version based on the version contraint, other
         /// dependencies (if resolve has been run), and the availability of the
         /// artifacts in the repository.  If this value is null or empty, either
-        /// it has not been initialized by calling PlayServicesSupport.AddDependency()
+        /// it has not been initialized by calling 
+        /// PlayServicesSupport.AddDependency()
         /// or there are no versions that meet all the constraints.
         /// </summary>
         /// <value>The best version.</value>
@@ -204,7 +206,7 @@ namespace Google.JarResolver
         /// <summary>
         /// Gets a value indicating whether this instance has possible versions.
         /// </summary>
-        /// <value><c>true</c> if this instance has possible versions; otherwise, <c>false</c>.</value>
+        /// <value><c>true</c> if this instance has possible versions.</value>
         public bool HasPossibleVersions
         {
             get
@@ -216,7 +218,8 @@ namespace Google.JarResolver
         /// <summary>
         /// Determines whether this instance is newer the specified candidate.
         /// </summary>
-        /// <returns><c>true</c> if this instance is newer the specified candidate; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c>
+        /// if this instance is newer the specified candidate.</returns>
         /// <param name="candidate">Candidate to test</param>
         public bool IsNewer(Dependency candidate)
         {
@@ -229,9 +232,11 @@ namespace Google.JarResolver
         }
 
         /// <summary>
-        /// Determines whether this instance is acceptable based on the version constraint.
+        /// Determines whether this instance is acceptable based
+        ///  on the version constraint.
         /// </summary>
-        /// <returns><c>true</c> if this instance is acceptable version the specified ver; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if this instance is acceptable
+        ///  version the specified ver.</returns>
         /// <param name="ver">Version to check.</param>
         public bool IsAcceptableVersion(string ver)
         {
@@ -269,7 +274,7 @@ namespace Google.JarResolver
         /// This is done by removing possible versions that are not acceptable
         /// to the candidate.
         /// </summary>
-        /// <returns><c>true</c>, if there are still possible versions, <c>false</c> otherwise.</returns>
+        /// <returns><c>true</c>, if there are still possible versions.</returns>
         /// <param name="candidate">Candidate to test versions with.</param>
         public bool RefineVersionRange(Dependency candidate)
         {
@@ -325,9 +330,11 @@ namespace Google.JarResolver
         }
 
         /// <summary>
-        /// Returns a <see cref="System.String"/> that represents the current <see cref="Google.JarResolver.Dependency"/>.
+        /// Returns a <see cref="System.String"/> that represents
+        /// the current <see cref="Google.JarResolver.Dependency"/>.
         /// </summary>
-        /// <returns>A <see cref="System.String"/> that represents the current <see cref="Google.JarResolver.Dependency"/>.</returns>
+        /// <returns>A <see cref="System.String"/> that represents the
+        /// current <see cref="Google.JarResolver.Dependency"/>.</returns>
         public override string ToString()
         {
             return Key + "(" + BestVersion + ")";
@@ -336,14 +343,31 @@ namespace Google.JarResolver
         /// <summary>
         /// Determines if version1 is greater than version2
         /// </summary>
-        /// <returns><c>true</c> if is greater the specified version1 version2; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if version1  is greater than version2.</returns>
         /// <param name="version1">Version1 to test.</param>
         /// <param name="version2">Version2 to test.</param>
         internal static bool IsGreater(string version1, string version2)
         {
-            // only works for concrete versions.
-            string[] parts1 = version1.Split('.');
-            string[] parts2 = version2.Split('.');
+            // only works for concrete versions so remove "+"
+            string[] parts1;
+            string[] parts2;
+            if (version1.EndsWith("+"))
+            {
+                parts1 = version1.Substring(0, version1.Length - 1).Split('.');
+            }
+            else
+            {
+                parts1 = version1.Split('.');
+            }
+
+            if (version2.EndsWith("+"))
+            {
+                parts2 = version2.Substring(0, version2.Length - 1).Split('.');
+            }
+            else
+            {
+                parts2 = version2.Split('.');
+            }
 
             int i1 = 0;
             int i2 = 0;
@@ -378,9 +402,36 @@ namespace Google.JarResolver
                     val2 = -3;
                 }
 
-                if (val1 != val2)
+                if (val1 != val2 || val1 < 0)
                 {
-                    return val1 > val2;
+                    if (val1 == -1)
+                    {
+                        if (val2 >= -1)
+                        {
+                            return parts1[i1].CompareTo(parts2[i2]) > 0;
+                        }
+                        else
+                        {
+                            // parts2 is shorter, so parts1 wins.
+                            return true;
+                        }
+                    }
+                    else if (val2 == -1)
+                    {
+                        if (val1 >= -1)
+                        {
+                            return parts1[i1].CompareTo(parts2[i2]) > 0;
+                        }
+                        else
+                        {
+                            // parts1 is shorter, so parts2 wins.
+                            return false;
+                        }
+                    }
+                    else
+                    {
+                        return val1 > val2;
+                    }
                 }
 
                 i1++;
@@ -393,7 +444,7 @@ namespace Google.JarResolver
         /// <summary>
         /// Determines whether version 2 meets the constraints of version 1
         /// </summary>
-        /// <returns><c>true</c> if version 2 is acceptable to version 1; otherwise, <c>false</c>.</returns>
+        /// <returns><c>true</c> if ver2 is acceptable to ver1.</returns>
         /// <param name="ver1">Version 1</param>
         /// <param name="ver2">Version 2</param>
         internal bool IsAcceptable(string[] ver1, string[] ver2)
@@ -520,7 +571,8 @@ namespace Google.JarResolver
                 {
                     return false;
                 }
-                else if ((us < 0 || them < 0) && !ours[ourIndex].ToLower().Equals(theirs[theirIndex].ToLower()))
+                else if ((us < 0 || them < 0) &&
+                    !ours[ourIndex].ToLower().Equals(theirs[theirIndex].ToLower()))
                 {
                     return false;
                 }
@@ -544,7 +596,8 @@ namespace Google.JarResolver
             /// </summary>
             /// <param name="x">The x coordinate.</param>
             /// <param name="y">The y coordinate.</param>
-            /// <returns>negative if x is greater than y, positive if y is greater than x, 0 if equal.</returns>
+            /// <returns>negative if x is greater than y,
+            /// positive if y is greater than x, 0 if equal.</returns>
             public int Compare(string x, string y)
             {
                 if (IsGreater(x, y))

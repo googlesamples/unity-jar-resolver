@@ -390,10 +390,25 @@ namespace Google.JarResolver
                     string existing =
                         Path.GetFileNameWithoutExtension(s);
 
-                    // the version is after the last -
-                    int idx = existing.LastIndexOf("-");
-                    string artifactName = existing.Substring(0, idx);
-                    string artifactVersion = existing.Substring(idx + 1);
+
+                    string artifactName = null;
+                    string artifactVersion = null;
+                    int idx = existing.Length;
+                    // handle artifacts like android-support-4.0.0-alpha.aar
+                    while(artifactVersion == null && idx > 0) {
+                        // the version is after the last -
+                        idx = existing.LastIndexOf("-",idx);
+
+                        if (idx >0) {
+                            artifactName = existing.Substring(0, idx);
+                            artifactVersion = existing.Substring(idx + 1);
+
+                            if (!char.IsDigit(artifactVersion.ToCharArray()[0])) {
+                                idx--;
+                                artifactVersion = null;
+                            }
+                        }
+                    }
 
                     Dependency oldDep = new Dependency(dep.Group, artifactName, artifactVersion);
 

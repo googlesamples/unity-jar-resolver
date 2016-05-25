@@ -34,13 +34,6 @@ namespace GooglePlayServices
     public class PlayServicesResolver : AssetPostprocessor
     {
         /// <summary>
-        /// The name of the current resolver.
-        /// </summary>
-        /// <remarks>
-        /// This should be updated when a new revision is created.
-        /// </remarks>
-        private static string CurrentResolverName = "ResolverVer1_1";
-        /// <summary>
         /// The instance to the play services support object.
         /// </summary>
         private static PlayServicesSupport svcSupport;
@@ -91,11 +84,6 @@ namespace GooglePlayServices
         {
             get
             {
-                if (_resolver == null)
-                {
-                    // create the latest resolver known.
-                    _resolver = Activator.CreateInstance("GooglePlayServices", CurrentResolverName) as IResolver;
-                }
                 return _resolver;
             }
         }

@@ -75,13 +75,17 @@ namespace Google.JarResolvers.Test
             Dependency dep11 = new Dependency("test", "artifact1", "1.1");
             Dependency dep101 = new Dependency("test", "artifact1", "1.0.1");
             Dependency dep31 = new Dependency("test", "artifact1", "3.1");
-
+            Dependency dep32alpha = new Dependency("test", "artifact1", "3.2-alpha");
+            Dependency dep32beta = new Dependency("test", "artifact1", "3.2-beta");
             Assert.False(dep09.IsNewer(dep));
             Assert.False(dep.IsNewer(dep));
             Assert.True(dep2.IsNewer(dep));
             Assert.True(dep11.IsNewer(dep));
             Assert.True(dep101.IsNewer(dep));
             Assert.True(dep31.IsNewer(dep));
+            Assert.True(dep32alpha.IsNewer(dep31));
+            Assert.True(dep32alpha.IsNewer(dep));
+            Assert.True(dep32beta.IsNewer(dep32alpha));
         }
 
         /// <summary>

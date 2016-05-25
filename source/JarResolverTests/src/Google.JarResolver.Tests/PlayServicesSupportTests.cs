@@ -47,11 +47,11 @@ namespace Google.Editor.Tests
             Dictionary<string, Dependency> deps = support.ResolveDependencies(false);
             Assert.NotNull(deps);
 
-            // should be only 1 and version 8.1
+            // should be only 1 and version 8.2.0-alpha
             Assert.True(deps.Count == 1);
             IEnumerator<Dependency> iter = deps.Values.GetEnumerator();
             iter.MoveNext();
-            Assert.True(iter.Current.BestVersion == "8.1.0");
+            Assert.True(iter.Current.BestVersion == "8.2.0-alpha");
         }
 
         /// <summary>
@@ -82,7 +82,7 @@ namespace Google.Editor.Tests
             Assert.True(deps.Count == 1);
             IEnumerator<Dependency> iter = deps.Values.GetEnumerator();
             iter.MoveNext();
-            Assert.True(iter.Current.BestVersion == "8.1.0");
+            Assert.True(iter.Current.BestVersion == "8.2.0-alpha");
         }
 
         /// <summary>
@@ -107,11 +107,11 @@ namespace Google.Editor.Tests
                 support.ResolveDependencies(false);
             Assert.NotNull(deps);
 
-            // should be only 1 and version 8.1
+            // should be only 1 and version 8.2.0-alpha
             Assert.True(deps.Count == 1);
             IEnumerator<Dependency> iter = deps.Values.GetEnumerator();
             iter.MoveNext();
-            Assert.True(iter.Current.BestVersion == "8.1.0");
+            Assert.True(iter.Current.BestVersion == "8.2.0-alpha");
 
             // check dependency that has transitive dependencies
             support.DependOn("test", "transdep", "1.0");
@@ -122,7 +122,7 @@ namespace Google.Editor.Tests
             // 1 is the previous test, then 2 for transdep and subdep.
             Assert.True(deps.Count == 3);
             Dependency d = deps["test:artifact"];
-            Assert.True(d.BestVersion == "8.1.0");
+            Assert.True(d.BestVersion == "8.2.0-alpha");
             d = deps["test:transdep"];
             Assert.AreEqual(d.BestVersion, "1.0.0");
             d = deps["test:subdep"];
@@ -152,7 +152,7 @@ namespace Google.Editor.Tests
             deps = support.ResolveDependencies(false);
             Assert.NotNull(deps);
             d = deps["test:artifact"];
-            Assert.True(d.BestVersion == "8.1.0");
+            Assert.True(d.BestVersion == "8.2.0-alpha");
 
             // Test downversioning.
             support.ResetDependencies();
@@ -176,7 +176,7 @@ namespace Google.Editor.Tests
             deps = support.ResolveDependencies(false);
             Assert.NotNull(deps);
             d = deps["test:artifact"];
-            Assert.True(d.BestVersion == "8.1.0");
+            Assert.True(d.BestVersion == "8.2.0-alpha");
             d = deps["test:subdep"];
             Assert.True(d.BestVersion == "0.9");
         }
@@ -202,7 +202,7 @@ namespace Google.Editor.Tests
                 support.ResolveDependencies(true);
             Assert.NotNull(deps);
             Dependency d = deps["test:artifact"];
-            Assert.True(d.BestVersion == "8.1.0");
+            Assert.True(d.BestVersion == "8.2.0-alpha");
             d = deps["test:subdep"];
             Assert.True(d.BestVersion == "1.1.0");
         }
@@ -233,7 +233,7 @@ namespace Google.Editor.Tests
                 client1.ResolveDependencies(true);
             Assert.NotNull(deps);
             Dependency d = deps["test:artifact"];
-            Assert.True(d.BestVersion == "8.1.0");
+            Assert.True(d.BestVersion == "8.2.0-alpha");
 
             // client 1 needs to see client 2 deps
             d = deps["test:subdep"];
@@ -244,7 +244,7 @@ namespace Google.Editor.Tests
                 client2.ResolveDependencies(true);
             Assert.NotNull(deps);
             d = deps["test:artifact"];
-            Assert.True(d.BestVersion == "8.1.0");
+            Assert.True(d.BestVersion == "8.2.0-alpha");
 
             d = deps["test:subdep"];
             Assert.True(d.BestVersion == "1.1.0");
@@ -255,7 +255,7 @@ namespace Google.Editor.Tests
             deps = client1.ResolveDependencies(true);
             Assert.NotNull(deps);
             d = deps["test:artifact"];
-            Assert.True(d.BestVersion == "8.1.0");
+            Assert.True(d.BestVersion == "8.2.0-alpha");
 
             Assert.False(deps.ContainsKey("test:subdep"));
         }
@@ -406,7 +406,7 @@ namespace Google.Editor.Tests
                 client3.ResolveDependencies(true);
             Assert.NotNull(deps);
             Dependency d = deps["test:artifact"];
-            Assert.True(d.BestVersion == "8.1.0");
+            Assert.True(d.BestVersion == "8.2.0-alpha");
 
             d = deps["test:subdep"];
             Assert.True(d.BestVersion == "1.1.0");

@@ -1,6 +1,10 @@
 # Version 1.2.0 - May 11 2016
 ## Bug Fixes
    * Handles resolving dependencies when the artifacts are split across 2 repos.
+   * #4 Misdetecting version for versions like 1.2-alpha.  These are now string
+       compared if alphanumeric
+   * Removed resolver creation via reflection since it did not work all the time.
+       Now a resolver needs to be loaded externally (which is existing behavior).
 ## New Features
     * Expose PlayServicesResolver properties to allow for script access.
     * Explodes firebase-common and firebase-measurement aar files to support
