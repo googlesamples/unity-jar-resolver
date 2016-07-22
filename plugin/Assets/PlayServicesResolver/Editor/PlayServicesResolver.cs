@@ -51,7 +51,8 @@ namespace GooglePlayServices
             svcSupport = PlayServicesSupport.CreateInstance(
                 "PlayServicesResolver",
                 EditorPrefs.GetString("AndroidSdkRoot"),
-                "ProjectSettings");
+                "ProjectSettings",
+                logger: UnityEngine.Debug.Log);
         }
 
         /// <summary>

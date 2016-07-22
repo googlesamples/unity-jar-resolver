@@ -1,3 +1,14 @@
+# Version 1.2.1 - Jul 25, 2016
+## Bug Fixes
+   * Removed 1.2 Resolver and hardcoded whitelist of AARs to expand.
+   * Improved error reporting when the "jar" executable can't be found.
+   * Removed the need to set JAVA_HOME if "jar" is in the user's path.
+   * Fixed spurious copying of partially matching AARs.
+   * Changed resolver to only copy / expand when source AARs change.
+## New Features
+   * Expand AARs that contain manifests with variable expansion like
+     ${applicationId}.
+   * Added optional logging in the JarResolverLib module.
 # Version 1.2.0 - May 11 2016
 ## Bug Fixes
    * Handles resolving dependencies when the artifacts are split across 2 repos.

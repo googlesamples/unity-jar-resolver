@@ -411,5 +411,45 @@ namespace Google.Editor.Tests
             d = deps["test:subdep"];
             Assert.True(d.BestVersion == "1.1.0");
         }
+
+        /// <summary>
+        /// Verify the logger delegate is called by the Log() method.
+        /// </summary>
+        [Test]
+        public void TestLogger()
+        {
+            List<string> messageList = new List<string>();
+            string logMessage = "this is a test";
+            PlayServicesSupport support = PlayServicesSupport.CreateInstance(
+                "log_test", "../../testData", Path.GetTempPath(),
+                logger: (message) => messageList.Add(message));
+            Assert.AreEqual(messageList.Count, 0);
+            support.Log(logMessage);
+            Assert.AreEqual(messageList.Count, 1);
+            Assert.AreEqual(messageList[0], logMessage);
+        }
+
+        /// <summary>
+        /// Verify candidate resolution fails with an exception if the SDK path isn't
+        /// set.
+        /// </summary>
+        [Test]
+        public void TestFindCandidate()
+        {
+            string sdk = System.Environment.GetEnvironmentVariable("ANDROID_HOME");
+            try
+            {
+                PlayServicesSupport support = PlayServicesSupport.CreateInstance(
+                    "find_candidate", "../../testData", Path.GetTempPath());
+                System.Environment.SetEnvironmentVariable("ANDROID_HOME", null);
+                Assert.Throws(typeof(ResolutionException),
+                              delegate { support.DependOn("some.group", "a-package", "1.2.3"); },
+                              "Expected ResolutionException as SDK path is not set");
+            }
+            finally
+            {
+                System.Environment.SetEnvironmentVariable("ANDROID_HOME", sdk);
+            }
+        }
     }
 }

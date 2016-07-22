@@ -22,6 +22,7 @@ namespace GooglePlayServices
     using System.IO;
     using UnityEngine;
     using System;
+    using System.Collections.Generic;
 
     /// <summary>
     /// Default resolver base class.
@@ -175,6 +176,193 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Get an executable extension.
+        /// </summary>
+        /// <returns>Platform specific extension for executables.</returns>
+        private static string GetExecutableExtension() {
+            return RuntimePlatform.WindowsEditor == Application.platform ? ".exe" : "";
+        }
+
+        /// <summary>
+        /// Locate an executable in the system path.
+        /// </summary>
+        /// <param name="exeName">Executable name without a platform specific extension like
+        /// .exe</param>
+        /// <returns>A string to the executable path if it's found, null otherwise.</returns>
+        private static string FindExecutable(string executable)
+        {
+            System.Diagnostics.Process process = new System.Diagnostics.Process();
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.FileName =
+                RuntimePlatform.WindowsEditor == Application.platform ? "where" : "which";
+            process.StartInfo.Arguments = executable;
+            try
+            {
+                process.Start();
+            }
+            catch (Exception e)
+            {
+                Debug.Log("'" + process.StartInfo.FileName + "' command is not on path.  " +
+                          "Unable to find executable '" + executable + "' (" + e.ToString() + ")");
+                process = null;
+            }
+            if (process != null)
+            {
+                string[] lines = System.Text.RegularExpressions.Regex.Split(
+                    process.StandardOutput.ReadToEnd(), "\r\n|\r|\n");
+                process.WaitForExit();
+                if (lines.Length > 0 && process.ExitCode == 0)
+                {
+                    return lines[0];
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Find a Java tool.
+        /// </summary>
+        /// <param name="toolName">Name of the tool to search for.</param>
+        private string FindJavaTool(string javaTool)
+        {
+            string javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+            string toolPath;
+            if (javaHome != null)
+            {
+                toolPath = Path.Combine(javaHome, Path.Combine("bin",
+                                                             javaTool + GetExecutableExtension()));
+                if (!File.Exists(toolPath))
+                {
+                    EditorUtility.DisplayDialog("Play Services Dependencies",
+                                                "JAVA_HOME environment references a directory (" +
+                                                javaHome + ") that does not contain " + javaTool +
+                                                " which is required to process Play Services " +
+                                                "dependencies.", "OK");
+                    throw new Exception("JAVA_HOME references incomplete Java distribution.  " +
+                                        javaTool + " not found.");
+                }
+            } else {
+                toolPath = FindExecutable(javaTool);
+                if (!File.Exists(toolPath))
+                {
+                    EditorUtility.DisplayDialog("Play Services Dependencies",
+                                                "Unable to find " + javaTool + " in the system " +
+                                                "path.  This tool is required to process Play " +
+                                                "Services dependencies.  Either set JAVA_HOME " +
+                                                "or add " + javaTool + " to the PATH variable " +
+                                                "to resolve this error.", "OK");
+                    throw new Exception(javaTool + " not found.");
+                }
+            }
+            return toolPath;
+        }
+
+        /// <summary>
+        /// Result from RunCommandLineTool().
+        /// </summary>
+        internal class CommandLineToolResult
+        {
+            /// String containing the standard output stream of the tool.
+            public string stdout;
+            /// String containing the standard error stream of the tool.
+            public string stderr;
+            /// Exit code returned by the tool when execution is complete.
+            public int exitCode;
+        };
+
+        /// <summary>
+        /// Execute a command line tool.
+        /// </summary>
+        /// <param name="toolPath">Tool to execute.</param>
+        /// <param name="arguments">String to pass to the tools' command line.</param>
+        /// <param name="workingDirectory">Directory to execute the tool from.</param>
+        /// <returns>CommandLineTool result if successful, raises an exception if it's not
+        /// possible to execute the tool.</returns>
+        internal static CommandLineToolResult RunCommandLineTool(string toolPath, string arguments,
+                                                                 string workingDirectory)
+        {
+            List<string>[] stdouterr = new List<string>[] { new List<string>(),
+                                                            new List<string>() };
+            System.Diagnostics.Process process = new System.Diagnostics.Process();
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.Arguments = arguments;
+            process.StartInfo.CreateNoWindow = true;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.FileName = toolPath;
+            process.StartInfo.WorkingDirectory = workingDirectory;
+            process.OutputDataReceived += (unusedSender, args) => stdouterr[0].Add(args.Data);
+            process.ErrorDataReceived += (unusedSender, args) => stdouterr[1].Add(args.Data);
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+            process.WaitForExit();
+            CommandLineToolResult result = new CommandLineToolResult();
+            result.stdout = String.Join(String.Empty, stdouterr[0].ToArray());
+            result.stderr = String.Join(String.Empty, stdouterr[1].ToArray());
+            result.exitCode = process.ExitCode;
+            return result;
+        }
+
+        /// <summary>
+        /// Create a temporary directory.
+        /// </summary>
+        /// <returns>If temporary directory creation fails, return null.</returns>
+        public static string CreateTemporaryDirectory()
+        {
+            int retry = 100;
+            while (retry-- > 0)
+            {
+                string temporaryDirectory = Path.Combine(Path.GetTempPath(),
+                                                         Path.GetRandomFileName());
+                if (File.Exists(temporaryDirectory))
+                {
+                    continue;
+                }
+                Directory.CreateDirectory(temporaryDirectory);
+                return temporaryDirectory;
+            }
+            return null;
+        }
+
+        // store the AndroidManifest.xml in a temporary directory before processing it.
+        /// <summary>
+        /// Extract an AAR to the specified directory.
+        /// </summary>
+        /// <param name="aarFile">Name of the AAR file to extract.</param>
+        /// <param name="extract_filenames">List of files to extract from the AAR.  If this array
+        /// is empty or null all files are extracted.</param>
+        /// <param name="outputDirectory">Directory to extract the AAR file to.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        internal virtual bool ExtractAar(string aarFile, string[] extractFilenames,
+                                         string outputDirectory)
+        {
+            try
+            {
+                string aarPath = Path.GetFullPath(aarFile);
+                string extractFilesArg = extractFilenames != null && extractFilenames.Length > 0 ?
+                    " \"" + String.Join("\" \"", extractFilenames) + "\"" : "";
+                CommandLineToolResult result = RunCommandLineTool(FindJavaTool("jar"),
+                                                                  "xvf " + "\"" + aarPath + "\"" +
+                                                                  extractFilesArg,
+                                                                  outputDirectory);
+                if (result.exitCode != 0)
+                {
+                    Debug.LogError("Error expanding " + aarPath + " err: " +
+                                   result.exitCode + ": " + result.stderr);
+                    return false;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.Log(e);
+                throw e;
+            }
+            return true;
+        }
+
+        /// <summary>
         /// Explodes a single aar file.  This is done by calling the
         /// JDK "jar" command, then moving the classes.jar file.
         /// </summary>
@@ -183,92 +371,45 @@ namespace GooglePlayServices
         /// <returns>The path to the exploded aar.
         internal virtual string ProcessAar(string dir, string aarFile)
         {
-            string file = Path.GetFileNameWithoutExtension(aarFile);
-            string workingDir = Path.Combine(dir, file);
+            string workingDir = Path.Combine(dir, Path.GetFileNameWithoutExtension(aarFile));
             Directory.CreateDirectory(workingDir);
-            try
+            if (!ExtractAar(aarFile, null, workingDir)) return workingDir;
+
+            // move the classes.jar file to libs.
+            string libDir = Path.Combine(workingDir, "libs");
+            if (!Directory.Exists(libDir))
             {
-                string exe = "jar";
-                if (RuntimePlatform.WindowsEditor == Application.platform)
-                {
-                    string javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
-                    if (javaHome == null)
-                    {
-                        EditorUtility.DisplayDialog("Play Services Jar Dependencies",
-                            "JAVA_HOME environment variable must be set.", "OK");
-                        throw new Exception("JAVA_HOME not set");
-                    }
-                    exe = Path.Combine(javaHome, Path.Combine("bin", "jar.exe"));
-                }
-
-                System.Diagnostics.Process p = new System.Diagnostics.Process();
-                p.StartInfo.UseShellExecute = false;
-                p.StartInfo.Arguments = "xvf " +
-                    "\"" + Path.GetFullPath(aarFile) + "\"";
-                p.StartInfo.CreateNoWindow = true;
-                p.StartInfo.RedirectStandardOutput = false;
-                p.StartInfo.RedirectStandardError = true;
-                p.StartInfo.FileName = exe;
-                p.StartInfo.WorkingDirectory = workingDir;
-                p.Start();
-
-                // To avoid deadlocks, always read the output stream first and then wait.
-                string stderr = p.StandardError.ReadToEnd();
-
-                p.WaitForExit();
-
-                if (p.ExitCode == 0)
-                {
-
-                    // move the classes.jar file to libs.
-                    string libDir = Path.Combine(workingDir, "libs");
-                    if (!Directory.Exists(libDir))
-                    {
-                        Directory.CreateDirectory(libDir);
-                    }
-                    if (File.Exists(Path.Combine(libDir, "classes.jar")))
-                    {
-                        File.Delete(Path.Combine(libDir, "classes.jar"));
-                    }
-                    if (File.Exists(Path.Combine(workingDir, "classes.jar")))
-                    {
-                        File.Move(Path.Combine(workingDir, "classes.jar"),
-                            Path.Combine(libDir, "classes.jar"));
-                    }
-
-                    // Create the project.properties file which indicates to
-                    // Unity that this directory is a plugin.
-                    if (!File.Exists(Path.Combine(workingDir, "project.properties")))
-                    {
-                        // write out project.properties
-                        string[] props =
-                            {
-                                "# Project target.",
-                                "target=android-9",
-                                "android.library=true"
-                            };
-
-                        File.WriteAllLines(Path.Combine(workingDir, "project.properties"),
-                            props);
-                    }
-
-                    // Clean up the aar file.
-                    File.Delete(Path.GetFullPath(aarFile));
-
-                    Debug.Log(aarFile + " expanded successfully");
-                }
-                else
-                {
-                    Debug.LogError("Error expanding " +
-                        Path.GetFullPath(aarFile) +
-                        " err: " + p.ExitCode + ": " + stderr);
-                }
+                Directory.CreateDirectory(libDir);
             }
-            catch (Exception e)
+            if (File.Exists(Path.Combine(libDir, "classes.jar")))
             {
-                Debug.Log(e);
-                throw e;
+                File.Delete(Path.Combine(libDir, "classes.jar"));
             }
+            if (File.Exists(Path.Combine(workingDir, "classes.jar")))
+            {
+                File.Move(Path.Combine(workingDir, "classes.jar"),
+                          Path.Combine(libDir, "classes.jar"));
+            }
+
+            // Create the project.properties file which indicates to
+            // Unity that this directory is a plugin.
+            if (!File.Exists(Path.Combine(workingDir, "project.properties")))
+            {
+                // write out project.properties
+                string[] props =
+                    {
+                        "# Project target.",
+                        "target=android-9",
+                        "android.library=true"
+                    };
+
+                File.WriteAllLines(Path.Combine(workingDir, "project.properties"),
+                                   props);
+            }
+
+            // Clean up the aar file.
+            File.Delete(Path.GetFullPath(aarFile));
+            Debug.Log(aarFile + " expanded successfully");
             return workingDir;
         }
 

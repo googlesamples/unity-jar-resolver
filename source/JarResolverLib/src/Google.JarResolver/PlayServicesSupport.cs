@@ -43,6 +43,17 @@ namespace Google.JarResolver
         private string sdk;
 
         /// <summary>
+        /// Delegate used to specify a log method for this class.  If provided this class
+        /// will log messages via this delegate.
+        /// </summary>
+        public delegate void LogMessage(string message);
+
+        /// <summary>
+        /// Log function delegate.  If set, this class will write log messages via this method.
+        /// </summary>
+        private LogMessage logger;
+
+        /// <summary>
         /// The settings directory.  Used to store the dependencies.
         /// </summary>
         private string settingsDirectory;
@@ -111,12 +122,14 @@ namespace Google.JarResolver
         /// <param name="sdkPath">Sdk path for Android SDK.</param>
         /// <param name="settingsDirectory">The relative path to the directory
         /// to save the settings.  For Unity projects this is "ProjectSettings"</param>
+        /// <param name="logger">Delegate used to write messages to the log.</param>
         public static PlayServicesSupport CreateInstance(
             string clientName,
             string sdkPath,
-            string settingsDirectory)
+            string settingsDirectory,
+            LogMessage logger = null)
         {
-            return CreateInstance(clientName, sdkPath, null, settingsDirectory);
+            return CreateInstance(clientName, sdkPath, null, settingsDirectory, logger: logger);
         }
 
         /// <summary>
@@ -132,13 +145,16 @@ namespace Google.JarResolver
         /// <param name="additionalRepositories">Array of additional repository paths. can be null</param>
         /// <param name="settingsDirectory">The relative path to the directory
         /// to save the settings.  For Unity projects this is "ProjectSettings"</param>
+        /// <param name="logger">Delegate used to write messages to the log.</param>
         internal static PlayServicesSupport CreateInstance(
             string clientName,
             string sdkPath,
             string[] additionalRepositories,
-            string settingsDirectory)
+            string settingsDirectory,
+            LogMessage logger = null)
         {
             PlayServicesSupport instance = new PlayServicesSupport();
+            instance.logger = logger;
             instance.sdk = sdkPath;
             string badchars = new string(Path.GetInvalidFileNameChars());
 
@@ -165,6 +181,20 @@ namespace Google.JarResolver
             }
             instance.clientDependenciesMap = instance.LoadDependencies(false);
             return instance;
+        }
+
+        /// <summary>
+        /// Log a message to the currently set logger.
+        /// </summary>
+        /// <remarks>
+        ///   <para>
+        ///     message is a string to write to the log.
+        ///   </para>
+        /// </remarks>
+        internal void Log(string message) {
+            if (logger != null) {
+                logger(message);
+            }
         }
 
         /// <summary>
@@ -390,6 +420,15 @@ namespace Google.JarResolver
                     string existing =
                         Path.GetFileNameWithoutExtension(s);
 
+                    // Make sure the file matches the expression "${artifact}-${version}".
+                    // e.g foo-bar-1.2.3 would match the glob foo-1.2.3 but would reference
+                    // a different artifact.
+                    if (!System.Text.RegularExpressions.Regex.Match(
+                            existing.Substring(dep.Artifact.Length + 1),
+                            "^[0-9.]+$").Success)
+                    {
+                        continue;
+                    }
 
                     string artifactName = null;
                     string artifactVersion = null;
@@ -402,7 +441,6 @@ namespace Google.JarResolver
                         if (idx >0) {
                             artifactName = existing.Substring(0, idx);
                             artifactVersion = existing.Substring(idx + 1);
-
                             if (!char.IsDigit(artifactVersion.ToCharArray()[0])) {
                                 idx--;
                                 artifactVersion = null;
@@ -414,6 +452,8 @@ namespace Google.JarResolver
 
                     // add the artifact version so BestVersion == version.
                     oldDep.AddVersion(oldDep.Version);
+                    // If the existing artifact matches the new dependency, don't modify it.
+                    if (dep.Key == oldDep.Key) continue;
                     doCleanup = doCleanup || confirmer == null || confirmer(oldDep, dep);
 
                     if (doCleanup)
@@ -455,11 +495,22 @@ namespace Google.JarResolver
                     if (aarFile != null)
                     {
                         string destName = Path.Combine(destDirectory, baseName);
-                        if (File.Exists(destName))
+                        string destNameUnpacked = Path.Combine(
+                            destDirectory, Path.GetFileNameWithoutExtension(destName));
+                        string existingName =
+                            File.Exists(destName) ? destName :
+                            Directory.Exists(destNameUnpacked) ? destNameUnpacked : null;
+
+                        if (existingName != null)
                         {
-                            File.Delete(destName);
+                            doCopy = File.GetLastWriteTime(existingName).CompareTo(
+                                File.GetLastWriteTime(aarFile)) < 0;
+                            if (doCopy) File.Delete(existingName);
                         }
-                        File.Copy(aarFile, destName);
+                        if (doCopy)
+                        {
+                            File.Copy(aarFile, destName);
+                        }
                     }
                     else
                     {
@@ -500,11 +551,15 @@ namespace Google.JarResolver
             {
                 string repoPath;
                 if (repo.StartsWith("$SDK")) {
-                    if (SDK == null)
+                    if (SDK == null || SDK.Length == 0)
                     {
                         throw new ResolutionException(
-                            "Android SDK path not set." +
-                            "  Set the SDK property or the ANDROID_HOME environment variable");
+                            "Android SDK path not set.  " +
+                            "Set the Android SDK property using the Unity " +
+                            "\"Edit > Preferences > External\" menu option on Windows " +
+                            "or the \"Unity > Preferences > External Tools\" menu " +
+                            "option on OSX. Alternatively, set the ANDROID_HOME " +
+                            "environment variable");
                     }
                     repoPath = repo.Replace("$SDK",SDK);
                 }
@@ -521,9 +576,11 @@ namespace Google.JarResolver
                 }
                 else
                 {
-                    Debug.Print("Repo not found: " + Path.GetFullPath(repoPath));
+                    Log("Repo not found: " + Path.GetFullPath(repoPath));
                 }
             }
+            Log("ERROR: Unable to find dependency " + dep.Group + " " + dep.Artifact + " " +
+                dep.Version + " in (" + String.Join(", ", repositoryPaths.ToArray()) + ")");
             return null;
         }
 
