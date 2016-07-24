@@ -5,6 +5,8 @@
    * Removed the need to set JAVA_HOME if "jar" is in the user's path.
    * Fixed spurious copying of partially matching AARs.
    * Changed resolver to only copy / expand when source AARs change.
+   * Auto-resolution of dependencies is now performed when the Android
+     build target is selected.
 ## New Features
    * Expand AARs that contain manifests with variable expansion like
      ${applicationId}.

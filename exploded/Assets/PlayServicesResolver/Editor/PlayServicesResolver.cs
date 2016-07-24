@@ -53,6 +53,9 @@ namespace GooglePlayServices
                 EditorPrefs.GetString("AndroidSdkRoot"),
                 "ProjectSettings",
                 logger: UnityEngine.Debug.Log);
+
+            EditorApplication.update -= AutoResolve;
+            EditorApplication.update += AutoResolve;
         }
 
         /// <summary>
@@ -102,18 +105,33 @@ namespace GooglePlayServices
                                            string[] movedAssets,
                                            string[] movedFromAssetPaths)
         {
-            if (!Resolver.ShouldAutoResolve(importedAssets, deletedAssets,
+            if (Resolver.ShouldAutoResolve(importedAssets, deletedAssets,
                     movedAssets, movedFromAssetPaths))
             {
-                return;
+                AutoResolve();
             }
+        }
 
-            Resolver.DoResolution(svcSupport,
-                "Assets/Plugins/Android",
-                HandleOverwriteConfirmation);
+        /// <summary>
+        /// Resolve dependencies if auto-resolution is enabled.
+        /// </summary>
+        private static void AutoResolve()
+        {
+            if (Resolver.AutomaticResolutionEnabled()) {
+                EditorApplication.update -= AutoResolve;
+                Resolve();
+                Debug.Log("Android Jar Dependencies: Resolution Complete");
+            }
+        }
 
+        /// <summary>
+        /// Resolve dependencies.
+        /// </summary>
+        private static void Resolve()
+        {
+            Resolver.DoResolution(svcSupport, "Assets/Plugins/Android",
+                                  HandleOverwriteConfirmation);
             AssetDatabase.Refresh();
-            Debug.Log("Android Jar Dependencies: Resolution Complete");
         }
 
         /// <summary>
@@ -131,9 +149,7 @@ namespace GooglePlayServices
         [MenuItem("Assets/Google Play Services/Resolve Client Jars")]
         public static void MenuResolve()
         {
-            Resolver.DoResolution(svcSupport, "Assets/Plugins/Android", HandleOverwriteConfirmation);
-
-            AssetDatabase.Refresh();
+            Resolve();
             EditorUtility.DisplayDialog("Android Jar Dependencies",
                 "Resolution Complete", "OK");
         }

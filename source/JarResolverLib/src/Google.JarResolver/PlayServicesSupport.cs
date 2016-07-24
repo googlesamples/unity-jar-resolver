@@ -70,6 +70,16 @@ namespace Google.JarResolver
             new Dictionary<string, Dependency>();
 
         /// <summary>
+        /// Error message displayed / logged when the Android SDK path isn't configured.
+        /// </summary>
+        public const string AndroidSdkConfigurationError =
+            ("Android SDK path not set.  " +
+             "Set the Android SDK property using the Unity " +
+             "\"Edit > Preferences > External Tools\" menu option on Windows " +
+             "or the \"Unity > Preferences > External Tools\" menu option on OSX. " +
+             "Alternatively, set the ANDROID_HOME environment variable");
+
+        /// <summary>
         /// Delegate used to prompt or notify the developer that an existing
         /// dependency file is being overwritten.
         /// </summary>
@@ -553,13 +563,7 @@ namespace Google.JarResolver
                 if (repo.StartsWith("$SDK")) {
                     if (SDK == null || SDK.Length == 0)
                     {
-                        throw new ResolutionException(
-                            "Android SDK path not set.  " +
-                            "Set the Android SDK property using the Unity " +
-                            "\"Edit > Preferences > External\" menu option on Windows " +
-                            "or the \"Unity > Preferences > External Tools\" menu " +
-                            "option on OSX. Alternatively, set the ANDROID_HOME " +
-                            "environment variable");
+                        throw new ResolutionException(AndroidSdkConfigurationError);
                     }
                     repoPath = repo.Replace("$SDK",SDK);
                 }
