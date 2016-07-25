@@ -65,6 +65,17 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Returns true if Android package installation is enabled.
+        /// </summary>
+        /// <returns><c>true</c>, package installation is enabled, <c>false</c> otherwise.
+        /// </returns>
+        public virtual bool AndroidPackageInstallationEnabled()
+        {
+            return EditorPrefs.GetBool("GooglePlayServices.AndroidPackageInstallationEnabled",
+                                       true);
+        }
+
+        /// <summary>
         /// Checks based on the asset changes, if resolution should occur.
         /// </summary>
         /// <remarks>
@@ -117,10 +128,9 @@ namespace GooglePlayServices
         public virtual void ShowSettingsDialog()
         {
 
-            EditorWindow window = EditorWindow.GetWindow(
+            SettingsDialog window = (SettingsDialog)EditorWindow.GetWindow(
                 typeof(SettingsDialog), true, "Play Services Resolver Settings");
-            window.minSize = new Vector2(300, 200);
-            window.position = new Rect(200, 200, 300, 200);
+            window.Initialize();
             window.Show();
         }
 
@@ -130,11 +140,27 @@ namespace GooglePlayServices
         /// <param name="svcSupport">Svc support.</param>
         /// <param name="destinationDirectory">Destination directory.</param>
         /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
-        public abstract void DoResolution(PlayServicesSupport svcSupport,
-            string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation);
+        /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
+        public virtual void DoResolution(
+            PlayServicesSupport svcSupport, string destinationDirectory,
+            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
+            System.Action resolutionComplete)
+        {
+            DoResolution(svcSupport, destinationDirectory, handleOverwriteConfirmation);
+            resolutionComplete();
+        }
 
         #endregion
+
+        /// <summary>
+        /// Compatibility method for synchronous implementations of DoResolution().
+        /// </summary>
+        /// <param name="svcSupport">Svc support.</param>
+        /// <param name="destinationDirectory">Destination directory.</param>
+        /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
+        public abstract void DoResolution(
+            PlayServicesSupport svcSupport, string destinationDirectory,
+            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation);
 
         /// <summary>
         /// Makes the version number.
@@ -176,51 +202,6 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Get an executable extension.
-        /// </summary>
-        /// <returns>Platform specific extension for executables.</returns>
-        private static string GetExecutableExtension() {
-            return RuntimePlatform.WindowsEditor == Application.platform ? ".exe" : "";
-        }
-
-        /// <summary>
-        /// Locate an executable in the system path.
-        /// </summary>
-        /// <param name="exeName">Executable name without a platform specific extension like
-        /// .exe</param>
-        /// <returns>A string to the executable path if it's found, null otherwise.</returns>
-        private static string FindExecutable(string executable)
-        {
-            System.Diagnostics.Process process = new System.Diagnostics.Process();
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.FileName =
-                RuntimePlatform.WindowsEditor == Application.platform ? "where" : "which";
-            process.StartInfo.Arguments = executable;
-            try
-            {
-                process.Start();
-            }
-            catch (Exception e)
-            {
-                Debug.Log("'" + process.StartInfo.FileName + "' command is not on path.  " +
-                          "Unable to find executable '" + executable + "' (" + e.ToString() + ")");
-                process = null;
-            }
-            if (process != null)
-            {
-                string[] lines = System.Text.RegularExpressions.Regex.Split(
-                    process.StandardOutput.ReadToEnd(), "\r\n|\r|\n");
-                process.WaitForExit();
-                if (lines.Length > 0 && process.ExitCode == 0)
-                {
-                    return lines[0];
-                }
-            }
-            return null;
-        }
-
-        /// <summary>
         /// Find a Java tool.
         /// </summary>
         /// <param name="toolName">Name of the tool to search for.</param>
@@ -230,8 +211,9 @@ namespace GooglePlayServices
             string toolPath;
             if (javaHome != null)
             {
-                toolPath = Path.Combine(javaHome, Path.Combine("bin",
-                                                             javaTool + GetExecutableExtension()));
+                toolPath = Path.Combine(
+                    javaHome, Path.Combine(
+                        "bin", javaTool + CommandLine.GetExecutableExtension()));
                 if (!File.Exists(toolPath))
                 {
                     EditorUtility.DisplayDialog("Play Services Dependencies",
@@ -243,7 +225,7 @@ namespace GooglePlayServices
                                         javaTool + " not found.");
                 }
             } else {
-                toolPath = FindExecutable(javaTool);
+                toolPath = CommandLine.FindExecutable(javaTool);
                 if (!File.Exists(toolPath))
                 {
                     EditorUtility.DisplayDialog("Play Services Dependencies",
@@ -256,53 +238,6 @@ namespace GooglePlayServices
                 }
             }
             return toolPath;
-        }
-
-        /// <summary>
-        /// Result from RunCommandLineTool().
-        /// </summary>
-        internal class CommandLineToolResult
-        {
-            /// String containing the standard output stream of the tool.
-            public string stdout;
-            /// String containing the standard error stream of the tool.
-            public string stderr;
-            /// Exit code returned by the tool when execution is complete.
-            public int exitCode;
-        };
-
-        /// <summary>
-        /// Execute a command line tool.
-        /// </summary>
-        /// <param name="toolPath">Tool to execute.</param>
-        /// <param name="arguments">String to pass to the tools' command line.</param>
-        /// <param name="workingDirectory">Directory to execute the tool from.</param>
-        /// <returns>CommandLineTool result if successful, raises an exception if it's not
-        /// possible to execute the tool.</returns>
-        internal static CommandLineToolResult RunCommandLineTool(string toolPath, string arguments,
-                                                                 string workingDirectory)
-        {
-            List<string>[] stdouterr = new List<string>[] { new List<string>(),
-                                                            new List<string>() };
-            System.Diagnostics.Process process = new System.Diagnostics.Process();
-            process.StartInfo.UseShellExecute = false;
-            process.StartInfo.Arguments = arguments;
-            process.StartInfo.CreateNoWindow = true;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-            process.StartInfo.FileName = toolPath;
-            process.StartInfo.WorkingDirectory = workingDirectory;
-            process.OutputDataReceived += (unusedSender, args) => stdouterr[0].Add(args.Data);
-            process.ErrorDataReceived += (unusedSender, args) => stdouterr[1].Add(args.Data);
-            process.Start();
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-            process.WaitForExit();
-            CommandLineToolResult result = new CommandLineToolResult();
-            result.stdout = String.Join(String.Empty, stdouterr[0].ToArray());
-            result.stderr = String.Join(String.Empty, stdouterr[1].ToArray());
-            result.exitCode = process.ExitCode;
-            return result;
         }
 
         /// <summary>
@@ -343,10 +278,10 @@ namespace GooglePlayServices
                 string aarPath = Path.GetFullPath(aarFile);
                 string extractFilesArg = extractFilenames != null && extractFilenames.Length > 0 ?
                     " \"" + String.Join("\" \"", extractFilenames) + "\"" : "";
-                CommandLineToolResult result = RunCommandLineTool(FindJavaTool("jar"),
-                                                                  "xvf " + "\"" + aarPath + "\"" +
-                                                                  extractFilesArg,
-                                                                  outputDirectory);
+                CommandLine.Result result = CommandLine.Run(FindJavaTool("jar"),
+                                                            "xvf " + "\"" + aarPath + "\"" +
+                                                            extractFilesArg,
+                                                            outputDirectory);
                 if (result.exitCode != 0)
                 {
                     Debug.LogError("Error expanding " + aarPath + " err: " +

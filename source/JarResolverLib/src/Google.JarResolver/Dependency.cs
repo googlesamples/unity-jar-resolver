@@ -64,17 +64,26 @@ namespace Google.JarResolver
         private List<string> possibleVersions;
 
         /// <summary>
+        /// Optional array of Android SDK identifiers for packages that are required for this
+        /// artifact.
+        /// </summary>
+        private string[] packageIds;
+
+        /// <summary>
         /// Initializes a new instance of the
         ///  <see cref="Google.JarResolver.Dependency"/> class.
         /// </summary>
         /// <param name="group">Group ID</param>
         /// <param name="artifact">Artifact ID</param>
         /// <param name="version">Version constraint.</param>
-        public Dependency(string group, string artifact, string version)
+        /// <param name="packageIds">Android SDK package identifiers required for this
+        /// artifact.</param>
+        public Dependency(string group, string artifact, string version, string[] packageIds=null)
         {
             this.group = group;
             this.artifact = artifact;
             this.version = version;
+            this.packageIds = packageIds;
             this.possibleVersions = new List<string>();
         }
 
@@ -111,6 +120,19 @@ namespace Google.JarResolver
             get
             {
                 return version;
+            }
+        }
+
+        /// <summary>
+        /// Array of Android SDK identifiers for packages that are required for this
+        /// artifact.
+        /// </summary>
+        /// <value>Package identifiers if set or null.</value>
+        public string[] PackageIds
+        {
+            get
+            {
+                return packageIds;
             }
         }
 

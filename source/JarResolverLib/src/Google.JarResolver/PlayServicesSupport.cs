@@ -232,15 +232,14 @@ namespace Google.JarResolver
         /// <param name="group">Group - the Group Id of the artiface</param>
         /// <param name="artifact">Artifact - Artifact Id</param>
         /// <param name="version">Version - the version constraint</param>
-        /// <exception cref="ResolutionException">thrown if the artifact is unknown.</exception>
-        public void DependOn(string group, string artifact, string version)
+        /// <param name="packageIds">Optional list of Android SDK package identifiers.</param>
+        public void DependOn(string group, string artifact, string version,
+                             string[] packageIds=null)
         {
-            Dependency dep = FindCandidate(new Dependency(group, artifact, version));
-            if (dep == null)
-            {
-                throw new ResolutionException("Cannot find candidate artifact for " +
-                    group + ":" + artifact + ":" + version);
-            }
+            Dependency unresolvedDep = new Dependency(group, artifact, version,
+                                                      packageIds: packageIds);
+            Dependency dep = FindCandidate(unresolvedDep);
+            dep = dep ?? unresolvedDep;
 
             clientDependenciesMap[dep.Key] = dep;
 
@@ -458,7 +457,8 @@ namespace Google.JarResolver
                         }
                     }
 
-                    Dependency oldDep = new Dependency(dep.Group, artifactName, artifactVersion);
+                    Dependency oldDep = new Dependency(dep.Group, artifactName, artifactVersion,
+                                                       packageIds: dep.PackageIds);
 
                     // add the artifact version so BestVersion == version.
                     oldDep.AddVersion(oldDep.Version);
@@ -684,6 +684,9 @@ namespace Google.JarResolver
                 // if we ended the dependency, add it
                 if (!string.IsNullOrEmpty(artifactId) && !inDep)
                 {
+                    // Unfortunately, the Maven POM doesn't contain metadata to map the package
+                    // to each Android SDK package ID so the list "packageIds" is left as null in
+                    // this case.
                     Dependency d = FindCandidate(new Dependency(groupId, artifactId, version));
                     if (d == null)
                     {
@@ -719,9 +722,14 @@ namespace Google.JarResolver
         /// <summary>
         /// Loads the dependencies from the settings files.
         /// </summary>
-        /// <param name="allClients">If true, all client dependencies are loaded and returned.</param>
+        /// <param name="allClients">If true, all client dependencies are loaded and returned
+        /// </param>
+        /// <param name="keepMissing">If false, missing dependencies result in a
+        /// ResolutionException being thrown.  If true, each missing dependency is included in
+        /// the returned set with RepoPath set to an empty string.</param>
         /// <returns>Dictionary of dependencies</returns>
-        internal Dictionary<string, Dependency> LoadDependencies(bool allClients)
+        public Dictionary<string, Dependency> LoadDependencies(bool allClients,
+                                                               bool keepMissing=false)
         {
             Dictionary<string, Dependency> dependencyMap =
                 new Dictionary<string, Dependency>();
@@ -752,6 +760,7 @@ namespace Google.JarResolver
                 string groupId = null;
                 string artifactId = null;
                 string versionId = null;
+                string[] packageIds = null;
 
                 while (reader.Read())
                 {
@@ -765,31 +774,60 @@ namespace Google.JarResolver
                         inDep = reader.IsStartElement();
                         if (!inDep)
                         {
-                            Dependency dep = FindCandidate(new Dependency(groupId, artifactId, versionId));
-                            if (dep == null)
+                            if (groupId != null && artifactId != null && versionId != null)
                             {
-                                throw new ResolutionException("Cannot find candidate artifact for " +
-                                    groupId + ":" + artifactId + ":" + versionId);
+                                Dependency unresolvedDependency =
+                                    new Dependency(groupId, artifactId, versionId,
+                                                   packageIds: packageIds);
+                                Dependency dep = FindCandidate(unresolvedDependency);
+                                if (dep == null)
+                                {
+                                    if (keepMissing)
+                                    {
+                                        dep = unresolvedDependency;
+                                    }
+                                    else
+                                    {
+                                        throw new ResolutionException(
+                                            "Cannot find candidate artifact for " +
+                                            groupId + ":" + artifactId + ":" + versionId);
+                                    }
+                                }
+                                if (!dependencyMap.ContainsKey(dep.Key))
+                                {
+                                    dependencyMap[dep.Key] = dep;
+                                }
                             }
-
-                            if (!dependencyMap.ContainsKey(dep.Key))
-                            {
-                                dependencyMap[dep.Key] = dep;
-                            }
+                            // Reset the dependency being read.
+                            groupId = null;
+                            artifactId = null;
+                            versionId = null;
+                            packageIds = null;
                         }
                     }
 
-                    if (inDep && reader.Name == "groupId")
+                    if (inDep)
                     {
-                        groupId = reader.ReadString();
-                    }
-                    else if (inDep && reader.Name == "artifactId")
-                    {
-                        artifactId = reader.ReadString();
-                    }
-                    else if (inDep && reader.Name == "version")
-                    {
-                        versionId = reader.ReadString();
+                        if (reader.Name == "groupId")
+                        {
+                            groupId = reader.ReadString();
+                        }
+                        else if (reader.Name == "artifactId")
+                        {
+                            artifactId = reader.ReadString();
+                        }
+                        else if (reader.Name == "version")
+                        {
+                            versionId = reader.ReadString();
+                        }
+                        else if (reader.Name == "packageIds")
+                        {
+                            // ReadContentAs does not appear to work for string[] in Mono 2.0
+                            // instead read the field as a string and split to retrieve each
+                            // packageId from the set.
+                            string packageId = reader.ReadString();
+                            packageIds = packageId.Split(new char[] {' '});
+                        }
                     }
                 }
                 reader.Close();
@@ -828,6 +866,13 @@ namespace Google.JarResolver
                 writer.WriteStartElement("version");
                 writer.WriteString(dep.Version);
                 writer.WriteEndElement();
+
+                if (dep.PackageIds != null)
+                {
+                    writer.WriteStartElement("packageIds");
+                    writer.WriteValue(dep.PackageIds);
+                    writer.WriteEndElement();
+                }
 
                 writer.WriteEndElement();
             }

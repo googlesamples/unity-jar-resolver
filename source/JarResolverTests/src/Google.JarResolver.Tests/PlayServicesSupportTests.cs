@@ -428,28 +428,5 @@ namespace Google.Editor.Tests
             Assert.AreEqual(messageList.Count, 1);
             Assert.AreEqual(messageList[0], logMessage);
         }
-
-        /// <summary>
-        /// Verify candidate resolution fails with an exception if the SDK path isn't
-        /// set.
-        /// </summary>
-        [Test]
-        public void TestFindCandidate()
-        {
-            string sdk = System.Environment.GetEnvironmentVariable("ANDROID_HOME");
-            try
-            {
-                PlayServicesSupport support = PlayServicesSupport.CreateInstance(
-                    "find_candidate", "../../testData", Path.GetTempPath());
-                System.Environment.SetEnvironmentVariable("ANDROID_HOME", null);
-                Assert.Throws(typeof(ResolutionException),
-                              delegate { support.DependOn("some.group", "a-package", "1.2.3"); },
-                              "Expected ResolutionException as SDK path is not set");
-            }
-            finally
-            {
-                System.Environment.SetEnvironmentVariable("ANDROID_HOME", sdk);
-            }
-        }
     }
 }

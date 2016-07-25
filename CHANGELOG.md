@@ -11,6 +11,8 @@
    * Expand AARs that contain manifests with variable expansion like
      ${applicationId}.
    * Added optional logging in the JarResolverLib module.
+   * Integration with the Android SDK manager for dependencies that
+     declare required Android SDK packages.
 # Version 1.2.0 - May 11 2016
 ## Bug Fixes
    * Handles resolving dependencies when the artifacts are split across 2 repos.

@@ -44,6 +44,16 @@ namespace GooglePlayServices
         private static IResolver _resolver;
 
         /// <summary>
+        /// Whether the resolver executed on the last Update() event.
+        /// This is used to de-duplicate resolutions when assets change *and* C# classes get
+        /// reloaded i.e The following occurs:
+        /// * Load classes - schedule resolve
+        /// * Update - Resolve
+        /// * OnPostprocessAllAssets - Resolve <= Prevents this case.
+        /// </summary>
+        private static bool resolvedOnUpdate = false;
+
+        /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver()
@@ -106,7 +116,7 @@ namespace GooglePlayServices
                                            string[] movedFromAssetPaths)
         {
             if (Resolver.ShouldAutoResolve(importedAssets, deletedAssets,
-                    movedAssets, movedFromAssetPaths))
+                    movedAssets, movedFromAssetPaths) && !resolvedOnUpdate)
             {
                 AutoResolve();
             }
@@ -117,21 +127,34 @@ namespace GooglePlayServices
         /// </summary>
         private static void AutoResolve()
         {
-            if (Resolver.AutomaticResolutionEnabled()) {
-                EditorApplication.update -= AutoResolve;
+            if (Resolver.AutomaticResolutionEnabled() && !resolvedOnUpdate)
+            {
+                // Prevent resolution on the call to OnPostprocessAllAssets().
+                // This method is called on the next Update event then removed from the Update
+                // list.
+                resolvedOnUpdate = true;
                 Resolve();
-                Debug.Log("Android Jar Dependencies: Resolution Complete");
+            }
+            else
+            {
+                EditorApplication.update -= AutoResolve;
+                // Allow resolution on calls to OnPostprocessAllAssets().
+                resolvedOnUpdate = false;
             }
         }
 
         /// <summary>
         /// Resolve dependencies.
         /// </summary>
-        private static void Resolve()
+        /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
+        private static void Resolve(System.Action resolutionComplete = null)
         {
             Resolver.DoResolution(svcSupport, "Assets/Plugins/Android",
-                                  HandleOverwriteConfirmation);
-            AssetDatabase.Refresh();
+                                  HandleOverwriteConfirmation,
+                                  () => {
+                                      AssetDatabase.Refresh();
+                                      if (resolutionComplete != null) resolutionComplete();
+                                  });
         }
 
         /// <summary>
@@ -149,9 +172,8 @@ namespace GooglePlayServices
         [MenuItem("Assets/Google Play Services/Resolve Client Jars")]
         public static void MenuResolve()
         {
-            Resolve();
-            EditorUtility.DisplayDialog("Android Jar Dependencies",
-                "Resolution Complete", "OK");
+            Resolve(() => { EditorUtility.DisplayDialog("Android Jar Dependencies",
+                                                        "Resolution Complete", "OK"); });
         }
 
         /// <summary>
