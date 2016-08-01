@@ -24,7 +24,7 @@ namespace GooglePlayServices
     using System;
     using UnityEditor;
 
-    internal static class CommandLine
+    public static class CommandLine
     {
         /// <summary>
         /// Result from Run().

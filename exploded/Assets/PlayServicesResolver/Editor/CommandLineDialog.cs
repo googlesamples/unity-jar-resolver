@@ -20,7 +20,7 @@ namespace GooglePlayServices
     using System.Collections;
     using UnityEditor;
 
-    internal class CommandLineDialog : TextAreaDialog
+    public class CommandLineDialog : TextAreaDialog
     {
         /// <summary>
         /// Forwards the output of the currently executing command to a CommandLineDialog window.
