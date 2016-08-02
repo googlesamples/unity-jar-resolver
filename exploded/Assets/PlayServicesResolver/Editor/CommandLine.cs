@@ -13,7 +13,6 @@
 //  See the License for the specific language governing permissions and
 //    limitations under the License.
 // </copyright>
-#if UNITY_ANDROID
 
 namespace GooglePlayServices
 {
@@ -81,23 +80,34 @@ namespace GooglePlayServices
         /// <param name="stdin">List of lines to write to the standard input.</param>
         /// <param name="stdoutHandler">Additional handler for the standard output stream.</param>
         /// <param name="stderrHandler">Additional handler for the standard error stream.</param>
+        /// <param name="envVars">Additional environment variables to set for the command.</param>
         /// <returns>CommandLineTool result if successful, raises an exception if it's not
         /// possible to execute the tool.</returns>
         public static Result Run(
             string toolPath, string arguments, string workingDirectory, string[] stdin = null,
             DataReceivedEventHandler stdoutHandler = null,
-            DataReceivedEventHandler stderrHandler = null)
+            DataReceivedEventHandler stderrHandler = null,
+            Dictionary<string, string> envVars = null)
         {
             List<string>[] stdouterr = new List<string>[] { new List<string>(),
                                                             new List<string>() };
             System.Text.Encoding inputEncoding = Console.InputEncoding;
+            System.Text.Encoding outputEncoding = Console.OutputEncoding;
             Console.InputEncoding = System.Text.Encoding.UTF8;
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
             Process process = new Process();
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.Arguments = arguments;
             process.StartInfo.CreateNoWindow = true;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
+            if (envVars != null)
+            {
+                foreach (var env in envVars)
+                {
+                    process.StartInfo.EnvironmentVariables[env.Key] = env.Value;
+                }
+            }
             if (stdin != null) process.StartInfo.RedirectStandardInput = true;
             process.StartInfo.FileName = toolPath;
             process.StartInfo.WorkingDirectory = workingDirectory;
@@ -122,6 +132,7 @@ namespace GooglePlayServices
             result.stderr = String.Join(Environment.NewLine, stdouterr[1].ToArray());
             result.exitCode = process.ExitCode;
             Console.InputEncoding = inputEncoding;
+            Console.OutputEncoding = outputEncoding;
             return result;
         }
 
@@ -165,5 +176,3 @@ namespace GooglePlayServices
         }
     }
 }
-
-#endif  // UNITY_ANDROID
