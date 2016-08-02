@@ -208,6 +208,26 @@ namespace Google.JarResolver
         }
 
         /// <summary>
+        /// Delete a file or directory if it exists.
+        /// </summary>
+        /// <param name="path">Path to the file or directory to delete if it exists.</param>
+        static internal void DeleteExistingFileOrDirectory(string path)
+        {
+            if (Directory.Exists(path))
+            {
+                foreach (string file in Directory.GetFileSystemEntries(path))
+                {
+                    DeleteExistingFileOrDirectory(file);
+                }
+                Directory.Delete(path);
+            }
+            else if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+
+        /// <summary>
         /// Adds a dependency to the project.
         /// </summary>
         /// <remarks>This method should be called for
@@ -251,11 +271,7 @@ namespace Google.JarResolver
         /// </summary>
         public void ClearDependencies()
         {
-            if (File.Exists(DependencyFileName))
-            {
-                File.Delete(DependencyFileName);
-            }
-
+            DeleteExistingFileOrDirectory(DependencyFileName);
             clientDependenciesMap = LoadDependencies(false);
         }
 
@@ -468,14 +484,7 @@ namespace Google.JarResolver
 
                     if (doCleanup)
                     {
-                        if (File.Exists(s))
-                        {
-                            File.Delete(s);
-                        }
-                        else if (Directory.Exists(s))
-                        {
-                            Directory.Delete(s);
-                        }
+                        DeleteExistingFileOrDirectory(s);
                     }
                     else
                     {
@@ -515,7 +524,7 @@ namespace Google.JarResolver
                         {
                             doCopy = File.GetLastWriteTime(existingName).CompareTo(
                                 File.GetLastWriteTime(aarFile)) < 0;
-                            if (doCopy) File.Delete(existingName);
+                            if (doCopy) DeleteExistingFileOrDirectory(existingName);
                         }
                         if (doCopy)
                         {
@@ -713,7 +722,7 @@ namespace Google.JarResolver
 
             foreach (string depFile in clientFiles)
             {
-                File.Delete(depFile);
+                DeleteExistingFileOrDirectory(depFile);
             }
 
             ClearDependencies();
@@ -842,10 +851,7 @@ namespace Google.JarResolver
         /// </summary>
         internal void PersistDependencies()
         {
-            if (File.Exists(DependencyFileName))
-            {
-                File.Delete(DependencyFileName);
-            }
+            DeleteExistingFileOrDirectory(DependencyFileName);
 
             StreamWriter sw = new StreamWriter(DependencyFileName);
 
