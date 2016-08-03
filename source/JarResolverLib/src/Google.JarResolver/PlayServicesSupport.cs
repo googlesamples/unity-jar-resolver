@@ -301,6 +301,8 @@ namespace Google.JarResolver
 
                 foreach (Dependency dep in unresolved)
                 {
+                    // Whether the dependency has been resolved and therefore should be removed
+                    // from the unresolved list.
                     bool remove = true;
 
                     // check for existing candidate
@@ -373,13 +375,6 @@ namespace Google.JarResolver
                         {
                             candidates.Add(candidate.VersionlessKey, candidate);
                             remove = true;
-                            foreach (Dependency d in GetDependencies(dep))
-                            {
-                                if (!nextUnresolved.ContainsKey(d.Key))
-                                {
-                                    nextUnresolved.Add(d.Key, d);
-                                }
-                            }
                         }
                         else
                         {
@@ -388,7 +383,19 @@ namespace Google.JarResolver
                         }
                     }
 
-                    if (!remove)
+                    // If the dependency has been found.
+                    if (remove)
+                    {
+                        // Add all transitive dependencies to resolution list.
+                        foreach (Dependency d in GetDependencies(dep))
+                        {
+                            if (!nextUnresolved.ContainsKey(d.Key))
+                            {
+                                nextUnresolved.Add(d.Key, d);
+                            }
+                        }
+                    }
+                    else
                     {
                         if (!nextUnresolved.ContainsKey(dep.Key))
                         {
@@ -430,8 +437,8 @@ namespace Google.JarResolver
             {
                 // match artifact-*.  The - is important to distinguish art-1.0.0
                 // from artifact-1.0.0 (or base and basement).
-                string[] dups =
-                    Directory.GetFiles(destDirectory, dep.Artifact + "-*");
+                string[] dups = Directory.GetFileSystemEntries(destDirectory,
+                                                               dep.Artifact + "-*");
                 bool doCopy = true;
                 bool doCleanup = false;
                 foreach (string s in dups)
