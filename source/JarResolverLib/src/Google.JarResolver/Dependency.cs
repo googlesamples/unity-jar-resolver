@@ -70,6 +70,11 @@ namespace Google.JarResolver
         private string[] packageIds;
 
         /// <summary>
+        /// Optional array of repository directories to search for this artifact.
+        /// </summary>
+        private string[] repositories;
+
+        /// <summary>
         /// Initializes a new instance of the
         ///  <see cref="Google.JarResolver.Dependency"/> class.
         /// </summary>
@@ -78,13 +83,17 @@ namespace Google.JarResolver
         /// <param name="version">Version constraint.</param>
         /// <param name="packageIds">Android SDK package identifiers required for this
         /// artifact.</param>
-        public Dependency(string group, string artifact, string version, string[] packageIds=null)
+        /// <param name="repositories">List of additional repository directories to search for
+        /// this artifact.</param>
+        public Dependency(string group, string artifact, string version, string[] packageIds=null,
+                          string[] repositories=null)
         {
             this.group = group;
             this.artifact = artifact;
             this.version = version;
             this.packageIds = packageIds;
             this.possibleVersions = new List<string>();
+            this.repositories = repositories;
         }
 
         /// <summary>
@@ -133,6 +142,18 @@ namespace Google.JarResolver
             get
             {
                 return packageIds;
+            }
+        }
+
+        /// <summary>
+        /// Array of repositories to search for this artifact.
+        /// </summary>
+        /// <value>List of repository directories if set or null.</value>
+        public string[] Repositories
+        {
+            get
+            {
+                return repositories;
             }
         }
 

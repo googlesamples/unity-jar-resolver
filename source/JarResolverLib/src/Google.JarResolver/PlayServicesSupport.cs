@@ -190,6 +190,11 @@ namespace Google.JarResolver
                 instance.repositoryPaths.AddRange(additionalRepositories);
             }
             instance.clientDependenciesMap = instance.LoadDependencies(false);
+            foreach (Dependency dependency in instance.clientDependenciesMap.Values)
+            {
+                string[] repositories = dependency.Repositories;
+                if (repositories != null) instance.repositoryPaths.AddRange(repositories);
+            }
             return instance;
         }
 
@@ -253,11 +258,14 @@ namespace Google.JarResolver
         /// <param name="artifact">Artifact - Artifact Id</param>
         /// <param name="version">Version - the version constraint</param>
         /// <param name="packageIds">Optional list of Android SDK package identifiers.</param>
+        /// <param name="repositories">List of additional repository directories to search for
+        /// this artifact.</param>
         public void DependOn(string group, string artifact, string version,
-                             string[] packageIds=null)
+                             string[] packageIds=null, string[] repositories=null)
         {
             Dependency unresolvedDep = new Dependency(group, artifact, version,
-                                                      packageIds: packageIds);
+                                                      packageIds: packageIds,
+                                                      repositories: repositories);
             Dependency dep = FindCandidate(unresolvedDep);
             dep = dep ?? unresolvedDep;
 
@@ -481,7 +489,8 @@ namespace Google.JarResolver
                     }
 
                     Dependency oldDep = new Dependency(dep.Group, artifactName, artifactVersion,
-                                                       packageIds: dep.PackageIds);
+                                                       packageIds: dep.PackageIds,
+                                                       repositories: dep.Repositories);
 
                     // add the artifact version so BestVersion == version.
                     oldDep.AddVersion(oldDep.Version);
@@ -777,6 +786,7 @@ namespace Google.JarResolver
                 string artifactId = null;
                 string versionId = null;
                 string[] packageIds = null;
+                string[] repositories = null;
 
                 while (reader.Read())
                 {
@@ -794,7 +804,8 @@ namespace Google.JarResolver
                             {
                                 Dependency unresolvedDependency =
                                     new Dependency(groupId, artifactId, versionId,
-                                                   packageIds: packageIds);
+                                                   packageIds: packageIds,
+                                                   repositories: repositories);
                                 Dependency dep = FindCandidate(unresolvedDependency);
                                 if (dep == null)
                                 {
@@ -819,6 +830,7 @@ namespace Google.JarResolver
                             artifactId = null;
                             versionId = null;
                             packageIds = null;
+                            repositories = null;
                         }
                     }
 
@@ -843,6 +855,11 @@ namespace Google.JarResolver
                             // packageId from the set.
                             string packageId = reader.ReadString();
                             packageIds = packageId.Split(new char[] {' '});
+                        }
+                        else if (reader.Name == "repositories")
+                        {
+                            string repositoriesValue = reader.ReadString();
+                            repositories = repositoriesValue.Split(new char[] {' '});
                         }
                     }
                 }
@@ -886,7 +903,12 @@ namespace Google.JarResolver
                     writer.WriteValue(dep.PackageIds);
                     writer.WriteEndElement();
                 }
-
+                if (dep.Repositories != null)
+                {
+                    writer.WriteStartElement("repositories");
+                    writer.WriteValue(dep.Repositories);
+                    writer.WriteEndElement();
+                }
                 writer.WriteEndElement();
             }
 
