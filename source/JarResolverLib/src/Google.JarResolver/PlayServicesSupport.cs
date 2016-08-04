@@ -120,6 +120,17 @@ namespace Google.JarResolver
             }
         }
 
+        // TODO(wilkinsonclay): get the extension from the pom file.
+        private string[] Packaging = {
+            ".aar",
+            ".jar",
+            // This allows users to place an aar inside a Unity project and have Unity
+            // ignore the file as part of the build process, but still allow the Jar
+            // Resolver to process the AAR so it can be included in the build.
+            ".srcaar"
+        };
+
+
         /// <summary>
         /// Creates an instance of PlayServicesSupport.  This instance is
         /// used to add dependencies for the calling client and invoke the resolution.
@@ -509,23 +520,24 @@ namespace Google.JarResolver
                     string aarFile = null;
 
                     // TODO(wilkinsonclay): get the extension from the pom file.
-                    string[] packaging = { ".aar", ".jar" };
-
                     string baseName = null;
-                    foreach (string ext in packaging)
+                    string extension = null;
+                    foreach (string ext in Packaging)
                     {
                         string fname = Path.Combine(dep.BestVersionPath,
                             dep.Artifact + "-" + dep.BestVersion + ext);
                         if (File.Exists(fname))
                         {
-                            baseName = dep.Artifact + "-" + dep.BestVersion + ext;
+                            baseName = dep.Artifact + "-" + dep.BestVersion;
                             aarFile = fname;
+                            extension = ext;
                         }
                     }
 
                     if (aarFile != null)
                     {
-                        string destName = Path.Combine(destDirectory, baseName);
+                        string destName = Path.Combine(destDirectory, baseName) +
+                            (extension == ".srcaar" ? ".aar" : extension);
                         string destNameUnpacked = Path.Combine(
                             destDirectory, Path.GetFileNameWithoutExtension(destName));
                         string existingName =
@@ -636,10 +648,8 @@ namespace Google.JarResolver
             {
 
                 // TODO(wilkinsonclay): get the packaging from the pom.
-                string[] packaging = { ".aar", ".jar" };
-
                 // Check for the actual file existing, otherwise skip this version.
-                foreach (string ext in packaging)
+                foreach (string ext in Packaging)
                 {
                     string basename = dep.Artifact + "-" + dep.BestVersion + ext;
                     string fname = Path.Combine(dep.BestVersionPath, basename);
