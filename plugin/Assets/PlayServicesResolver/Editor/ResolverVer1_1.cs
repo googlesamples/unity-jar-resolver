@@ -307,7 +307,7 @@ namespace GooglePlayServices
                 {
                     string depString = System.String.Join(
                         ", ", CollectionToArray(requiredPackages[pkg].Keys));
-                    if (installPackages.ContainsKey(pkg))
+                    if (installPackages.ContainsKey(pkg) && depString.Length > 0)
                     {
                         Debug.LogWarning(pkg + " not installed or out of date!  This is " +
                                          "required by the following dependencies " + depString);

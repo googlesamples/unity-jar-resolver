@@ -61,7 +61,7 @@ namespace Google.JarResolver
         /// <summary>
         /// The repository paths.
         /// </summary>
-        private List<string> repositoryPaths = new List<string>();
+        private Dictionary<string, bool> repositoryPaths = new Dictionary<string, bool>();
 
         /// <summary>
         /// The client dependencies map.  This is a proper subset of dependencyMap.
@@ -181,20 +181,16 @@ namespace Google.JarResolver
 
             // Add the standard repo paths from the Android SDK
             string sdkExtrasDir = Path.Combine("$SDK", "extras");
-            instance.repositoryPaths.Add(Path.Combine(sdkExtrasDir,
-                Path.Combine("android","m2repository")));
-            instance.repositoryPaths.Add(Path.Combine(sdkExtrasDir,
-                Path.Combine("google","m2repository")));
-            if (additionalRepositories != null)
+            instance.repositoryPaths[
+                Path.Combine(sdkExtrasDir, Path.Combine("android","m2repository"))] = true;
+            instance.repositoryPaths[
+                Path.Combine(sdkExtrasDir, Path.Combine("google","m2repository"))] = true;
+            foreach (string repo in additionalRepositories ?? new string[] {})
             {
-                instance.repositoryPaths.AddRange(additionalRepositories);
+                instance.repositoryPaths[repo] = true;
             }
-            instance.clientDependenciesMap = instance.LoadDependencies(false);
-            foreach (Dependency dependency in instance.clientDependenciesMap.Values)
-            {
-                string[] repositories = dependency.Repositories;
-                if (repositories != null) instance.repositoryPaths.AddRange(repositories);
-            }
+            instance.clientDependenciesMap = instance.LoadDependencies(false,
+                                                                       true);
             return instance;
         }
 
@@ -280,7 +276,7 @@ namespace Google.JarResolver
         public void ClearDependencies()
         {
             DeleteExistingFileOrDirectory(DependencyFileName);
-            clientDependenciesMap = LoadDependencies(false);
+            clientDependenciesMap = LoadDependencies(false, true);
         }
 
         /// <summary>
@@ -297,7 +293,7 @@ namespace Google.JarResolver
 
             Dictionary<string, Dependency> candidates = new Dictionary<string, Dependency>();
 
-            Dictionary<string, Dependency> dependencyMap = LoadDependencies(true);
+            Dictionary<string, Dependency> dependencyMap = LoadDependencies(true, true);
 
             // All dependencies are added to the "unresolved" list.
             unresolved.AddRange(dependencyMap.Values);
@@ -582,7 +578,7 @@ namespace Google.JarResolver
 
         internal Dependency FindCandidate(Dependency dep)
         {
-            foreach(string repo in repositoryPaths)
+            foreach(string repo in repositoryPaths.Keys)
             {
                 string repoPath;
                 if (repo.StartsWith("$SDK")) {
@@ -609,7 +605,8 @@ namespace Google.JarResolver
                 }
             }
             Log("ERROR: Unable to find dependency " + dep.Group + " " + dep.Artifact + " " +
-                dep.Version + " in (" + String.Join(", ", repositoryPaths.ToArray()) + ")");
+                dep.Version + " in (" +
+                String.Join(", ", new List<string>(repositoryPaths.Keys).ToArray()) + ")");
             return null;
         }
 
@@ -854,12 +851,14 @@ namespace Google.JarResolver
                             // instead read the field as a string and split to retrieve each
                             // packageId from the set.
                             string packageId = reader.ReadString();
-                            packageIds = packageId.Split(new char[] {' '});
+                            packageIds = Array.FindAll(packageId.Split(new char[] {' '}),
+                                                       (s) => { return s.Length > 0; });
                         }
                         else if (reader.Name == "repositories")
                         {
                             string repositoriesValue = reader.ReadString();
-                            repositories = repositoriesValue.Split(new char[] {' '});
+                            repositories = Array.FindAll(repositoriesValue.Split(new char[] {' '}),
+                                                         (s) => { return s.Length > 0; });
                         }
                     }
                 }
@@ -867,6 +866,13 @@ namespace Google.JarResolver
                 sr.Close();
             }
 
+            foreach (Dependency dependency in dependencyMap.Values)
+            {
+                foreach (string repo in dependency.Repositories ?? new string[] {})
+                {
+                    repositoryPaths[repo] = true;
+                }
+            }
             return dependencyMap;
         }
 
