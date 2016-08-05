@@ -464,36 +464,20 @@ namespace Google.JarResolver
                         continue;
                     }
 
-                    string existing =
+                    // Strip the package extension from filenames.  Directories generated from
+                    // unpacked AARs do not have extensions.
+                    string existing = Directory.Exists(s) ? s :
                         Path.GetFileNameWithoutExtension(s);
 
-                    // Make sure the file matches the expression "${artifact}-${version}".
-                    // e.g foo-bar-1.2.3 would match the glob foo-1.2.3 but would reference
-                    // a different artifact.
-                    if (!System.Text.RegularExpressions.Regex.Match(
-                            existing.Substring(dep.Artifact.Length + 1),
-                            "^[0-9.]+$").Success)
-                    {
-                        continue;
-                    }
-
-                    string artifactName = null;
-                    string artifactVersion = null;
-                    int idx = existing.Length;
-                    // handle artifacts like android-support-4.0.0-alpha.aar
-                    while(artifactVersion == null && idx > 0) {
-                        // the version is after the last -
-                        idx = existing.LastIndexOf("-",idx);
-
-                        if (idx >0) {
-                            artifactName = existing.Substring(0, idx);
-                            artifactVersion = existing.Substring(idx + 1);
-                            if (!char.IsDigit(artifactVersion.ToCharArray()[0])) {
-                                idx--;
-                                artifactVersion = null;
-                            }
-                        }
-                    }
+                    // Extract the version from the filename.
+                    // dep.Artifact is the name of the package (prefix)
+                    // The regular expression extracts the version number from the filename
+                    // handling filenames like foo-1.2.3-alpha.
+                    string artifactName = existing.Substring(dep.Artifact.Length + 1);
+                    System.Text.RegularExpressions.Match match =
+                        System.Text.RegularExpressions.Regex.Match(artifactName, "^([0-9.]+)");
+                    if (!match.Success) continue;
+                    string artifactVersion = match.Groups[1].Value;
 
                     Dependency oldDep = new Dependency(dep.Group, artifactName, artifactVersion,
                                                        packageIds: dep.PackageIds,
