@@ -174,7 +174,7 @@ namespace GooglePlayServices
             DateTime currentPollTime = DateTime.Now;
             if (currentBundleId != bundleId)
             {
-                // If the bundle ID setting hasn't changed for a while. 
+                // If the bundle ID setting hasn't changed for a while.
                 if (currentBundleId == lastBundleId)
                 {
                     if (currentPollTime.Subtract(lastBundleIdPollTime).Seconds >=

@@ -200,6 +200,46 @@ namespace GooglePlayServices
         /// </summary>
         internal delegate void GetAvailablePackagesComplete(Dictionary<string, bool> packages);
 
+        // Answers Android SDK manager license questions.
+        private class LicenseResponder : CommandLine.LineReader
+        {
+            private const string Question = "Do you accept the license";
+
+            private string response;
+
+            // Initialize the class to respond "yes" or "no" to license questions.
+            public LicenseResponder(bool accept)
+            {
+                LineHandler += CheckAndRespond;
+                response = accept ? "yes" : "no";
+            }
+
+            // Respond license questions with the "response".
+            public void CheckAndRespond(System.Diagnostics.Process process, StreamWriter stdin,
+                                        CommandLine.StreamData data)
+            {
+                if (process.HasExited) return;
+                if ((data.data != null && data.text.Contains(Question)) ||
+                    CommandLine.LineReader.Aggregate(GetBufferedData(0)).text.Contains(Question))
+                {
+                    Flush();
+                    // Ignore I/O exceptions as this could race with the process exiting.
+                    try
+                    {
+                        foreach (byte b in System.Text.Encoding.UTF8.GetBytes(
+                                     response + System.Environment.NewLine))
+                        {
+                            stdin.BaseStream.WriteByte(b);
+                        }
+                        stdin.BaseStream.Flush();
+                    }
+                    catch (System.IO.IOException)
+                    {
+                    }
+                }
+            }
+        }
+
         /// <summary>
         /// Get the set of available SDK packages and whether they're installed.
         /// </summary>
@@ -217,8 +257,9 @@ namespace GooglePlayServices
             window.modal = false;
             window.summaryText = "Getting list of installed Android packages.";
             window.progressTitle = window.summaryText;
+            window.autoScrollToBottom = true;
             window.RunAsync(
-                androidTool, "list sdk -u -e -a", System.Environment.CurrentDirectory,
+                androidTool, "list sdk -u -e -a",
                 (result) => {
                     window.Close();
                     if (result.exitCode != 0)
@@ -258,7 +299,7 @@ namespace GooglePlayServices
                     }
                     complete(packages);
                 },
-                maxProgressLines: 25);
+                maxProgressLines: 50);
             window.Show();
         }
 
@@ -393,7 +434,7 @@ namespace GooglePlayServices
                     // Start installation.
                     string installPackagesString = System.String.Join(
                         ",", CollectionToArray(installPackages.Keys));
-                    string packagesCommand = "update sdk -u -t " + installPackagesString;
+                    string packagesCommand = "update sdk -a -u -t " + installPackagesString;
                     CommandLineDialog window = CommandLineDialog.CreateCommandLineDialog(
                         "Install Android SDK packages");
                     window.summaryText = "Retrieving licenses...";
@@ -401,12 +442,9 @@ namespace GooglePlayServices
                     window.progressTitle = window.summaryText;
                     window.RunAsync(
                         androidTool, packagesCommand,
-                        System.Environment.CurrentDirectory,
                         (CommandLine.Result getLicensesResult) => {
                             // Get the start of the license text.
                             int licenseTextStart = getLicensesResult.stdout.IndexOf("--------");
-                            int licenseTextEnd = getLicensesResult.stdout.LastIndexOf(
-                                "Do you accept the license");
                             if (getLicensesResult.exitCode != 0 || licenseTextStart < 0)
                             {
                                 window.Close();
@@ -415,13 +453,9 @@ namespace GooglePlayServices
                                 return;
                             }
 
-                            // Truncate the string to get rid of the command line status output.
+                            // Remove the download output from the string.
                             string licenseText = getLicensesResult.stdout.Substring(
-                                licenseTextStart, licenseTextEnd - licenseTextStart);
-                            // TODO: Since the Android SDK manager doesn't seem to be able to
-                            // read a line at a time from stdin, strip all
-                            // "Do you accept the license" lines and "Unknown response"
-                            // lines from the output.
+                                licenseTextStart);
                             window.summaryText = ("License agreement(s) required to install " +
                                                   "Android SDK packages");
                             window.bodyText = licenseText;
@@ -442,11 +476,11 @@ namespace GooglePlayServices
                                 window.noText = "";
                                 window.buttonClicked = null;
                                 window.progressTitle = window.summaryText;
+                                window.autoScrollToBottom = true;
                                 window.Repaint();
                                 // Kick off installation.
                                 ((CommandLineDialog)window).RunAsync(
                                     androidTool, packagesCommand,
-                                    System.Environment.CurrentDirectory,
                                     (CommandLine.Result updateResult) => {
                                         window.Close();
                                         if (updateResult.exitCode == 0)
@@ -460,11 +494,11 @@ namespace GooglePlayServices
                                                            updateResult.exitCode.ToString() + ")");
                                         }
                                     },
-                                    stdin: new string[] {"y"},
+                                    ioHandler: (new LicenseResponder(true)).AggregateLine,
                                     maxProgressLines: 500);
                             };
                         },
-                        stdin: new string[] {"n"},
+                        ioHandler: (new LicenseResponder(false)).AggregateLine,
                         maxProgressLines: 250);
                 });
         }
@@ -494,8 +528,6 @@ namespace GooglePlayServices
                 {
                     packagesToUpdate.Add(kv.Value.path);
                     aarsToResolve.Add(kv.Key);
-                    Debug.Log("bundle ID changed \"" + kv.Value.bundleId + "\" --> \"" + bundleId +
-                              "\" need to update " + kv.Value.path);  // DEBUG
                 }
             }
             // Remove AARs that will be resolved from the dictionary so the next call to

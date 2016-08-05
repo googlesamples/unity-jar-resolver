@@ -292,7 +292,7 @@ namespace GooglePlayServices
                 CommandLine.Result result = CommandLine.Run(FindJavaTool("jar"),
                                                             "xvf " + "\"" + aarPath + "\"" +
                                                             extractFilesArg,
-                                                            outputDirectory);
+                                                            workingDirectory: outputDirectory);
                 if (result.exitCode != 0)
                 {
                     Debug.LogError("Error expanding " + aarPath + " err: " +

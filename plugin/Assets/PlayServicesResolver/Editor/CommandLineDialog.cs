@@ -16,15 +16,20 @@
 
 namespace GooglePlayServices
 {
+    using System.Collections.Generic;
     using System.Collections;
+    using System.Diagnostics;
+    using System.IO;
+    using System;
     using UnityEditor;
+    using UnityEngine;
 
     public class CommandLineDialog : TextAreaDialog
     {
         /// <summary>
         /// Forwards the output of the currently executing command to a CommandLineDialog window.
         /// </summary>
-        public class ProgressReporter
+        public class ProgressReporter : CommandLine.LineReader
         {
             /// <summary>
             /// Used to scale the progress bar by the number of lines reported by the command
@@ -33,7 +38,7 @@ namespace GooglePlayServices
             public int maxProgressLines;
 
             // Queue of command line output lines to send to the main / UI thread.
-            private Queue textQueue = null;
+            private System.Collections.Queue textQueue = null;
             // Number of lines reported by the command line tool.
             private volatile int linesReported;
             // Command line tool result, set when command line execution is complete.
@@ -48,23 +53,36 @@ namespace GooglePlayServices
             /// <summary>
             /// Construct a new reporter.
             /// </summary>
-            public ProgressReporter()
+            public ProgressReporter(CommandLine.IOHandler handler = null)
             {
-                textQueue = Queue.Synchronized(new Queue());
+                textQueue = System.Collections.Queue.Synchronized(new System.Collections.Queue());
                 maxProgressLines = 0;
                 linesReported = 0;
+                LineHandler += CommandLineIOHandler;
                 Complete = null;
+            }
+
+            // Count the number of newlines and carriage returns in a string.
+            private int CountLines(string str)
+            {
+                return str.Split(new char[] { '\n', '\r' }).Length - 1;
             }
 
             /// <summary>
             /// Called from RunCommandLine() tool to report the output of the currently
             /// executing commmand.
             /// </summary>
-            public void DataReceivedHandler(object unusedSender,
-                                            System.Diagnostics.DataReceivedEventArgs args)
+            /// <param name="process">Executing process.</param>
+            /// <param name="stdin">Standard input stream.</param>
+            /// <param name="data">Data read from the standard output or error streams.</param>
+            private void CommandLineIOHandler(Process process, StreamWriter stdin,
+                                              CommandLine.StreamData data)
             {
-                textQueue.Enqueue(args.Data + "\n");
-                linesReported ++;
+                if (process.HasExited || data.data == null) return;
+                // Count lines in stdout.
+                if (data.handle == 0) linesReported += CountLines(data.text);
+                // Enqueue data for the text view.
+                textQueue.Enqueue(System.Text.Encoding.UTF8.GetString(data.data));
             }
 
             /// <summary>
@@ -78,19 +96,37 @@ namespace GooglePlayServices
             /// <summary>
             /// Called from CommandLineDialog in the context of the main / UI thread.
             /// </summary>
-            public void Update(CommandLineDialog window) {
+            public void Update(CommandLineDialog window)
+            {
                 if (textQueue.Count > 0)
                 {
-                    string data = (string)textQueue.Dequeue();
-                    string bodyText = window.bodyText;
-                    // Really weak handling carriage returns for progress style updates.
-                    int carriageReturn = bodyText.LastIndexOf("\r");
-                    string bodyTail = carriageReturn >= 0 && carriageReturn < bodyText.Length - 1 ?
-                        bodyText.Substring(carriageReturn + 1) : "";
-                    if (carriageReturn > 0) bodyText = bodyText.Substring(0, carriageReturn);
-                    int tailLength = bodyTail.Length - data.Length;
-                    bodyTail = tailLength > 0 ? bodyTail.Substring(data.Length) : "";
-                    window.bodyText = bodyText + data + bodyTail;
+                    List<string> textList = new List<string>();
+                    while (textQueue.Count > 0) textList.Add((string)textQueue.Dequeue());
+                    string bodyText = window.bodyText + String.Join("", textList.ToArray());
+                    // Really weak handling of carriage returns.  Truncates to the previous
+                    // line for each newline detected.
+                    while (true)
+                    {
+                        // Really weak handling carriage returns for progress style updates.
+                        int carriageReturn = bodyText.LastIndexOf("\r");
+                        if (carriageReturn < 0 || bodyText.Substring(carriageReturn, 1) == "\n")
+                        {
+                            break;
+                        }
+                        string bodyTextHead = "";
+                        int previousNewline = bodyText.LastIndexOf("\n", carriageReturn,
+                                                                   carriageReturn);
+                        if (previousNewline >= 0)
+                        {
+                            bodyTextHead = bodyText.Substring(0, previousNewline + 1);
+                        }
+                        bodyText = bodyTextHead + bodyText.Substring(carriageReturn + 1);
+                    }
+                    window.bodyText = bodyText;
+                    if (window.autoScrollToBottom)
+                    {
+                        window.scrollPosition.y = Mathf.Infinity;
+                    }
                     window.Repaint();
                 }
                 if (maxProgressLines > 0)
@@ -112,6 +148,7 @@ namespace GooglePlayServices
         public volatile float progress;
         public string progressTitle;
         public string progressSummary;
+        public volatile bool autoScrollToBottom;
 
         /// <summary>
         /// Event delegate called from the Update() method of the window.
@@ -145,6 +182,7 @@ namespace GooglePlayServices
             progressSummary = "";
             UpdateEvent = null;
             progressBarVisible = false;
+            autoScrollToBottom = false;
         }
 
         /// <summary>
@@ -153,38 +191,34 @@ namespace GooglePlayServices
         /// </summary>
         /// <param name="toolPath">Tool to execute.</param>
         /// <param name="arguments">String to pass to the tools' command line.</param>
-        /// <param name="workingDirectory">Directory to execute the tool from.</param>
         /// <param name="completionDelegate">Called when the tool completes.</param>
-        /// <param name="windowTitle">Title of the window used to display the command line
-        /// output.</param>
-        /// <param name="stdin">List of lines to write to the standard input.</param>
-        /// <param name="stdoutHandler">Additional handler for the standard output stream.</param>
-        /// <param name="stderrHandler">Additional handler for the standard error stream.</param>
+        /// <param name="workingDirectory">Directory to execute the tool from.</param>
+        /// <param name="ioHandler">Allows a caller to provide interactive input and also handle
+        /// both output and error streams from a single delegate.</param>
         /// <param name="maxProgressLines">Specifies the number of lines output by the
         /// command line that results in a 100% value on a progress bar.</param>
         /// <returns>Reference to the new window.</returns>
         public void RunAsync(
-            string toolPath, string arguments, string workingDirectory,
+            string toolPath, string arguments,
             CommandLine.CompletionHandler completionDelegate,
-            string[] stdin = null,
-            System.Diagnostics.DataReceivedEventHandler stderrHandler = null,
-            int maxProgressLines = 0)
+            string workingDirectory = null, Dictionary<string, string> envVars = null,
+            CommandLine.IOHandler ioHandler = null, int maxProgressLines = 0)
         {
-            CommandLineDialog.ProgressReporter reporter =
-                new CommandLineDialog.ProgressReporter();
+            CommandLineDialog.ProgressReporter reporter = new CommandLineDialog.ProgressReporter();
             reporter.maxProgressLines = maxProgressLines;
             // Call the reporter from the UI thread from this window.
             UpdateEvent += reporter.Update;
             // Connect the user's delegate to the reporter's completion method.
             reporter.Complete += completionDelegate;
+            // Connect the caller's IoHandler delegate to the reporter.
+            reporter.DataHandler += ioHandler;
             // Disconnect the reporter when the command completes.
             CommandLine.CompletionHandler reporterUpdateDisable =
                 (CommandLine.Result unusedResult) => { this.UpdateEvent -= reporter.Update; };
             reporter.Complete += reporterUpdateDisable;
-            CommandLine.RunAsync(toolPath, arguments, workingDirectory,
-                                 reporter.CommandLineToolCompletion,
-                                 stdin: stdin, stdoutHandler: reporter.DataReceivedHandler,
-                                 stderrHandler: stderrHandler);
+            CommandLine.RunAsync(toolPath, arguments, reporter.CommandLineToolCompletion,
+                                 workingDirectory: workingDirectory, envVars: envVars,
+                                 ioHandler: reporter.AggregateLine);
         }
 
         /// <summary>
