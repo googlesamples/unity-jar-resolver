@@ -223,10 +223,12 @@ namespace Google.JarResolver
         /// Delete a file or directory if it exists.
         /// </summary>
         /// <param name="path">Path to the file or directory to delete if it exists.</param>
-        public static void DeleteExistingFileOrDirectory(string path)
+        static public void DeleteExistingFileOrDirectory(string path)
         {
             if (Directory.Exists(path))
             {
+                var di = new DirectoryInfo(path);
+                di.Attributes &= ~FileAttributes.ReadOnly;
                 foreach (string file in Directory.GetFileSystemEntries(path))
                 {
                     DeleteExistingFileOrDirectory(file);
@@ -235,6 +237,7 @@ namespace Google.JarResolver
             }
             else if (File.Exists(path))
             {
+                File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
                 File.Delete(path);
             }
         }
