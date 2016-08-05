@@ -54,6 +54,26 @@ namespace GooglePlayServices
         private static bool resolvedOnUpdate = false;
 
         /// <summary>
+        /// Seconds to wait until re-resolving dependencies after the bundle ID has changed.
+        /// </summary>
+        private const int bundleUpdateDelaySeconds = 3;
+
+        /// <summary>
+        /// Last time the bundle ID was checked.
+        /// </summary>
+        private static DateTime lastBundleIdPollTime = DateTime.Now;
+
+        /// <summary>
+        /// Last bundle ID value.
+        /// </summary>
+        private static string lastBundleId = PlayerSettings.bundleIdentifier;
+
+        /// <summary>
+        /// Last value of bundle ID since the last time OnBundleId() was called.
+        /// </summary>
+        private static string bundleId = "";
+
+        /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver()
@@ -66,6 +86,8 @@ namespace GooglePlayServices
 
             EditorApplication.update -= AutoResolve;
             EditorApplication.update += AutoResolve;
+            EditorApplication.update -= PollBundleId;
+            EditorApplication.update += PollBundleId;
         }
 
         /// <summary>
@@ -144,11 +166,58 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// If the user changes the bundle ID, perform resolution again.
+        /// </summary>
+        private static void PollBundleId()
+        {
+            string currentBundleId = PlayerSettings.bundleIdentifier;
+            DateTime currentPollTime = DateTime.Now;
+            if (currentBundleId != bundleId)
+            {
+                // If the bundle ID setting hasn't changed for a while. 
+                if (currentBundleId == lastBundleId)
+                {
+                    if (currentPollTime.Subtract(lastBundleIdPollTime).Seconds >=
+                        bundleUpdateDelaySeconds)
+                    {
+                        if (Resolver.AutomaticResolutionEnabled())
+                        {
+                            bundleId = currentBundleId;
+                            if (DeleteFiles(Resolver.OnBundleId(bundleId))) Resolve();
+                        }
+                    }
+                }
+                else
+                {
+                    lastBundleId = currentBundleId;
+                    lastBundleIdPollTime = currentPollTime;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Delete the specified array of files and directories.
+        /// </summary>
+        /// <param name="filenames">Array of files or directories to delete.</param>
+        /// <returns>true if files are deleted, false otherwise.</returns>
+        private static bool DeleteFiles(string[] filenames)
+        {
+            if (filenames == null) return false;
+            foreach (string artifact in filenames)
+            {
+                PlayServicesSupport.DeleteExistingFileOrDirectory(artifact);
+            }
+            AssetDatabase.Refresh();
+            return true;
+        }
+
+        /// <summary>
         /// Resolve dependencies.
         /// </summary>
         /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
         private static void Resolve(System.Action resolutionComplete = null)
         {
+            DeleteFiles(Resolver.OnBundleId(PlayerSettings.bundleIdentifier));
             Resolver.DoResolution(svcSupport, "Assets/Plugins/Android",
                                   HandleOverwriteConfirmation,
                                   () => {

@@ -223,7 +223,7 @@ namespace Google.JarResolver
         /// Delete a file or directory if it exists.
         /// </summary>
         /// <param name="path">Path to the file or directory to delete if it exists.</param>
-        static internal void DeleteExistingFileOrDirectory(string path)
+        public static void DeleteExistingFileOrDirectory(string path)
         {
             if (Directory.Exists(path))
             {
@@ -797,6 +797,10 @@ namespace Google.JarResolver
                                     new Dependency(groupId, artifactId, versionId,
                                                    packageIds: packageIds,
                                                    repositories: repositories);
+                                foreach (string repo in repositories ?? new string[] {})
+                                {
+                                    repositoryPaths[repo] = true;
+                                }
                                 Dependency dep = FindCandidate(unresolvedDependency);
                                 if (dep == null)
                                 {
@@ -858,14 +862,6 @@ namespace Google.JarResolver
                 }
                 reader.Close();
                 sr.Close();
-            }
-
-            foreach (Dependency dependency in dependencyMap.Values)
-            {
-                foreach (string repo in dependency.Repositories ?? new string[] {})
-                {
-                    repositoryPaths[repo] = true;
-                }
             }
             return dependencyMap;
         }

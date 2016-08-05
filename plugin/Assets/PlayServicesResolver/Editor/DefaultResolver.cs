@@ -150,6 +150,17 @@ namespace GooglePlayServices
             resolutionComplete();
         }
 
+        /// <summary>
+        /// Called during Update to allow the resolver to check the bundle ID of the application
+        /// to see whether resolution should be triggered again.
+        /// </summary>
+        /// <returns>Array of packages that should be re-resolved if resolution should occur,
+        /// null otherwise.</returns>
+        public virtual string[] OnBundleId(string bundleId)
+        {
+            return null;
+        }
+
         #endregion
 
         /// <summary>
@@ -346,28 +357,6 @@ namespace GooglePlayServices
             File.Delete(Path.GetFullPath(aarFile));
             Debug.Log(aarFile + " expanded successfully");
             return workingDir;
-        }
-
-        /// <summary>
-        /// Deletes the directory fully.
-        /// </summary>
-        /// <param name="dir">Directory to delete.</param>
-        internal static void DeleteFully(string dir)
-        {
-            string[] files = Directory.GetFiles(dir);
-            string[] dirs = Directory.GetDirectories(dir);
-
-            foreach (string f in files)
-            {
-                File.Delete(f);
-            }
-
-            foreach (string d in dirs)
-            {
-                DeleteFully(d);
-            }
-
-            Directory.Delete(dir);
         }
     }
 }

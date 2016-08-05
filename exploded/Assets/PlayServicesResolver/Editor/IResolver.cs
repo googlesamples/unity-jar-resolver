@@ -77,6 +77,14 @@ namespace GooglePlayServices
                           string destinationDirectory,
                           PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
                           System.Action resolutionComplete);
+
+        /// <summary>
+        /// Called during Update to allow the resolver to check the bundle ID of the application
+        /// to see whether resolution should be triggered again.
+        /// </summary>
+        /// <returns>Array of packages that should be re-resolved if resolution should occur,
+        /// null otherwise.</returns>
+        string[] OnBundleId(string bundleId);
     }
 }
 #endif

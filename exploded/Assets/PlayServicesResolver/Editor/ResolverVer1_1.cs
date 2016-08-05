@@ -36,7 +36,11 @@ namespace GooglePlayServices
             // Time the file was modified the last time it was inspected.
             public System.DateTime modificationTime;
             // Whether the AAR file should be expanded / exploded.
-            public bool explode;
+            public bool explode = false;
+            // Project's bundle ID when this was expanded.
+            public string bundleId = "";
+            // Path of the target AAR package.
+            public string path = "";
         }
 
         private Dictionary<string, AarExplodeData> aarExplodeData =
@@ -65,6 +69,7 @@ namespace GooglePlayServices
             if (!File.Exists(aarExplodeDataFile)) return;
 
             XmlTextReader reader = new XmlTextReader(new StreamReader(aarExplodeDataFile));
+            aarExplodeData.Clear();
             while (reader.Read())
             {
                 if (reader.NodeType == XmlNodeType.Element && reader.Name == "aars")
@@ -95,6 +100,14 @@ namespace GooglePlayServices
                                         else if (elementName == "explode")
                                         {
                                             aarData.explode = reader.ReadContentAsBoolean();
+                                        }
+                                        else if (elementName == "bundleId")
+                                        {
+                                            aarData.bundleId = reader.ReadContentAsString();
+                                        }
+                                        else if (elementName == "path")
+                                        {
+                                            aarData.path = reader.ReadContentAsString();
                                         }
                                     }
                                 }
@@ -129,6 +142,12 @@ namespace GooglePlayServices
                 writer.WriteEndElement();
                 writer.WriteStartElement("explode");
                 writer.WriteValue(kv.Value.explode);
+                writer.WriteEndElement();
+                writer.WriteStartElement("bundleId");
+                writer.WriteValue(PlayerSettings.bundleIdentifier);
+                writer.WriteEndElement();
+                writer.WriteStartElement("path");
+                writer.WriteValue(kv.Value.path);
                 writer.WriteEndElement();
                 writer.WriteEndElement();
             }
@@ -458,6 +477,33 @@ namespace GooglePlayServices
                          () => {});
         }
 
+        /// <summary>
+        /// Called during Update to allow the resolver to check the bundle ID of the application
+        /// to see whether resolution should be triggered again.
+        /// </summary>
+        /// <returns>Array of packages that should be re-resolved if resolution should occur,
+        /// null otherwise.</returns>
+        public override string[] OnBundleId(string bundleId)
+        {
+            // Determine which packages need to be updated.
+            List<string> packagesToUpdate = new List<string>();
+            List<string> aarsToResolve = new List<string>();
+            foreach (KeyValuePair<string, AarExplodeData> kv in aarExplodeData)
+            {
+                if (kv.Value.explode && kv.Value.bundleId != bundleId && kv.Value.path != "")
+                {
+                    packagesToUpdate.Add(kv.Value.path);
+                    aarsToResolve.Add(kv.Key);
+                    Debug.Log("bundle ID changed \"" + kv.Value.bundleId + "\" --> \"" + bundleId +
+                              "\" need to update " + kv.Value.path);  // DEBUG
+                }
+            }
+            // Remove AARs that will be resolved from the dictionary so the next call to
+            // OnBundleId triggers another resolution process.
+            foreach (string aar in aarsToResolve) aarExplodeData.Remove(aar);
+            return packagesToUpdate.Count > 0 ? packagesToUpdate.ToArray() : null;
+        }
+
         #endregion
 
         /// <summary>
@@ -512,19 +558,23 @@ namespace GooglePlayServices
             string[] files = Directory.GetFiles(dir, "*.aar");
             foreach (string f in files)
             {
+                string dirPath = Path.Combine(dir, Path.GetFileNameWithoutExtension(f));
+                string targetPath = Path.Combine(dir, Path.GetFileName(f));
                 if (ShouldExplode(f))
                 {
-                    string exploded = ProcessAar(Path.GetFullPath(dir), f);
-                    ReplaceVariables(exploded);
+                    ReplaceVariables(ProcessAar(Path.GetFullPath(dir), f));
+                    targetPath = dirPath;
                 }
                 else
                 {
-                    string baseName = Path.GetFileNameWithoutExtension(f);
-                    if (Directory.Exists(Path.Combine(dir, baseName)))
+                    // Clean up previously expanded / exploded versions of the AAR.
+                    if (Directory.Exists(dirPath))
                     {
-                        DeleteFully(Path.Combine(dir, baseName));
+                        PlayServicesSupport.DeleteExistingFileOrDirectory(dirPath);
                     }
                 }
+                aarExplodeData[f].path = targetPath;
+                aarExplodeData[f].bundleId = PlayerSettings.bundleIdentifier;
             }
         }
 
@@ -538,21 +588,18 @@ namespace GooglePlayServices
         /// <param name="aarFile">The aar file.</param>
         internal virtual bool ShouldExplode(string aarFile)
         {
-            AarExplodeData aarData = new AarExplodeData();
-            aarData.explode = !SupportsAarFiles;
-            if (!aarData.explode)
+            AarExplodeData aarData = null;
+            if (!aarExplodeData.TryGetValue(aarFile, out aarData)) aarData = new AarExplodeData();
+            bool explode = !SupportsAarFiles;
+            if (!explode)
             {
-                AarExplodeData retrievedAarData = null;
-                if (aarExplodeData.TryGetValue(aarFile, out retrievedAarData))
+                System.DateTime modificationTime = File.GetLastWriteTime(aarFile);
+                if (modificationTime.CompareTo(aarData.modificationTime) <= 0)
                 {
-                    System.DateTime modificationTime = File.GetLastWriteTime(aarFile);
-                    if (modificationTime.CompareTo(aarData.modificationTime) <= 0)
-                    {
-                        aarData = retrievedAarData;
-                    }
+                    explode = aarData.explode;
                 }
             }
-            if (!aarData.explode)
+            if (!explode)
             {
                 string temporaryDirectory = CreateTemporaryDirectory();
                 if (temporaryDirectory == null) return false;
@@ -567,7 +614,7 @@ namespace GooglePlayServices
                         if (File.Exists(manifestPath))
                         {
                             string manifest = File.ReadAllText(manifestPath);
-                            aarData.explode = manifest.IndexOf("${applicationId}") >= 0;
+                            explode = manifest.IndexOf("${applicationId}") >= 0;
                         }
                         aarData.modificationTime = File.GetLastWriteTime(aarFile);
                     }
@@ -579,11 +626,12 @@ namespace GooglePlayServices
                 }
                 finally
                 {
-                    DefaultResolver.DeleteFully(temporaryDirectory);
+                    PlayServicesSupport.DeleteExistingFileOrDirectory(temporaryDirectory);
                 }
             }
+            aarData.explode = explode;
             aarExplodeData[aarFile] = aarData;
-            return aarData.explode;
+            return explode;
         }
 
         /// <summary>
