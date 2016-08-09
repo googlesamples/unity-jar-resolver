@@ -351,7 +351,7 @@ namespace GooglePlayServices
                         requiredPackages[packageId] = dependencySet;
                         // If the dependency is missing, add it to the set that needs to be
                         // installed.
-                        if (dependency.RepoPath == null || dependency.RepoPath == "")
+                        if (System.String.IsNullOrEmpty(dependency.BestVersionPath))
                         {
                             installPackages[packageId] = false;
                         }
