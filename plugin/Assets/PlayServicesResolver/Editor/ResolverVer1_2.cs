@@ -57,6 +57,7 @@ namespace GooglePlayServices
             return base.ShouldExplode(aarFile) ||
             aarFile.Contains("firebase-common") ||
             aarFile.Contains("firebase-measurement") ||
+            aarFile.Contains("firebase-iid") ||
             !SupportsAarFiles;
         }
     }
