@@ -40,7 +40,7 @@ public static class SampleDependencies
     static SampleDependencies()
     {
 
-        PlayServicesSupport svcSupport = PlayServicesSupport.CreateInstance(
+        svcSupport = PlayServicesSupport.CreateInstance(
                                              PluginName,
                                              EditorPrefs.GetString("AndroidSdkRoot"),
                                              "ProjectSettings");
