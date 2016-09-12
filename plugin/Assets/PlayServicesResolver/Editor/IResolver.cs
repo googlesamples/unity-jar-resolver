@@ -79,6 +79,16 @@ namespace GooglePlayServices
                           System.Action resolutionComplete);
 
         /// <summary>
+        /// Does the resolution of the play-services aars.
+        /// </summary>
+        /// <param name="svcSupport">Svc support.</param>
+        /// <param name="destinationDirectory">Destination directory.</param>
+        /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
+        void DoResolution(PlayServicesSupport svcSupport,
+                          string destinationDirectory,
+                          PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation);
+
+        /// <summary>
         /// Called during Update to allow the resolver to check the bundle ID of the application
         /// to see whether resolution should be triggered again.
         /// </summary>
