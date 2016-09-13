@@ -1,7 +1,6 @@
 /*
-*   Gradle file to build the Unity plugin for Google Play Game Services.
-*/
-
+ * Gradle file to build the Jar Resolver Unity plugin.
+ */
 buildscript {
     repositories {
         jcenter()
@@ -10,21 +9,71 @@ buildscript {
 }
 
 /*
-    Project level variables
-*/
+ * Project level variables
+ */
 project.ext {
     sdk_root = System.getProperty("ANDROID_HOME")
     if (sdk_root == null || sdk_root.isEmpty()) {
         sdk_root = System.getenv("ANDROID_HOME")
     }
+
+    // Determine the current OS.
+    os_name = System.getProperty("os.name").toLowerCase();
+    os_osx = os_name.contains("mac os x");
+    os_windows = os_name.contains("windows");
+    os_linux = os_name.contains("linux");
+
+    // Search for the Unity editor executable.
+    // The Unity editor is required to package the plug-in.
     unity_exe = System.getProperty("UNITY_EXE")
     if (unity_exe == null || unity_exe.isEmpty()) {
         unity_exe = System.getenv("UNITY_EXE")
     }
     if (unity_exe == null || unity_exe.isEmpty()) {
+      // TODO: Should probably also search the path using Exec / which / where.
+      if (os_osx) {
         unity_exe ='/Applications/Unity/Unity.app/Contents/MacOS/Unity'
+      } else if (os_windows) {
+        unity_exe = 'C:\\Program Files\\Unity\\Editor\\Unity.exe'
+      } else if (os_linux) {
+        unity_exe = '/opt/Unity/Editor/Unity'
+      }
+    }
+    unity_exe_found = (new File(unity_exe)).exists();
+    if (!unity_exe_found) {
+      logger.warn('Unity editor executable not found, plug-in packaging ' +
+                  'may fail.')
     }
 
+    // Get the path to the Unity DLLs.
+    // Unity DLLs are referenced by the plug-in and therefore required by the
+    // build process.
+    unity_dll_path = System.getProperty("UNITY_DLL_PATH")
+    unity_dll_path_file = (unity_dll_path == null ||
+                           unity_dll_path.isEmpty()) ?
+                          null : new File(unity_dll_path);
+    if ((unity_dll_path_file == null || !unity_dll_path_file.exists()) &&
+        unity_exe_found) {
+      if (os_osx) {
+        // ${unity_exe}/../../Frameworks/Managed/Unity{Engine,Editor}.dll
+        unity_dll_path_file = new File(
+            (new File(unity_exe)).getParentFile().getParentFile(),
+            'Frameworks' + File.separator + 'Managed')
+      } else if (os_windows || os_linux) {
+        // ${unity_exe}/../Data/Managed/Unity{Engine,Editor}.dlledun
+        unity_dll_path_file = new File(
+            (new File(unity_exe)).getParentFile(),
+            'Data' + File.separator + 'Managed')
+      }
+      if (unity_dll_path_file != null && unity_dll_path_file.exists()) {
+        unity_dll_path = unity_dll_path_file.getPath()
+      }
+    }
+    if (unity_dll_path_file == null || !unity_dll_path_file.exists()) {
+      logger.error('Unity DLLs not found, plug-in build will fail.')
+    }
+
+    // Mono's xbuild tool is required to build the managed DLLs in the plug-in.
     xbuild_exe = System.getProperty("XBUILD_EXE")
     if (xbuild_exe == null || xbuild_exe.isEmpty()) {
         xbuild_exe = System.getenv("XBUILD_EXE")
@@ -32,69 +81,167 @@ project.ext {
     if (xbuild_exe == null || xbuild_exe.isEmpty()) {
         xbuild_exe = 'xbuild'
     }
+    if (!(new File(xbuild_exe)).exists()) {
+      logger.warn('xbuild not found, plug-in build may fail.')
+    }
 
     pluginSrc = file('plugin').absolutePath
     pluginProj = file('build/PluginSrc').absolutePath
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
+    dllDir = 'Assets/PlayServicesResolver/Editor'
+    pluginVersion = '1.2.0.0'
     currentPluginPath = file('.').absolutePath
-    currentPluginName = 'play-services-resolver-1.2.0.unitypackage'
+    currentPluginBasename = 'play-services-resolver'
+    currentPluginName = (currentPluginBasename + '-' + pluginVersion +
+                         '.unitypackage')
 }
 
-if (!tasks.findByName('prebuild')) {
-    task prebuild() {
-        println('Local prebuild')
-    }
-    prebuild.dependsOn {
-        project.tasks.findAll { task -> task.ext.has('remoteTaskPhase') && task.ext.remoteTaskPhase == 'prebuild' }
-    }
-}
-if (!tasks.findByName('build')) {
-    task build() {
-        println('Local build')
-    }
-    build.dependsOn {
-        project.tasks.findAll { task -> task.ext.has('remoteTaskPhase') && task.ext.remoteTaskPhase == 'build' }
-    }
-}
-if (!tasks.findByName('postbuild')) {
-    task postbuild() {
-        println('Local postbuild')
-    }
-    postbuild.dependsOn {
-        project.tasks.findAll { task -> task.ext.has('remoteTaskPhase') && task.ext.remoteTaskPhase == 'postbuild' }
-    }
+task compile_resolverTests(type: Exec) {
+  description 'Compile the tests for the Mono framework component.'
+  workingDir 'source'
+  commandLine "${xbuild_exe}", '/target:JarResolverTests'
+  ext.remoteTaskPhase = 'prebuild'
 }
 
-project.defaultTasks = ['prebuild', 'build', 'postbuild']
-
-
-/**
-    Final task of building all the unity packages.
-**/
-task unity_package(dependsOn:'export_package') {
-
-    description = "Top level task for building the unity packages"
-
-    doLast {
-        println "Packaging Complete!"
-    }
-
-    // Mark this a build phase task for remoteTask support.
-    ext.remoteTaskPhase = 'build'
-
-    // Depends on packaging all the samples
-    dependsOn {
-        tasks.findAll { task -> task.name.startsWith('PackageSample') }
-    }
+task test_resolverLib(type: Exec, dependsOn: compile_resolverTests) {
+  description 'Runs the tests.'
+  workingDir 'source'
+  commandLine "nunit-console",
+              "JarResolverTests/bin/Debug/JarResolverTests.dll"
+  ext.remoteTaskPhase = 'prebuild'
 }
 
-task export_package () {
-    description = "Creates and exports the Plugin unity package"
+task copy_unityDlls(type: Copy) {
+  description 'Copy Unity DLLs required to build managed DLLs in the plugin.'
+  from files(new File(project.ext.unity_dll_path_file, 'UnityEngine.dll'),
+             new File(project.ext.unity_dll_path_file, 'UnityEditor.dll'))
+  into 'unity_dlls'
+  ext.remoteTaskPhase = 'prebuild'
+}
 
-    doLast {
-        def argv = [
-                "-g.building",
+// Construct the name of a versioned asset from the source filename, version
+// string and the list of platforms the asset targets (e.g ['Android', 'iOS'])
+// The encoded string takes the form...
+// ${filename}_v${version}_t${hypen_separated_target_names}.${extension}
+// where extension is derived from the specified filename.
+// If manifest is true '_manifest' is added to the name to indicate a manifest
+// file.
+def versionedAssetName(filename, version, targets=null, manifest=false) {
+  def extensionIndex = filename.lastIndexOf('.')
+  def basename = filename.substring(0, extensionIndex)
+  def extension = filename.substring(extensionIndex)
+  // Encode the DLL version and target names into the DLL in the form...
+  // ${dllname}_t${hypen_separated_target_names}_v${version}.dll
+  def targetName = basename
+  if (version != null && !version.isEmpty()) {
+    targetName += '_v' + version
+  }
+  if (targets != null && targets.size()) {
+    targetName += '_t' + targets.join('-')
+  }
+  if (manifest != false) {
+    targetName += '_manifest'
+  }
+  return targetName + extension
+}
+
+// Generate the tasks to compile a plugin DLL and copy it to the Unity
+// plugin packaging folder.
+def build_pluginDll(projectName, assemblyDllBasename) {
+  def targets = ['Editor']
+  def version = "${pluginVersion}"
+  def projectPath = 'source/' + projectName + '/' + projectName + '.csproj'
+  def assemblyDll = versionedAssetName(assemblyDllBasename, version, targets)
+
+  def compileTask = tasks.create(name: "compile_" + projectName,
+                                 type: Exec,
+                                 description: 'Compile ' + projectName,
+                                 dependsOn: [copy_unityDlls])
+  compileTask.workingDir('source')
+  compileTask.commandLine(["${xbuild_exe}", "/target:" + projectName])
+  compileTask.ext.remoteTaskPhase = "prebuild"
+  def assemblyDllSource = file("source/" + projectName + "/bin/Debug/" +
+                               assemblyDllBasename)
+
+  def dllMetaBasename = assemblyDllBasename + ".meta"
+  def dllMeta = "${pluginSrc}/${dllDir}/" + dllMetaBasename
+  def dllMetaVersioned = assemblyDll + ".meta"
+  def copyTask = tasks.create(name: "copy_" + projectName,
+                              type: Copy,
+                              description: ('Copy ' + projectName +
+                                            ' to unity packaging folder'),
+                              dependsOn: compileTask)
+  copyTask.from(files(assemblyDllSource, dllMeta))
+  copyTask.into("${pluginProj}/${dllDir}")
+  copyTask.duplicatesStrategy('include')
+  copyTask.rename({
+                    String fn ->
+                      if (fn.endsWith(dllMetaBasename)) {
+                        return fn.replace(dllMetaBasename, dllMetaVersioned)
+                      } else if (fn.endsWith(assemblyDllBasename)) {
+                        return fn.replace(assemblyDllBasename, assemblyDll)
+                      }
+                      return fn
+                  })
+  copyTask.ext.remoteTaskPhase = "prebuild"
+}
+
+build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll")
+build_pluginDll("VersionHandler", "Google.VersionHandler.dll")
+
+task copy_pluginTemplate(type: Copy) {
+  description 'Copy the template project into the Unity plugin packaging dir.'
+  from "${pluginSrc}"
+  into "${pluginProj}"
+  exclude '**/*.dll.*', '**/*_manifest.txt.meta'
+  duplicatesStrategy 'include'
+  ext.remoteTaskPhase = 'prebuild'
+}
+
+task copy_manifestMetadata(type: Copy) {
+  def manifestBasename = versionedAssetName(
+    currentPluginBasename + '.txt', null, null, true) + '.meta'
+  description 'Copy .meta file for the plugin manifest.'
+  from file("${pluginSrc}/${dllDir}/" + manifestBasename)
+  into file("${pluginProj}/${dllDir}/")
+  rename {
+    String fn ->
+      return fn.replace(manifestBasename,
+                        versionedAssetName(currentPluginBasename + '.txt',
+                                           "${pluginVersion}", null, true) +
+                        '.meta')
+  }
+  ext.remoteTaskPhase = 'prebuild'
+}
+
+task generate_manifest(dependsOn: ['copy_manifestMetadata',
+                                   'copy_pluginTemplate',
+                                   'copy_PlayServicesResolver',
+                                   'copy_VersionHandler']) {
+  description 'Generate a manifest for the files in the plug-in.'
+  doLast {
+    def dir = file("${pluginProj}/Assets")
+    def list = []
+    dir.eachFileRecurse(groovy.io.FileType.FILES) { filename ->
+      def path = filename.path
+      if (!(path.toLowerCase().endsWith('.meta') ||
+            path.toLowerCase().contains('_manifest'))) {
+        list << filename.path.replace("${pluginProj}/", '')
+      }
+    }
+    def manifest = file("${pluginProj}/${dllDir}/" +
+                        versionedAssetName(currentPluginBasename + '.txt',
+                                           "${pluginVersion}", null, true))
+    manifest.write(list.join('\n') + '\n')
+  }
+  ext.remoteTaskPhase = 'prebuild'
+}
+
+task export_package(dependsOn: 'generate_manifest') {
+  description 'Creates and exports the Plugin unity package.'
+  doLast {
+    def argv = ["-g.building",
                 "-buildTarget",
                 "android",
                 "-batchmode",
@@ -105,79 +252,54 @@ task export_package () {
                 "-exportPackage",
                 "Assets/PlayServicesResolver",
                 "${exportPath}",
-                "-quit"
-                ]
-        exec {
-            executable "${unity_exe}"
-                args argv
-        }
+                "-quit"]
+    exec {
+      executable "${unity_exe}"
+      args argv
     }
-}
-export_package.ext.remoteTaskPhase = 'build'
-
-/*
-    Copy the plugin to the current-build directory
-*/
-task copy_plugin() {
-    description = 'Copy plugin to the current-build directory'
-    doFirst {
-            copy {
-                from file(exportPath)
-                into file(currentPluginPath)
-                rename ('plugin.unitypackage', currentPluginName)
-            }
-        }
-
-    doLast {
-        copy {
-            from file("${buildDir}/PluginSrc")
-            into file(currentPluginPath +"/exploded")
-            include "Assets/PlayServicesResolver/**/*"
-        }
-    }
-
-    doLast {
-        println "Copied  ${exportPath}  to   ${currentPluginPath}"
-    }
-
-        ext.remoteTaskPhase = 'postbuild'
-
+  }
+  ext.remoteTaskPhase = 'build'
 }
 
-
-task copy_plugin_source << {
+task copy_plugin(dependsOn: 'export_package') {
+  description 'Copy plugin to the current-build directory'
+  doFirst {
     copy {
-        from {"${pluginSrc}"}
-        into {"${pluginProj}"}
+      from file(exportPath)
+      into file(currentPluginPath)
+      rename ('plugin.unitypackage', currentPluginName)
     }
-}
-copy_plugin_source.description = "Copies plugin source into build directory"
-copy_plugin_source.ext.remoteTaskPhase = 'prebuild'
-
-task compile_sharpen(type: org.gradle.api.tasks.Exec) {
-    doFirst {
-        println "Running $xbuild_exe"
-    }
-    workingDir  'source'
-    commandLine "${xbuild_exe}"
-    ext.remoteTaskPhase = 'prebuild'
-}
- 
-task test_resolverlib(type: org.gradle.api.tasks.Exec) {
-  workingDir 'source'
-  commandLine "nunit-console", "JarResolverTests/bin/Debug/JarResolverTests.dll"
-  ext.remoteTaskPhase = 'prebuild'
-}
-test_resolverlib.dependsOn compile_sharpen
-
-
-
-task copy_csharp_dll() << {
+  }
+  doLast {
     copy {
-        from "source/JarResolverLib/bin/Debug/JarResolverLib.dll"
-        into "${buildDir}/PluginSrc/Assets/PlayServicesResolver/Editor"
+      from file("${pluginProj}")
+      into file(currentPluginPath +"/exploded")
+      include "Assets/PlayServicesResolver/**/*"
     }
+  }
+  ext.remoteTaskPhase = 'postbuild'
 }
-copy_csharp_dll.dependsOn compile_sharpen
-copy_csharp_dll.ext.remoteTaskPhase = 'prebuild'
 
+task build_unityPackage(dependsOn: 'copy_plugin') {
+  description "Top level task for building the unity package."
+  doLast { println "Packaging Complete!" }
+  ext.remoteTaskPhase = 'build'
+  dependsOn {
+    tasks.findAll { task -> task.name.startsWith('PackageSample') }
+  }
+}
+
+defaultTasks = ['prebuild', 'build', 'postbuild']
+for (phase in defaultTasks) {
+  if (!tasks.findByName(phase)) {
+    def build_phase_name = 'Local ' + phase
+    tasks.create(name: phase,
+                 action: { println(build_phase_name) },
+                 description: build_phase_name,
+                 dependsOn: project.tasks.findAll {
+                   task -> task.ext.has('remoteTaskPhase') &&
+                   task.ext.remoteTaskPhase == phase
+                 })
+  }
+}
+project.defaultTasks = defaultTasks

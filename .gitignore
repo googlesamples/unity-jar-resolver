@@ -15,3 +15,5 @@ plugin/Temp/
 plugin/obj/
 plugin/plugin.sln
 plugin/plugin.userprefs
+
+unity_dlls/
