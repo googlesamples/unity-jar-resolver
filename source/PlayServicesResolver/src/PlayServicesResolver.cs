@@ -139,6 +139,8 @@ namespace GooglePlayServices
                                            string[] movedAssets,
                                            string[] movedFromAssetPaths)
         {
+            if (Resolver == null) return;
+
             if (Resolver.ShouldAutoResolve(importedAssets, deletedAssets,
                     movedAssets, movedFromAssetPaths) && !resolvedOnUpdate)
             {
@@ -229,11 +231,26 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Display a dialog explaining that the resolver is disabled in the current configuration.
+        /// </summary>
+        private static void NotAvailableDialog() {
+            EditorUtility.DisplayDialog("Play Services Resolver.",
+                                        "Resolver not enabled. " +
+                                        "Android platform must be selected.",
+                                        "OK");
+
+        }
+
+        /// <summary>
         /// Add a menu item for resolving the jars manually.
         /// </summary>
         [MenuItem("Assets/Google Play Services/Settings")]
         public static void SettingsDialog()
         {
+            if (Resolver == null) {
+                NotAvailableDialog();
+                return;
+            }
             Resolver.ShowSettingsDialog();
         }
 
@@ -243,6 +260,10 @@ namespace GooglePlayServices
         [MenuItem("Assets/Google Play Services/Resolve Client Jars")]
         public static void MenuResolve()
         {
+            if (Resolver == null) {
+                NotAvailableDialog();
+                return;
+            }
             Resolve(() => { EditorUtility.DisplayDialog("Android Jar Dependencies",
                                                         "Resolution Complete", "OK"); });
         }
