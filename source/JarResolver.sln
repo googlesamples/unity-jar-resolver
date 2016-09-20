@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PlayServicesResolver", "Pla
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VersionHandler", "VersionHandler\VersionHandler.csproj", "{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IOSResolver", "IOSResolver\IOSResolver.csproj", "{5B581BAE-D432-41AB-AEED-FD269AEA081D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -31,6 +33,10 @@ Global
 		{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(MonoDevelopProperties) = preSolution
 		StartupItem = PlayServicesResolver\PlayServicesResolver.csproj

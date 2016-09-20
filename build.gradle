@@ -60,7 +60,7 @@ project.ext {
             (new File(unity_exe)).getParentFile().getParentFile(),
             'Frameworks' + File.separator + 'Managed')
       } else if (os_windows || os_linux) {
-        // ${unity_exe}/../Data/Managed/Unity{Engine,Editor}.dlledun
+        // ${unity_exe}/../Data/Managed/Unity{Engine,Editor}.dll
         unity_dll_path_file = new File(
             (new File(unity_exe)).getParentFile(),
             'Data' + File.separator + 'Managed')
@@ -71,6 +71,43 @@ project.ext {
     }
     if (unity_dll_path_file == null || !unity_dll_path_file.exists()) {
       logger.error('Unity DLLs not found, plug-in build will fail.')
+    }
+
+    unity_playback_engines_dll_path = System.getProperty(
+      "UNITY_PLAYBACK_ENGINES_DLL_PATH")
+    unity_playback_engines_dll_path_file = (
+      unity_playback_engines_dll_path == null ||
+      unity_playback_engines_dll_path.isEmpty()) ? null : (
+        new File(unity_playback_engines_dll_path))
+    if ((unity_playback_engines_dll_path_file == null ||
+         !unity_playback_engines_dll_path_file.exists()) &&
+        unity_exe_found) {
+      if (os_osx) {
+        // ${unity_exe}/../../../../PlaybackEngines
+        unity_playback_engines_dll_path_file = new File(
+          (new File(unity_exe))
+              .getParentFile()
+              .getParentFile()
+              .getParentFile()
+              .getParentFile(),
+          'PlaybackEngines')
+        println unity_playback_engines_dll_path_file.getPath()
+      } else if (os_windows) {
+        // ${unity_exe}/../Data/PlaybackEngines
+        unity_playback_engines_dll_path_file = new File(
+            (new File(unity_exe)).getParentFile(),
+            'Data' + File.separator + 'PlaybackEngines')
+      }
+      if (unity_playback_engines_dll_path_file != null &&
+          unity_playback_engines_dll_path_file.exists()) {
+        unity_playback_engines_dll_path =
+          unity_playback_engines_dll_path_file.getPath()
+      }
+    }
+    if (unity_playback_engines_dll_path_file == null ||
+        !unity_playback_engines_dll_path_file.exists()) {
+      logger.error('Unity Playback Engine DLLs not found, iOS plug-in build ' +
+                   'will fail.')
     }
 
     // Mono's xbuild tool is required to build the managed DLLs in the plug-in.
@@ -115,7 +152,10 @@ task test_resolverLib(type: Exec, dependsOn: compile_resolverTests) {
 task copy_unityDlls(type: Copy) {
   description 'Copy Unity DLLs required to build managed DLLs in the plugin.'
   from files(new File(project.ext.unity_dll_path_file, 'UnityEngine.dll'),
-             new File(project.ext.unity_dll_path_file, 'UnityEditor.dll'))
+             new File(project.ext.unity_dll_path_file, 'UnityEditor.dll'),
+             new File(project.ext.unity_playback_engines_dll_path_file,
+                      'iOSSupport' + File.separator +
+                      'UnityEditor.iOS.Extensions.Xcode.dll'))
   into 'unity_dlls'
   ext.remoteTaskPhase = 'prebuild'
 }
@@ -189,6 +229,7 @@ def build_pluginDll(projectName, assemblyDllBasename) {
 
 build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll")
 build_pluginDll("VersionHandler", "Google.VersionHandler.dll")
+build_pluginDll("IOSResolver", "Google.IOSResolver.dll")
 
 task copy_pluginTemplate(type: Copy) {
   description 'Copy the template project into the Unity plugin packaging dir.'
@@ -218,7 +259,8 @@ task copy_manifestMetadata(type: Copy) {
 task generate_manifest(dependsOn: ['copy_manifestMetadata',
                                    'copy_pluginTemplate',
                                    'copy_PlayServicesResolver',
-                                   'copy_VersionHandler']) {
+                                   'copy_VersionHandler',
+                                   'copy_IOSResolver']) {
   description 'Generate a manifest for the files in the plug-in.'
   doLast {
     def dir = file("${pluginProj}/Assets")
