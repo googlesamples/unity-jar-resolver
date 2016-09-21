@@ -827,9 +827,8 @@ public class VersionHandler : AssetPostprocessor {
     /// </summary>
     public static bool Enabled {
         get {
-            return EditorPrefs.GetBool(
-                PREFERENCE_ENABLED, defaultValue:
-                    !System.Environment.CommandLine.Contains("-batchmode"));
+            return !System.Environment.CommandLine.Contains("-batchmode") &&
+                EditorPrefs.GetBool(PREFERENCE_ENABLED, defaultValue: true);
         }
         set { EditorPrefs.SetBool(PREFERENCE_ENABLED, value); }
     }
