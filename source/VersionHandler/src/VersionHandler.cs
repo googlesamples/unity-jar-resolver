@@ -496,6 +496,9 @@ public class VersionHandler : AssetPostprocessor {
                         modifiedThisVersion = true;
                     }
                 }
+                if (modifiedThisVersion) {
+                    pluginImporter.SaveAndReimport();
+                }
                 // If the version was modified and it's obsolete keep track of
                 // it to log it later.
                 if (obsoleteVersion && modifiedThisVersion) {
@@ -846,8 +849,9 @@ public class VersionHandler : AssetPostprocessor {
     /// Enable / disable verbose logging.
     /// </summary>
     public static bool VerboseLoggingEnabled {
-        get { return EditorPrefs.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
-                                         defaultValue: false); }
+        get { return System.Environment.CommandLine.Contains("-batchmode") ||
+                EditorPrefs.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
+                                    defaultValue: false); }
         set { EditorPrefs.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
     }
 
