@@ -56,6 +56,12 @@ public static class IOSResolver {
         public bool bitcodeEnabled = true;
 
         /// <summary>
+        /// Minimum target SDK revision required by this pod.
+        /// In the form major.minor
+        /// </summary>
+        public string minTargetSdk = null;
+
+        /// <summary>
         /// Format a "pod" line for a Podfile.
         /// </summary>
         public string PodFilePodLine {
@@ -80,10 +86,56 @@ public static class IOSResolver {
         /// </summary>
         /// <param name="name">Name of the pod.</param>
         /// <param name="version">Version of the pod.</param>
-        public Pod(string name, string version, bool bitcodeEnabled) {
+        /// <param name="bitcodeEnabled">Whether this pod was compiled with
+        /// bitcode.</param>
+        /// <param name="minTargetSdk">Minimum target SDK revision required by
+        /// this pod.</param>
+        public Pod(string name, string version, bool bitcodeEnabled,
+                   string minTargetSdk) {
             this.name = name;
             this.version = version;
             this.bitcodeEnabled = bitcodeEnabled;
+            this.minTargetSdk = minTargetSdk;
+        }
+
+        /// <summary>
+        /// Convert min target SDK to an integer in the form
+        // (major * 10) + minor.
+        /// </summary>
+        /// <return>Numeric minimum SDK revision required by this pod.</return>
+        public int MinTargetSdkToVersion() {
+            string sdkString =
+                String.IsNullOrEmpty(minTargetSdk) ? "0.0" : minTargetSdk;
+            if (!minTargetSdk.Contains(".")) {
+                sdkString = minTargetSdk + ".0";
+            }
+            return IOSResolver.TargetSdkStringToVersion(sdkString);
+        }
+
+        /// <summary>
+        /// Given a list of pods bucket them into a dictionary sorted by
+        /// min SDK version.  Pods which specify no minimum version (e.g 0)
+        /// are ignored.
+        /// </summary>
+        /// <param name="pods">Enumerable of pods to query.</param>
+        /// <returns>Sorted dictionary of lists of pod names bucketed by
+        /// minimum required SDK version.</returns>
+        public static SortedDictionary<int, List<string>>
+                BucketByMinSdkVersion(IEnumerable<Pod> pods) {
+            var buckets = new SortedDictionary<int, List<string>>();
+            foreach (var pod in pods) {
+                int minVersion = pod.MinTargetSdkToVersion();
+                if (minVersion == 0) {
+                    continue;
+                }
+                List<string> nameList = null;
+                if (!buckets.TryGetValue(minVersion, out nameList)) {
+                    nameList = new List<string>();
+                }
+                nameList.Add(pod.name);
+                buckets[minVersion] = nameList;
+            }
+            return buckets;
         }
     }
 
@@ -151,7 +203,7 @@ public static class IOSResolver {
     /// </summary>
     private static bool InjectDependencies() {
         return EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
-            Enabled;
+            Enabled && pods.Count > 0;
     }
 
     /// <summary>
@@ -159,15 +211,106 @@ public static class IOSResolver {
     /// This is called from a deps file in each API to aggregate all of the
     /// dependencies to automate the Podfile generation.
     /// </summary>
-    /// <param name="pod">pod path, for example "Google-Mobile-Ads-SDK" to be
-    /// included</param>
+    /// <param name="podName">pod path, for example "Google-Mobile-Ads-SDK" to
+    /// be included</param>
     /// <param name="version">Version specification.  See Pod.version.</param>
     /// <param name="bitcodeEnabled">Whether the pod was compiled with bitcode
     /// enabled.  If this is set to false on a pod, the entire project will
     /// be configured with bitcode disabled.</param>
-    public static void AddPod(string pod, string version = null,
-                              bool bitcodeEnabled = true) {
-        pods[pod] = new Pod(pod, version, bitcodeEnabled);
+    /// <param name="minTargetSdk">Minimum SDK revision required by this
+    /// pod.</param>
+    public static void AddPod(string podName, string version = null,
+                              bool bitcodeEnabled = true,
+                              string minTargetSdk = null) {
+        var pod = new Pod(podName, version, bitcodeEnabled, minTargetSdk);
+        pods[podName] = pod;
+        UpdateTargetSdk(pod);
+    }
+
+    /// <summary>
+    /// Update the iOS target SDK if it's lower than the minimum SDK
+    /// version specified by the pod.
+    /// </summary>
+    /// <param name="pod">Pod to query for the minimum supported version.
+    /// </param>
+    /// <param name="notifyUser">Whether to write to the log to notify the
+    /// user of a build setting change.</param>
+    /// <returns>true if the SDK version was changed, false
+    /// otherwise.</returns>
+    private static bool UpdateTargetSdk(Pod pod,
+                                        bool notifyUser = true) {
+        int currentVersion = TargetSdkVersion;
+        int minVersion = pod.MinTargetSdkToVersion();
+        if (currentVersion >= minVersion) {
+            return false;
+        }
+        if (notifyUser) {
+            string oldSdk = TargetSdk;
+            TargetSdkVersion = minVersion;
+            Debug.Log("iOS Target SDK changed from " + oldSdk + " to " +
+                      TargetSdk + " required by the " + pod.name + " pod");
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Update the target SDK if it's required.
+    /// </summary>
+    /// <returns>true if the SDK was updated, false otherwise.</returns>
+    public static bool UpdateTargetSdk() {
+        var minVersionAndPodNames = TargetSdkNeedsUpdate();
+        if (minVersionAndPodNames.Value != null) {
+            var minVersionString =
+                TargetSdkVersionToString(minVersionAndPodNames.Key);
+            var update = EditorUtility.DisplayDialog(
+                "Unsupported Target SDK",
+                "Target SDK selected in the iOS Player Settings is not " +
+                "supported by the Cocoapods included in this project. " +
+                "The build will very likely fail. The minimum supported " +
+                "version is \"" + minVersionString + "\" " +
+                "required by pods (" +
+                String.Join(", ", minVersionAndPodNames.Value.ToArray()) +
+                ").\n" +
+                "Would you like to update the target SDK version?",
+                "Yes", cancel: "No");
+            if (update) {
+                TargetSdkVersion = minVersionAndPodNames.Key;
+                string errorString = (
+                    "Target SDK has been updated to " + minVersionString +
+                    ".  You must restart the " +
+                    "build for this change to take effect.");
+                EditorUtility.DisplayDialog(
+                    "Target SDK updated.", errorString, "OK");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Determine whether the target SDK needs to be updated based upon pod
+    /// dependencies.
+    /// </summary>
+    /// <returns>Key value pair of minimum SDK version (key) and
+    /// a list of pod names that require it (value) if the currently
+    /// selected target SDK version does not satify pod requirements, the list
+    /// (value) is null otherwise.</returns>
+    private static KeyValuePair<int, List<string>> TargetSdkNeedsUpdate() {
+        var kvpair = new KeyValuePair<int, List<string>>(0, null);
+        var podListsByVersion = Pod.BucketByMinSdkVersion(pods.Values);
+        if (podListsByVersion.Count == 0) {
+            return kvpair;
+        }
+        KeyValuePair<int, List<string>> minVersionAndPodName = kvpair;
+        foreach (var versionAndPodList in podListsByVersion) {
+            minVersionAndPodName = versionAndPodList;
+            break;
+        }
+        int currentVersion = TargetSdkVersion;
+        if (currentVersion >= minVersionAndPodName.Key) {
+            return kvpair;
+        }
+        return minVersionAndPodName;
     }
 
     /// <summary>
@@ -182,13 +325,49 @@ public static class IOSResolver {
     }
 
     /// <summary>
-    /// Get the Unity iOS platform version string from the build setting enum.
+    /// Get or set the Unity iOS target SDK version string (e.g "7.1")
+    /// build setting.
     /// </summary>
-    static string PlatformVersion {
+    static string TargetSdk {
         get {
             return UnityEditor.PlayerSettings.iOS.targetOSVersion.ToString().
                 Replace("iOS_", "").Replace("_", ".");
         }
+
+        set {
+            var targetOSVersion = (iOSTargetOSVersion)System.Enum.Parse(
+                typeof(iOSTargetOSVersion),
+                "iOS_" + value.Replace(".", "_"));
+            UnityEditor.PlayerSettings.iOS.targetOSVersion = targetOSVersion;
+        }
+    }
+
+    /// <summary>
+    /// Get or set the Unity iOS target SDK using a version number (e.g 71
+    /// is equivalent to "7.1").
+    /// </summary>
+    static int TargetSdkVersion {
+        get { return TargetSdkStringToVersion(TargetSdk); }
+        set { TargetSdk = TargetSdkVersionToString(value); }
+    }
+
+    /// <summary>
+    /// Convert a target SDK string into a value of the form
+    // (major * 10) + minor.
+    /// </summary>
+    /// <returns>Integer representation of the SDK.</returns>
+    internal static int TargetSdkStringToVersion(string targetSdk) {
+        return Convert.ToInt32(targetSdk.Replace(".", ""));
+    }
+
+    /// <summary>
+    /// Convert an integer target SDK value into a string.
+    /// </summary>
+    /// <returns>String version number.</returns>
+    internal static string TargetSdkVersionToString(int version) {
+        int major = version / 10;
+        int minor = version % 10;
+        return major.ToString() + "." + minor.ToString();
     }
 
     /// <summary>
@@ -254,7 +433,7 @@ public static class IOSResolver {
                new StreamWriter(Path.Combine(pathToBuiltProject, "Podfile"))) {
             file.Write("source 'https://github.com/CocoaPods/Specs.git'\n" +
                 "install! 'cocoapods', :integrate_targets => false\n" +
-                string.Format("platform :ios, '{0}'\n\n", PlatformVersion) +
+                string.Format("platform :ios, '{0}'\n\n", TargetSdk) +
                 "target '" + TARGET_NAME + "' do\n"
             );
             foreach(var pod in pods.Values) {
@@ -284,6 +463,7 @@ public static class IOSResolver {
     public static void OnPostProcessInstallPods(BuildTarget buildTarget,
                                                 string pathToBuiltProject) {
         if (!InjectDependencies()) return;
+        if (UpdateTargetSdk()) return;
 
         string pod_command = FindPodTool();
         if (String.IsNullOrEmpty(pod_command)) {
@@ -311,9 +491,9 @@ public static class IOSResolver {
                     "en_US.UTF-8").Split('.')[0] + ".UTF-8"}
             });
         if (result.exitCode != 0) {
-            Debug.LogError("Pod install failed. See the output for details.");
-            Debug.Log(result.stdout);
-            Debug.Log(result.stderr);
+            Debug.LogError("Pod install failed. See the output below for " +
+                           "details.\n\n" + result.stdout + "\n\n" +
+                           result.stderr);
             return;
         }
     }
@@ -326,6 +506,11 @@ public static class IOSResolver {
     public static void OnPostProcessUpdateProjectDeps(
             BuildTarget buildTarget, string pathToBuiltProject) {
         if (!InjectDependencies()) return;
+
+        // If the Pods directory does not exist, the pod download step
+        // failed.
+        var podsDir = Path.Combine(pathToBuiltProject, "Pods");
+        if (!Directory.Exists(podsDir)) return;
 
         Directory.CreateDirectory(Path.Combine(pathToBuiltProject,
                                                "Frameworks"));
@@ -340,9 +525,8 @@ public static class IOSResolver {
         HashSet<string> frameworks = new HashSet<string>();
         HashSet<string> linkFlags = new HashSet<string>();
         foreach (var frameworkFullPath in
-                 Directory.GetDirectories(
-                     Path.Combine(pathToBuiltProject, "Pods"),
-                     "*.framework", SearchOption.AllDirectories)) {
+                 Directory.GetDirectories(podsDir, "*.framework",
+                                          SearchOption.AllDirectories)) {
             string frameworkName = new DirectoryInfo(frameworkFullPath).Name;
             string destFrameworkPath = Path.Combine("Frameworks",
                                                     frameworkName);

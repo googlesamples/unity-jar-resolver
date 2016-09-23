@@ -510,10 +510,14 @@ public class VersionHandler : AssetPostprocessor {
             // has been enabled.
             if (modified && enabledVersion != null &&
                 VersionHandler.VerboseLoggingEnabled) {
-                UnityEngine.Debug.Log(
-                    filenameCanonical + ": enabled version " + enabledVersion +
-                    "  obsolete versions disabled (" +
-                    String.Join(", ", disabledVersions.ToArray()) + ")");
+                string message = (filenameCanonical + ": enabled version " +
+                                  enabledVersion);
+                if (disabledVersions.Count > 0) {
+                    message += ("  obsolete versions disabled (" +
+                                String.Join(", ", disabledVersions.ToArray()) +
+                                ")");
+                }
+                UnityEngine.Debug.Log(message);
             }
             return modified;
         }
