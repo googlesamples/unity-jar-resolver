@@ -177,10 +177,13 @@ public class VersionHandler : AssetPostprocessor {
                             if (String.IsNullOrEmpty(versionString)) {
                                 versionString = ParseVersion(token);
                             }
+                        } else if (token.Equals(FILENAME_TOKEN_MANIFEST)) {
+                            isManifest = true;
                         }
                     }
                 }
             }
+
             filenameCanonical = Path.Combine(
                 filenameComponents.directory,
                 filenameComponents.basenameNoExtension +
@@ -239,7 +242,7 @@ public class VersionHandler : AssetPostprocessor {
                     if (BUILD_TARGET_NAME_TO_ENUM.TryGetValue(
                             target, out buildTarget)) {
                         buildTargetSet.Add(buildTarget);
-                    } else if (target != "editor") {
+                    } else if (!target.Equals("editor")) {
                         UnityEngine.Debug.LogError(
                             filename + " reference to unknown target " +
                             target + " the version handler may out of date.");
@@ -270,6 +273,9 @@ public class VersionHandler : AssetPostprocessor {
                 labels.Add(LABEL_PREFIX + TOKEN_TARGETS +
                            String.Join(Char.ToString(FIELD_SEPARATOR[0]),
                                        targets));
+            }
+            if (isManifest) {
+                labels.Add(LABEL_PREFIX + FILENAME_TOKEN_MANIFEST);
             }
             AssetDatabase.SetLabels(importer, labels.ToArray());
         }
@@ -399,6 +405,22 @@ public class VersionHandler : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Get FileMetadata from this object given a version number.
+        /// </summary>
+        /// <param name="version">Version to search for.</param>
+        /// <returns>FileMetadata instance if the version is found, null
+        /// otherwise.</returns>
+        public FileMetadata this[long version] {
+            get {
+                FileMetadata metadata;
+                if (metadataByVersion.TryGetValue(version, out metadata)) {
+                    return metadata;
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Construct an instance.
         /// </summary>
         /// <param name="filenameCanonical">Filename with metadata stripped.
@@ -443,11 +465,15 @@ public class VersionHandler : AssetPostprocessor {
                             break;
                         }
                     }
-                    if (canonicalMetadata != null) {
-                        disabledVersions.Add(canonicalMetadata.versionString);
-                    }
                     if (!mostRecentVersion.RenameAsset(filenameCanonical)) {
                         return false;
+                    }
+                    if (canonicalMetadata != null) {
+                        // Overwrote the current version with the rename
+                        // operation.
+                        metadataByVersion.Remove(
+                            canonicalMetadata.CalculateVersion());
+                        numberOfVersions = metadataByVersion.Count;
                     }
                     modified = true;
                 }
@@ -630,8 +656,9 @@ public class VersionHandler : AssetPostprocessor {
                 bool needsUpdate = metadataByVersion.Count > 1;
                 if (!needsUpdate) {
                     foreach (var metadata in metadataByVersion) {
-                        if (metadata.targets != null &&
-                            metadata.targets.Length > 0) {
+                        if ((metadata.targets != null &&
+                             metadata.targets.Length > 0) ||
+                            metadata.isManifest) {
                             needsUpdate = true;
                             break;
                         }
@@ -643,6 +670,25 @@ public class VersionHandler : AssetPostprocessor {
                 }
             }
             return outMetadataSet;
+        }
+
+        /// <summary>
+        /// Search for metadata for an existing file given a canonical filename
+        /// and version.
+        /// </summary>
+        /// <param name="filenameCanonical">Name of the file set to search
+        /// for.</param>
+        /// <param name="version">Version number of the file in the set.</param>
+        /// <returns>Reference to the metadata if successful, null otherwise.
+        /// </returns>
+        public FileMetadata FindMetadata(string filenameCanonical,
+                                         long version) {
+            FileMetadataByVersion metadataByVersion;
+            if (!metadataByCanonicalFilename.TryGetValue(
+                    filenameCanonical, out metadataByVersion)) {
+                return null;
+            }
+            return metadataByVersion[version];
         }
     }
 
@@ -682,9 +728,14 @@ public class VersionHandler : AssetPostprocessor {
         /// <param name="metadataByVersion">Metadata for files ordered by
         /// version number.  If the metadata does not have the isManifest
         /// attribute it is ignored.</param>
+        /// <param name="metadataSet">Set of all metadata files in the
+        /// project.  This is used to handle file renaming in the parsed
+        /// manifest.  If the manifest contains files that have been
+        /// renamed it's updated with the new filenames.</param>
         /// <returns>true if data was parsed from the specified file metadata,
         /// false otherwise.</returns>
-        public bool ParseManifests(FileMetadataByVersion metadataByVersion) {
+        public bool ParseManifests(FileMetadataByVersion metadataByVersion,
+                                   FileMetadataSet metadataSet) {
             currentFiles = new HashSet<string>();
             obsoleteFiles = new HashSet<string>();
 
@@ -693,6 +744,7 @@ public class VersionHandler : AssetPostprocessor {
             foreach (FileMetadata metadata in metadataByVersion.Values) {
                 versionIndex++;
                 if (!metadata.isManifest) return false;
+                bool manifestNeedsUpdate = false;
                 HashSet<string> filesInManifest =
                     versionIndex < numberOfVersions ?
                         obsoleteFiles : currentFiles;
@@ -700,8 +752,23 @@ public class VersionHandler : AssetPostprocessor {
                     new StreamReader(metadata.filename);
                 string line;
                 while ((line = manifestFile.ReadLine()) != null) {
-                    filesInManifest.Add(line.Trim());
+                    var manifestFileMetadata = new FileMetadata(line.Trim());
+                    string filename = manifestFileMetadata.filename;
+                    // Check for a renamed file.
+                    var existingFileMetadata =
+                        metadataSet.FindMetadata(
+                            manifestFileMetadata.filenameCanonical,
+                            manifestFileMetadata.CalculateVersion());
+                    if (existingFileMetadata != null &&
+                        !manifestFileMetadata.filename.Equals(
+                            existingFileMetadata.filename)) {
+                        filename = existingFileMetadata.filename;
+                        manifestNeedsUpdate = true;
+                    }
+                    filesInManifest.Add(filename);
                 }
+                manifestFile.Close();
+
                 // If this is the most recent manifest version, remove all
                 // current files from the set to delete.
                 if (versionIndex == numberOfVersions) {
@@ -709,6 +776,16 @@ public class VersionHandler : AssetPostprocessor {
                     foreach (var currentFile in filesInManifest) {
                         obsoleteFiles.Remove(currentFile);
                     }
+                }
+
+                // Rewrite the manifest to track renamed files.
+                if (manifestNeedsUpdate) {
+                    File.Delete(metadata.filename);
+                    var writer = new StreamWriter(metadata.filename);
+                    foreach (var filename in filesInManifest) {
+                        writer.WriteLine(filename);
+                    }
+                    writer.Close();
                 }
             }
             this.filenameCanonical = metadataByVersion.filenameCanonical;
@@ -727,7 +804,8 @@ public class VersionHandler : AssetPostprocessor {
             foreach (var metadataByVersion in metadataSet.Values) {
                 ManifestReferences manifestReferences =
                     new ManifestReferences();
-                if (manifestReferences.ParseManifests(metadataByVersion)) {
+                if (manifestReferences.ParseManifests(metadataByVersion,
+                                                      metadataSet)) {
                     manifestReferencesList.Add(manifestReferences);
                 }
             }
@@ -795,6 +873,10 @@ public class VersionHandler : AssetPostprocessor {
                         manifestsReferencingFile.Add(
                             manifestReferences.currentMetadata.filename);
                     }
+                }
+                // If the referenced file doesn't exist, ignore it.
+                if (!File.Exists(obsoleteFile)) {
+                    continue;
                 }
                 if (manifestsReferencingFile.Count > 0) {
                     referencedObsoleteFiles[obsoleteFile] =
@@ -953,8 +1035,7 @@ public class VersionHandler : AssetPostprocessor {
         }
 
         var obsoleteFiles = new ObsoleteFiles(
-            ManifestReferences.FindAndReadManifests(metadataSet),
-            metadataSet);
+            ManifestReferences.FindAndReadManifests(metadataSet), metadataSet);
 
         // Obsolete files that are no longer reference can be safely
         // deleted, prompt the user for confirmation if they have the option

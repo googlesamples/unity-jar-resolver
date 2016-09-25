@@ -231,7 +231,25 @@ build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll")
 build_pluginDll("VersionHandler", "Google.VersionHandler.dll")
 build_pluginDll("IOSResolver", "Google.IOSResolver.dll")
 
-task copy_pluginTemplate(type: Copy) {
+task update_metadataForVersion() {
+  description 'Update plugin metadata if the plugin version changed.'
+  if (!file(currentPluginName).exists()) {
+    for (fileobj in fileTree("${pluginSrc}")) {
+      def lines = fileobj.text.split('\n')
+      def outputLines = []
+      for (line in lines) {
+        if (line.contains('guid:')) {
+          line = (
+            'guid: ' + java.util.UUID.randomUUID().toString().replace('-', ''))
+        }
+        outputLines.add(line)
+      }
+      fileobj.write(outputLines.join('\n') + '\n')
+    }
+  }
+}
+
+task copy_pluginTemplate(type: Copy, dependsOn: update_metadataForVersion) {
   description 'Copy the template project into the Unity plugin packaging dir.'
   from "${pluginSrc}"
   into "${pluginProj}"
@@ -306,6 +324,11 @@ task export_package(dependsOn: 'generate_manifest') {
 task copy_plugin(dependsOn: 'export_package') {
   description 'Copy plugin to the current-build directory'
   doFirst {
+    // If the version number has been bumped delete the exploded directory.
+    if (!file(currentPluginName).exists()) {
+      delete file(currentPluginPath +"/exploded")
+    }
+
     copy {
       from file(exportPath)
       into file(currentPluginPath)
