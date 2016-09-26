@@ -106,8 +106,8 @@ public static class IOSResolver {
         public int MinTargetSdkToVersion() {
             string sdkString =
                 String.IsNullOrEmpty(minTargetSdk) ? "0.0" : minTargetSdk;
-            if (!minTargetSdk.Contains(".")) {
-                sdkString = minTargetSdk + ".0";
+            if (!sdkString.Contains(".")) {
+                sdkString = sdkString + ".0";
             }
             return IOSResolver.TargetSdkStringToVersion(sdkString);
         }
