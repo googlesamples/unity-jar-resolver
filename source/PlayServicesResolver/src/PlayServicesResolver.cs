@@ -43,14 +43,9 @@ namespace GooglePlayServices
         private static IResolver _resolver;
 
         /// <summary>
-        /// Whether the resolver executed on the last Update() event.
-        /// This is used to de-duplicate resolutions when assets change *and* C# classes get
-        /// reloaded i.e The following occurs:
-        /// * Load classes - schedule resolve
-        /// * Update - Resolve
-        /// * OnPostprocessAllAssets - Resolve <= Prevents this case.
+        /// Flag used to prevent re-entrant auto-resolution.
         /// </summary>
-        private static bool resolvedOnUpdate = false;
+        private static bool autoResolving = false;
 
         /// <summary>
         /// Seconds to wait until re-resolving dependencies after the bundle ID has changed.
@@ -70,13 +65,21 @@ namespace GooglePlayServices
         /// <summary>
         /// Last value of bundle ID since the last time OnBundleId() was called.
         /// </summary>
-        private static string bundleId = "";
+        private static string bundleId = PlayerSettings.bundleIdentifier;
 
         /// <summary>
         /// Arguments for the bundle ID update event.
         /// </summary>
         public class BundleIdChangedEventArgs : EventArgs {
+            /// <summary>
+            /// Current project Bundle ID.
+            /// </summary>
             public string BundleId { get; set; }
+
+            /// <summary>
+            /// Bundle ID when this event was last fired.
+            /// </summary>
+            public string PreviousBundleId { get; set; }
         }
 
         /// <summary>
@@ -156,7 +159,7 @@ namespace GooglePlayServices
             if (Resolver == null) return;
 
             if (Resolver.ShouldAutoResolve(importedAssets, deletedAssets,
-                    movedAssets, movedFromAssetPaths) && !resolvedOnUpdate)
+                                           movedAssets, movedFromAssetPaths))
             {
                 AutoResolve();
             }
@@ -167,19 +170,13 @@ namespace GooglePlayServices
         /// </summary>
         private static void AutoResolve()
         {
-            if (Resolver.AutomaticResolutionEnabled() && !resolvedOnUpdate)
-            {
-                // Prevent resolution on the call to OnPostprocessAllAssets().
-                // This method is called on the next Update event then removed from the Update
-                // list.
-                resolvedOnUpdate = true;
-                Resolve();
-            }
-            else
+            if (Resolver.AutomaticResolutionEnabled() && !autoResolving)
             {
                 EditorApplication.update -= AutoResolve;
-                // Allow resolution on calls to OnPostprocessAllAssets().
-                resolvedOnUpdate = false;
+                // Prevent resolution on the call to OnPostprocessAllAssets().
+                autoResolving = true;
+                Resolve();
+                autoResolving = false;
             }
         }
 
@@ -190,7 +187,7 @@ namespace GooglePlayServices
         {
             if (Resolver.AutomaticResolutionEnabled())
             {
-                if (DeleteFiles(Resolver.OnBundleId(bundleId))) Resolve();
+                if (DeleteFiles(Resolver.OnBundleId(args.BundleId))) AutoResolve();
             }
         }
 
@@ -212,7 +209,10 @@ namespace GooglePlayServices
                     {
                         if (BundleIdChanged != null) {
                             BundleIdChanged(null,
-                                            new BundleIdChangedEventArgs { BundleId = bundleId });
+                                            new BundleIdChangedEventArgs {
+                                                PreviousBundleId = bundleId,
+                                                BundleId = currentBundleId
+                                            });
                         }
                         bundleId = currentBundleId;
                     }
