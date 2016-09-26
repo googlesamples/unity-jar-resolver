@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 7b1c0bb2427144e898ebaf7ed5d76ad3
+guid: 97befec6542e472f91999e1c453b3322
 labels:
 - gvh
 timeCreated: 1473798236
@@ -17,10 +17,6 @@ PluginImporter:
       enabled: 0
       settings:
         DefaultValueInitialized: true
-    WindowsStoreApps:
-      enabled: 0
-      settings:
-        CPU: AnyCPU
   userData: 
   assetBundleName: 
   assetBundleVariant: 
