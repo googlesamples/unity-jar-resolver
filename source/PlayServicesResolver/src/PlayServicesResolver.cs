@@ -73,6 +73,18 @@ namespace GooglePlayServices
         private static string bundleId = "";
 
         /// <summary>
+        /// Arguments for the bundle ID update event.
+        /// </summary>
+        public class BundleIdChangedEventArgs : EventArgs {
+            public string BundleId { get; set; }
+        }
+
+        /// <summary>
+        /// Event which is fired when the bundle ID is updated.
+        /// </summary>
+        public static event EventHandler<BundleIdChangedEventArgs> BundleIdChanged;
+
+        /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver()
@@ -87,9 +99,11 @@ namespace GooglePlayServices
 
                 EditorApplication.update -= AutoResolve;
                 EditorApplication.update += AutoResolve;
-                EditorApplication.update -= PollBundleId;
-                EditorApplication.update += PollBundleId;
+                BundleIdChanged -= ResolveOnBundleIdChanged;
+                BundleIdChanged += ResolveOnBundleIdChanged;
             }
+            EditorApplication.update -= PollBundleId;
+            EditorApplication.update += PollBundleId;
         }
 
         /// <summary>
@@ -172,6 +186,18 @@ namespace GooglePlayServices
         /// <summary>
         /// If the user changes the bundle ID, perform resolution again.
         /// </summary>
+        private static void ResolveOnBundleIdChanged(object sender, BundleIdChangedEventArgs args)
+        {
+            if (Resolver.AutomaticResolutionEnabled())
+            {
+                if (DeleteFiles(Resolver.OnBundleId(bundleId))) Resolve();
+            }
+        }
+
+
+        /// <summary>
+        /// If the user changes the bundle ID, perform resolution again.
+        /// </summary>
         private static void PollBundleId()
         {
             string currentBundleId = PlayerSettings.bundleIdentifier;
@@ -184,11 +210,11 @@ namespace GooglePlayServices
                     if (currentPollTime.Subtract(lastBundleIdPollTime).Seconds >=
                         bundleUpdateDelaySeconds)
                     {
-                        if (Resolver.AutomaticResolutionEnabled())
-                        {
-                            bundleId = currentBundleId;
-                            if (DeleteFiles(Resolver.OnBundleId(bundleId))) Resolve();
+                        if (BundleIdChanged != null) {
+                            BundleIdChanged(null,
+                                            new BundleIdChangedEventArgs { BundleId = bundleId });
                         }
+                        bundleId = currentBundleId;
                     }
                 }
                 else
