@@ -80,6 +80,12 @@ public class VersionHandler : AssetPostprocessor {
         // Prefix for labels which encode metadata of an asset.
         private static string LABEL_PREFIX = "gvh_";
 
+        /// <summary>
+        /// Label which flags whether an asset is should be managed by this
+        /// module.
+        /// </summary>
+        public static string ASSET_LABEL = "gvh";
+
         // Map of build target names to BuildTarget enumeration values.
         static public Dictionary<string, BuildTarget>
             BUILD_TARGET_NAME_TO_ENUM = new Dictionary<string, BuildTarget> {
@@ -261,10 +267,14 @@ public class VersionHandler : AssetPostprocessor {
             List<string> labels = new List<String>();
             // Strip labels we're currently managing.
             foreach (string label in AssetDatabase.GetLabels(importer)) {
-                if (!label.StartsWith(LABEL_PREFIX)) {
+                if (!(label.ToLower().StartsWith(LABEL_PREFIX) ||
+                      label.ToLower().Equals(ASSET_LABEL))) {
                     labels.Add(label);
                 }
             }
+            // Add / preserve the label that indicates this asset is managed by
+            // this module.
+            labels.Add(ASSET_LABEL);
             // Add labels for the metadata in this class.
             if (!String.IsNullOrEmpty(versionString)) {
                 labels.Add(LABEL_PREFIX + TOKEN_VERSION + versionString);
@@ -998,10 +1008,8 @@ public class VersionHandler : AssetPostprocessor {
     /// Get all assets managed by this module.
     /// </summary>
     public static string[] FindAllAssets() {
-        return SearchAssetDatabase(filter: (filename) => {
-                string extension = Path.GetExtension(filename).ToLower();
-                return extension.Equals(".dll") || extension.Equals(".txt");
-            });
+        return SearchAssetDatabase(
+            assetsFilter: "l:" + FileMetadata.ASSET_LABEL);
     }
 
     /// <summary>
