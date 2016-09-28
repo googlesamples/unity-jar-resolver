@@ -270,7 +270,7 @@ namespace GooglePlayServices
         /// <summary>
         /// Add a menu item for resolving the jars manually.
         /// </summary>
-        [MenuItem("Assets/Google Play Services/Settings")]
+        [MenuItem("Assets/Play Services Resolver/Android Resolver/Settings")]
         public static void SettingsDialog()
         {
             if (Resolver == null) {
@@ -283,7 +283,7 @@ namespace GooglePlayServices
         /// <summary>
         /// Add a menu item for resolving the jars manually.
         /// </summary>
-        [MenuItem("Assets/Google Play Services/Resolve Client Jars")]
+        [MenuItem("Assets/Play Services Resolver/Android Resolver/Resolve Client Jars")]
         public static void MenuResolve()
         {
             if (Resolver == null) {

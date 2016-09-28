@@ -190,10 +190,16 @@ public class VersionHandler : AssetPostprocessor {
                 }
             }
 
+            // On Windows the AssetDatabase converts native path separators
+            // used by the .NET framework '\' to *nix style '/' such that
+            // System.IO.Path generated paths will not match those looked up
+            // in the asset database.  So we convert the output of Path.Combine
+            // here to use *nix style paths so that it's possible to perform
+            // simple string comparisons to check for path equality.
             filenameCanonical = Path.Combine(
                 filenameComponents.directory,
                 filenameComponents.basenameNoExtension +
-                filenameComponents.extension);
+                filenameComponents.extension).Replace('\\', '/');
             UpdateAssetLabels();
         }
 
@@ -955,7 +961,7 @@ public class VersionHandler : AssetPostprocessor {
     /// Add the settings dialog for this module to the menu and show the
     /// window when the menu item is selected.
     /// </summary>
-    [MenuItem("Assets/Google Version Handler/Settings")]
+    [MenuItem("Assets/Play Services Resolver/Version Handler/Settings")]
     public static void ShowSettings() {
         SettingsDialog window = (SettingsDialog)EditorWindow.GetWindow(
             typeof(SettingsDialog), true, PLUGIN_NAME + " Settings");
@@ -966,7 +972,7 @@ public class VersionHandler : AssetPostprocessor {
     /// <summary>
     /// Menu item which forces version handler execution.
     /// </summary>
-    [MenuItem("Assets/Google Version Handler/Update")]
+    [MenuItem("Assets/Play Services Resolver/Version Handler/Update")]
     public static void UpdateNow() {
         UpdateVersionedAssets(forceUpdate: true);
         EditorUtility.DisplayDialog(PLUGIN_NAME, "Update complete.", "OK");

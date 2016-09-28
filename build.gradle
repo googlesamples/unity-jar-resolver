@@ -55,10 +55,13 @@ project.ext {
     if ((unity_dll_path_file == null || !unity_dll_path_file.exists()) &&
         unity_exe_found) {
       if (os_osx) {
-        // ${unity_exe}/../../Frameworks/Managed/Unity{Engine,Editor}.dll
-        unity_dll_path_file = new File(
-            (new File(unity_exe)).getParentFile().getParentFile(),
-            'Frameworks' + File.separator + 'Managed')
+        // Search paths relative to the Unity binary for the Managed
+        // directory.
+        for (path in ['../Frameworks/Managed', '../Managed']) {
+          unity_dll_path_file = new File(new File(unity_exe).getParentFile(),
+                                         path)
+          if (unity_dll_path_file.exists()) break;
+        }
       } else if (os_windows || os_linux) {
         // ${unity_exe}/../Data/Managed/Unity{Engine,Editor}.dll
         unity_dll_path_file = new File(
@@ -153,7 +156,7 @@ task copy_unityDlls(type: Copy) {
   description 'Copy Unity DLLs required to build managed DLLs in the plugin.'
   from files(new File(project.ext.unity_dll_path_file, 'UnityEngine.dll'),
              new File(project.ext.unity_dll_path_file, 'UnityEditor.dll'),
-             new File(project.ext.unity_playback_engines_dll_path_file,
+             new File((File)project.ext.unity_playback_engines_dll_path_file,
                       'iOSSupport' + File.separator +
                       'UnityEditor.iOS.Extensions.Xcode.dll'))
   into 'unity_dlls'
