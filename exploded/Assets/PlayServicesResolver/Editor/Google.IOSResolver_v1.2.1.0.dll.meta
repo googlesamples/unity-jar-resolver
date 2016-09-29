@@ -1,7 +1,9 @@
 fileFormatVersion: 2
-guid: b61e6f6b1f574320a0ec9ceee2ad0f60
+guid: 97befec6542e472f91999e1c453b3322
 labels:
+- gvh_v1.2.1.0
 - gvh
+- gvh_teditor
 timeCreated: 1473798236
 licenseType: Pro
 PluginImporter:
@@ -14,7 +16,7 @@ PluginImporter:
       enabled: 0
       settings: {}
     Editor:
-      enabled: 1
+      enabled: 0
       settings:
         DefaultValueInitialized: true
   userData: 

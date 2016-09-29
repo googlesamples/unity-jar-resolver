@@ -164,13 +164,11 @@ task copy_unityDlls(type: Copy) {
 }
 
 // Construct the name of a versioned asset from the source filename, version
-// string and the list of platforms the asset targets (e.g ['Android', 'iOS'])
+// string.
 // The encoded string takes the form...
-// ${filename}_v${version}_t${hypen_separated_target_names}.${extension}
+// ${filename}_v${version_.${extension}
 // where extension is derived from the specified filename.
-// If manifest is true '_manifest' is added to the name to indicate a manifest
-// file.
-def versionedAssetName(filename, version, targets=null, manifest=false) {
+def versionedAssetName(filename, version) {
   def extensionIndex = filename.lastIndexOf('.')
   def basename = filename.substring(0, extensionIndex)
   def extension = filename.substring(extensionIndex)
@@ -180,22 +178,15 @@ def versionedAssetName(filename, version, targets=null, manifest=false) {
   if (version != null && !version.isEmpty()) {
     targetName += '_v' + version
   }
-  if (targets != null && targets.size()) {
-    targetName += '_t' + targets.join('-')
-  }
-  if (manifest != false) {
-    targetName += '_manifest'
-  }
   return targetName + extension
 }
 
 // Generate the tasks to compile a plugin DLL and copy it to the Unity
 // plugin packaging folder.
 def build_pluginDll(projectName, assemblyDllBasename) {
-  def targets = ['Editor']
   def version = "${pluginVersion}"
   def projectPath = 'source/' + projectName + '/' + projectName + '.csproj'
-  def assemblyDll = versionedAssetName(assemblyDllBasename, version, targets)
+  def assemblyDll = versionedAssetName(assemblyDllBasename, version)
 
   def compileTask = tasks.create(name: "compile_" + projectName,
                                  type: Exec,
@@ -256,14 +247,37 @@ task copy_pluginTemplate(type: Copy, dependsOn: update_metadataForVersion) {
   description 'Copy the template project into the Unity plugin packaging dir.'
   from "${pluginSrc}"
   into "${pluginProj}"
-  exclude '**/*.dll.*', '**/*_manifest.txt.meta'
+  exclude '**/*.dll.*', '**/*.txt.meta'
   duplicatesStrategy 'include'
   ext.remoteTaskPhase = 'prebuild'
 }
 
+task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
+                                             'copy_PlayServicesResolver',
+                                             'copy_VersionHandler',
+                                             'copy_IOSResolver']) {
+  description 'Inject the version number into the plugin\'s meta files.'
+  ext.remoteTaskPhase = 'prebuild'
+  doLast {
+    for (fileobj in fileTree("${pluginProj}")) {
+      if (fileobj.path.endsWith('.meta')) {
+        def lines = fileobj.text.split('\n')
+        def outputLines = []
+        for (line in lines) {
+          outputLines.add(line)
+          if (line.contains('labels:')) {
+            outputLines.add("- gvh_v${pluginVersion}")
+          }
+        }
+        fileobj.write(outputLines.join('\n') + '\n')
+      }
+    }
+  }
+}
+
 task copy_manifestMetadata(type: Copy) {
   def manifestBasename = versionedAssetName(
-    currentPluginBasename + '.txt', null, null, true) + '.meta'
+    currentPluginBasename + '.txt', null) + '.meta'
   description 'Copy .meta file for the plugin manifest.'
   from file("${pluginSrc}/${dllDir}/" + manifestBasename)
   into file("${pluginProj}/${dllDir}/")
@@ -271,17 +285,14 @@ task copy_manifestMetadata(type: Copy) {
     String fn ->
       return fn.replace(manifestBasename,
                         versionedAssetName(currentPluginBasename + '.txt',
-                                           "${pluginVersion}", null, true) +
+                                           "${pluginVersion}") +
                         '.meta')
   }
   ext.remoteTaskPhase = 'prebuild'
 }
 
 task generate_manifest(dependsOn: ['copy_manifestMetadata',
-                                   'copy_pluginTemplate',
-                                   'copy_PlayServicesResolver',
-                                   'copy_VersionHandler',
-                                   'copy_IOSResolver']) {
+                                   'inject_versionIntoMetaFiles']) {
   description 'Generate a manifest for the files in the plug-in.'
   doLast {
     def dir = file("${pluginProj}/Assets")
@@ -289,13 +300,13 @@ task generate_manifest(dependsOn: ['copy_manifestMetadata',
     dir.eachFileRecurse(groovy.io.FileType.FILES) { filename ->
       def path = filename.path
       if (!(path.toLowerCase().endsWith('.meta') ||
-            path.toLowerCase().contains('_manifest'))) {
+            path.toLowerCase().endsWith('.txt'))) {
         list << filename.path.replace("${pluginProj}/", '')
       }
     }
     def manifest = file("${pluginProj}/${dllDir}/" +
                         versionedAssetName(currentPluginBasename + '.txt',
-                                           "${pluginVersion}", null, true))
+                                           "${pluginVersion}"))
     manifest.write(list.join('\n') + '\n')
   }
   ext.remoteTaskPhase = 'prebuild'

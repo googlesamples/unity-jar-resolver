@@ -1,7 +1,9 @@
 fileFormatVersion: 2
 guid: da1248427d3946f68e3d8a139502d0ef
 labels:
+- gvh_v1.2.1.0
 - gvh
+- gvh_manifest
 timeCreated: 1474401009
 licenseType: Pro
 TextScriptImporter:
