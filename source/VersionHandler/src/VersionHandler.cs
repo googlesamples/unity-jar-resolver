@@ -19,6 +19,7 @@ using UnityEditor;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System;
 
 namespace Google {
@@ -1114,6 +1115,85 @@ public class VersionHandler : AssetPostprocessor {
             string[] importedAssets, string[] deletedAssets,
             string[] movedAssets, string[] movedFromPath) {
         UpdateVersionedAssets();
+    }
+
+
+    /// <summary>
+    /// Find a class from an assembly by name.
+    /// </summary>
+    /// <param name="assemblyName">Name of the assembly to search for.</param>
+    /// <param name="className">Name of the class to find.</param>
+    /// <returns>The Type of the class if found, null otherwise.</returns>
+    public static Type FindClass(string assemblyName, string className) {
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+            if (assembly.GetName().Name == assemblyName) {
+                return Type.GetType(className + ", " + assembly.FullName);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Call a method on an object with named arguments.
+    /// </summary>
+    /// <param name="objectInstance">Object to call a method on.</param>
+    /// <param name="methodName">Name of the method to call.</param>
+    /// <param name="arg">Positional arguments of the method.</param>
+    /// <param name="namedArgs">Named arguments of the method.</param>
+    /// <returns>object returned by the method.</returns>
+    public static object InvokeInstanceMethod(
+            object objectInstance, string methodName, object[] args,
+            Dictionary<string, object> namedArgs = null) {
+        return InvokeMethod(objectInstance.GetType(),
+                            objectInstance, methodName, args: args,
+                            namedArgs: namedArgs);
+    }
+
+    /// <summary>
+    /// Call a static method on an object.
+    /// </summary>
+    /// <param name="type">Class to call the method on.</param>
+    /// <param name="methodName">Name of the method to call.</param>
+    /// <param name="arg">Positional arguments of the method.</param>
+    /// <param name="namedArgs">Named arguments of the method.</param>
+    /// <returns>object returned by the method.</returns>
+    public static object InvokeStaticMethod(
+            Type type, string methodName, object[] args,
+            Dictionary<string, object> namedArgs = null) {
+        return InvokeMethod(type, null, methodName, args: args,
+                            namedArgs: namedArgs);
+    }
+
+    /// <summary>
+    /// Call a method on an object with named arguments.
+    /// </summary>
+    /// <param name="type">Class to call the method on.</param>
+    /// <param name="objectInstance">Object to call a method on.</param>
+    /// <param name="methodName">Name of the method to call.</param>
+    /// <param name="arg">Positional arguments of the method.</param>
+    /// <param name="namedArgs">Named arguments of the method.</param>
+    /// <returns>object returned by the method.</returns>
+    public static object InvokeMethod(
+            Type type, object objectInstance, string methodName,
+            object[] args, Dictionary<string, object> namedArgs = null) {
+        MethodInfo method = type.GetMethod(methodName);
+        ParameterInfo[] parameters = method.GetParameters();
+        int numParameters = parameters.Length;
+        object[] parameterValues = new object[numParameters];
+        int numPositionalArgs = args != null ? args.Length : 0;
+        foreach (var parameter in parameters) {
+            int position = parameter.Position;
+            if (position < numPositionalArgs) {
+                parameterValues[position] = args[position];
+                continue;
+            }
+            object namedValue = null;
+            if (namedArgs != null) {
+                namedArgs.TryGetValue(parameter.Name, out namedValue);
+            }
+            parameterValues[position] = namedValue;
+        }
+        return method.Invoke(objectInstance, parameterValues);
     }
 }
 

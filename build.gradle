@@ -163,10 +163,10 @@ task copy_unityDlls(type: Copy) {
   ext.remoteTaskPhase = 'prebuild'
 }
 
-// Construct the name of a versioned asset from the source filename, version
+// Construct the name of a versioned asset from the source filename and version
 // string.
 // The encoded string takes the form...
-// ${filename}_v${version_.${extension}
+// ${filename}_v${version}_.${extension}
 // where extension is derived from the specified filename.
 def versionedAssetName(filename, version) {
   def extensionIndex = filename.lastIndexOf('.')
