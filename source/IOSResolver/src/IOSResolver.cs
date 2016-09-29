@@ -264,8 +264,9 @@ public static class IOSResolver {
                 TargetSdkVersionToString(minVersionAndPodNames.Key);
             var update = EditorUtility.DisplayDialog(
                 "Unsupported Target SDK",
-                "Target SDK selected in the iOS Player Settings is not " +
-                "supported by the Cocoapods included in this project. " +
+                "Target SDK selected in the iOS Player Settings (" +
+                TargetSdk + ") is not supported by the Cocoapods " +
+                "included in this project. " +
                 "The build will very likely fail. The minimum supported " +
                 "version is \"" + minVersionString + "\" " +
                 "required by pods (" +
@@ -276,8 +277,8 @@ public static class IOSResolver {
             if (update) {
                 TargetSdkVersion = minVersionAndPodNames.Key;
                 string errorString = (
-                    "Target SDK has been updated to " + minVersionString +
-                    ".  You must restart the " +
+                    "Target SDK has been updated from " + TargetSdk +
+                    " to " + minVersionString + ".  You must restart the " +
                     "build for this change to take effect.");
                 EditorUtility.DisplayDialog(
                     "Target SDK updated.", errorString, "OK");
@@ -330,8 +331,22 @@ public static class IOSResolver {
     /// </summary>
     static string TargetSdk {
         get {
-            return UnityEditor.PlayerSettings.iOS.targetOSVersion.ToString().
-                Replace("iOS_", "").Replace("_", ".");
+            string name = Enum.GetName(
+                typeof(iOSTargetOSVersion),
+                UnityEditor.PlayerSettings.iOS.targetOSVersion);
+            if (name == null) {
+                // Versions 8.2 and above do not have enum symbols
+                // The values in Unity 5.4.1f1:
+                // 8.2 == 32
+                // 8.3 == 34
+                // 8.4 == 36
+                // 9.0 == 38
+                // 9.1 == 40
+                // Since these are undocumented just report
+                // 8.2 as selected for the moment.
+                return "82";
+            }
+            return name.Replace("iOS_", "").Replace("_", ".");
         }
 
         set {
