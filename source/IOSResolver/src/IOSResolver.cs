@@ -547,6 +547,15 @@ public static class IOSResolver {
                                                     frameworkName);
             string destFrameworkFullPath = Path.Combine(pathToBuiltProject,
                                                         destFrameworkPath);
+            // Only move this framework if it contains a library.
+            // Skip frameworks that consist of just resources, they're handled
+            // in a separate import step.
+            if (!File.Exists(Path.Combine(
+                    frameworkFullPath,
+                    Path.GetFileName(frameworkFullPath)
+                        .Replace(".framework", "")))) {
+                continue;
+            }
 
             PlayServicesSupport.DeleteExistingFileOrDirectory(
                 destFrameworkFullPath);
@@ -609,7 +618,7 @@ public static class IOSResolver {
                         destFolderFullPath);
                     Directory.Move(resFolder, destFolderFullPath);
                     project.AddFileToBuild(
-                        target, project.AddFile(destFolderFullPath, destFolder,
+                        target, project.AddFile(destFolder, destFolder,
                                                 PBXSourceTree.Source));
                 }
             }
