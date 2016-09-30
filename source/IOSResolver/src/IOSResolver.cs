@@ -175,6 +175,11 @@ public static class IOSResolver {
     private const string PREFERENCE_ENABLED = "Google.IOSResolver.Enabled";
 
     /// <summary>
+    /// Whether verbose logging is enabled.
+    /// </summary>
+    internal static bool verboseLogging = false;
+
+    /// <summary>
     /// Initialize the module.
     /// </summary>
     static IOSResolver() {
@@ -188,6 +193,35 @@ public static class IOSResolver {
         get { return EditorPrefs.GetBool(PREFERENCE_ENABLED,
                                          defaultValue: true); }
         set { EditorPrefs.SetBool(PREFERENCE_ENABLED, value); }
+    }
+
+    /// <summary>
+    /// Log severity.
+    /// </summary>
+    internal enum LogLevel {
+        Info,
+        Warning,
+        Error,
+    };
+
+    /// <summary>
+    /// Log a message.
+    /// </summary>
+    internal static void Log(string message, bool verbose = false,
+                             LogLevel level = LogLevel.Info) {
+        if (!verbose || verboseLogging) {
+            switch (level) {
+                case LogLevel.Info:
+                    Debug.Log(message);
+                    break;
+                case LogLevel.Warning:
+                    Debug.LogWarning(message);
+                    break;
+                case LogLevel.Error:
+                    Debug.LogError(message);
+                    break;
+            }
+        }
     }
 
     /// <summary>
@@ -222,6 +256,11 @@ public static class IOSResolver {
     public static void AddPod(string podName, string version = null,
                               bool bitcodeEnabled = true,
                               string minTargetSdk = null) {
+        Log("AddPod - name: " + podName +
+            " version: " + (version ?? "null") +
+            " bitcode: " + bitcodeEnabled.ToString() +
+            " sdk: " + (minTargetSdk ?? "null"),
+            verbose: true);
         var pod = new Pod(podName, version, bitcodeEnabled, minTargetSdk);
         pods[podName] = pod;
         UpdateTargetSdk(pod);
@@ -247,8 +286,8 @@ public static class IOSResolver {
         if (notifyUser) {
             string oldSdk = TargetSdk;
             TargetSdkVersion = minVersion;
-            Debug.Log("iOS Target SDK changed from " + oldSdk + " to " +
-                      TargetSdk + " required by the " + pod.name + " pod");
+            Log("iOS Target SDK changed from " + oldSdk + " to " +
+                TargetSdk + " required by the " + pod.name + " pod");
         }
         return true;
     }
@@ -410,9 +449,9 @@ public static class IOSResolver {
         var podsWithoutBitcode = FindPodsWithBitcodeDisabled();
         bool bitcodeDisabled = podsWithoutBitcode.Count > 0;
         if (bitcodeDisabled) {
-            UnityEngine.Debug.LogWarning(
-                "Bitcode is disabled due to the following Cocoapods (" +
-                String.Join(", ", podsWithoutBitcode.ToArray()) + ")");
+            Log("Bitcode is disabled due to the following Cocoapods (" +
+                String.Join(", ", podsWithoutBitcode.ToArray()) + ")",
+                level: LogLevel.Warning);
         }
 
         // Configure project settings for Cocoapods.
@@ -482,9 +521,9 @@ public static class IOSResolver {
 
         string pod_command = FindPodTool();
         if (String.IsNullOrEmpty(pod_command)) {
-            UnityEngine.Debug.LogError(
-                "'pod' command not found; unable to generate a usable" +
-                " Xcode project. " + COCOAPOD_INSTALL_INSTRUCTIONS);
+            Log("'pod' command not found; unable to generate a usable" +
+                " Xcode project. " + COCOAPOD_INSTALL_INSTRUCTIONS,
+                level: LogLevel.Error);
             return;
         }
 
@@ -492,9 +531,9 @@ public static class IOSResolver {
         CommandLine.Result result =
             CommandLine.Run(pod_command, "--version", pathToBuiltProject);
         if (result.exitCode != 0 || result.stdout[0] == '0') {
-            Debug.LogError(
-               "Error running cocoapods. Please ensure you have at least " +
-               "version  1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS);
+            Log("Error running cocoapods. Please ensure you have at least " +
+                "version  1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS,
+                level: LogLevel.Error);
             return;
         }
 
@@ -506,9 +545,9 @@ public static class IOSResolver {
                     "en_US.UTF-8").Split('.')[0] + ".UTF-8"}
             });
         if (result.exitCode != 0) {
-            Debug.LogError("Pod install failed. See the output below for " +
-                           "details.\n\n" + result.stdout + "\n\n" +
-                           result.stderr);
+            Log("Pod install failed. See the output below for " +
+                "details.\n\n" + result.stdout + "\n\n" +
+                result.stderr, level: LogLevel.Error);
             return;
         }
     }

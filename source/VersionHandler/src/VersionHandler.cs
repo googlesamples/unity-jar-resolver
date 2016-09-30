@@ -1187,9 +1187,12 @@ public class VersionHandler : AssetPostprocessor {
                 parameterValues[position] = args[position];
                 continue;
             }
-            object namedValue = null;
+            object namedValue = parameter.RawDefaultValue;
             if (namedArgs != null) {
-                namedArgs.TryGetValue(parameter.Name, out namedValue);
+                object overrideValue;
+                if (namedArgs.TryGetValue(parameter.Name, out overrideValue)) {
+                    namedValue = overrideValue;
+                }
             }
             parameterValues[position] = namedValue;
         }

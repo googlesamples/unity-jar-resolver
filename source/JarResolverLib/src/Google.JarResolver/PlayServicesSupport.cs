@@ -120,6 +120,11 @@ namespace Google.JarResolver
             }
         }
 
+        /// <summary>
+        /// Whether verbose logging is enabled.
+        /// </summary>
+        internal bool verboseLogging = false;
+
         // TODO(wilkinsonclay): get the extension from the pom file.
         private string[] Packaging = {
             ".aar",
@@ -213,8 +218,8 @@ namespace Google.JarResolver
         ///     message is a string to write to the log.
         ///   </para>
         /// </remarks>
-        internal void Log(string message) {
-            if (logger != null) {
+        internal void Log(string message, bool verbose = false) {
+            if (logger != null && (!verbose || verboseLogging)) {
                 logger(message);
             }
         }
@@ -273,6 +278,15 @@ namespace Google.JarResolver
         public void DependOn(string group, string artifact, string version,
                              string[] packageIds=null, string[] repositories=null)
         {
+            Log("DependOn - group: " + group +
+                " artifact: " + artifact +
+                " version: " + version +
+                " packageIds: " +
+                (packageIds != null ? String.Join(", ", packageIds) : "null") +
+                " repositories: " +
+                (repositories != null ? String.Join(", ", repositories) :
+                 "null"),
+                verbose: true);
             Dependency unresolvedDep = new Dependency(group, artifact, version,
                                                       packageIds: packageIds,
                                                       repositories: repositories);
