@@ -17,6 +17,7 @@
 namespace Google.JarResolver
 {
     using System.Collections.Generic;
+    using System.Collections.ObjectModel;
     using System.IO;
 
     /// <summary>
@@ -178,6 +179,17 @@ namespace Google.JarResolver
                 {
                     return string.Empty;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Returns the available versions of this dependency.
+        /// </summary>
+        public ReadOnlyCollection<string> PossibleVersions
+        {
+            get
+            {
+                return possibleVersions.AsReadOnly();
             }
         }
 

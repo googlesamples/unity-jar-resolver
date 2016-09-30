@@ -322,6 +322,10 @@ namespace Google.JarResolver
             Dictionary<string, Dependency> candidates = new Dictionary<string, Dependency>();
 
             Dictionary<string, Dependency> dependencyMap = LoadDependencies(true, true);
+            // Set of each versioned dependencies for each version-less dependency key.
+            // e.g if foo depends upon bar, map[bar] = {foo}.
+            var reverseDependencyTree = new Dictionary<string, HashSet<string>>();
+            var warnings = new HashSet<string>();
 
             // All dependencies are added to the "unresolved" list.
             unresolved.AddRange(dependencyMap.Values);
@@ -333,6 +337,7 @@ namespace Google.JarResolver
 
                 foreach (Dependency dep in unresolved)
                 {
+                    var currentDep = dep;
                     // Whether the dependency has been resolved and therefore should be removed
                     // from the unresolved list.
                     bool remove = true;
@@ -340,17 +345,17 @@ namespace Google.JarResolver
                     // check for existing candidate
                     Dependency candidate;
                     Dependency newCandidate;
-                    if (candidates.TryGetValue(dep.VersionlessKey, out candidate))
+                    if (candidates.TryGetValue(currentDep.VersionlessKey, out candidate))
                     {
-                        if (dep.IsAcceptableVersion(candidate.BestVersion))
+                        if (currentDep.IsAcceptableVersion(candidate.BestVersion))
                         {
                             remove = true;
 
                             // save the most restrictive dependency in the
                             //  candidate
-                            if (dep.IsNewer(candidate))
+                            if (currentDep.IsNewer(candidate))
                             {
-                                candidates[dep.VersionlessKey] = dep;
+                                candidates[currentDep.VersionlessKey] = currentDep;
                             }
                         }
                         else
@@ -361,15 +366,15 @@ namespace Google.JarResolver
                             // refine one or both dependencies if they are
                             // non-concrete.
                             bool possible = false;
-                            if (dep.Version.Contains("+") && candidate.IsNewer(dep))
+                            if (currentDep.Version.Contains("+") && candidate.IsNewer(currentDep))
                             {
-                                possible = dep.RefineVersionRange(candidate);
+                                possible = currentDep.RefineVersionRange(candidate);
                             }
 
                             // only try if the candidate is less than the depenceny
-                            if (candidate.Version.Contains("+") && dep.IsNewer(candidate))
+                            if (candidate.Version.Contains("+") && currentDep.IsNewer(candidate))
                             {
-                                possible = possible || candidate.RefineVersionRange(dep);
+                                possible = possible || candidate.RefineVersionRange(currentDep);
                             }
 
                             if (possible)
@@ -389,20 +394,40 @@ namespace Google.JarResolver
                             }
                             else if (!possible && useLatest)
                             {
-                                newCandidate = dep.IsNewer(candidate) ? dep : candidate;
+                                // Reload versions of the dependency has they all have been
+                                // removed.
+                                newCandidate = (currentDep.IsNewer(candidate) ?
+                                                currentDep : candidate);
+                                newCandidate = newCandidate.HasPossibleVersions ? newCandidate :
+                                    FindCandidate(newCandidate);
                                 candidates[newCandidate.VersionlessKey] = newCandidate;
+                                currentDep = newCandidate;
                                 remove = true;
+                                // Due to a dependency being via multiple modules we track
+                                // whether a warning has already been reported and make sure it's
+                                // only reported once.
+                                if (!warnings.Contains(currentDep.VersionlessKey)) {
+                                    Log("WARNING: No compatible versions of " +
+                                        currentDep.VersionlessKey + " required by (" +
+                                        String.Join(
+                                            ", ", (new List<string>(
+                                                reverseDependencyTree[
+                                                    currentDep.VersionlessKey])).ToArray()) +
+                                        "), will try using the latest version " +
+                                        currentDep.BestVersion);
+                                    warnings.Add(currentDep.VersionlessKey);
+                                }
                             }
                             else if (!possible)
                             {
                                 throw new ResolutionException("Cannot resolve " +
-                                    dep + " and " + candidate);
+                                    currentDep + " and " + candidate);
                             }
                         }
                     }
                     else
                     {
-                        candidate = FindCandidate(dep);
+                        candidate = FindCandidate(currentDep);
                         if (candidate != null)
                         {
                             candidates.Add(candidate.VersionlessKey, candidate);
@@ -411,7 +436,7 @@ namespace Google.JarResolver
                         else
                         {
                             throw new ResolutionException("Cannot resolve " +
-                                dep);
+                                currentDep);
                         }
                     }
 
@@ -419,19 +444,28 @@ namespace Google.JarResolver
                     if (remove)
                     {
                         // Add all transitive dependencies to resolution list.
-                        foreach (Dependency d in GetDependencies(dep))
+                        foreach (Dependency d in GetDependencies(currentDep))
                         {
                             if (!nextUnresolved.ContainsKey(d.Key))
                             {
+                                Log("For " + currentDep.Key + " adding dep " + d.Key,
+                                    verbose: true);
+                                HashSet<string> parentNames;
+                                if (!reverseDependencyTree.TryGetValue(d.VersionlessKey,
+                                                                       out parentNames)) {
+                                    parentNames = new HashSet<string>();
+                                }
+                                parentNames.Add(currentDep.Key);
+                                reverseDependencyTree[d.VersionlessKey] = parentNames;
                                 nextUnresolved.Add(d.Key, d);
                             }
                         }
                     }
                     else
                     {
-                        if (!nextUnresolved.ContainsKey(dep.Key))
+                        if (!nextUnresolved.ContainsKey(currentDep.Key))
                         {
-                            nextUnresolved.Add(dep.Key, dep);
+                            nextUnresolved.Add(currentDep.Key, currentDep);
                         }
                     }
                 }
@@ -571,7 +605,7 @@ namespace Google.JarResolver
         /// </summary>
         /// <param name="dep">Dependency to process</param>
         /// <param name="fname">file name of the metadata.</param>
-        internal static void ProcessMetadata(Dependency dep, string fname)
+        internal void ProcessMetadata(Dependency dep, string fname)
         {
             XmlTextReader reader = new XmlTextReader(new StreamReader(fname));
 
@@ -661,6 +695,8 @@ namespace Google.JarResolver
                     }
                 }
 
+                Log(dep.Key + " version " + dep.BestVersion + " not available, ignoring.",
+                    verbose: true);
                 dep.RemovePossibleVersion(dep.BestVersion);
             }
 
@@ -677,9 +713,18 @@ namespace Google.JarResolver
         internal IEnumerable<Dependency> GetDependencies(Dependency dep)
         {
             List<Dependency> dependencyList = new List<Dependency>();
+            if (String.IsNullOrEmpty(dep.BestVersion)) {
+                Log("ERROR: no compatible versions of " + dep.Key +
+                    "given the set of dependencies");
+                return dependencyList;
+            }
 
             string basename = dep.Artifact + "-" + dep.BestVersion + ".pom";
             string pomFile = Path.Combine(dep.BestVersionPath, basename);
+            Log("GetDependencies - reading pom of " + basename + " pom: " + pomFile + " " +
+                " versions: " +
+                String.Join(", ", (new List<string>(dep.PossibleVersions)).ToArray()),
+                verbose: true);
 
             XmlTextReader reader = new XmlTextReader(new StreamReader(pomFile));
             bool inDependencies = false;
