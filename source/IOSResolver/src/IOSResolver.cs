@@ -21,6 +21,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using UnityEditor.iOS.Xcode;
 using UnityEditor;
 using UnityEditor.Callbacks;
@@ -179,11 +180,111 @@ public static class IOSResolver {
     /// </summary>
     internal static bool verboseLogging = false;
 
+    // Whether the xcode extension was successfully loaded.
+    private static bool iOSXcodeExtensionLoaded = true;
+
+    private static string IOS_PLAYBACK_ENGINES_PATH =
+        Path.Combine("PlaybackEngines", "iOSSupport");
+
+    // Search for a directory up to a maximum search depth stopping the
+    // depth first search each time the specified directory is found.
+    private static List<string> FindDirectory(
+            string searchPath, string directoryToFind, int maxDepth,
+            int currentDepth = 0) {
+        if (Path.GetFileName(searchPath) == directoryToFind) {
+            return new List<string> { searchPath };
+        } else if (maxDepth == currentDepth) {
+            return new List<string>();
+        }
+        var foundDirs = new List<string>();
+        foreach (var dir in Directory.GetDirectories(searchPath)) {
+            if (Path.GetFileName(dir) == directoryToFind) {
+                foundDirs.Add(dir);
+            } else {
+                foundDirs.AddRange(FindDirectory(
+                    dir, directoryToFind, maxDepth,
+                    currentDepth: currentDepth + 1));
+            }
+        }
+        return foundDirs;
+    }
+
+    // Try to load the Xcode editor extension.
+    private static Assembly ResolveUnityEditoriOSXcodeExtension(
+            object sender, ResolveEventArgs args)
+    {
+        // The UnityEditor.iOS.Extensions.Xcode.dll has the wrong name baked
+        // into the assembly so references end up resolving as
+        // Unity.iOS.Extensions.Xcode.  Catch this and redirect the load to
+        // the UnityEditor.iOS.Extensions.Xcode.
+        string assemblyName = (new AssemblyName(args.Name)).Name;
+        if (!assemblyName.Equals("Unity.iOS.Extensions.Xcode")) {
+            return null;
+        }
+        iOSXcodeExtensionLoaded = false;
+        string fixedAssemblyName =
+            assemblyName.Replace("Unity.", "UnityEditor.") + ".dll";
+
+        // Find the playback engines folder.
+        string folderPath = Path.GetDirectoryName(
+            Assembly.GetAssembly(
+                typeof(UnityEditor.AssetPostprocessor)).Location);
+        if (UnityEngine.RuntimePlatform.OSXEditor ==
+            UnityEngine.Application.platform) {
+            // Unity likes to move their DLLs around between releases to keep
+            // us on our toes, so search for the PlaybackEngines folder under
+            // the package path.
+            string searchPath = (new DirectoryInfo(folderPath)).FullName;
+            searchPath = Path.GetDirectoryName(
+                searchPath.Substring(0, searchPath.LastIndexOf(".app")));
+            foreach (var directory in
+                     FindDirectory(
+                         searchPath,
+                         Path.GetFileName(IOS_PLAYBACK_ENGINES_PATH), 3)) {
+                if (File.Exists(Path.Combine(directory, fixedAssemblyName))) {
+                    folderPath = directory;
+                    break;
+                }
+            }
+        } else {
+            folderPath = Path.Combine(
+                (new DirectoryInfo(folderPath)).Parent.FullName,
+                IOS_PLAYBACK_ENGINES_PATH);
+        }
+
+        // Try to load the assembly.
+        string assemblyPath = Path.Combine(folderPath, fixedAssemblyName);
+        if (!File.Exists(assemblyPath)) {
+          return null;
+        }
+        Assembly assembly = Assembly.LoadFrom(assemblyPath);
+        if (assembly != null) {
+            iOSXcodeExtensionLoaded = true;
+        }
+        return assembly;
+    }
+
     /// <summary>
     /// Initialize the module.
     /// </summary>
     static IOSResolver() {
-        TARGET_NAME = PBXProject.GetUnityTargetName();
+        RemapXcodeExtension();
+        try {
+            TARGET_NAME = PBXProject.GetUnityTargetName();
+        } catch (FileNotFoundException) {
+            // It's likely we failed to load the iOS Xcode extension.
+            Debug.LogWarning(
+                "Failed to load the UnityEditor.iOS.Extensions.Xcode dll.  " +
+                "Is iOS support installed?");
+        }
+    }
+
+    // Fix loading of the Xcode extension dll.
+    public static void RemapXcodeExtension() {
+        AppDomain.CurrentDomain.AssemblyResolve -=
+            ResolveUnityEditoriOSXcodeExtension;
+        AppDomain.CurrentDomain.AssemblyResolve +=
+            ResolveUnityEditoriOSXcodeExtension;
     }
 
     /// <summary>
@@ -191,7 +292,8 @@ public static class IOSResolver {
     /// </summary>
     public static bool Enabled {
         get { return EditorPrefs.GetBool(PREFERENCE_ENABLED,
-                                         defaultValue: true); }
+                                         defaultValue: true) &&
+                iOSXcodeExtensionLoaded; }
         set { EditorPrefs.SetBool(PREFERENCE_ENABLED, value); }
     }
 
