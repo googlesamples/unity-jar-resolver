@@ -271,11 +271,16 @@ public static class IOSResolver {
         RemapXcodeExtension();
         try {
             TARGET_NAME = PBXProject.GetUnityTargetName();
-        } catch (FileNotFoundException) {
-            // It's likely we failed to load the iOS Xcode extension.
-            Debug.LogWarning(
-                "Failed to load the UnityEditor.iOS.Extensions.Xcode dll.  " +
-                "Is iOS support installed?");
+        } catch (Exception exception) {
+            if (exception is FileNotFoundException ||
+                exception is TypeInitializationException) {
+                // It's likely we failed to load the iOS Xcode extension.
+                Debug.LogWarning(
+                    "Failed to load the UnityEditor.iOS.Extensions.Xcode " +
+                    "dll.  Is iOS support installed?");
+            } else {
+                throw exception;
+            }
         }
     }
 
