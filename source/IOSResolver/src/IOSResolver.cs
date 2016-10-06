@@ -273,7 +273,8 @@ public static class IOSResolver {
             TARGET_NAME = PBXProject.GetUnityTargetName();
         } catch (Exception exception) {
             if (exception is FileNotFoundException ||
-                exception is TypeInitializationException) {
+                exception is TypeInitializationException ||
+                exception is TargetInvocationException) {
                 // It's likely we failed to load the iOS Xcode extension.
                 Debug.LogWarning(
                     "Failed to load the UnityEditor.iOS.Extensions.Xcode " +
