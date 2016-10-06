@@ -17,6 +17,7 @@
 namespace Google.JarResolver
 {
     using System.Collections.Generic;
+    using System.Collections.ObjectModel;
     using System.IO;
 
     /// <summary>
@@ -64,18 +65,36 @@ namespace Google.JarResolver
         private List<string> possibleVersions;
 
         /// <summary>
+        /// Optional array of Android SDK identifiers for packages that are required for this
+        /// artifact.
+        /// </summary>
+        private string[] packageIds;
+
+        /// <summary>
+        /// Optional array of repository directories to search for this artifact.
+        /// </summary>
+        private string[] repositories;
+
+        /// <summary>
         /// Initializes a new instance of the
         ///  <see cref="Google.JarResolver.Dependency"/> class.
         /// </summary>
         /// <param name="group">Group ID</param>
         /// <param name="artifact">Artifact ID</param>
         /// <param name="version">Version constraint.</param>
-        public Dependency(string group, string artifact, string version)
+        /// <param name="packageIds">Android SDK package identifiers required for this
+        /// artifact.</param>
+        /// <param name="repositories">List of additional repository directories to search for
+        /// this artifact.</param>
+        public Dependency(string group, string artifact, string version, string[] packageIds=null,
+                          string[] repositories=null)
         {
             this.group = group;
             this.artifact = artifact;
             this.version = version;
+            this.packageIds = packageIds;
             this.possibleVersions = new List<string>();
+            this.repositories = repositories;
         }
 
         /// <summary>
@@ -115,6 +134,31 @@ namespace Google.JarResolver
         }
 
         /// <summary>
+        /// Array of Android SDK identifiers for packages that are required for this
+        /// artifact.
+        /// </summary>
+        /// <value>Package identifiers if set or null.</value>
+        public string[] PackageIds
+        {
+            get
+            {
+                return packageIds;
+            }
+        }
+
+        /// <summary>
+        /// Array of repositories to search for this artifact.
+        /// </summary>
+        /// <value>List of repository directories if set or null.</value>
+        public string[] Repositories
+        {
+            get
+            {
+                return repositories;
+            }
+        }
+
+        /// <summary>
         /// Gets the best version based on the version contraint, other
         /// dependencies (if resolve has been run), and the availability of the
         /// artifacts in the repository.  If this value is null or empty, either
@@ -135,6 +179,17 @@ namespace Google.JarResolver
                 {
                     return string.Empty;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Returns the available versions of this dependency.
+        /// </summary>
+        public ReadOnlyCollection<string> PossibleVersions
+        {
+            get
+            {
+                return possibleVersions.AsReadOnly();
             }
         }
 

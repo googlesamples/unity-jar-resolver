@@ -1,0 +1,23 @@
+fileFormatVersion: 2
+guid: 97befec6542e472f91999e1c453b3322
+labels:
+- gvh
+- gvh_teditor
+timeCreated: 1473798236
+licenseType: Pro
+PluginImporter:
+  serializedVersion: 1
+  iconMap: {}
+  executionOrder: {}
+  isPreloaded: 0
+  platformData:
+    Any:
+      enabled: 0
+      settings: {}
+    Editor:
+      enabled: 0
+      settings:
+        DefaultValueInitialized: true
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

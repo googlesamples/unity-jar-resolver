@@ -3,21 +3,21 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{CC4F239D-3C7F-4164-830F-9215AE15B32A}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <RootNamespace>JarResolverLib</RootNamespace>
-    <AssemblyName>JarResolverLib</AssemblyName>
-    <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
-    <ReleaseVersion>1.2</ReleaseVersion>
-    <ProductVersion>12.0.0</ProductVersion>
+    <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{5B581BAE-D432-41AB-AEED-FD269AEA081D}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Google</RootNamespace>
+    <AssemblyName>Google.IOSResolver</AssemblyName>
+    <ReleaseVersion>1.2</ReleaseVersion>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>True</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>False</Optimize>
     <OutputPath>bin\Debug</OutputPath>
-    <DefineConstants>DEBUG;</DefineConstants>
+    <DefineConstants>DEBUG;UNITY_EDITOR;UNITY_IOS</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
@@ -31,27 +31,31 @@
     <ConsolePause>False</ConsolePause>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="UnityEditor">
+      <HintPath>..\..\unity_dlls\UnityEditor.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\unity_dlls\UnityEngine.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Xml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="src\Google.JarResolver\AssemblyInfo.cs" />
-    <Compile Include="src\Google.JarResolver\Dependency.cs" />
-    <Compile Include="src\Google.JarResolver\PlayServicesSupport.cs" />
-    <Compile Include="src\Google.JarResolver\ResolutionException.cs" />
+    <Reference Include="UnityEditor.iOS.Extensions.Xcode">
+      <HintPath>..\..\unity_dlls\UnityEditor.iOS.Extensions.Xcode.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
     <Folder Include="src\" />
+    <Folder Include="Properties\" />
   </ItemGroup>
-  <ProjectExtensions>
-    <MonoDevelop>
-      <Properties>
-        <Policies>
-          <DotNetNamingPolicy DirectoryNamespaceAssociation="Flat" ResourceNamePolicy="FileFormatDefault" />
-        </Policies>
-      </Properties>
-    </MonoDevelop>
-  </ProjectExtensions>
+  <ItemGroup>
+    <Compile Include="src\IOSResolver.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\PlayServicesResolver\PlayServicesResolver.csproj">
+      <Project>{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}</Project>
+      <Name>PlayServicesResolver</Name>
+    </ProjectReference>
+  </ItemGroup>
 </Project>

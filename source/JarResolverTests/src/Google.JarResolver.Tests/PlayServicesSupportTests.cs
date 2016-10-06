@@ -411,5 +411,22 @@ namespace Google.Editor.Tests
             d = deps["test:subdep"];
             Assert.True(d.BestVersion == "1.1.0");
         }
+
+        /// <summary>
+        /// Verify the logger delegate is called by the Log() method.
+        /// </summary>
+        [Test]
+        public void TestLogger()
+        {
+            List<string> messageList = new List<string>();
+            string logMessage = "this is a test";
+            PlayServicesSupport support = PlayServicesSupport.CreateInstance(
+                "log_test", "../../testData", Path.GetTempPath(),
+                logger: (message) => messageList.Add(message));
+            Assert.AreEqual(messageList.Count, 0);
+            support.Log(logMessage);
+            Assert.AreEqual(messageList.Count, 1);
+            Assert.AreEqual(messageList[0], logMessage);
+        }
     }
 }

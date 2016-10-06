@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>12.0.0</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>PlayServicesResolver</RootNamespace>
+    <AssemblyName>Google.JarResolver</AssemblyName>
+    <ReleaseVersion>1.2</ReleaseVersion>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>True</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>False</Optimize>
+    <OutputPath>bin\Debug</OutputPath>
+    <DefineConstants>DEBUG;UNITY_EDITOR</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>False</ConsolePause>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>none</DebugType>
+    <Optimize>True</Optimize>
+    <OutputPath>bin\Release</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>False</ConsolePause>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="UnityEditor">
+      <HintPath>..\..\unity_dlls\UnityEditor.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>..\..\unity_dlls\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <ItemGroup>
+    <Folder Include="src\" />
+    <Folder Include="Google.JarResolver\" />
+    <Folder Include="Properties\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="src\CommandLine.cs" />
+    <Compile Include="src\CommandLineDialog.cs" />
+    <Compile Include="src\DefaultResolver.cs" />
+    <Compile Include="src\IResolver.cs" />
+    <Compile Include="src\PlayServicesResolver.cs" />
+    <Compile Include="src\ResolverVer1_1.cs" />
+    <Compile Include="src\SettingsDialog.cs" />
+    <Compile Include="src\TextAreaDialog.cs" />
+    <Compile Include="..\JarResolverLib\src\Google.JarResolver\Dependency.cs">
+      <Link>Google.JarResolver\Dependency.cs</Link>
+    </Compile>
+    <Compile Include="..\JarResolverLib\src\Google.JarResolver\PlayServicesSupport.cs">
+      <Link>Google.JarResolver\PlayServicesSupport.cs</Link>
+    </Compile>
+    <Compile Include="..\JarResolverLib\src\Google.JarResolver\ResolutionException.cs">
+      <Link>Google.JarResolver\ResolutionException.cs</Link>
+    </Compile>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+</Project>

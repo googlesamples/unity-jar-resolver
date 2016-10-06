@@ -54,13 +54,12 @@ the Google Repository SDK components.  These are found in the "extras" section.
 
 # Packaging
 
-The plugin consists of a C# DLL that contains the logic to resolve the dependencies
-and the logic to resolve dependencies and copy them into Unity projects.
-This includes removing older versions of the client libraries.
+The plugin consists of several C# DLLs that contain
+ the logic to resolve the dependencies for both Android and iOS (using CocoaPods),
+the logic to resolve dependencies and copy them into Unity projects, and logic
+to remove older versions of the client libraries as well as older versions of the
+JarResolver DLLs.
 
-There also are 2 C# files.  The first, PlayServicesResolver.cs,
-creates an AssetPostprocessor instance that is used to trigger background
-resolution of the dependencies.  It also adds a menu item
 (Assets/Google Play Services/Resolve Client Jars).  In order to support
 Unity version 4.x, this class also converts the aar file
 to a java plugin project.  The second C# file is SampleDependencies.cs
@@ -76,19 +75,45 @@ plugin).
   2. Copy the SampleDependencies.cs file to another name specific to your plugin
 and add the dependencies your plugin needs.
 
+Reflection is used to access the resolver in order to behave correctly when the
+project is being loaded into Unity and there is no specific order of class
+initialization.
+
+For Android dependencies first create and instance of the resolver object:
 ```
-instance.DependOn(group, artifact, version);
+// Setup the resolver using reflection as the module may not be
+    // available at compile time.
+    Type playServicesSupport = Google.VersionHandler.FindClass(
+      "Google.JarResolver", "Google.JarResolver.PlayServicesSupport");
+    if (playServicesSupport == null) {
+      return;
+    }
+    svcSupport = svcSupport ?? Google.VersionHandler.InvokeStaticMethod(
+      playServicesSupport, "CreateInstance",
+      new object[] {
+          "GooglePlayGames",
+          EditorPrefs.GetString("AndroidSdkRoot"),
+          "ProjectSettings"
+      });
 ```
 
-This declares that the this application now depends on the specified artifact.
-Where:
-
-  * group: indicates the artifact group, e.g. "com.android.support" or
-"com.google.android.gms"
-  * artifact: indicates the artifact, e.g. "appcompat-v7" or
-"play-services-appinvite"
-  * version: indicates the version.  The version value supports both specific
-versions such as 8.1.0, and also the trailing '+' indicating "or greater" for
+Then add dependencies. For example to depend on
+play-services-games version 9.6.0, you need to specify the package, artifact,
+and version as well as the packageId from the SDK manager in case a updated
+version needs to be downloaded from the SDK Manager in order to build.
+```
+    Google.VersionHandler.InvokeInstanceMethod(
+      svcSupport, "DependOn",
+      new object[] {
+      "com.google.android.gms",
+      "play-services-games",
+      "9.6.0" },
+      namedArgs: new Dictionary<string, object>() {
+          {"packageIds", new string[] { "extra-google-m2repository" } }
+      });
+```
+The version value supports both specific versions such as 8.1.0,
+and also the trailing '+' indicating "or greater" for
 the portion of the number preceding the period.  For example 8.1.+ would match
 8.1.2, but not 8.2.  The string "8+" would resolve to any version greater or
 equal to 8.0. The meta version  'LATEST' is also supported meaning the greatest
@@ -100,6 +125,39 @@ Some aar files (notably play-services-measurement) contain variables that
 are processed by the Android Gradle plugin.  Unfortunately, Unity does not perform
 the same processing, so this plugin handles known cases of this variable substition
 by exploding the aar and replacing ${applicationId} with the bundleID.
+
+
+# iOS Dependency Management
+iOS dependencies are identified using Cocoapods.  Cocoapods is run as a post build
+process step.  The libraries are downloaded and injected into the XCode project
+file directly, rather than creating a separate xcworkspace.
+
+To add a dependency you first need an instance of the resolver.  Reflection is
+used to safely handle race conditions when Unity is loading the project and the
+order of class initialization is not known.
+```
+    Type iosResolver = Google.VersionHandler.FindClass(
+  "Google.IOSResolver", "Google.IOSResolver");
+    if (iosResolver == null) {
+      return;
+    }
+```
+
+Dependencies for iOS are added by referring to CocoaPods.  The libraries and
+frameworks are added to the Unity project, so they will automatically be included.
+
+This example add the GooglePlayGames pod, version 5.0 or greater,
+disabling bitcode generation.
+
+```
+    Google.VersionHandler.InvokeStaticMethod(
+      iosResolver, "AddPod",
+      new object[] { "GooglePlayGames" },
+      namedArgs: new Dictionary<string, object>() {
+          { "version", "5.0+" },
+          { "bitcodeEnabled", false },
+      });
+```
 
 # Disabling automatic resolution
 
@@ -132,9 +190,11 @@ non-concrete version constraints (i.e. have a + in the version).
         3. If there
         4. If there are still possible versions to check, add  the dependency to the end
 of the unresolved list for re-processing with a new version candidate.
-        5. If there are no possible versions to resolve both the candidate and the
+        5. If there are no possible versions, then the SDK Manager is used to download
+and updated versions of the libraries based on the packageId.
+        6. If there still are no possible versions to resolve both the candidate and the
 unresolved dependencies, then either fail resolution with an exception, or use
-the greatest version value (depending on the useLatest flag passed to resolve).
+the greatest version value.
      3. When a candidate version is selected, the pom file is read for that version and
 the
 
@@ -143,4 +203,3 @@ the unresolved.
   3. Process transitive dependencies
      5. for each candidate artifact, read the pom file for dependencies and add them to
 the unresolved list.
-
