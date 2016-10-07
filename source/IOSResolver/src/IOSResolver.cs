@@ -22,7 +22,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using UnityEditor.iOS.Xcode;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEngine;
@@ -186,27 +185,27 @@ public static class IOSResolver {
     private static string IOS_PLAYBACK_ENGINES_PATH =
         Path.Combine("PlaybackEngines", "iOSSupport");
 
-    // Search for a directory up to a maximum search depth stopping the
-    // depth first search each time the specified directory is found.
-    private static List<string> FindDirectory(
-            string searchPath, string directoryToFind, int maxDepth,
+    // Search for a file up to a maximum search depth stopping the
+    // depth first search each time the specified file is found.
+    private static List<string> FindFile(
+            string searchPath, string fileToFind, int maxDepth,
             int currentDepth = 0) {
-        if (Path.GetFileName(searchPath) == directoryToFind) {
+        if (Path.GetFileName(searchPath) == fileToFind) {
             return new List<string> { searchPath };
         } else if (maxDepth == currentDepth) {
             return new List<string>();
         }
-        var foundDirs = new List<string>();
-        foreach (var dir in Directory.GetDirectories(searchPath)) {
-            if (Path.GetFileName(dir) == directoryToFind) {
-                foundDirs.Add(dir);
-            } else {
-                foundDirs.AddRange(FindDirectory(
-                    dir, directoryToFind, maxDepth,
-                    currentDepth: currentDepth + 1));
+        var foundFiles = new List<string>();
+        foreach (var file in Directory.GetFiles(searchPath)) {
+            if (Path.GetFileName(file) == fileToFind) {
+                foundFiles.Add(file);
             }
         }
-        return foundDirs;
+        foreach (var dir in Directory.GetDirectories(searchPath)) {
+            foundFiles.AddRange(FindFile(dir, fileToFind, maxDepth,
+                                         currentDepth: currentDepth + 1));
+        }
+        return foundFiles;
     }
 
     // Try to load the Xcode editor extension.
@@ -218,47 +217,55 @@ public static class IOSResolver {
         // Unity.iOS.Extensions.Xcode.  Catch this and redirect the load to
         // the UnityEditor.iOS.Extensions.Xcode.
         string assemblyName = (new AssemblyName(args.Name)).Name;
-        if (!assemblyName.Equals("Unity.iOS.Extensions.Xcode")) {
+        if (!(assemblyName.Equals("Unity.iOS.Extensions.Xcode") ||
+              assemblyName.Equals("UnityEditor.iOS.Extensions.Xcode"))) {
             return null;
         }
+        Log("Trying to load assembly: " + assemblyName, verbose: true);
         iOSXcodeExtensionLoaded = false;
         string fixedAssemblyName =
             assemblyName.Replace("Unity.", "UnityEditor.") + ".dll";
+        Log("Redirecting to assembly name: " + fixedAssemblyName,
+            verbose: true);
 
-        // Find the playback engines folder.
+        // Get the managed DLLs folder.
         string folderPath = Path.GetDirectoryName(
             Assembly.GetAssembly(
                 typeof(UnityEditor.AssetPostprocessor)).Location);
-        if (UnityEngine.RuntimePlatform.OSXEditor ==
-            UnityEngine.Application.platform) {
-            // Unity likes to move their DLLs around between releases to keep
-            // us on our toes, so search for the PlaybackEngines folder under
-            // the package path.
-            string searchPath = (new DirectoryInfo(folderPath)).FullName;
-            searchPath = Path.GetDirectoryName(
-                searchPath.Substring(0, searchPath.LastIndexOf(".app")));
-            foreach (var directory in
-                     FindDirectory(
-                         searchPath,
-                         Path.GetFileName(IOS_PLAYBACK_ENGINES_PATH), 3)) {
-                if (File.Exists(Path.Combine(directory, fixedAssemblyName))) {
-                    folderPath = directory;
-                    break;
-                }
-            }
-        } else {
-            folderPath = Path.Combine(
-                (new DirectoryInfo(folderPath)).Parent.FullName,
-                IOS_PLAYBACK_ENGINES_PATH);
-        }
-
-        // Try to load the assembly.
+        // Try searching a common install location.
+        folderPath = Path.Combine(
+            (new DirectoryInfo(folderPath)).Parent.FullName,
+            IOS_PLAYBACK_ENGINES_PATH);
         string assemblyPath = Path.Combine(folderPath, fixedAssemblyName);
         if (!File.Exists(assemblyPath)) {
-          return null;
+            string searchPath = (new DirectoryInfo(folderPath)).FullName;
+            if (UnityEngine.RuntimePlatform.OSXEditor ==
+                UnityEngine.Application.platform) {
+                // Unity likes to move their DLLs around between releases to
+                // keep us on our toes, so search for the DLL under the
+                // package path.
+                searchPath = Path.GetDirectoryName(
+                    searchPath.Substring(0, searchPath.LastIndexOf(".app")));
+            } else {
+                // Search under the Data directory.
+                searchPath = Path.GetDirectoryName(
+                    searchPath.Substring(
+                        0, searchPath.LastIndexOf(
+                            "Data" + Path.DirectorySeparatorChar.ToString())));
+            }
+            Log("Searching for assembly under " + searchPath, verbose: true);
+            var files = FindFile(searchPath, fixedAssemblyName, 5);
+            if (files.Count > 0) assemblyPath = files.ToArray()[0];
         }
+        // Try to load the assembly.
+        if (!File.Exists(assemblyPath)) {
+            Log(assemblyPath + " does not exist", verbose: true);
+            return null;
+        }
+        Log("Loading " + assemblyPath, verbose: true);
         Assembly assembly = Assembly.LoadFrom(assemblyPath);
         if (assembly != null) {
+            Log("Load succeeded from " + assemblyPath, verbose: true);
             iOSXcodeExtensionLoaded = true;
         }
         return assembly;
@@ -268,10 +275,22 @@ public static class IOSResolver {
     /// Initialize the module.
     /// </summary>
     static IOSResolver() {
+        // NOTE: We can't reference the UnityEditor.iOS.Xcode module in this
+        // method as the Mono runtime in Unity 4 and below requires all
+        // dependencies of a method are loaded before the method is executed
+        // so we install the DLL loader first then try using the Xcode module.
         RemapXcodeExtension();
+        InitializeTargetName();
+    }
+
+    /// <summary>
+    /// Initialize the TARGET_NAME property.
+    /// </summary>
+    private static void InitializeTargetName() {
         try {
-            TARGET_NAME = PBXProject.GetUnityTargetName();
+            TARGET_NAME = UnityEditor.iOS.Xcode.PBXProject.GetUnityTargetName();
         } catch (Exception exception) {
+            Debug.Log("Failed: " + exception.ToString());
             if (exception is FileNotFoundException ||
                 exception is TypeInitializationException ||
                 exception is TargetInvocationException) {
@@ -561,10 +580,9 @@ public static class IOSResolver {
                 String.Join(", ", podsWithoutBitcode.ToArray()) + ")",
                 level: LogLevel.Warning);
         }
-
         // Configure project settings for Cocoapods.
         string pbxprojPath = GetProjectPath(pathToBuiltProject);
-        PBXProject project = new PBXProject();
+        var project = new UnityEditor.iOS.Xcode.PBXProject();
         project.ReadFromString(File.ReadAllText(pbxprojPath));
         string target = project.TargetGuidByName(TARGET_NAME);
         project.SetBuildProperty(target, "CLANG_ENABLE_MODULES", "YES");
@@ -680,7 +698,7 @@ public static class IOSResolver {
                                                "Resources"));
 
         string pbxprojPath = GetProjectPath(pathToBuiltProject);
-        PBXProject project = new PBXProject();
+        var project = new UnityEditor.iOS.Xcode.PBXProject();
         project.ReadFromString(File.ReadAllText(pbxprojPath));
         string target = project.TargetGuidByName(TARGET_NAME);
 
@@ -707,10 +725,11 @@ public static class IOSResolver {
             PlayServicesSupport.DeleteExistingFileOrDirectory(
                 destFrameworkFullPath);
             Directory.Move(frameworkFullPath, destFrameworkFullPath);
-            project.AddFileToBuild(target,
-                                   project.AddFile(destFrameworkPath,
-                                                   destFrameworkPath,
-                                                   PBXSourceTree.Source));
+            project.AddFileToBuild(
+                target,
+                project.AddFile(destFrameworkPath,
+                                destFrameworkPath,
+                                UnityEditor.iOS.Xcode.PBXSourceTree.Source));
 
             string moduleMapPath =
                 Path.Combine(Path.Combine(destFrameworkFullPath, "Modules"),
@@ -752,8 +771,9 @@ public static class IOSResolver {
                     File.Copy(resFile, Path.Combine(pathToBuiltProject,
                                                     destFile), true);
                     project.AddFileToBuild(
-                        target, project.AddFile(destFile, destFile,
-                                                PBXSourceTree.Source));
+                        target, project.AddFile(
+                            destFile, destFile,
+                            UnityEditor.iOS.Xcode.PBXSourceTree.Source));
                 }
                 foreach (var resFolder in resFolders) {
                     string destFolder =
@@ -765,8 +785,9 @@ public static class IOSResolver {
                         destFolderFullPath);
                     Directory.Move(resFolder, destFolderFullPath);
                     project.AddFileToBuild(
-                        target, project.AddFile(destFolder, destFolder,
-                                                PBXSourceTree.Source));
+                        target, project.AddFile(
+                            destFolder, destFolder,
+                            UnityEditor.iOS.Xcode.PBXSourceTree.Source));
                 }
             }
         }

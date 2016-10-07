@@ -438,6 +438,18 @@ public class VersionHandler : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Determine whether the PluginImporter class is available in
+        /// UnityEditor. Unity 4 does not have this class in which case we
+        /// can't - without potentially dangerously - modify the .meta yaml
+        /// files to enable / disable plugin targeting.
+        /// </summary>
+        internal static bool PluginImporterAvailable {
+            get {
+                return FindClass("UnityEditor", "UnityEditor.PluginImporter") != null;
+            }
+        }
+
+        /// <summary>
         /// Construct an instance.
         /// </summary>
         /// <param name="filenameCanonical">Filename with metadata stripped.
@@ -635,6 +647,11 @@ public class VersionHandler : AssetPostprocessor {
         /// AssetDatabase.Refresh(), false otherwise.</return>
         public bool EnableMostRecentPlugins() {
             bool modified = false;
+
+            // If PluginImporter isn't available it's not possible
+            // to enable / disable targeting.
+            if (!FileMetadataByVersion.PluginImporterAvailable) return false;
+
             foreach (var metadataByVersion in
                      metadataByCanonicalFilename.Values) {
                 modified |= metadataByVersion.EnableMostRecentPlugins();
