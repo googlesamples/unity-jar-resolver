@@ -290,7 +290,7 @@ public static class IOSResolver {
         try {
             TARGET_NAME = UnityEditor.iOS.Xcode.PBXProject.GetUnityTargetName();
         } catch (Exception exception) {
-            Debug.Log("Failed: " + exception.ToString());
+            Log("Failed: " + exception.ToString(), level: LogLevel.Error);
             if (exception is FileNotFoundException ||
                 exception is TypeInitializationException ||
                 exception is TargetInvocationException) {

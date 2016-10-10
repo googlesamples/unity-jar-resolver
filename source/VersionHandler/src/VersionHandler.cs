@@ -439,9 +439,9 @@ public class VersionHandler : AssetPostprocessor {
 
         /// <summary>
         /// Determine whether the PluginImporter class is available in
-        /// UnityEditor. Unity 4 does not have this class in which case we
-        /// can't - without potentially dangerously - modify the .meta yaml
-        /// files to enable / disable plugin targeting.
+        /// UnityEditor. Unity 4 does not have the PluginImporter class so
+        /// it's not possible to modify asset metadata without hacking the
+        /// .meta yaml files directly to enable / disable plugin targeting.
         /// </summary>
         internal static bool PluginImporterAvailable {
             get {
