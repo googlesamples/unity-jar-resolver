@@ -1,4 +1,4 @@
-﻿// <copyright file="VersionHandler.cs" company="Google Inc.">
+// <copyright file="VersionHandler.cs" company="Google Inc.">
 // Copyright (C) 2016 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -80,6 +80,8 @@ public class VersionHandler : AssetPostprocessor {
         private static long VERSION_COMPONENT_MULTIPLIER = 1000;
         // Prefix for labels which encode metadata of an asset.
         private static string LABEL_PREFIX = "gvh_";
+        // Initialized depending on the version of unity we are running against
+        private static HashSet<BuildTarget> targetBlackList = null;
 
         /// <summary>
         /// Label which flags whether an asset is should be managed by this
@@ -112,6 +114,40 @@ public class VersionHandler : AssetPostprocessor {
             {"wiiu", BuildTarget.WiiU},
             {"tvos", BuildTarget.tvOS},
         };
+
+        // Returns the major/minor version of the unity environment we are running in
+        // as a float so it can be compared numerically.
+        static float GetUnityVersionMajorMinor() {
+            float result = 5.4f;
+            string version = Application.unityVersion;
+            if (!string.IsNullOrEmpty(version)) {
+                int dotIndex = version.IndexOf('.');
+                if (dotIndex > 0 && version.Length > dotIndex + 1) {
+                    if (!float.TryParse(version.Substring(0, dotIndex + 2), out result)) {
+                        result = 5.4f;
+                    }
+                }
+            }
+            return result;
+        }
+
+        // Returns a hashset containing blacklisted build targets for the current
+        // unity environment.
+        static HashSet<BuildTarget> GetBlackList() {
+            if (targetBlackList == null) {
+                targetBlackList = new HashSet<BuildTarget>();
+                if (GetUnityVersionMajorMinor() >= 5.5) {
+                    targetBlackList.Add(BuildTarget.PS3);
+                    targetBlackList.Add(BuildTarget.XBOX360);
+                }
+            }
+            return targetBlackList;
+        }
+
+        // Returns true if the given target is supported by the current environment.
+        internal static bool IsTargetSupportedByUnity(BuildTarget target) {
+            return !GetBlackList().Contains(target);
+        }
 
         /// <summary>
         /// Name of the file use to construct this object.
@@ -542,13 +578,21 @@ public class VersionHandler : AssetPostprocessor {
                 }
                 foreach (BuildTarget target in
                          FileMetadata.BUILD_TARGET_NAME_TO_ENUM.Values) {
-                    bool enabled = selectedTargets != null &&
-                        selectedTargets.Contains(target);
-                    if (pluginImporter.GetCompatibleWithPlatform(target) !=
-                        enabled) {
-                        pluginImporter.SetCompatibleWithPlatform(
-                            target, enabled);
-                        modifiedThisVersion = true;
+                    if (FileMetadata.IsTargetSupportedByUnity(target)) {
+                        bool enabled = selectedTargets != null &&
+                            selectedTargets.Contains(target);
+                        try {
+                            if (pluginImporter.GetCompatibleWithPlatform(target) !=
+                                enabled) {
+                                pluginImporter.SetCompatibleWithPlatform(
+                                    target, enabled);
+                                modifiedThisVersion = true;
+                            }
+                        }
+                        catch(Exception e) {
+                          UnityEngine.Debug.LogWarning(
+                            "Unexpected error enumerating targets: " + e.Message);
+                        }
                     }
                 }
                 if (modifiedThisVersion) {
