@@ -87,15 +87,49 @@ public class VersionHandler : AssetPostprocessor {
         /// </summary>
         public static string ASSET_LABEL = "gvh";
 
+        public class TargetPlatform
+        {
+            public TargetPlatform(BuildTarget buildTarget, string unityVersionBegin = null, string unityVersionEnd = null)
+            {
+                this.buildTarget = buildTarget;
+                this.unityVersionBegin = unityVersionBegin;
+                this.unityVersionEnd = unityVersionEnd;
+            }
+
+            public static implicit operator TargetPlatform(BuildTarget buildTarget)
+            {
+                return new TargetPlatform(buildTarget, null, null);
+            }
+
+            public bool IsSupportedByCurrentUnity()
+            {
+                if (unityVersionBegin != null && string.Compare(Application.unityVersion, unityVersionBegin) < 0)
+                {
+                    return false;
+                }
+
+                if (unityVersionEnd != null && string.Compare(Application.unityVersion, unityVersionEnd) >= 0)
+                {
+                    return false;
+                }
+
+                return false;
+            }
+                
+            public readonly BuildTarget buildTarget;
+            public readonly string unityVersionBegin;
+            public readonly string unityVersionEnd;
+        }
+
         // Map of build target names to BuildTarget enumeration values.
-        static public Dictionary<string, BuildTarget>
-            BUILD_TARGET_NAME_TO_ENUM = new Dictionary<string, BuildTarget> {
+        static public Dictionary<string, TargetPlatform>
+            BUILD_TARGET_NAME_TO_ENUM = new Dictionary<string, TargetPlatform> {
             {"osx", BuildTarget.StandaloneOSXUniversal},
             {"osxintel", BuildTarget.StandaloneOSXIntel},
             {"windows", BuildTarget.StandaloneWindows},
             {"ios", BuildTarget.iOS},
             {"ps3", BuildTarget.PS3},
-            {"xbox360", BuildTarget.XBOX360},
+            {"xbox360", new TargetPlatform(BuildTarget.XBOX360, null, "5.5")},
             {"android", BuildTarget.Android},
             {"linux32", BuildTarget.StandaloneLinux},
             {"windows64", BuildTarget.StandaloneWindows64},
@@ -251,10 +285,11 @@ public class VersionHandler : AssetPostprocessor {
             HashSet<BuildTarget> buildTargetSet = new HashSet<BuildTarget>();
             if (targets != null) {
                 foreach (string target in targets) {
-                    BuildTarget buildTarget;
+                    FileMetadata.TargetPlatform targetPlatform;
                     if (BUILD_TARGET_NAME_TO_ENUM.TryGetValue(
-                            target, out buildTarget)) {
-                        buildTargetSet.Add(buildTarget);
+                            target, out targetPlatform) &&
+                            targetPlatform.IsSupportedByCurrentUnity()) {
+                        buildTargetSet.Add(targetPlatform.buildTarget);
                     } else if (!target.Equals("editor")) {
                         UnityEngine.Debug.LogError(
                             filename + " reference to unknown target " +
@@ -540,15 +575,19 @@ public class VersionHandler : AssetPostprocessor {
                     pluginImporter.SetCompatibleWithEditor(editorEnabled);
                     modifiedThisVersion = true;
                 }
-                foreach (BuildTarget target in
+                foreach (FileMetadata.TargetPlatform target in
                          FileMetadata.BUILD_TARGET_NAME_TO_ENUM.Values) {
-                    bool enabled = selectedTargets != null &&
-                        selectedTargets.Contains(target);
-                    if (pluginImporter.GetCompatibleWithPlatform(target) !=
-                        enabled) {
-                        pluginImporter.SetCompatibleWithPlatform(
-                            target, enabled);
-                        modifiedThisVersion = true;
+                    if (target.IsSupportedByCurrentUnity())
+                    {
+                        bool enabled = selectedTargets != null &&
+                                   selectedTargets.Contains(target.buildTarget);
+                        if (pluginImporter.GetCompatibleWithPlatform(target.buildTarget) !=
+                            enabled)
+                        {
+                            pluginImporter.SetCompatibleWithPlatform(
+                                target.buildTarget, enabled);
+                            modifiedThisVersion = true;
+                        }
                     }
                 }
                 if (modifiedThisVersion) {
