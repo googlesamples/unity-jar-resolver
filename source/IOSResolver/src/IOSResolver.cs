@@ -590,7 +590,7 @@ public static class IOSResolver {
         project.AddBuildProperty(target, "OTHER_CFLAGS", "$(inherited)");
         project.AddBuildProperty(target, "HEADER_SEARCH_PATHS",
                                  "$(inherited)");
-        project.SetBuildProperty(target, "FRAMEWORK_SEARCH_PATHS",
+        project.AddBuildProperty(target, "FRAMEWORK_SEARCH_PATHS",
                                  "$(inherited)");
         project.AddBuildProperty(target, "FRAMEWORK_SEARCH_PATHS",
                                  "$(PROJECT_DIR)/Frameworks");
