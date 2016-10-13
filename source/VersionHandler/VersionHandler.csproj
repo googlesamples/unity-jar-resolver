@@ -30,12 +30,18 @@
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
   </PropertyGroup>
+    <PropertyGroup>
+        <UnityHintPath>..\..\unity_dlls</UnityHintPath>
+   </PropertyGroup>
   <ItemGroup>
     <Reference Include="UnityEditor">
-      <HintPath>..\..\unity_dlls\UnityEditor.dll</HintPath>
+        <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>..\..\unity_dlls\UnityEngine.dll</HintPath>
+        <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="Unity.UNetWeaver">
+        <HintPath>$(UnityHintPath)/Unity.UNetWeaver.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Xml" />
