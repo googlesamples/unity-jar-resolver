@@ -100,7 +100,6 @@ project.ext {
         logger.info("Unity NUnity framework found in  $unity_nunit_dll_path")
     }
 
-
 // xbuild is used to build the dlls.
     xbuild_exe = findUnityPath("XBUILD_EXE", false,
                     os_windows ?
@@ -113,6 +112,20 @@ project.ext {
         xbuild_exe = null
     } else {
         logger.info("xbuild found at $xbuild_exe")
+    }
+
+// nunit-console is used to run tests.
+    nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+                    os_windows ?
+                        fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2.bat'}
+                    :
+                        fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2'}
+                )
+    if (nunit_console_exe == null || !nunit_console_exe.exists()) {
+        logger.warn("nunit_console command not found, compilation may fail.")
+        nunit_console_exe = null
+    } else {
+        logger.info("nunit_console found at $nunit_console_exe")
     }
 
     pluginSrc = file('plugin').absolutePath
@@ -138,7 +151,7 @@ task compile_resolverTests(type: Exec) {
 task test_resolverLib(type: Exec, dependsOn: compile_resolverTests) {
   description 'Runs the tests.'
   workingDir 'source'
-  commandLine "nunit-console",
+  commandLine "$nunit_console_exe",
               "JarResolverTests/bin/Debug/JarResolverTests.dll"
   ext.remoteTaskPhase = 'build'
 }
@@ -352,6 +365,8 @@ task export_package(dependsOn: 'generate_manifest') {
     }
   }
   ext.remoteTaskPhase = 'build'
+
+  dependsOn test_resolverLib
 }
 
 task copy_plugin() {
