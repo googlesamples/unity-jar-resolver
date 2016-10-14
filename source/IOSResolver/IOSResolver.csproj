@@ -30,18 +30,25 @@
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
   </PropertyGroup>
+    <PropertyGroup>
+        <UnityHintPath>..\..\unity_dlls</UnityHintPath>
+        <UnityIosPath>..\..\unity_dlls</UnityIosPath>
+   </PropertyGroup>
   <ItemGroup>
     <Reference Include="UnityEditor">
-      <HintPath>..\..\unity_dlls\UnityEditor.dll</HintPath>
+        <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>..\..\unity_dlls\UnityEngine.dll</HintPath>
+        <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="Unity.UNetWeaver">
+        <HintPath>$(UnityHintPath)/Unity.UNetWeaver.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEditor.iOS.Extensions.Xcode">
+      <HintPath>$(UnityIosPath)/UnityEditor.iOS.Extensions.Xcode.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Xml" />
-    <Reference Include="UnityEditor.iOS.Extensions.Xcode">
-      <HintPath>..\..\unity_dlls\UnityEditor.iOS.Extensions.Xcode.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>

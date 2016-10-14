@@ -7,7 +7,7 @@
     <OutputType>Library</OutputType>
     <RootNamespace>JarResolverTests</RootNamespace>
     <AssemblyName>JarResolverTests</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
     <ReleaseVersion>1.2</ReleaseVersion>
     <ProductVersion>12.0.0</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
@@ -30,12 +30,15 @@
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
   </PropertyGroup>
+  <PropertyGroup>
+        <NUnityHintPath>..\packages\NUnit.2.6.3\lib\</NUnityHintPath>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
-    <Reference Include="nunit.framework">
-      <HintPath>..\packages\NUnit.2.6.3\lib\nunit.framework.dll</HintPath>
-      <Package>nunit</Package>
-    </Reference>
+    <Reference Include="System.Core" />
+ <Reference Include="nunit.framework">
+        <HintPath>$(NUnityHintPath)/nunit.framework.dll</HintPath>
+ </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\Google.JarResolver.Tests\DependencyTests.cs" />
