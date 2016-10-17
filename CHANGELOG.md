@@ -1,3 +1,8 @@
+# Version 1.2.2 - Oct 17, 2016
+## Bug Fixes
+    * Fixed issue working with Unity 5.5
+    * Fixed issue with PlayServicesResolver corrupting other iOS dependencies.
+    * Updated build script to use Unity distributed tools for building.
 # Version 1.2.1 - Jul 25, 2016
 ## Bug Fixes
    * Removed 1.2 Resolver and hardcoded whitelist of AARs to expand.
