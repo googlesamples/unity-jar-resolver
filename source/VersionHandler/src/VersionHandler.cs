@@ -136,7 +136,15 @@ public class VersionHandler : AssetPostprocessor {
         static HashSet<BuildTarget> GetBlackList() {
             if (targetBlackList == null) {
                 targetBlackList = new HashSet<BuildTarget>();
-                if (GetUnityVersionMajorMinor() >= 5.5) {
+                var unityVersion = GetUnityVersionMajorMinor();
+                if (unityVersion < 5.2) {
+                    targetBlackList.Add(BuildTarget.Nintendo3DS);
+                    targetBlackList.Add(BuildTarget.WiiU);
+                }
+                if (unityVersion < 5.3) {
+                    targetBlackList.Add(BuildTarget.tvOS);
+                }
+                if (unityVersion >= 5.5) {
                     targetBlackList.Add(BuildTarget.PS3);
                     targetBlackList.Add(BuildTarget.XBOX360);
                 }
