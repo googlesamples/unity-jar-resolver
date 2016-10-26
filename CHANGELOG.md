@@ -1,3 +1,7 @@
+# Version 1.2.3 - Oct 25, 2016
+## Bug Fixes
+    * Fixed exception when reporting conflicting depedencies.
+
 # Version 1.2.2 - Oct 17, 2016
 ## Bug Fixes
     * Fixed issue working with Unity 5.5
