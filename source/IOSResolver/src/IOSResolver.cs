@@ -637,6 +637,35 @@ public static class IOSResolver {
     }
 
     /// <summary>
+    /// Finds and executes the pod command on the command line, using the
+    /// correct environment.
+    /// </summary>
+    /// <param name="podArgs">Arguments passed to the pod command.</param>
+    /// <param name="pathToBuiltProject">The path to the unity project, given
+    /// from the unity [PostProcessBuildAttribute()] function.</param>
+    /// <returns>The CommandLine.Result from running the command.</returns>
+    private static CommandLine.Result RunPodCommand(string podArgs,
+                                                    string pathToBuiltProject) {
+        string pod_command = FindPodTool();
+        if (String.IsNullOrEmpty(pod_command)) {
+            CommandLine.Result r = new CommandLine.Result();
+            r.exitCode = 1;
+            r.stderr = "'pod' command not found; unable to generate a usable" +
+                " Xcode project. " + COCOAPOD_INSTALL_INSTRUCTIONS;
+            Log(r.stderr, level: LogLevel.Error);
+            return r;
+        }
+
+        return CommandLine.Run(
+            pod_command, podArgs, pathToBuiltProject,
+            // cocoapods seems to require this, or it spits out a warning.
+            envVars: new Dictionary<string,string>() {
+                {"LANG", (System.Environment.GetEnvironmentVariable("LANG") ??
+                    "en_US.UTF-8").Split('.')[0] + ".UTF-8"}
+            });
+    }
+
+    /// <summary>
     /// Downloads all of the framework dependencies using pods.
     /// </summary>
     [PostProcessBuildAttribute(BUILD_ORDER_INSTALL_PODS)]
@@ -645,17 +674,9 @@ public static class IOSResolver {
         if (!InjectDependencies()) return;
         if (UpdateTargetSdk()) return;
 
-        string pod_command = FindPodTool();
-        if (String.IsNullOrEmpty(pod_command)) {
-            Log("'pod' command not found; unable to generate a usable" +
-                " Xcode project. " + COCOAPOD_INSTALL_INSTRUCTIONS,
-                level: LogLevel.Error);
-            return;
-        }
-
         // Require at least version 1.0.0
-        CommandLine.Result result =
-            CommandLine.Run(pod_command, "--version", pathToBuiltProject);
+        CommandLine.Result result;
+        result = RunPodCommand("--version", pathToBuiltProject);
         if (result.exitCode != 0 || result.stdout[0] == '0') {
             Log("Error running cocoapods. Please ensure you have at least " +
                 "version  1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS,
@@ -663,18 +684,38 @@ public static class IOSResolver {
             return;
         }
 
-        result = CommandLine.Run(
-            pod_command, "install", pathToBuiltProject,
-            // cocoapods seems to require this, or it spits out a warning.
-            envVars: new Dictionary<string,string>() {
-                {"LANG", (System.Environment.GetEnvironmentVariable("LANG") ??
-                    "en_US.UTF-8").Split('.')[0] + ".UTF-8"}
-            });
+        result = RunPodCommand("install", pathToBuiltProject);
+
+        // If pod installation failed it may be due to an out of date pod repo.
+        // We'll attempt to resolve the error by updating the pod repo -
+        // which is a slow operation - and retrying pod installation.
         if (result.exitCode != 0) {
-            Log("Pod install failed. See the output below for " +
-                "details.\n\n" + result.stdout + "\n\n" +
-                result.stderr, level: LogLevel.Error);
-            return;
+            bool updateSucceeded =
+                RunPodCommand("repo update", pathToBuiltProject).exitCode != 0;
+
+            // Second attempt result.
+            // This is isolated in case it fails, so we can just report the
+            // original failure.
+            CommandLine.Result result2;
+            result2 = RunPodCommand("install", pathToBuiltProject);
+
+            // If the repo update still didn't fix the problem...
+            if (result2.exitCode != 0) {
+                Log("iOS framework addition failed due to a " +
+                    "Cocoapods installation failure. This will will likely " +
+                    "result in an non-functional Xcode project.\n\n" +
+                    "After the failure, \"pod repo update\" " +
+                    "was executed and " +
+                    (updateSucceeded ? "succeeded. " : "failed. ") +
+                    "\"pod install\" was then attempted again, and still " +
+                    "failed. This may be due to a broken Cocoapods " +
+                    "installation. See: " +
+                    "https://guides.cocoapods.org/using/troubleshooting.html " +
+                    "for potential solutions.\n\n" +
+                    "See the output below for details.\n\n" + result.stdout +
+                    "\n\n" + result.stderr, level: LogLevel.Error);
+                return;
+            }
         }
     }
 
