@@ -1,3 +1,11 @@
+# Version 1.2.5 - Nov 3, 2016
+## Bug Fixes
+    * Added crude support for source only Cocoapods to the IOSResolver.
+
+# Version 1.2.4 - Oct 27, 2016
+## Bug Fixes
+    * Automated resolution of out of date pod repositories.
+
 # Version 1.2.3 - Oct 25, 2016
 ## Bug Fixes
     * Fixed exception when reporting conflicting depedencies.

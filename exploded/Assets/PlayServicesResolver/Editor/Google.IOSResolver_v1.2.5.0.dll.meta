@@ -1,7 +1,7 @@
 fileFormatVersion: 2
-guid: f00c0febcdd84d1c97709f8e0b338e3c
+guid: c054f8c222774c09bb429085e53bc63a
 labels:
-- gvh_v1.2.4.0
+- gvh_v1.2.5.0
 - gvh
 - gvh_teditor
 timeCreated: 1473798236
@@ -16,13 +16,9 @@ PluginImporter:
       enabled: 0
       settings: {}
     Editor:
-      enabled: 1
-      settings:
-        DefaultValueInitialized: true
-    WindowsStoreApps:
       enabled: 0
       settings:
-        CPU: AnyCPU
+        DefaultValueInitialized: true
   userData: 
   assetBundleName: 
   assetBundleVariant: 
