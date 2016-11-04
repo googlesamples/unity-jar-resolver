@@ -196,6 +196,12 @@ public static class IOSResolver {
     private static string IOS_PLAYBACK_ENGINES_PATH =
         Path.Combine("PlaybackEngines", "iOSSupport");
 
+    // Directory containing downloaded Cocoapods relative to the project
+    // directory.
+    private const string PODS_DIR = "Pods";
+    // Name of the project within PODS_DIR that references downloaded Cocoapods.
+    private const string PODS_PROJECT_NAME = "Pods";
+
     // Search for a file up to a maximum search depth stopping the
     // depth first search each time the specified file is found.
     private static List<string> FindFile(
@@ -491,15 +497,21 @@ public static class IOSResolver {
         return minVersionAndPodName;
     }
 
+    // Get the path of an xcode project relative to the specified directory.
+    private static string GetProjectPath(string relativeTo,
+                                         string projectName) {
+        return Path.Combine(relativeTo,
+                            Path.Combine(projectName + ".xcodeproj",
+                                         "project.pbxproj"));
+    }
+
     /// <summary>
     /// Get the generated xcode project path relative to the specified
     /// directory.
     /// </summary>
     /// <param name="relativeTo">Path the project is relative to.</param>
     public static string GetProjectPath(string relativeTo) {
-        return Path.Combine(relativeTo,
-                            Path.Combine(PROJECT_NAME + ".xcodeproj",
-                                         "project.pbxproj"));
+        return GetProjectPath(relativeTo, PROJECT_NAME);
     }
 
     /// <summary>
@@ -758,7 +770,7 @@ public static class IOSResolver {
 
         // If the Pods directory does not exist, the pod download step
         // failed.
-        var podsDir = Path.Combine(pathToBuiltProject, "Pods");
+        var podsDir = Path.Combine(pathToBuiltProject, PODS_DIR);
         if (!Directory.Exists(podsDir)) return;
 
         Directory.CreateDirectory(Path.Combine(pathToBuiltProject,
@@ -870,19 +882,72 @@ public static class IOSResolver {
 
         // Add all source files found under the pods directory to the project.
         // This is a very crude way of partially supporting source pods.
-        var sourceFiles = FindFilesWithExtensions(podsDir,
-                                                  SOURCE_FILE_EXTENSIONS);
-        foreach (var filename in sourceFiles) {
-            var filenameRelativeToProject =
-                filename.Substring(pathToBuiltProject.Length + 1
-                                   /* +1 for the path separator) */);
-            // podsDir is relative to the project directory so each filename
-            // will be included in a relative path in the project.
+        var podPathToProjectPaths = new Dictionary<string, string>();
+        // Find pod source files and map them to paths relative to the target
+        // Xcode project.
+        foreach (var filename in
+                 FindFilesWithExtensions(podsDir, SOURCE_FILE_EXTENSIONS)) {
+            // Save the path relative to the target project for each path
+            // relative to the generated pods Xcode project.
+            // +1 in the following expressions to strip the file separator.
+            podPathToProjectPaths[filename.Substring(podsDir.Length + 1)] =
+                filename.Substring(pathToBuiltProject.Length + 1);
+        }
+        // Add a reference to each source file in the target project.
+        foreach (var podPathProjectPath in podPathToProjectPaths) {
             project.AddFileToBuild(
                 target,
-                project.AddFile(filenameRelativeToProject,
-                                filenameRelativeToProject,
+                project.AddFile(podPathProjectPath.Value,
+                                podPathProjectPath.Value,
                                 UnityEditor.iOS.Xcode.PBXSourceTree.Source));
+        }
+
+        // Attempt to read per-file compile / build settings from the Pods
+        // project.
+        var podsProjectPath = GetProjectPath(podsDir, PODS_PROJECT_NAME);
+        var podsProject = new UnityEditor.iOS.Xcode.PBXProject();
+        podsProject.ReadFromString(File.ReadAllText(podsProjectPath));
+        foreach (var directory in Directory.GetDirectories(podsDir)) {
+            // Each pod will have a top level directory under the pods dir
+            // named after the pod.  Also, some pods have build targets in the
+            // xcode project where each build target has the same name as the
+            // pod such that pod Foo is in directory Foo with build target Foo.
+            // Since we can't read the build targets from the generated Xcode
+            // project using Unity's API, we scan the Xcode project for targets
+            // to optionally retrieve build settings for each source file
+            // the settings can be applied in the target project.
+            var podTargetName = Path.GetFileName(directory);
+            var podTargetGuid = podsProject.TargetGuidByName(podTargetName);
+            Log(String.Format("Looking for target: {0} guid: {1}",
+                              podTargetName, podTargetGuid ?? "null"),
+                verbose: true);
+            if (podTargetGuid == null) continue;
+            foreach (var podPathProjectPath in podPathToProjectPaths) {
+                var podSourceFileGuid = podsProject.FindFileGuidByRealPath(
+                    podPathProjectPath.Key);
+                if (podSourceFileGuid == null) continue;
+                var podSourceFileCompileFlags =
+                    podsProject.GetCompileFlagsForFile(podTargetGuid,
+                                                       podSourceFileGuid);
+                if (podSourceFileCompileFlags == null) {
+                    continue;
+                }
+                var targetSourceFileGuid = project.FindFileGuidByProjectPath(
+                    podPathProjectPath.Value);
+                if (targetSourceFileGuid == null) {
+                    Log("Unable to find " + podPathProjectPath.Value +
+                        " in generated project", level: LogLevel.Warning);
+                    continue;
+                }
+                Log(String.Format(
+                        "Setting {0} compile flags to ({1})",
+                        podPathProjectPath.Key,
+                        String.Join(", ",
+                                    podSourceFileCompileFlags.ToArray())),
+                    verbose: true);
+                project.SetCompileFlagsForFile(target, targetSourceFileGuid,
+                                               podSourceFileCompileFlags);
+            }
         }
 
         File.WriteAllText(pbxprojPath, project.WriteToString());

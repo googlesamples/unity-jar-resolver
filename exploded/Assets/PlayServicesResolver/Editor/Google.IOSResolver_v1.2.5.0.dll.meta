@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: c054f8c222774c09bb429085e53bc63a
+guid: 69323d390cc2405e86d7c91651454e37
 labels:
 - gvh_v1.2.5.0
 - gvh
@@ -19,6 +19,10 @@ PluginImporter:
       enabled: 0
       settings:
         DefaultValueInitialized: true
+    WindowsStoreApps:
+      enabled: 0
+      settings:
+        CPU: AnyCPU
   userData: 
   assetBundleName: 
   assetBundleVariant: 
