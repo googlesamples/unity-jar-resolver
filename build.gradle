@@ -101,12 +101,13 @@ project.ext {
     }
 
 // xbuild is used to build the dlls.
-    xbuild_exe = findUnityPath("XBUILD_EXE", false,
-                    os_windows ?
-                        fileTree(dir: unity_root).matching { include '**/Mono/bin/xbuild.bat'}
-                    :
-                        fileTree(dir: unity_root).matching { include '**/Mono/bin/xbuild'}
-                )
+    if (os_windows) {
+        xbuild_exe = findUnityPath("XBUILD_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/Mono/bin/xbuild.bat'})
+    } else if (os_osx || os_linux) {
+        xbuild_exe = findUnityPath("XBUILD_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/xbuild'})
+    }
     if (xbuild_exe == null || !xbuild_exe.exists()) {
         logger.warn("xbuild command not found, compilation may fail.")
         xbuild_exe = null
@@ -115,12 +116,16 @@ project.ext {
     }
 
 // nunit-console is used to run tests.
-    nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
-                    os_windows ?
-                        fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2.bat'}
-                    :
-                        fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2'}
-                )
+    if (os_windows) {
+        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/Mono/bin/nunut-console2.bat'})
+    } else if (os_osx) {
+        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/nunit-console2'})
+    } else if (os_linux) {
+        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/nunit-console'})
+    }
     if (nunit_console_exe == null || !nunit_console_exe.exists()) {
         logger.warn("nunit_console command not found, compilation may fail.")
         nunit_console_exe = null
