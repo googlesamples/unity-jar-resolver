@@ -26,6 +26,7 @@
     <DebugType>none</DebugType>
     <Optimize>True</Optimize>
     <OutputPath>bin\Release</OutputPath>
+    <DefineConstants>DEBUG;UNITY_EDITOR</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
@@ -40,10 +41,8 @@
     <Reference Include="UnityEngine">
         <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
     </Reference>
-    <Reference Include="Unity.UNetWeaver">
-        <HintPath>$(UnityHintPath)/Unity.UNetWeaver.dll</HintPath>
-    </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Core" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
