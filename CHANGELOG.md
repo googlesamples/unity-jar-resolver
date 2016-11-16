@@ -1,3 +1,9 @@
+# Version 1.2.6 - Nov 15, 2016
+## Bug Fixes
+    * Fixed IOSResolver errors when iOS support is not installed.
+    * Added fallback to "pod" executable search which queries the Ruby Gems
+      package manager for the binary install location.
+
 # Version 1.2.5 - Nov 3, 2016
 ## Bug Fixes
     * Added crude support for source only Cocoapods to the IOSResolver.

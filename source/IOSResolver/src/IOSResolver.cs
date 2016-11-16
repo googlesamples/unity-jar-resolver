@@ -155,10 +155,13 @@ public static class IOSResolver {
         " > sudo gem install -n /usr/local/bin cocoapods\n" +
         " > pod setup");
 
-    // Paths to search for the "pod" command.
+    // Pod executable filename.
+    private static string POD_EXECUTABLE = "pod";
+    // Default paths to search for the "pod" command before falling back to
+    // querying the Ruby Gem tool for the environment.
     private static string[] POD_SEARCH_PATHS = new string[] {
-        "/usr/local/bin/pod",
-        "/usr/bin/pod",
+        "/usr/local/bin",
+        "/usr/bin",
     };
 
     // Extensions of pod source files to include in the project.
@@ -297,28 +300,35 @@ public static class IOSResolver {
         // dependencies of a method are loaded before the method is executed
         // so we install the DLL loader first then try using the Xcode module.
         RemapXcodeExtension();
-        InitializeTargetName();
+        // NOTE: It's not possible to catch exceptions a missing reference
+        // to the UnityEditor.iOS.Xcode assembly in this method as the runtime
+        // will attempt to load the assemebly before the method is executed so
+        // we handle exceptions here.
+        try {
+            InitializeTargetName();
+        } catch (Exception exception) {
+            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
+                Log("Failed: " + exception.ToString(), level: LogLevel.Error);
+                if (exception is FileNotFoundException ||
+                    exception is TypeInitializationException ||
+                    exception is TargetInvocationException) {
+                    // It's likely we failed to load the iOS Xcode extension.
+                    Debug.LogWarning(
+                        "Failed to load the " +
+                        "UnityEditor.iOS.Extensions.Xcode dll.  " +
+                        "Is iOS support installed?");
+                } else {
+                    throw exception;
+                }
+            }
+        }
     }
 
     /// <summary>
     /// Initialize the TARGET_NAME property.
     /// </summary>
     private static void InitializeTargetName() {
-        try {
-            TARGET_NAME = UnityEditor.iOS.Xcode.PBXProject.GetUnityTargetName();
-        } catch (Exception exception) {
-            Log("Failed: " + exception.ToString(), level: LogLevel.Error);
-            if (exception is FileNotFoundException ||
-                exception is TypeInitializationException ||
-                exception is TargetInvocationException) {
-                // It's likely we failed to load the iOS Xcode extension.
-                Debug.LogWarning(
-                    "Failed to load the UnityEditor.iOS.Extensions.Xcode " +
-                    "dll.  Is iOS support installed?");
-            } else {
-                throw exception;
-            }
-        }
+        TARGET_NAME = UnityEditor.iOS.Xcode.PBXProject.GetUnityTargetName();
     }
 
     // Fix loading of the Xcode extension dll.
@@ -595,7 +605,15 @@ public static class IOSResolver {
     public static void OnPostProcessPatchProject(BuildTarget buildTarget,
                                                  string pathToBuiltProject) {
         if (!InjectDependencies()) return;
+        PatchProject(buildTarget, pathToBuiltProject);
+    }
 
+    // Implementation of OnPostProcessPatchProject().
+    // NOTE: This is separate from the post-processing method to prevent the
+    // Mono runtime from loading the Xcode API before calling the post
+    // processing step.
+    internal static void PatchProject(
+            BuildTarget buildTarget, string pathToBuiltProject) {
         var podsWithoutBitcode = FindPodsWithBitcodeDisabled();
         bool bitcodeDisabled = podsWithoutBitcode.Count > 0;
         if (bitcodeDisabled) {
@@ -633,7 +651,15 @@ public static class IOSResolver {
     public static void OnPostProcessGenPodfile(BuildTarget buildTarget,
                                                string pathToBuiltProject) {
         if (!InjectDependencies()) return;
+        GenPodfile(buildTarget, pathToBuiltProject);
+    }
 
+    // Implementation of OnPostProcessGenPodfile().
+    // NOTE: This is separate from the post-processing method to prevent the
+    // Mono runtime from loading the Xcode API before calling the post
+    // processing step.
+    public static void GenPodfile(BuildTarget buildTarget,
+                                  string pathToBuiltProject) {
         using (StreamWriter file =
                new StreamWriter(Path.Combine(pathToBuiltProject, "Podfile"))) {
             file.Write("source 'https://github.com/CocoaPods/Specs.git'\n" +
@@ -654,8 +680,35 @@ public static class IOSResolver {
     /// <returns>Path to the pod tool if successful, null otherwise.</returns>
     private static string FindPodTool() {
         foreach (string path in POD_SEARCH_PATHS) {
-            if (File.Exists(path)) {
-                return path;
+            string podPath = Path.Combine(path, POD_EXECUTABLE);
+            Log("Searching for cocoapods tool in " + podPath,
+                verbose: true);
+            if (File.Exists(podPath)) {
+                Log("Found cocoapods tool in " + podPath, verbose: true);
+                return podPath;
+            }
+        }
+        Log("Querying gems for cocoapods install path", verbose: true);
+        var result = CommandLine.Run("gem", "environment");
+        if (result.exitCode == 0) {
+            // gem environment outputs YAML for all config variables,
+            // the following code only parses the executable dir from the
+            // output.
+            const string executableDir = "- EXECUTABLE DIRECTORY:";
+            char[] variableSeparator = new char[] { ':' };
+            foreach (var line in result.stdout.Split(
+                         new char[] { '\r', '\n' })) {
+                if (line.Trim().StartsWith(executableDir)) {
+                    string path = line.Split(variableSeparator)[1].Trim();
+                    string podPath = Path.Combine(path, POD_EXECUTABLE);
+                    Log("Checking gems install path for cocoapods tool " +
+                        podPath, verbose: true);
+                    if (File.Exists(podPath)) {
+                        Log("Found cocoapods tool in " + podPath,
+                            verbose: true);
+                        return podPath;
+                    }
+                }
             }
         }
         return null;
@@ -704,8 +757,10 @@ public static class IOSResolver {
         result = RunPodCommand("--version", pathToBuiltProject);
         if (result.exitCode != 0 || result.stdout[0] == '0') {
             Log("Error running cocoapods. Please ensure you have at least " +
-                "version  1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS,
-                level: LogLevel.Error);
+                "version  1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS + "\n\n" +
+                "'" + POD_EXECUTABLE + " --version' returned status: " +
+                result.exitCode.ToString() + "\n" +
+                "output: " + result.stdout, level: LogLevel.Error);
             return;
         }
 
@@ -767,7 +822,15 @@ public static class IOSResolver {
     public static void OnPostProcessUpdateProjectDeps(
             BuildTarget buildTarget, string pathToBuiltProject) {
         if (!InjectDependencies()) return;
+        UpdateProjectDeps(buildTarget, pathToBuiltProject);
+    }
 
+    // Implementation of OnPostProcessUpdateProjectDeps().
+    // NOTE: This is separate from the post-processing method to prevent the
+    // Mono runtime from loading the Xcode API before calling the post
+    // processing step.
+    public static void UpdateProjectDeps(
+            BuildTarget buildTarget, string pathToBuiltProject) {
         // If the Pods directory does not exist, the pod download step
         // failed.
         var podsDir = Path.Combine(pathToBuiltProject, PODS_DIR);
