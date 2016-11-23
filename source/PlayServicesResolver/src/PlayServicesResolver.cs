@@ -305,7 +305,7 @@ namespace GooglePlayServices
             // Don't prompt overwriting the same version, just do it.
             if (oldDep.BestVersion != newDep.BestVersion)
             {
-                string msg = "Remove or replace " + oldDep.Artifact + " version " +
+                string msg = "Replace " + oldDep.Artifact + " version " +
                              oldDep.BestVersion + " with version " + newDep.BestVersion + "?";
                 return EditorUtility.DisplayDialog("Android Jar Dependencies",
                     msg, "OK", "Keep");

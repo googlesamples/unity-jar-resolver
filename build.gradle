@@ -45,84 +45,92 @@ project.ext {
                   'may fail.')
     }
 
-    // Get the path to the Unity DLLs.
-    // Unity DLLs are referenced by the plug-in and therefore required by the
-    // build process.
-    unity_dll_path = System.getProperty("UNITY_DLL_PATH")
-    unity_dll_path_file = (unity_dll_path == null ||
-                           unity_dll_path.isEmpty()) ?
-                          null : new File(unity_dll_path);
-    if ((unity_dll_path_file == null || !unity_dll_path_file.exists()) &&
-        unity_exe_found) {
-      if (os_osx) {
-        // Search paths relative to the Unity binary for the Managed
-        // directory.
-        for (path in ['../Frameworks/Managed', '../Managed']) {
-          unity_dll_path_file = new File(new File(unity_exe).getParentFile(),
-                                         path)
-          if (unity_dll_path_file.exists()) break;
+    // find the unity root directory by working up from the executable.
+    // not, perfect, but pretty close, work up the tree until the
+    // name starts with unity.
+    unity_root = (new File(unity_exe)).getParentFile().getParentFile();
+    while (!unity_root.name.toLowerCase().startsWith("unity")) {
+        if (unity_root.getParentFile() != null) {
+            unity_root = unity_root.getParentFile();
+        } else {
+            break;
         }
-      } else if (os_windows || os_linux) {
-        // ${unity_exe}/../Data/Managed/Unity{Engine,Editor}.dll
-        unity_dll_path_file = new File(
-            (new File(unity_exe)).getParentFile(),
-            'Data' + File.separator + 'Managed')
-      }
-      if (unity_dll_path_file != null && unity_dll_path_file.exists()) {
-        unity_dll_path = unity_dll_path_file.getPath()
-      }
-    }
-    if (unity_dll_path_file == null || !unity_dll_path_file.exists()) {
-      logger.error('Unity DLLs not found, plug-in build will fail.')
     }
 
-    unity_playback_engines_dll_path = System.getProperty(
-      "UNITY_PLAYBACK_ENGINES_DLL_PATH")
-    unity_playback_engines_dll_path_file = (
-      unity_playback_engines_dll_path == null ||
-      unity_playback_engines_dll_path.isEmpty()) ? null : (
-        new File(unity_playback_engines_dll_path))
-    if ((unity_playback_engines_dll_path_file == null ||
-         !unity_playback_engines_dll_path_file.exists()) &&
-        unity_exe_found) {
-      if (os_osx) {
-        // ${unity_exe}/../../../../PlaybackEngines
-        unity_playback_engines_dll_path_file = new File(
-          (new File(unity_exe))
-              .getParentFile()
-              .getParentFile()
-              .getParentFile()
-              .getParentFile(),
-          'PlaybackEngines')
-        println unity_playback_engines_dll_path_file.getPath()
-      } else if (os_windows) {
-        // ${unity_exe}/../Data/PlaybackEngines
-        unity_playback_engines_dll_path_file = new File(
-            (new File(unity_exe)).getParentFile(),
-            'Data' + File.separator + 'PlaybackEngines')
-      }
-      if (unity_playback_engines_dll_path_file != null &&
-          unity_playback_engines_dll_path_file.exists()) {
-        unity_playback_engines_dll_path =
-          unity_playback_engines_dll_path_file.getPath()
-      }
-    }
-    if (unity_playback_engines_dll_path_file == null ||
-        !unity_playback_engines_dll_path_file.exists()) {
-      logger.error('Unity Playback Engine DLLs not found, iOS plug-in build ' +
-                   'will fail.')
+    logger.info( "Unity root is $unity_root")
+
+    // find unity engine dll
+    unity_dll_path =  findUnityPath("UNITY_DLL_PATH", true,
+                            fileTree(dir: unity_root).matching {
+                                include '**/Managed/UnityEngine.dll'});
+
+    if (unity_dll_path == null || !unity_dll_path.exists()) {
+        logger.warn('Unity Editor and Runtime DLLs not found, compilation may fail!')
+    } else {
+        logger.info("Unity Engine DLL path is $unity_dll_path")
     }
 
-    // Mono's xbuild tool is required to build the managed DLLs in the plug-in.
-    xbuild_exe = System.getProperty("XBUILD_EXE")
-    if (xbuild_exe == null || xbuild_exe.isEmpty()) {
-        xbuild_exe = System.getenv("XBUILD_EXE")
+    // ios runtime dll.  This is with the playback engine, so the
+    // structure is different for MacOS and the others.
+    unity_ios_dll_path = findUnityPath("UNITY_IOS_PLAYBACK_PATH", true,
+            os_osx ?
+                fileTree(dir: unity_root.parentFile).matching {
+                    include '**/PlaybackEngines/iOSSupport/UnityEditor.iOS.Extensions.dll'
+                } :
+                fileTree(dir: unity_root).matching {
+                    include '**/PlaybackEngines/iOSSupport/UnityEditor.iOS.Extensions.dll'
+                })
+
+    if (unity_ios_dll_path == null || !unity_ios_dll_path.exists()) {
+        logger.warn('Unity iOS Playback engine not found, compilation may fail!')
+    } else {
+        logger.info("Unity iOS Playback engine is $unity_ios_dll_path")
     }
-    if (xbuild_exe == null || xbuild_exe.isEmpty()) {
-        xbuild_exe = 'xbuild'
+
+
+    // find the NUnit framework dll.
+    unity_nunit_dll_path = findUnityPath("UNITY_NUNIT_PATH", true,
+                                fileTree(dir: unity_root).matching {
+                                    include '**/nunit.framework.dll'
+                                })
+
+    if (unity_nunit_dll_path == null || !unity_nunit_dll_path.exists()) {
+        logger.warn('Unity NUnit framework not found, compilation may fail!')
+    } else {
+        logger.info("Unity NUnity framework found in  $unity_nunit_dll_path")
     }
-    if (!(new File(xbuild_exe)).exists()) {
-      logger.warn('xbuild not found, plug-in build may fail.')
+
+// xbuild is used to build the dlls.
+    if (os_windows) {
+        xbuild_exe = findUnityPath("XBUILD_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/Mono/bin/xbuild.bat'})
+    } else if (os_osx || os_linux) {
+        xbuild_exe = findUnityPath("XBUILD_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/xbuild'})
+    }
+    if (xbuild_exe == null || !xbuild_exe.exists()) {
+        logger.warn("xbuild command not found, compilation may fail.")
+        xbuild_exe = null
+    } else {
+        logger.info("xbuild found at $xbuild_exe")
+    }
+
+// nunit-console is used to run tests.
+    if (os_windows) {
+        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/Mono/bin/nunut-console2.bat'})
+    } else if (os_osx) {
+        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/nunit-console2'})
+    } else if (os_linux) {
+        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/nunit-console'})
+    }
+    if (nunit_console_exe == null || !nunit_console_exe.exists()) {
+        logger.warn("nunit_console command not found, compilation may fail.")
+        nunit_console_exe = null
+    } else {
+        logger.info("nunit_console found at $nunit_console_exe")
     }
 
     pluginSrc = file('plugin').absolutePath
@@ -130,7 +138,7 @@ project.ext {
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
     dllDir = 'Assets/PlayServicesResolver/Editor'
-    pluginVersion = '1.2.1.0'
+    pluginVersion = '1.2.6.0'
     currentPluginPath = file('.').absolutePath
     currentPluginBasename = 'play-services-resolver'
     currentPluginName = (currentPluginBasename + '-' + pluginVersion +
@@ -140,27 +148,52 @@ project.ext {
 task compile_resolverTests(type: Exec) {
   description 'Compile the tests for the Mono framework component.'
   workingDir 'source'
-  commandLine "${xbuild_exe}", '/target:JarResolverTests'
-  ext.remoteTaskPhase = 'prebuild'
+  commandLine "${xbuild_exe}", '/target:JarResolverTests',
+        "/property:NUnityHintPath=$unity_nunit_dll_path.absolutePath"
+  ext.remoteTaskPhase = 'build'
 }
 
 task test_resolverLib(type: Exec, dependsOn: compile_resolverTests) {
   description 'Runs the tests.'
   workingDir 'source'
-  commandLine "nunit-console",
+  commandLine "$nunit_console_exe",
               "JarResolverTests/bin/Debug/JarResolverTests.dll"
-  ext.remoteTaskPhase = 'prebuild'
+  ext.remoteTaskPhase = 'build'
 }
 
-task copy_unityDlls(type: Copy) {
-  description 'Copy Unity DLLs required to build managed DLLs in the plugin.'
-  from files(new File(project.ext.unity_dll_path_file, 'UnityEngine.dll'),
-             new File(project.ext.unity_dll_path_file, 'UnityEditor.dll'),
-             new File((File)project.ext.unity_playback_engines_dll_path_file,
-                      'iOSSupport' + File.separator +
-                      'UnityEditor.iOS.Extensions.Xcode.dll'))
-  into 'unity_dlls'
-  ext.remoteTaskPhase = 'prebuild'
+/// find paths within the Unity file tree used for building.
+def findUnityPath(propertyKey, wantDirectory, fileTree) {
+
+    def propValue;
+    def fileValue;
+
+    propValue = System.getProperty(propertyKey)
+    if (propValue == null || propValue.isEmpty()) {
+        propValue = System.getenv(propertyKey)
+    }
+    // convert string to file object
+    if (propValue != null) {
+        fileValue = file(propValue)
+    } else {
+        fileValue = null
+    }
+
+    if (fileValue == null || !fileValue.exists()) {
+        // take the shortest path location.
+        fileValue = null
+        fileTree.files.each { p ->
+            if (fileValue == null ||
+                    fileValue.absolutePath.length() > p.absolutePath.length()) {
+                fileValue = p;
+            }
+        }
+    }
+
+    if (wantDirectory) {
+        return fileValue != null ? fileValue.parentFile : null;
+    } else {
+        return fileValue
+    }
 }
 
 // Construct the name of a versioned asset from the source filename and version
@@ -190,11 +223,15 @@ def build_pluginDll(projectName, assemblyDllBasename) {
 
   def compileTask = tasks.create(name: "compile_" + projectName,
                                  type: Exec,
-                                 description: 'Compile ' + projectName,
-                                 dependsOn: [copy_unityDlls])
+                                 description: 'Compile ' + projectName
+                                )
   compileTask.workingDir('source')
-  compileTask.commandLine(["${xbuild_exe}", "/target:" + projectName])
-  compileTask.ext.remoteTaskPhase = "prebuild"
+  compileTask.commandLine(["${xbuild_exe}", "/target:" + projectName,
+        "/property:UnityHintPath=$unity_dll_path.absolutePath",
+        "/property:UnityIosPath=$unity_ios_dll_path.absolutePath"
+    ])
+
+  compileTask.ext.remoteTaskPhase = "build"
   def assemblyDllSource = file("source/" + projectName + "/bin/Debug/" +
                                assemblyDllBasename)
 
@@ -218,7 +255,7 @@ def build_pluginDll(projectName, assemblyDllBasename) {
                       }
                       return fn
                   })
-  copyTask.ext.remoteTaskPhase = "prebuild"
+  copyTask.ext.remoteTaskPhase = "build"
 }
 
 build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll")
@@ -249,7 +286,7 @@ task copy_pluginTemplate(type: Copy, dependsOn: update_metadataForVersion) {
   into "${pluginProj}"
   exclude '**/*.dll.*', '**/*.txt.meta'
   duplicatesStrategy 'include'
-  ext.remoteTaskPhase = 'prebuild'
+  ext.remoteTaskPhase = 'build'
 }
 
 task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
@@ -257,7 +294,7 @@ task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
                                              'copy_VersionHandler',
                                              'copy_IOSResolver']) {
   description 'Inject the version number into the plugin\'s meta files.'
-  ext.remoteTaskPhase = 'prebuild'
+  ext.remoteTaskPhase = 'build'
   doLast {
     for (fileobj in fileTree("${pluginProj}")) {
       if (fileobj.path.endsWith('.meta')) {
@@ -309,7 +346,7 @@ task generate_manifest(dependsOn: ['copy_manifestMetadata',
                                            "${pluginVersion}"))
     manifest.write(list.join('\n') + '\n')
   }
-  ext.remoteTaskPhase = 'prebuild'
+  ext.remoteTaskPhase = 'build'
 }
 
 task export_package(dependsOn: 'generate_manifest') {
@@ -333,9 +370,11 @@ task export_package(dependsOn: 'generate_manifest') {
     }
   }
   ext.remoteTaskPhase = 'build'
+
+  dependsOn test_resolverLib
 }
 
-task copy_plugin(dependsOn: 'export_package') {
+task copy_plugin() {
   description 'Copy plugin to the current-build directory'
   doFirst {
     // If the version number has been bumped delete the exploded directory.
@@ -366,6 +405,20 @@ task build_unityPackage(dependsOn: 'copy_plugin') {
   dependsOn {
     tasks.findAll { task -> task.name.startsWith('PackageSample') }
   }
+}
+
+task clean() {
+    doFirst {
+        delete 'build'
+        file("source").listFiles().each { f ->
+            if (file("$f/obj").exists()) {
+                delete "$f/obj"
+            }
+            if (file("$f/bin").exists()) {
+                delete "$f/bin"
+            }
+        }
+     }
 }
 
 defaultTasks = ['prebuild', 'build', 'postbuild']

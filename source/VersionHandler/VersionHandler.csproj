@@ -26,18 +26,23 @@
     <DebugType>none</DebugType>
     <Optimize>True</Optimize>
     <OutputPath>bin\Release</OutputPath>
+    <DefineConstants>DEBUG;UNITY_EDITOR</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
   </PropertyGroup>
+    <PropertyGroup>
+        <UnityHintPath>..\..\unity_dlls</UnityHintPath>
+   </PropertyGroup>
   <ItemGroup>
     <Reference Include="UnityEditor">
-      <HintPath>..\..\unity_dlls\UnityEditor.dll</HintPath>
+        <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
-      <HintPath>..\..\unity_dlls\UnityEngine.dll</HintPath>
+        <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Core" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />

@@ -52,6 +52,10 @@ This library only works with Unity version 4.6.8 or higher.
 The library relies on the installation of the Android Support Repository and
 the Google Repository SDK components.  These are found in the "extras" section.
 
+Building using Ubuntu
+
+sudo apt-get install monodevelop nunit-console
+
 # Packaging
 
 The plugin consists of several C# DLLs that contain

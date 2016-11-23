@@ -407,14 +407,32 @@ namespace Google.JarResolver
                                 // whether a warning has already been reported and make sure it's
                                 // only reported once.
                                 if (!warnings.Contains(currentDep.VersionlessKey)) {
-                                    Log("WARNING: No compatible versions of " +
-                                        currentDep.VersionlessKey + " required by (" +
-                                        String.Join(
-                                            ", ", (new List<string>(
-                                                reverseDependencyTree[
-                                                    currentDep.VersionlessKey])).ToArray()) +
-                                        "), will try using the latest version " +
-                                        currentDep.BestVersion);
+                                    // If no parents of this dependency are found the app
+                                    // must have specified the dependency.
+                                    string requiredByString =
+                                        currentDep.VersionlessKey + " required by (this app)";
+                                    // Print dependencies to aid debugging.
+                                    var dependenciesMessage = new List<string>();
+                                    dependenciesMessage.Add("Found dependencies:");
+                                    dependenciesMessage.Add(requiredByString);
+                                    foreach (var kv in reverseDependencyTree) {
+                                        string requiredByMessage =
+                                            String.Format(
+                                                "{0} required by ({1})",
+                                                kv.Key,
+                                                String.Join(
+                                                    ", ",
+                                                    (new List<string>(kv.Value)).ToArray()));
+                                        dependenciesMessage.Add(requiredByMessage);
+                                        if (kv.Key == currentDep.VersionlessKey) {
+                                            requiredByString = requiredByMessage;
+                                        }
+                                    }
+                                    Log(String.Join("\n", dependenciesMessage.ToArray()));
+                                    Log(String.Format(
+                                        "WARNING: No compatible versions of {0}, will try using " +
+                                        "the latest version {1}", requiredByString,
+                                        currentDep.BestVersion));
                                     warnings.Add(currentDep.VersionlessKey);
                                 }
                             }
@@ -524,13 +542,13 @@ namespace Google.JarResolver
                     // dep.Artifact is the name of the package (prefix)
                     // The regular expression extracts the version number from the filename
                     // handling filenames like foo-1.2.3-alpha.
-                    string artifactName = existing.Substring(dep.Artifact.Length + 1);
                     System.Text.RegularExpressions.Match match =
-                        System.Text.RegularExpressions.Regex.Match(artifactName, "^([0-9.]+)");
+                        System.Text.RegularExpressions.Regex.Match(
+                            existing.Substring(dep.Artifact.Length + 1), "^([0-9.]+)");
                     if (!match.Success) continue;
                     string artifactVersion = match.Groups[1].Value;
 
-                    Dependency oldDep = new Dependency(dep.Group, artifactName, artifactVersion,
+                    Dependency oldDep = new Dependency(dep.Group, dep.Artifact, artifactVersion,
                                                        packageIds: dep.PackageIds,
                                                        repositories: dep.Repositories);
 
