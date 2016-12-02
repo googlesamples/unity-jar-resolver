@@ -213,7 +213,8 @@ namespace GooglePlayServices
         /// <param name="toolName">Name of the tool to search for.</param>
         private string FindJavaTool(string javaTool)
         {
-            string javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+            string javaHome = UnityEditor.EditorPrefs.GetString("JdkPath");
+            javaHome = javaHome ?? Environment.GetEnvironmentVariable("JAVA_HOME");
             string toolPath;
             if (javaHome != null)
             {

@@ -82,6 +82,10 @@ public class VersionHandler : AssetPostprocessor {
         private static string LABEL_PREFIX = "gvh_";
         // Initialized depending on the version of unity we are running against
         private static HashSet<BuildTarget> targetBlackList = null;
+        // Initialized by parsing BuildTarget enumeration values from
+        // BUILD_TARGET_NAME_TO_ENUM_NAME.
+        private static Dictionary<string, BuildTarget>
+            buildTargetNameToEnum = null;
 
         /// <summary>
         /// Label which flags whether an asset is should be managed by this
@@ -89,31 +93,69 @@ public class VersionHandler : AssetPostprocessor {
         /// </summary>
         public static string ASSET_LABEL = "gvh";
 
-        // Map of build target names to BuildTarget enumeration values.
-        static public Dictionary<string, BuildTarget>
-            BUILD_TARGET_NAME_TO_ENUM = new Dictionary<string, BuildTarget> {
-            {"osx", BuildTarget.StandaloneOSXUniversal},
-            {"osxintel", BuildTarget.StandaloneOSXIntel},
-            {"windows", BuildTarget.StandaloneWindows},
-            {"ios", BuildTarget.iOS},
-            {"ps3", BuildTarget.PS3},
-            {"xbox360", BuildTarget.XBOX360},
-            {"android", BuildTarget.Android},
-            {"linux32", BuildTarget.StandaloneLinux},
-            {"windows64", BuildTarget.StandaloneWindows64},
-            {"webgl", BuildTarget.WebGL},
-            {"linux64", BuildTarget.StandaloneLinux64},
-            {"linux", BuildTarget.StandaloneLinuxUniversal},
-            {"osxintel64", BuildTarget.StandaloneOSXIntel64},
-            {"tizen", BuildTarget.Tizen},
-            {"psp2", BuildTarget.PSP2},
-            {"ps4", BuildTarget.PS4},
-            {"xboxone", BuildTarget.XboxOne},
-            {"samsungtv", BuildTarget.SamsungTV},
-            {"nintendo3ds", BuildTarget.Nintendo3DS},
-            {"wiiu", BuildTarget.WiiU},
-            {"tvos", BuildTarget.tvOS},
+        // Map of build target names to BuildTarget enumeration names.
+        // We don't use BuildTarget enumeration values here as Unity has a
+        // habit of removing unsupported ones from the API.
+        static public Dictionary<string, string>
+            BUILD_TARGET_NAME_TO_ENUM_NAME = new Dictionary<string, string> {
+            {"osx", "StandaloneOSXUniversal"},
+            {"osxintel", "StandaloneOSXIntel"},
+            {"windows", "StandaloneWindows"},
+            {"ios", "iOS"},
+            {"ps3", "PS3"},
+            {"xbox360", "XBOX360"},
+            {"android", "Android"},
+            {"linux32", "StandaloneLinux"},
+            {"windows64", "StandaloneWindows64"},
+            {"webgl", "WebGL"},
+            {"linux64", "StandaloneLinux64"},
+            {"linux", "StandaloneLinuxUniversal"},
+            {"osxintel64", "StandaloneOSXIntel64"},
+            {"tizen", "Tizen"},
+            {"psp2", "PSP2"},
+            {"ps4", "PS4"},
+            {"xboxone", "XboxOne"},
+            {"samsungtv", "SamsungTV"},
+            {"nintendo3ds", "Nintendo3DS"},
+            {"wiiu", "WiiU"},
+            {"tvos", "tvOS"},
         };
+
+        /// <summary>
+        /// Get a set of build target names mapped to supported BuildTarget
+        /// enumeration values.
+        /// </summary>
+        internal static Dictionary<string, BuildTarget> GetBuildTargetNameToEnum() {
+            if (buildTargetNameToEnum == null) {
+                var targetBlackList = GetBlackList();
+                buildTargetNameToEnum =
+                    new Dictionary<string, BuildTarget>();
+                foreach (var targetNameEnumName in
+                         BUILD_TARGET_NAME_TO_ENUM_NAME) {
+                    // Attempt to parse the build target name.
+                    // ArgumentException, OverflowException or
+                    // TypeInitializationException
+                    // will be thrown if the build target is no longer
+                    // supported.
+                    BuildTarget target;
+                    try {
+                        target = (BuildTarget)Enum.Parse(
+                            typeof(BuildTarget), targetNameEnumName.Value);
+                    } catch (ArgumentException) {
+                        continue;
+                    } catch (OverflowException) {
+                        continue;
+                    } catch (TypeInitializationException) {
+                        continue;
+                    }
+                    if (!targetBlackList.Contains(target)) {
+                        buildTargetNameToEnum[targetNameEnumName.Key] =
+                            target;
+                    }
+                }
+            }
+            return buildTargetNameToEnum;
+        }
 
         // Returns the major/minor version of the unity environment we are running in
         // as a float so it can be compared numerically.
@@ -133,6 +175,11 @@ public class VersionHandler : AssetPostprocessor {
 
         // Returns a hashset containing blacklisted build targets for the current
         // unity environment.
+        // We need to maintain a seperate blacklist as Unity occasionally
+        // removes BuildTarget display names but does not remove the enumeration
+        // values associated with the names.  This causes a fatal error in
+        // PluginImporter.GetCompatibleWithPlatform() when provided with a
+        // BuildTarget that no longer has a display name.
         static HashSet<BuildTarget> GetBlackList() {
             if (targetBlackList == null) {
                 targetBlackList = new HashSet<BuildTarget>();
@@ -142,11 +189,6 @@ public class VersionHandler : AssetPostprocessor {
                 }
             }
             return targetBlackList;
-        }
-
-        // Returns true if the given target is supported by the current environment.
-        internal static bool IsTargetSupportedByUnity(BuildTarget target) {
-            return !GetBlackList().Contains(target);
         }
 
         /// <summary>
@@ -285,11 +327,11 @@ public class VersionHandler : AssetPostprocessor {
         /// </returns>
         public HashSet<BuildTarget> GetBuildTargets() {
             HashSet<BuildTarget> buildTargetSet = new HashSet<BuildTarget>();
+            var buildTargetToEnum = GetBuildTargetNameToEnum();
             if (targets != null) {
                 foreach (string target in targets) {
                     BuildTarget buildTarget;
-                    if (BUILD_TARGET_NAME_TO_ENUM.TryGetValue(
-                            target, out buildTarget)) {
+                    if (buildTargetToEnum.TryGetValue(target, out buildTarget)) {
                         buildTargetSet.Add(buildTarget);
                     } else if (!target.Equals("editor")) {
                         UnityEngine.Debug.LogError(
@@ -577,22 +619,20 @@ public class VersionHandler : AssetPostprocessor {
                     modifiedThisVersion = true;
                 }
                 foreach (BuildTarget target in
-                         FileMetadata.BUILD_TARGET_NAME_TO_ENUM.Values) {
-                    if (FileMetadata.IsTargetSupportedByUnity(target)) {
-                        bool enabled = selectedTargets != null &&
-                            selectedTargets.Contains(target);
-                        try {
-                            if (pluginImporter.GetCompatibleWithPlatform(target) !=
-                                enabled) {
-                                pluginImporter.SetCompatibleWithPlatform(
-                                    target, enabled);
-                                modifiedThisVersion = true;
-                            }
+                         FileMetadata.GetBuildTargetNameToEnum().Values) {
+                    bool enabled = selectedTargets != null &&
+                        selectedTargets.Contains(target);
+                    try {
+                        if (pluginImporter.GetCompatibleWithPlatform(target) !=
+                            enabled) {
+                            pluginImporter.SetCompatibleWithPlatform(
+                                target, enabled);
+                            modifiedThisVersion = true;
                         }
-                        catch(Exception e) {
-                          UnityEngine.Debug.LogWarning(
-                            "Unexpected error enumerating targets: " + e.Message);
-                        }
+                    }
+                    catch(Exception e) {
+                      UnityEngine.Debug.LogWarning(
+                        "Unexpected error enumerating targets: " + e.Message);
                     }
                 }
                 if (modifiedThisVersion) {

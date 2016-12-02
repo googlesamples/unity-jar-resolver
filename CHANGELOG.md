@@ -1,3 +1,10 @@
+# Version 1.2.7 - Dec 2, 2016
+## Bug Fixes
+    * Fixed VersionHandler build errors with Unity 5.5, due to the constantly
+      changing BuildTarget enum.
+    * Added support for Unity configured JDK Path rather than requiring
+      JAVA_HOME to be set in the Jar Resolver.
+
 # Version 1.2.6 - Nov 15, 2016
 ## Bug Fixes
     * Fixed IOSResolver errors when iOS support is not installed.

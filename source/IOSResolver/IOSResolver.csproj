@@ -43,8 +43,8 @@
         <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="UnityEditor.iOS.Extensions.Xcode">
-      <HintPath>$(UnityIosPath)/UnityEditor.iOS.Extensions.Xcode.dll</HintPath>
-      <HintPath>$(UnityIosPath)/Unity.iOS.Extensions.Xcode.dll</HintPath>
+      <HintPath Condition="Exists('$(UnityIosPath)/UnityEditor.iOS.Extensions.Xcode.dll')">$(UnityIosPath)/UnityEditor.iOS.Extensions.Xcode.dll</HintPath>
+      <HintPath Condition="Exists('$(UnityIosPath)/Unity.iOS.Extensions.Xcode.dll')">$(UnityIosPath)/Unity.iOS.Extensions.Xcode.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
