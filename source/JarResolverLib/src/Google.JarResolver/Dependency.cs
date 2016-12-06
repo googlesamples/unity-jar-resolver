@@ -21,7 +21,7 @@ namespace Google.JarResolver
     using System.IO;
 
     /// <summary>
-    /// Represents a dependency.  A dependency is defined by a groupId, 
+    /// Represents a dependency.  A dependency is defined by a groupId,
     /// artifactId and version constraint.  This information is used to search
     /// the repositories of artifacts to find a version that meets the version
     /// contraints (as well as be compatible with other dependencies' constraints).
@@ -39,41 +39,10 @@ namespace Google.JarResolver
         private readonly VersionComparer versionComparison = new VersionComparer();
 
         /// <summary>
-        /// The group ID.
-        /// </summary>
-        private string group;
-
-        /// <summary>
-        /// The artifact ID.
-        /// </summary>
-        private string artifact;
-
-        /// <summary>
-        /// The version constraint.
-        /// </summary>
-        private string version;
-
-        /// <summary>
-        /// The path to the respository where this dependency is found first.
-        /// </summary>
-        private string repoPath;
-
-        /// <summary>
         /// The possible versions found in the repository.  This list is mutable
         /// and will change as the constraints are applied.
         /// </summary>
         private List<string> possibleVersions;
-
-        /// <summary>
-        /// Optional array of Android SDK identifiers for packages that are required for this
-        /// artifact.
-        /// </summary>
-        private string[] packageIds;
-
-        /// <summary>
-        /// Optional array of repository directories to search for this artifact.
-        /// </summary>
-        private string[] repositories;
 
         /// <summary>
         /// Initializes a new instance of the
@@ -89,80 +58,50 @@ namespace Google.JarResolver
         public Dependency(string group, string artifact, string version, string[] packageIds=null,
                           string[] repositories=null)
         {
-            this.group = group;
-            this.artifact = artifact;
-            this.version = version;
-            this.packageIds = packageIds;
+            Group = group;
+            Artifact = artifact;
+            Version = version;
+            PackageIds = packageIds;
             this.possibleVersions = new List<string>();
-            this.repositories = repositories;
+            Repositories = repositories;
         }
 
         /// <summary>
         /// Gets the group ID
         /// </summary>
         /// <value>The group.</value>
-        public string Group
-        {
-            get
-            {
-                return group;
-            }
-        }
+        public string Group { get; private set; }
 
         /// <summary>
         /// Gets the artifact ID.
         /// </summary>
         /// <value>The artifact.</value>
-        public string Artifact
-        {
-            get
-            {
-                return artifact;
-            }
-        }
+        public string Artifact { get; private set; }
 
         /// <summary>
         /// Gets the version constraint.
         /// </summary>
         /// <value>The version.</value>
-        public string Version
-        {
-            get
-            {
-                return version;
-            }
-        }
+        public string Version { get; private set; }
 
         /// <summary>
         /// Array of Android SDK identifiers for packages that are required for this
         /// artifact.
         /// </summary>
         /// <value>Package identifiers if set or null.</value>
-        public string[] PackageIds
-        {
-            get
-            {
-                return packageIds;
-            }
-        }
+        public string[] PackageIds { get; private set; }
 
         /// <summary>
         /// Array of repositories to search for this artifact.
         /// </summary>
         /// <value>List of repository directories if set or null.</value>
-        public string[] Repositories
-        {
-            get
-            {
-                return repositories;
-            }
-        }
+        public string[] Repositories { get; private set; }
 
         /// <summary>
         /// Gets the best version based on the version contraint, other
         /// dependencies (if resolve has been run), and the availability of the
         /// artifacts in the repository.  If this value is null or empty, either
-        /// it has not been initialized by calling 
+        /// it has not been initialized by calling
         /// PlayServicesSupport.AddDependency()
         /// or there are no versions that meet all the constraints.
         /// </summary>
@@ -206,7 +145,7 @@ namespace Google.JarResolver
                     string path = Group + Path.DirectorySeparatorChar +
                                   Artifact;
                     path = path.Replace('.', Path.DirectorySeparatorChar);
-                    return repoPath + Path.DirectorySeparatorChar + path +
+                    return RepoPath + Path.DirectorySeparatorChar + path +
                     Path.DirectorySeparatorChar + BestVersion;
                 }
 
@@ -219,18 +158,7 @@ namespace Google.JarResolver
         /// relative to the SDK.
         /// </summary>
         /// <value>The repo path.</value>
-        public string RepoPath
-        {
-            get
-            {
-                return repoPath;
-            }
-
-            set
-            {
-                repoPath = value;
-            }
-        }
+        public string RepoPath { get; set; }
 
         /// <summary>
         /// Gets the versionless key.  This key is used to manage collections
@@ -241,12 +169,12 @@ namespace Google.JarResolver
         {
             get
             {
-                return group + ":" + artifact;
+                return Group + ":" + Artifact;
             }
         }
 
         /// <summary>
-        /// Gets the key for this dependency.  The key is a tuple of the 
+        /// Gets the key for this dependency.  The key is a tuple of the
         /// group, artifact and version constraint.
         /// </summary>
         /// <value>The key.</value>
@@ -254,7 +182,7 @@ namespace Google.JarResolver
         {
             get
             {
-                return group + ":" + artifact + ":" + version;
+                return Group + ":" + Artifact + ":" + Version;
             }
         }
 
@@ -295,8 +223,8 @@ namespace Google.JarResolver
         /// <param name="ver">Version to check.</param>
         public bool IsAcceptableVersion(string ver)
         {
-            bool hasPlus = version.Contains("+");
-            bool latest = version.ToUpper().Equals("LATEST");
+            bool hasPlus = Version.Contains("+");
+            bool latest = Version.ToUpper().Equals("LATEST");
             if (latest)
             {
                 return string.IsNullOrEmpty(BestVersion) ||
@@ -305,7 +233,7 @@ namespace Google.JarResolver
 
             if (!hasPlus)
             {
-                if (ver.Equals(version))
+                if (ver.Equals(Version))
                 {
                     return true;
                 }
@@ -333,7 +261,7 @@ namespace Google.JarResolver
         /// <param name="candidate">Candidate to test versions with.</param>
         public bool RefineVersionRange(Dependency candidate)
         {
-            // remove all possible versions that are not acceptable to the 
+            // remove all possible versions that are not acceptable to the
             // candidate
             List<string> removals = new List<string>();
 

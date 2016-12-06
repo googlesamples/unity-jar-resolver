@@ -1,3 +1,11 @@
+# Version 1.2.8 - Dec 6, 2016
+## Bug Fixes
+    * Increased speed of JarResolver resolution.
+    * Fixed JarResolver caches getting out of sync with requested dependencies
+      by removing the caches.
+    * Fixed JarResolver explode cache always being rewritten even when no
+      dependencies change.
+
 # Version 1.2.7 - Dec 2, 2016
 ## Bug Fixes
     * Fixed VersionHandler build errors with Unity 5.5, due to the constantly
@@ -28,6 +36,7 @@
     * Fixed issue working with Unity 5.5
     * Fixed issue with PlayServicesResolver corrupting other iOS dependencies.
     * Updated build script to use Unity distributed tools for building.
+
 # Version 1.2.1 - Jul 25, 2016
 ## Bug Fixes
    * Removed 1.2 Resolver and hardcoded whitelist of AARs to expand.
@@ -42,7 +51,8 @@
      ${applicationId}.
    * Added optional logging in the JarResolverLib module.
    * Integration with the Android SDK manager for dependencies that
-     declare required Android SDK packages.
+   declare required Android SDK packages.
+
 # Version 1.2.0 - May 11 2016
 ## Bug Fixes
    * Handles resolving dependencies when the artifacts are split across 2 repos.
@@ -53,11 +63,13 @@
 ## New Features
     * Expose PlayServicesResolver properties to allow for script access.
     * Explodes firebase-common and firebase-measurement aar files to support
-         ${applicationId} substitution.
+    ${applicationId} substitution.
+
 # Version 1.1.1 - 25 Feb 2016
 ## Bug Fixes
     * #1 Spaces in project path not handled when exploding Aar file.
     * #2 Script compilation error: TypeLoadException.
+
 # Version 1.1.0 - 5 Feb 2016
 ## New Features
   * Adds friendly alert when JAVA_HOME is not set on Windows platforms.

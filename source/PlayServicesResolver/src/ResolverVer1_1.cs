@@ -42,12 +42,15 @@ namespace GooglePlayServices
             public string path = "";
         }
 
+        // Data that should be stored in the explode cache.
         private Dictionary<string, AarExplodeData> aarExplodeData =
+            new Dictionary<string, AarExplodeData>();
+        // Data currently stored in the explode cache.
+        private Dictionary<string, AarExplodeData> aarExplodeDataSaved =
             new Dictionary<string, AarExplodeData>();
         // File used to to serialize aarExplodeData.  This is required as Unity will reload classes
         // in the editor when C# files are modified.
-        private string aarExplodeDataFile = Path.Combine("ProjectSettings",
-                                                         "GoogleAarExplodeCache.xml");
+        private string aarExplodeDataFile = Path.Combine("Temp", "GoogleAarExplodeCache.xml");
 
         private const int MajorVersion = 1;
         private const int MinorVersion = 1;
@@ -61,6 +64,22 @@ namespace GooglePlayServices
                 resolver.LoadAarExplodeCache();
                 PlayServicesResolver.RegisterResolver(resolver);
             }
+        }
+
+        /// <summary>
+        /// Compare two dictionaries of AarExplodeData.
+        /// </summary>
+        private bool CompareExplodeData(Dictionary<string, AarExplodeData> explodeData1,
+                                        Dictionary<string, AarExplodeData> explodeData2) {
+            if (explodeData1 == explodeData2) return true;
+            if (explodeData1 == null || explodeData2 == null) return false;
+            if (explodeData1.Count != explodeData2.Count) return false;
+            foreach (var item in explodeData1) {
+                AarExplodeData data = null;
+                if (!explodeData2.TryGetValue(item.Key, out data)) return false;
+                if (!item.Value.Equals(data)) return false;
+            }
+            return true;
         }
 
         /// <summary>
@@ -120,6 +139,7 @@ namespace GooglePlayServices
                     }
                 }
             }
+            aarExplodeDataSaved = new Dictionary<string, AarExplodeData>(aarExplodeData);
         }
 
         /// <summary>
@@ -129,9 +149,13 @@ namespace GooglePlayServices
         {
             if (File.Exists(aarExplodeDataFile))
             {
+                // If the explode data hasn't been modified, don't save.
+                if (CompareExplodeData(aarExplodeData, aarExplodeDataSaved)) return;
                 File.Delete(aarExplodeDataFile);
             }
-            XmlTextWriter writer = new XmlTextWriter(new StreamWriter(aarExplodeDataFile));
+            XmlTextWriter writer = new XmlTextWriter(new StreamWriter(aarExplodeDataFile)) {
+                Formatting = Formatting.Indented,
+            };
             writer.WriteStartElement("aars");
             foreach (KeyValuePair<string, AarExplodeData> kv in aarExplodeData)
             {
@@ -156,6 +180,7 @@ namespace GooglePlayServices
             writer.WriteEndElement();
             writer.Flush();
             writer.Close();
+            aarExplodeDataSaved = new Dictionary<string, AarExplodeData>(aarExplodeData);
         }
 
         /// <summary>
@@ -331,6 +356,9 @@ namespace GooglePlayServices
                                                    handleOverwriteConfirmation);
                 resolutionComplete();
             };
+
+            var dependencies = svcSupport.DependenciesPresent(destinationDirectory);
+            if (dependencies == null) return;
 
             // Set of packages that need to be installed.
             Dictionary<string, bool> installPackages = new Dictionary<string, bool>();
@@ -551,7 +579,7 @@ namespace GooglePlayServices
             {
                 // Get the collection of dependencies that need to be copied.
                 Dictionary<string, Dependency> deps =
-                    svcSupport.ResolveDependencies(true);
+                    svcSupport.ResolveDependencies(true, destDirectory: destinationDirectory);
                 // Copy the list
                 svcSupport.CopyDependencies(deps,
                                             destinationDirectory,
