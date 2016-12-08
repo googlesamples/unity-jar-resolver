@@ -205,6 +205,9 @@ public static class IOSResolver {
     // Name of the project within PODS_DIR that references downloaded Cocoapods.
     private const string PODS_PROJECT_NAME = "Pods";
 
+    // Version of the Cocoapods installation.
+    private static string podsVersion = "";
+
     // Search for a file up to a maximum search depth stopping the
     // depth first search each time the specified file is found.
     private static List<string> FindFile(
@@ -755,9 +758,11 @@ public static class IOSResolver {
         // Require at least version 1.0.0
         CommandLine.Result result;
         result = RunPodCommand("--version", pathToBuiltProject);
-        if (result.exitCode != 0 || result.stdout[0] == '0') {
+        if (result.exitCode == 0) podsVersion = result.stdout.Trim();
+
+        if (result.exitCode != 0 || podsVersion[0] == '0') {
             Log("Error running cocoapods. Please ensure you have at least " +
-                "version  1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS + "\n\n" +
+                "version 1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS + "\n\n" +
                 "'" + POD_EXECUTABLE + " --version' returned status: " +
                 result.exitCode.ToString() + "\n" +
                 "output: " + result.stdout, level: LogLevel.Error);
@@ -770,8 +775,9 @@ public static class IOSResolver {
         // We'll attempt to resolve the error by updating the pod repo -
         // which is a slow operation - and retrying pod installation.
         if (result.exitCode != 0) {
-            bool updateSucceeded =
-                RunPodCommand("repo update", pathToBuiltProject).exitCode != 0;
+            CommandLine.Result repoUpdateResult =
+                RunPodCommand("repo update", pathToBuiltProject);
+            bool repoUpdateSucceeded = repoUpdateResult.exitCode == 0;
 
             // Second attempt result.
             // This is isolated in case it fails, so we can just report the
@@ -786,14 +792,17 @@ public static class IOSResolver {
                     "result in an non-functional Xcode project.\n\n" +
                     "After the failure, \"pod repo update\" " +
                     "was executed and " +
-                    (updateSucceeded ? "succeeded. " : "failed. ") +
+                    (repoUpdateSucceeded ? "succeeded. " : "failed. ") +
                     "\"pod install\" was then attempted again, and still " +
                     "failed. This may be due to a broken Cocoapods " +
                     "installation. See: " +
                     "https://guides.cocoapods.org/using/troubleshooting.html " +
                     "for potential solutions.\n\n" +
-                    "See the output below for details.\n\n" + result.stdout +
-                    "\n\n" + result.stderr, level: LogLevel.Error);
+                    "pod install output:\n\n" + result.stdout +
+                    "\n\n" + result.stderr +
+                    "\n\n\n" +
+                    "pod repo update output:\n\n" + repoUpdateResult.stdout +
+                    "\n\n" + repoUpdateResult.stderr, level: LogLevel.Error);
                 return;
             }
         }
@@ -968,49 +977,68 @@ public static class IOSResolver {
         // Attempt to read per-file compile / build settings from the Pods
         // project.
         var podsProjectPath = GetProjectPath(podsDir, PODS_PROJECT_NAME);
-        var podsProject = new UnityEditor.iOS.Xcode.PBXProject();
-        podsProject.ReadFromString(File.ReadAllText(podsProjectPath));
-        foreach (var directory in Directory.GetDirectories(podsDir)) {
-            // Each pod will have a top level directory under the pods dir
-            // named after the pod.  Also, some pods have build targets in the
-            // xcode project where each build target has the same name as the
-            // pod such that pod Foo is in directory Foo with build target Foo.
-            // Since we can't read the build targets from the generated Xcode
-            // project using Unity's API, we scan the Xcode project for targets
-            // to optionally retrieve build settings for each source file
-            // the settings can be applied in the target project.
-            var podTargetName = Path.GetFileName(directory);
-            var podTargetGuid = podsProject.TargetGuidByName(podTargetName);
-            Log(String.Format("Looking for target: {0} guid: {1}",
-                              podTargetName, podTargetGuid ?? "null"),
-                verbose: true);
-            if (podTargetGuid == null) continue;
-            foreach (var podPathProjectPath in podPathToProjectPaths) {
-                var podSourceFileGuid = podsProject.FindFileGuidByRealPath(
-                    podPathProjectPath.Key);
-                if (podSourceFileGuid == null) continue;
-                var podSourceFileCompileFlags =
-                    podsProject.GetCompileFlagsForFile(podTargetGuid,
-                                                       podSourceFileGuid);
-                if (podSourceFileCompileFlags == null) {
-                    continue;
-                }
-                var targetSourceFileGuid = project.FindFileGuidByProjectPath(
-                    podPathProjectPath.Value);
-                if (targetSourceFileGuid == null) {
-                    Log("Unable to find " + podPathProjectPath.Value +
-                        " in generated project", level: LogLevel.Warning);
-                    continue;
-                }
-                Log(String.Format(
-                        "Setting {0} compile flags to ({1})",
-                        podPathProjectPath.Key,
-                        String.Join(", ",
-                                    podSourceFileCompileFlags.ToArray())),
+        if (File.Exists(podsProjectPath)) {
+            var podsProject = new UnityEditor.iOS.Xcode.PBXProject();
+            podsProject.ReadFromString(File.ReadAllText(podsProjectPath));
+            foreach (var directory in Directory.GetDirectories(podsDir)) {
+                // Each pod will have a top level directory under the pods dir
+                // named after the pod.  Also, some pods have build targets in
+                // the xcode project where each build target has the same name
+                // as the pod such that pod Foo is in directory Foo with build
+                // target Foo.  Since we can't read the build targets from the
+                // generated Xcode project using Unity's API, we scan the Xcode
+                // project for targets to optionally retrieve build settings
+                // for each source file the settings can be applied in the
+                // target project.
+                var podTargetName = Path.GetFileName(directory);
+                var podTargetGuid =
+                    podsProject.TargetGuidByName(podTargetName);
+                Log(String.Format("Looking for target: {0} guid: {1}",
+                                  podTargetName, podTargetGuid ?? "null"),
                     verbose: true);
-                project.SetCompileFlagsForFile(target, targetSourceFileGuid,
-                                               podSourceFileCompileFlags);
+                if (podTargetGuid == null) continue;
+                foreach (var podPathProjectPath in podPathToProjectPaths) {
+                    var podSourceFileGuid = podsProject.FindFileGuidByRealPath(
+                        podPathProjectPath.Key);
+                    if (podSourceFileGuid == null) continue;
+                    var podSourceFileCompileFlags =
+                        podsProject.GetCompileFlagsForFile(podTargetGuid,
+                                                           podSourceFileGuid);
+                    if (podSourceFileCompileFlags == null) {
+                        continue;
+                    }
+                    var targetSourceFileGuid =
+                        project.FindFileGuidByProjectPath(
+                            podPathProjectPath.Value);
+                    if (targetSourceFileGuid == null) {
+                        Log("Unable to find " + podPathProjectPath.Value +
+                            " in generated project", level: LogLevel.Warning);
+                        continue;
+                    }
+                    Log(String.Format(
+                            "Setting {0} compile flags to ({1})",
+                            podPathProjectPath.Key,
+                            String.Join(", ",
+                                        podSourceFileCompileFlags.ToArray())),
+                        verbose: true);
+                    project.SetCompileFlagsForFile(
+                        target, targetSourceFileGuid,
+                        podSourceFileCompileFlags);
+                }
             }
+        } else if (File.Exists(podsProjectPath + ".xml")) {
+            // If neither the Pod pbxproj or pbxproj.xml are present pod
+            // install failed earlier and an error has already been report.
+            Log("Old Cocoapods installation detected (version: " +
+                podsVersion + ").  Unable to include " +
+                "source pods, your project will not build.\n" +
+                "\n" +
+                "Older versions of the pod tool generate xml format Xcode " +
+                "projects which can not be read by Unity's xcodeapi.  To " +
+                "resolve this issue update Cocoapods to at least version " +
+                "1.1.0\n\n" +
+                COCOAPOD_INSTALL_INSTRUCTIONS,
+                level: LogLevel.Error);
         }
 
         File.WriteAllText(pbxprojPath, project.WriteToString());
