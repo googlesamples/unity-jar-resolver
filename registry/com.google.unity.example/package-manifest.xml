@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<metadata>
+  <groupId>com.google.unity.example</groupId>
+  <artifactId>gpm-example-plugin</artifactId>
+  <packaging>unitypackage</packaging>
+  <version>1.0.0</version>
+  <versioning>
+    <release>1.0.0</release>
+    <versions>
+      <version>1.0.0</version>
+    </versions>
+  </versioning>
+  <lastUpdated>0</lastUpdated>
+</metadata>
