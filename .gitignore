@@ -17,3 +17,5 @@ plugin/plugin.sln
 plugin/plugin.userprefs
 
 unity_dlls/
+
+.DS_Store

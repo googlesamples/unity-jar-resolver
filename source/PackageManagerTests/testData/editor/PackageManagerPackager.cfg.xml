@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<package-settings xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <packages>
+    <PackageSettings>
+      <description>
+        <languages>
+          <Language type="en">
+            <name>Krispy Bar Plugin</name>
+            <short>A bar as a plugin</short>
+            <full>Woot some description goes here</full>
+          </Language>
+        </languages>
+      </description>
+      <name>Bar Plugin</name>
+      <group-id>krispy.co.bar</group-id>
+      <artifact-id>bar-plugin</artifact-id>
+      <version>1.0.0.0</version>
+      <guid-label>GPM:krispy.co.bar:bar-plugin:1.0.0.0</guid-label>
+      <assets>
+        <assetPath>
+          <string>Assets/BarPlugin</string>
+          <string>Assets/BarPlugin/Editor</string>
+          <string>Assets/BarPlugin/Editor/BarGoogleDeps.cs</string>
+          <string>Assets/BarPlugin/Editor/SomeScript.cs</string>
+        </assetPath>
+      </assets>
+    </PackageSettings>
+    <PackageSettings>
+      <description>
+        <languages>
+          <Language type="en">
+            <name>Google Unity Package Manager</name>
+            <short>A package manager for plugins that make use of the JarResolver</short>
+            <full>A complete package management solution for developers who make use of the
+                  JarResolver. Provides discoverability, install &amp; clean removal
+                  of plugins.</full>
+          </Language>
+        </languages>
+      </description>
+      <name>Package Manager Plugin</name>
+      <group-id>com.google.unity</group-id>
+      <artifact-id>package-manager</artifact-id>
+      <version>1.0.0.0</version>
+      <guid-label>GPM:com.google.unity:package-manager:1.0.0.0</guid-label>
+      <assets>
+        <assetPath>
+          <string>Assets/Editor</string>
+          <string>Assets/Editor/PackageManager.cs</string>
+          <string>Assets/Editor/PackageManagerModels.cs</string>
+          <string>Assets/Editor/PackageManagerPackager.cs</string>
+          <string>Assets/PlayServicesResolver</string>
+          <string>Assets/PlayServicesResolver/Editor</string>
+          <string>Assets/PlayServicesResolver/Editor/Google.IOSResolver.dll</string>
+          <string>Assets/PlayServicesResolver/Editor/Google.JarResolver.dll</string>
+          <string>Assets/PlayServicesResolver/Editor/Google.VersionHandler.dll</string>
+          <string>Assets/PlayServicesResolver/Editor/play-services-resolver.txt</string>
+        </assetPath>
+      </assets>
+    </PackageSettings>
+  </packages>
+</package-settings>

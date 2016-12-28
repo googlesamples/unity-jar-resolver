@@ -11,6 +11,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VersionHandler", "VersionHa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IOSResolver", "IOSResolver\IOSResolver.csproj", "{5B581BAE-D432-41AB-AEED-FD269AEA081D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageManager", "PackageManager\PackageManager.csproj", "{8B0A2564-01ED-426B-AF33-33EED4A81828}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageManagerTests", "PackageManagerTests\PackageManagerTests.csproj", "{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -37,6 +41,14 @@ Global
 		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8B0A2564-01ED-426B-AF33-33EED4A81828}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B0A2564-01ED-426B-AF33-33EED4A81828}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B0A2564-01ED-426B-AF33-33EED4A81828}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B0A2564-01ED-426B-AF33-33EED4A81828}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(MonoDevelopProperties) = preSolution
 		StartupItem = PlayServicesResolver\PlayServicesResolver.csproj
@@ -45,8 +57,8 @@ Global
 		$1.DirectoryNamespaceAssociation = Hierarchical
 		$1.ResourceNamePolicy = FileFormatDefault
 		$0.TextStylePolicy = $2
-		$2.inheritsSet = VisualStudio
-		$2.inheritsScope = text/plain
+		$2.inheritsSet = null
+		$2.inheritsScope = text/x-csharp
 		$2.scope = text/plain
 		$0.CSharpFormattingPolicy = $3
 		$3.IndentSwitchBody = True
@@ -73,6 +85,16 @@ Global
 		$3.inheritsSet = Mono
 		$3.inheritsScope = text/x-csharp
 		$3.scope = text/x-csharp
+		$3.NewLinesForBracesInTypes = False
+		$3.NewLinesForBracesInMethods = False
+		$3.SpacingAfterMethodDeclarationName = False
+		$3.SpaceAfterMethodCallName = False
+		$3.SpaceAfterControlFlowStatementKeyword = False
+		$3.SpaceBeforeOpenSquareBracket = False
+		$3.SpaceAfterColonInBaseTypeDeclaration = False
+		$3.SpaceAfterComma = False
+		$3.SpaceAfterSemicolonsInForStatement = False
+		$3.SpaceBeforeColonInBaseTypeDeclaration = False
 		$0.TextStylePolicy = $4
 		$4.inheritsSet = VisualStudio
 		$4.inheritsScope = text/plain
