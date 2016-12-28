@@ -40,6 +40,9 @@
          <HintPath>$(NUnityHintPath)/nunit.framework.dll</HintPath>
   </Reference>
    </ItemGroup>
+   <ItemGroup>
+     <Compile Include="src\Google.PackageManager.Tests\ModelTests.cs" />
+   </ItemGroup>
    <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
    <ItemGroup>
      <None Include="packages.config" />

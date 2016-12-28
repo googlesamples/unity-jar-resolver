@@ -161,6 +161,22 @@ task test_resolverLib(type: Exec, dependsOn: compile_resolverTests) {
   ext.remoteTaskPhase = 'build'
 }
 
+task compile_packageManagerTests(type: Exec) {
+  description 'Compile the tests for the Mono framework component.'
+  workingDir 'source'
+  commandLine "${xbuild_exe}", '/target:PackageManagerTests',
+        "/property:NUnityHintPath=$unity_nunit_dll_path.absolutePath"
+  ext.remoteTaskPhase = 'build'
+}
+
+task test_packageManager(type: Exec, dependsOn: compile_packageManagerTests) {
+  description 'Runs the tests.'
+  workingDir 'source'
+  commandLine "$nunit_console_exe",
+              "PackageManagerTests/bin/Debug/PackageManagerTests.dll"
+  ext.remoteTaskPhase = 'build'
+}
+
 /// find paths within the Unity file tree used for building.
 def findUnityPath(propertyKey, wantDirectory, fileTree) {
 
@@ -261,6 +277,7 @@ def build_pluginDll(projectName, assemblyDllBasename) {
 build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll")
 build_pluginDll("VersionHandler", "Google.VersionHandler.dll")
 build_pluginDll("IOSResolver", "Google.IOSResolver.dll")
+build_pluginDll("PackageManager", "Google.PackageManager.dll")
 
 task update_metadataForVersion() {
   description 'Update plugin metadata if the plugin version changed.'
@@ -292,7 +309,8 @@ task copy_pluginTemplate(type: Copy, dependsOn: update_metadataForVersion) {
 task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
                                              'copy_PlayServicesResolver',
                                              'copy_VersionHandler',
-                                             'copy_IOSResolver']) {
+                                             'copy_IOSResolver',
+                                             'copy_PackageManager']) {
   description 'Inject the version number into the plugin\'s meta files.'
   ext.remoteTaskPhase = 'build'
   doLast {
@@ -349,6 +367,8 @@ task generate_manifest(dependsOn: ['copy_manifestMetadata',
   ext.remoteTaskPhase = 'build'
 }
 
+task tests(dependsOn: ['test_resolverLib','test_packageManager'])
+
 task export_package(dependsOn: 'generate_manifest') {
   description 'Creates and exports the Plugin unity package.'
   doLast {
@@ -371,7 +391,7 @@ task export_package(dependsOn: 'generate_manifest') {
   }
   ext.remoteTaskPhase = 'build'
 
-  dependsOn test_resolverLib
+  dependsOn tests
 }
 
 task copy_plugin() {

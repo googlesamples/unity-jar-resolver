@@ -57,9 +57,10 @@ Global
 		$1.DirectoryNamespaceAssociation = Hierarchical
 		$1.ResourceNamePolicy = FileFormatDefault
 		$0.TextStylePolicy = $2
-		$2.inheritsSet = null
-		$2.inheritsScope = text/x-csharp
+		$2.inheritsSet = VisualStudio
+		$2.inheritsScope = text/plain
 		$2.scope = text/plain
+		$2.FileWidth = 100
 		$0.CSharpFormattingPolicy = $3
 		$3.IndentSwitchBody = True
 		$3.AnonymousMethodBraceStyle = NextLine
@@ -89,12 +90,7 @@ Global
 		$3.NewLinesForBracesInMethods = False
 		$3.SpacingAfterMethodDeclarationName = False
 		$3.SpaceAfterMethodCallName = False
-		$3.SpaceAfterControlFlowStatementKeyword = False
 		$3.SpaceBeforeOpenSquareBracket = False
-		$3.SpaceAfterColonInBaseTypeDeclaration = False
-		$3.SpaceAfterComma = False
-		$3.SpaceAfterSemicolonsInForStatement = False
-		$3.SpaceBeforeColonInBaseTypeDeclaration = False
 		$0.TextStylePolicy = $4
 		$4.inheritsSet = VisualStudio
 		$4.inheritsScope = text/plain
