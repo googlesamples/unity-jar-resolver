@@ -55,5 +55,6 @@
     <Compile Include="src\Models.cs" />
     <Compile Include="src\Utilities.cs" />
     <Compile Include="src\Constants.cs" />
+    <Compile Include="src\Controllers.cs" />
   </ItemGroup>
 </Project>

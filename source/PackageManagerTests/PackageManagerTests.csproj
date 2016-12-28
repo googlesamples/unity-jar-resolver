@@ -42,6 +42,7 @@
    </ItemGroup>
    <ItemGroup>
      <Compile Include="src\Google.PackageManager.Tests\ModelTests.cs" />
+     <Compile Include="src\Google.PackageManager.Tests\ControllerTests.cs" />
    </ItemGroup>
    <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
    <ItemGroup>
@@ -51,6 +52,10 @@
      <None Include="testData\registry\com.google.unity.example\package-manifest.xml" />
      <None Include="testData\registry\com.google.unity.example\gpm-example-plugin\1.0.0.0\description.xml" />
      <None Include="testData\registry\com.google.unity.example\gpm-example-plugin\1.0.0.0\gpm-example-plugin.unitypackage" />
+     <None Include="testData\registry2\registry.xml" />
+     <None Include="testData\registry2\com.google.unity.example2\package-manifest.xml" />
+     <None Include="testData\registry2\com.google.unity.example2\gpm-example2-plugin\4.3.2.1\description.xml" />
+     <None Include="testData\registry2\com.google.unity.example2\gpm-example2-plugin\4.3.2.1\gpm-example2-plugin.unitypackage" />
    </ItemGroup>
    <ItemGroup>
      <ProjectReference Include="..\PackageManager\PackageManager.csproj">
