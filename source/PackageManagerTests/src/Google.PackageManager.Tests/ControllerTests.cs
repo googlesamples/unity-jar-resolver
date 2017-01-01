@@ -41,7 +41,7 @@ namespace Google.PackageManager.Tests {
                 if (data.TryGetValue(key, out tmp)) {
                     return tmp;
                 }
-                return string.Format("{0}",defaultValue);
+                return string.Format("{0}", defaultValue);
             }
 
             public bool GetBool(string key, bool defaultValue = false) {
@@ -106,6 +106,10 @@ namespace Google.PackageManager.Tests {
                 result = textResult;
                 return rc;
             }
+
+            public ResponseCode BlockingFetchAsBytes(Uri uri, out byte[] result) {
+                throw new NotImplementedException();
+            }
         }
 
         public class MockMultiFetcher : IUriDataFetcher {
@@ -131,14 +135,26 @@ namespace Google.PackageManager.Tests {
                 }
                 return responseCode;
             }
+
+            public ResponseCode BlockingFetchAsBytes(Uri uri, out byte[] result) {
+                throw new NotImplementedException();
+            }
         }
 
         public class MockDeterministicFetcher : IUriDataFetcher {
             Dictionary<string, string> urlToXml = new Dictionary<string, string>();
             Dictionary<string, ResponseCode> uriToResponse = new Dictionary<string, ResponseCode>();
             public void AddResponse(string uri, string giveText, ResponseCode giveResponse) {
-                urlToXml.Add(uri, giveText);
-                uriToResponse.Add(uri, giveResponse);
+                if (!urlToXml.ContainsKey(uri)) {
+                    urlToXml.Add(uri, giveText);
+                } else {
+                    urlToXml[uri] = giveText;
+                }
+                if (!uriToResponse.ContainsKey(uri)) {
+                    uriToResponse.Add(uri, giveResponse);
+                } else {
+                    uriToResponse[uri] = giveResponse;
+                }
             }
             public ResponseCode BlockingFetchAsString(Uri uri, out string result) {
                 if (urlToXml.TryGetValue(uri.AbsoluteUri, out result)) {
@@ -151,6 +167,10 @@ namespace Google.PackageManager.Tests {
                 result = null;
                 return ResponseCode.FETCH_ERROR;
             }
+
+            public ResponseCode BlockingFetchAsBytes(Uri uri, out byte[] result) {
+                throw new NotImplementedException();
+            }
         }
     }
 
@@ -159,28 +179,56 @@ namespace Google.PackageManager.Tests {
     /// </summary>
     [TestFixture]
     public class ControllerTests {
+        TestData.MockDeterministicFetcher mockFetcher = new TestData.MockDeterministicFetcher();
+
         [SetUp]
         public void Setup() {
             UnityController.SwapEditorPrefs(new TestData.MockEditorPrefs());
+            LoggingController.testing = true;
+            TestableConstants.testcase = true;
+            TestableConstants.DefaultRegistryLocation =
+                                 new Uri(Path.GetFullPath(
+                                     Path.Combine(TestData.PATH, "registry/registry.xml")))
+                                 .AbsoluteUri;
+
+            string testRegXmlPath = TestableConstants.DefaultRegistryLocation;
+            mockFetcher.AddResponse((new Uri(testRegXmlPath)).AbsoluteUri,
+                                    File.ReadAllText((new Uri(testRegXmlPath)).AbsolutePath),
+                                    ResponseCode.FETCH_COMPLETE);
+            var rb = new RegistryManagerController.RegistryDatabase();
+            rb.registryLocation.Add(TestableConstants.DefaultRegistryLocation);
+            UnityController.editorPrefs.SetString(Constants.KEY_REGISTRIES,
+                                                  rb.SerializeToXMLString());
+
+            var u = new Uri(Path.GetFullPath(Path.Combine(TestData.PATH,
+                                                          "registry2/registry.xml")));
+            var xml = File.ReadAllText(u.AbsolutePath);
+            mockFetcher.AddResponse(u.AbsoluteUri,
+                                    File.ReadAllText(u.AbsolutePath),
+                                    ResponseCode.FETCH_COMPLETE);
+
+            UriDataFetchController.SwapUriDataFetcher(mockFetcher);
         }
 
         [Test]
         public void TestSettingsController() {
-            // DowloadCachePath should start with a value (system dependent)
-            Assert.NotNull(SettingsController.DownloadCachePath, "Why is download cache path null?");
+            // DowloadCachePath should start with a value (system dependent).
+            Assert.NotNull(SettingsController.DownloadCachePath,
+                           "Why is download cache path null?");
 
-            // Set and Get test
+            // Set and Get test.
             SettingsController.DownloadCachePath = Path.GetFullPath(TestData.PATH);
-            Assert.NotNull(SettingsController.DownloadCachePath, "Why is download cache path null?");
+            Assert.NotNull(SettingsController.DownloadCachePath,
+                           "Why is download cache path null?");
             Assert.AreEqual(Path.GetFullPath(TestData.PATH), SettingsController.DownloadCachePath,
                             "Why is download cache path different?");
 
-            // Verbose logging Get/Set
+            // Verbose logging Get/Set.
             Assert.IsTrue(SettingsController.VerboseLogging, "VerboseLogging to start true.");
             SettingsController.VerboseLogging = false;
             Assert.IsFalse(SettingsController.VerboseLogging);
 
-            // Show install files Get/Set
+            // Show install files Get/Set.
             Assert.IsTrue(SettingsController.ShowInstallFiles, "ShowInstallFiles to start true");
             SettingsController.ShowInstallFiles = false;
             Assert.IsFalse(SettingsController.ShowInstallFiles);
@@ -188,57 +236,29 @@ namespace Google.PackageManager.Tests {
 
         [Test]
         public void TestRegistryManagerController() {
-            TestableConstants.testcase = true;
-            TestableConstants.DefaultRegistryLocation =
-                                 Path.GetFullPath(
-                                     Path.Combine(TestData.PATH, "registry/registry.xml"));
+            Assert.AreEqual(1, RegistryManagerController.AllWrappedRegistries.Count);
 
-            string testRegXmlPath = TestableConstants.DefaultRegistryLocation;
-            string xml = File.ReadAllText((new Uri(Path.GetFullPath(testRegXmlPath))).AbsolutePath);
-            UriDataFetchController.SwapUriDataFetcher(
-                new TestData.MockFetcher(xml, ResponseCode.FETCH_COMPLETE));
-            Assert.AreEqual(1, RegistryManagerController.AllRegistries.Count);
-
-            var u = new Uri(Path.GetFullPath(Path.Combine(TestData.PATH, "registry2/registry.xml")));
-            xml = File.ReadAllText(u.AbsolutePath);
-            UriDataFetchController.SwapUriDataFetcher(
-                new TestData.MockFetcher(xml, ResponseCode.FETCH_COMPLETE));
-
+            var u = new Uri(Path.GetFullPath(Path.Combine(TestData.PATH,
+                                                          "registry2/registry.xml")));
             Assert.AreEqual(ResponseCode.REGISTRY_ADDED,
                            RegistryManagerController.AddRegistry(u));
             Assert.AreEqual(2, RegistryManagerController.AllWrappedRegistries.Count);
 
-            // cannot add same uri
+            // Cannot add same uri.
             Assert.AreEqual(ResponseCode.REGISTRY_ALREADY_PRESENT,
                            RegistryManagerController.AddRegistry(u));
 
             Assert.AreEqual(ResponseCode.REGISTRY_REMOVED,
                             RegistryManagerController.RemoveRegistry(u));
 
-            // Can't remove it a second time it won't be there
+            // Can't remove it a second time it won't be there.
             Assert.AreEqual(ResponseCode.REGISTRY_NOT_FOUND,
                             RegistryManagerController.RemoveRegistry(u));
         }
 
         [Test]
         public void TestPluginManagerController() {
-            TestableConstants.testcase = true;
-            TestableConstants.DefaultRegistryLocation =
-                                 new Uri(Path.GetFullPath(
-                                     Path.Combine(TestData.PATH, "registry/registry.xml")))
-                                 .AbsoluteUri;
-
-            var mockFetcher = new TestData.MockDeterministicFetcher();
-
-            string testRegXmlPath = TestableConstants.DefaultRegistryLocation;
-            mockFetcher.AddResponse((new Uri(testRegXmlPath)).AbsoluteUri,
-                                    File.ReadAllText((new Uri(testRegXmlPath)).AbsolutePath),
-                                    ResponseCode.FETCH_COMPLETE);
-
-            UriDataFetchController.SwapUriDataFetcher(mockFetcher);
-
-            RegistryManagerController._init();
-            Assert.AreEqual(1, RegistryManagerController.AllRegistries.Count);
+            Assert.AreEqual(1, RegistryManagerController.AllWrappedRegistries.Count);
             RegistryWrapper r = RegistryManagerController.AllWrappedRegistries[0];
 
             var u = new Uri(Path.GetFullPath(Path.Combine(
@@ -254,36 +274,44 @@ namespace Google.PackageManager.Tests {
                                     File.ReadAllText(u.AbsolutePath),
                                     ResponseCode.FETCH_COMPLETE);
 
-            // test ChangeRegistryUriIntoModuleUri
+            // Test ChangeRegistryUriIntoModuleUri.
             var regU = new Uri(TestableConstants.DefaultRegistryLocation);
             var modName = "apples-oranges";
             var metaLoc = PluginManagerController.ChangeRegistryUriIntoModuleUri(regU, modName);
             Assert.IsTrue(metaLoc.AbsoluteUri.Contains(modName));
             Assert.IsTrue(metaLoc.AbsoluteUri.Contains(Constants.MANIFEST_FILE_NAME));
 
-            // test GetPluginForRegistry
-            var plugins = PluginManagerController.GetPluginsForRegistry(r);
+            // Test GetPluginForRegistry.
+            var plugins = PluginManagerController.GetPluginsForRegistry(r, true);
             Assert.AreEqual(1, plugins.Count);
             var packagedPlugin = plugins[0];
             Assert.NotNull(packagedPlugin);
             Assert.AreEqual(r.Model, packagedPlugin.ParentRegistry);
 
-            // test GenerateDescriptionUri
-            var d = PluginManagerController.GenerateDescriptionUri(metaLoc, packagedPlugin.MetaData);
+            // Test GenerateDescriptionUri.
+            var d = PluginManagerController.GenerateDescriptionUri(metaLoc,
+                                                                   packagedPlugin.MetaData);
             Assert.IsTrue(d.AbsoluteUri.Contains(packagedPlugin.MetaData.artifactId));
             Assert.IsTrue(d.AbsoluteUri.Contains(packagedPlugin.MetaData.versioning.release));
             Assert.IsTrue(d.AbsoluteUri.Contains(Constants.DESCRIPTION_FILE_NAME));
 
             plugins = PluginManagerController.GetPluginsForRegistry(null);
-            Assert.IsNull(plugins);
+            Assert.AreEqual(0, plugins.Count);
 
-            // test Refresh
+            // Test Refresh.
             PluginManagerController.Refresh(r);
             plugins = PluginManagerController.GetPluginsForRegistry(r);
             Assert.AreEqual(1, plugins.Count);
             packagedPlugin = plugins[0];
             Assert.NotNull(packagedPlugin);
             Assert.AreEqual(r.Model, packagedPlugin.ParentRegistry);
+        }
+
+        [Test]
+        public void TestProjectManagerController() {
+            // TODO - test refresh list of assets
+            // TODO - test IsPluginInstalledInProject
+
         }
     }
 }

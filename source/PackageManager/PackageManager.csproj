@@ -56,5 +56,12 @@
     <Compile Include="src\Utilities.cs" />
     <Compile Include="src\Constants.cs" />
     <Compile Include="src\Controllers.cs" />
+    <Compile Include="src\Views.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VersionHandler\VersionHandler.csproj">
+      <Project>{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}</Project>
+      <Name>VersionHandler</Name>
+    </ProjectReference>
   </ItemGroup>
 </Project>
