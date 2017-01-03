@@ -18,6 +18,7 @@ namespace Google.PackageManager {
     using System.Collections.Generic;
     using System.IO;
     using System.Xml.Serialization;
+    using JarResolver;
     using UnityEditor;
     using UnityEngine;
 
@@ -237,6 +238,10 @@ namespace Google.PackageManager {
         /// Plugin resolution (getting its data from source) succeded
         /// </summary>
         PLUGIN_RESOLVED,
+        /// <summary>
+        /// Plugin was successfully removed
+        /// </summary>
+        PLUGIN_REMOVED,
         /// <summary>
         /// Plugin metadata was not processed due to an error
         /// </summary>
@@ -937,14 +942,25 @@ namespace Google.PackageManager {
         string GUIDToAssetPath(string guid);
         void SetLabels(string path, string[] labels);
         void ImportPackage(string packagePath, bool interactive);
+        bool DeleteAsset(string path);
+        string[] FindAssets(string filter, string[] searchInFolders);
+        void Refresh(ImportAssetOptions options = ImportAssetOptions.Default);
     }
 
     /// <summary>
     /// Unity engine asset database proxy to intermediate Unity AssertDatabase.
     /// </summary>
     public class UnityEngineAssetDatabaseProxy : IUnityAssetDatabaseProxy {
+        public bool DeleteAsset(string path) {
+            return AssetDatabase.DeleteAsset(path);
+        }
+
         public string[] FindAssets(string filter) {
             return AssetDatabase.FindAssets(filter);
+        }
+
+        public string[] FindAssets(string filter, string[] searchInFolders) {
+            return AssetDatabase.FindAssets(filter, searchInFolders);
         }
 
         public string[] GetAllAssetPaths() {
@@ -965,6 +981,10 @@ namespace Google.PackageManager {
 
         public void SetLabels(string path, string[] labels) {
             AssetDatabase.SetLabels(AssetDatabase.LoadMainAssetAtPath(path), labels);
+        }
+
+        public void Refresh(ImportAssetOptions options = ImportAssetOptions.Default) {
+            AssetDatabase.Refresh();
         }
     }
 
@@ -994,6 +1014,15 @@ namespace Google.PackageManager {
         }
         public static void ImportPackage(string packagePath, bool interactive) {
             databaseProxy.ImportPackage(packagePath, interactive);
+        }
+        public static bool DeleteAsset(string path) {
+            return databaseProxy.DeleteAsset(path);
+        }
+        public static string[] FindAssets(string filter, string[] searchInFolders) {
+            return databaseProxy.FindAssets(filter, searchInFolders);
+        }
+        public static void Refresh() {
+            databaseProxy.Refresh();
         }
     }
 
@@ -1028,15 +1057,25 @@ namespace Google.PackageManager {
         /// otherwise.</returns>
         /// <param name="pluginKey">Plugin key.</param>
         public static bool IsPluginInstalledInProject(string pluginKey) {
-            if (allProjectAssetLabels.Count == 0) {
-                RefreshListOfAssetLabels();
+            LoggingController.Log(
+                string.Format("Called IsPluginInstalledInProject for key {0}", pluginKey));
+
+            RefreshListOfAssetLabels();
+
+            foreach (var label in allProjectAssetLabels) {
+                LoggingController.Log(
+                string.Format("Project Asset Label: {0}", label));
             }
-            var strungKey = string.Join(Constants.STRING_KEY_BINDER, new string[] {
+
+            var stringKey = string.Join(Constants.STRING_KEY_BINDER, new string[] {
                 Constants.GPM_LABEL_MARKER,
                 Constants.GPM_LABEL_KEY,
                 pluginKey
             });
-            return allProjectAssetLabels.Contains(strungKey);
+            var installed = allProjectAssetLabels.Contains(stringKey);
+            LoggingController.Log(
+                string.Format("IsPluginInstalledInProject? {0} = {1}", pluginKey, installed));
+            return installed;
         }
 
         /// <summary>
@@ -1111,7 +1150,6 @@ namespace Google.PackageManager {
             return ResponseCode.PLUGIN_INSTALLED;
         }
 
-        // TODO(krispy): impement uninstall
         /// <summary>
         /// Uninstalls the plugin from the current project.
         /// </summary>
@@ -1119,34 +1157,105 @@ namespace Google.PackageManager {
         /// <param name="pluginKey">Plugin key.</param>
         public static ResponseCode UninstallPlugin(string pluginKey) {
 
-            // 1. is the plugin in the project?
-            // 2. what assets need to be removed?
-            // 3. suspend auto resolution
-            // 4. remove the assets
-            // 5. resume auto resolution if was suspended
+            LoggingController.Log(
+                string.Format("Remove Plugin for key: {0}", pluginKey));
 
-            return ResponseCode.PLUGIN_NOT_REMOVED;
-        }
+            var versionlessPluginKey =
+                PluginManagerController
+                    .VersionedPluginKeyToVersionless(pluginKey);
+            var plugin = PluginManagerController
+                .GetPluginForVersionlessKey(versionlessPluginKey);
 
-        // TODO(krispy): impement uninstall
-        /// <summary>
-        /// Gets all asset to remove. Potentially modifies asset labels on shared assets.
-        /// The returned set of assets must be removed or the project will be in a state where
-        /// shared assets no longer have the association of the pluginKey.
-        /// </summary>
-        /// <returns>The all asset to remove.</returns>
-        /// <param name="pluginKey">Plugin key.</param>
-        static List<string> GetAllAssetToRemove(string pluginKey) {
-            // 1. get the set of assets that have the labels
-            //    - Constants.GPM_LABEL_MARKER:KEY:<pluginKey>
-            // 2. check for existance of other KEY labels
-            //    - if there is more than one KEY this means that it is a shared asset
-            //      in this case we simply remove the asset label but do not remove the asset
-            //      Note: two labels will need to be removed
-            //      - the KEY label
-            //      - the CLIENT label
-            // 3. resolve list of assets that actually need to be removed
-            return null;
+            // is the plugin in the project?
+            if (plugin == null) {
+                LoggingController.Log(
+                    string.Format("Plugin not found for versionless key: {0}",
+                              versionlessPluginKey));
+                return ResponseCode.PLUGIN_NOT_FOUND;
+            }
+
+            PlayServicesSupport pluginClient = null;
+            LoggingController.Log(
+                string.Format("Total # of PlayServicesSupport clients: {0}",
+                              PlayServicesSupport.instances.Keys.Count));
+            foreach (var nameKey in PlayServicesSupport.instances.Keys) {
+                LoggingController.Log(
+                string.Format("Found PlayServicesSupport client name {0}",
+                              nameKey));
+                if (versionlessPluginKey.Equals(nameKey)) {
+                    pluginClient = PlayServicesSupport.instances[nameKey];
+                }
+            }
+            if (pluginClient == null) {
+                // If this case occurs it means that the plugin dependencies
+                // script for the selected plugin is not using the versionless
+                // plugin key as its client name.
+                LoggingController.Log(
+                    string.Format("Failed to find PlayServicesSupport client" +
+                                  " for the requested plugin {0}.",
+                                  versionlessPluginKey));
+                return ResponseCode.PLUGIN_NOT_REMOVED;
+            }
+
+            // what assets need to be removed?
+            // get all the dependences that this specific plugin has
+            var resolvedDependencies = pluginClient.ResolveDependencies(
+                true, "Assets/Plugins/Android");
+            var listOfVersionlessAssetNames = new List<string>();
+            // using for each because logging is important
+            foreach (var rDep in resolvedDependencies.Values) {
+                var artifact = rDep.Artifact;
+                LoggingController.Log(
+                    string.Format("Resolved dependency to remove: {0}",
+                                 artifact));
+                listOfVersionlessAssetNames.Add(artifact);
+            }
+
+            // Suspend resolution.
+            bool vhEnabled = VersionHandler.Enabled;
+            VersionHandler.Enabled = false;
+
+            try {
+                // Remove the assets
+                // Disable the Plugin PlayServicesResolver Client.
+                PlayServicesSupport.instances[versionlessPluginKey] = null;
+
+                // Remove the labeled assets.
+                var allAssetsToRemove = new List<string>();
+                var pluginAssetLabel = plugin.MetaData.GenerateAssetLabel();
+                string[] pluginAssets = AssetDatabase.FindAssets(
+                    string.Format("l:{0}", pluginAssetLabel));
+                allAssetsToRemove.AddRange(pluginAssets);
+
+                // Remove the Plugins/Android assets.
+                string[] lookIn = { "Assets/Plugins/Android" };
+                foreach (var assetNamePrefix in listOfVersionlessAssetNames) {
+                    var assets = AssetDatabaseController.FindAssets(assetNamePrefix,
+                                                                    lookIn);
+                    allAssetsToRemove.AddRange(assets);
+                }
+                LoggingController.Log(
+                    string.Format("Found {0} assets for label {1}.",
+                                  pluginAssets.Length,
+                                  pluginAssetLabel));
+
+                foreach (var assetGUID in allAssetsToRemove) {
+                    LoggingController.Log(
+                        string.Format("Removing asset {0} with label {1}",
+                                      assetGUID, pluginAssetLabel));
+                    var assetPath = AssetDatabaseController.GUIDToAssetPath(assetGUID);
+                    AssetDatabaseController.DeleteAsset(assetPath);
+                }
+
+                AssetDatabaseController.Refresh();
+            } catch (Exception ex) {
+                LoggingController.LogError(ex.ToString());
+            } finally {
+                // Restore resume resolution if was suspended.
+                VersionHandler.Enabled = vhEnabled;
+            }
+
+            return ResponseCode.PLUGIN_REMOVED;
         }
     }
 }

@@ -196,6 +196,21 @@ namespace Google.PackageManager {
                                   plugin.Description.languages[0].fullDesc,
                                   "Ok");
             }
+
+            while (uninstallPlugins.Count > 0) {
+                var pluginKey = uninstallPlugins.Pop();
+                ResponseCode rc = ProjectManagerController.UninstallPlugin(pluginKey);
+                if (ResponseCode.PLUGIN_NOT_REMOVED == rc) {
+                    EditorUtility.DisplayDialog("Plugin Uninstall Error",
+                                      "There was a problem removing the selected plugin.",
+                                      "Ok");
+                    LoggingController.Log(
+                        string.Format("Could not uninstall plugin with key {0}." +
+                                      "Got {1} response code.",pluginKey,rc));
+                } else {
+                    pluginDataDirty = true;
+                }
+            }
         }
 
         void OnGUI() {
