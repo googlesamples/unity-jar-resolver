@@ -1,4 +1,4 @@
-﻿// <copyright file="Views.cs" company="Google Inc.">
+// <copyright file="Views.cs" company="Google Inc.">
 // Copyright (C) 2016 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,91 +20,39 @@ namespace Google.PackageManager {
     using UnityEngine;
 
     /// <summary>
-    /// Registry manager view.
+    /// Registry manager view provides the UI within Unity's editor allowing the user
+    /// to manage the set of registered registries.
     /// </summary>
     public class RegistryManagerView : EditorWindow {
         Vector2 scrollPos;
         string newRegUri;
-        List<RegistryWrapper> registires;
+        bool registryDataDirty = true;
+        Stack<string> installRegistry = new Stack<string>();
+        Stack<string> uninstallRegistry = new Stack<string>();
 
         void OnInspectorGUI() {
             EditorUtility.SetDirty(this);
         }
 
         /// <summary>
-        /// Called by UnityEditor after lifecycle events:
-        /// - Awake {open project}
-        /// - AFTER:OnDisable {open different scene, change source code}
+        /// Update override method called by Unity editor. The update cycle looks
+        /// for any action events that were generated in the OnGUI method by the
+        /// user and takes action on those events.
         /// </summary>
-        void OnEnable() {
-            registires = RegistryManagerController.AllWrappedRegistries;
-        }
-
-        /// <summary>
-        /// Called by UnityEditor lifecycle events:
-        /// - {open different scene, change source code}
-        /// </summary>
-        void OnDisable() {
-            registires.Clear();
-        }
-
-        void OnGUI() {
-            using (var h = new EditorGUILayout.HorizontalScope()) {
-                using (var scrollView = new EditorGUILayout.ScrollViewScope(scrollPos)) {
-                    scrollPos = scrollView.scrollPosition;
-                    RenderAddRegistryForm();
-                    RenderListOfRegistries();
-                }
+        void Update() {
+            if (registryDataDirty) {
+                LoggingController.Log("plugin data marked dirty - refreshing...");
+                registryDataDirty = false;
+                RegistryManagerController.RefreshRegistryCache();
+                EditorUtility.SetDirty(this);
             }
-        }
 
-        /// <summary>
-        /// Renders the list of known registries.
-        /// </summary>
-        void RenderListOfRegistries() {
-            try {
-                foreach (var wrappedReg in registires) {
-                    EditorGUILayout.BeginHorizontal();
-                    EditorGUILayout.LabelField(wrappedReg.Model.GenerateUniqueKey());
-                    GUI.backgroundColor = Color.red;
-                    if (GUILayout.Button("Remove Registry")) {
-                        if (EditorUtility.DisplayDialog("Confirm Delete Registry",
-                            "Are you sure you want to delete the registry?",
-                                                        "Yes Delete It!",
-                                                        "Cancel")) {
-                            ResponseCode rc = RegistryManagerController
-                                .RemoveRegistry(wrappedReg.Location);
-
-                            if (ResponseCode.REGISTRY_NOT_FOUND == rc) {
-                                EditorUtility.DisplayDialog("Registry Not Found!",
-                                                            "There was a problem while trying to " +
-                                                            "remove the registry. It was not " +
-                                                            "found when we tried to remove it."
-                                                            , "Ok");
-                            }
-                        }
-                    }
-                    EditorGUILayout.EndHorizontal();
-                    EditorGUILayout.LabelField(wrappedReg.Location.AbsoluteUri);
-                }
-            } catch (Exception e) {
-                Debug.LogError(e);
-            }
-        }
-
-        /// <summary>
-        /// Renders the add registry form.
-        /// </summary>
-        void RenderAddRegistryForm() {
-            EditorGUILayout.BeginHorizontal();
-            newRegUri = EditorGUILayout.TextField("New Registry Uri:", newRegUri);
-            GUI.backgroundColor = Color.green;
-            if (GUILayout.Button("Add Registry")) {
+            while (installRegistry.Count > 0) {
+                var regUriStr = installRegistry.Pop();
                 try {
-                    ResponseCode rc = RegistryManagerController.AddRegistry(new Uri(newRegUri));
+                    ResponseCode rc = RegistryManagerController.AddRegistry(new Uri(regUriStr));
                     if (ResponseCode.REGISTRY_ADDED == rc) {
-                        newRegUri = "";
-                        registires = RegistryManagerController.AllWrappedRegistries;
+                        registryDataDirty = true;
                     } else if (ResponseCode.REGISTRY_ALREADY_PRESENT == rc) {
                         EditorUtility.DisplayDialog("Registry Already Present",
                                                     "The registry was NOT added since it" +
@@ -123,13 +71,82 @@ namespace Google.PackageManager {
                     EditorUtility.DisplayDialog("Registry Location Processing Error",
                                                 string.Format("A processing exception was " +
                                                               "generated while trying to add {0}." +
-                                                              "\n\n{1}", newRegUri, e),
+                                                              "\n\n{1}", regUriStr, e),
                                                 "Ok");
+                }
+            }
+
+            while (uninstallRegistry.Count > 0) {
+                var regUriStr = uninstallRegistry.Pop();
+                if (EditorUtility.DisplayDialog("Confirm Delete Registry",
+                                                "Are you sure you want to delete the registry?",
+                                                "Yes Delete It!",
+                                                "Cancel")) {
+                    ResponseCode rc = RegistryManagerController
+                        .RemoveRegistry(new Uri(regUriStr));
+                    registryDataDirty = true;
+                    if (ResponseCode.REGISTRY_NOT_FOUND == rc) {
+                        EditorUtility.DisplayDialog("Registry Not Found!",
+                                                    "There was a problem while trying to " +
+                                                    "remove the registry. It was not " +
+                                                    "found when we tried to remove it."
+                                                    , "Ok");
+                    }
+                }
+            }
+        }
+
+        void OnGUI() {
+            using (var h = new EditorGUILayout.HorizontalScope()) {
+                using (var scrollView = new EditorGUILayout.ScrollViewScope(scrollPos)) {
+                    scrollPos = scrollView.scrollPosition;
+                    RenderAddRegistryForm();
+                    RenderListOfRegistries();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Renders the list of known registries and interactive UI component to remove a
+        /// registry entry.
+        /// </summary>
+        void RenderListOfRegistries() {
+            try {
+                foreach (var wrappedReg in RegistryManagerController.AllWrappedRegistries) {
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.LabelField(wrappedReg.Model.GenerateUniqueKey());
+                    GUI.backgroundColor = Color.red;
+                    if (GUILayout.Button("Remove Registry")) {
+                        uninstallRegistry.Push(wrappedReg.Location.AbsoluteUri);
+                    }
+                    EditorGUILayout.EndHorizontal();
+                    EditorGUILayout.LabelField(wrappedReg.Location.AbsoluteUri);
+                }
+            } catch (Exception e) {
+                Debug.LogError(e);
+            }
+        }
+
+        /// <summary>
+        /// Renders UI with interactive UI components allowing the user to add a
+        /// registry location Uri.
+        /// </summary>
+        void RenderAddRegistryForm() {
+            EditorGUILayout.BeginHorizontal();
+            newRegUri = EditorGUILayout.TextField("New Registry Uri:", newRegUri);
+            GUI.backgroundColor = Color.green;
+            if (GUILayout.Button("Add Registry")) {
+                if (newRegUri != null && newRegUri.Length > 12) { // min chars 12
+                    installRegistry.Push(newRegUri);
+                    newRegUri = "";
                 }
             }
             EditorGUILayout.EndHorizontal();
         }
 
+        /// <summary>
+        /// Adds the Registries menu item in Unity Editor.
+        /// </summary>
         [MenuItem("Assets/Play Services Resolver/Package Manager/Registries")]
         public static void ShowRegistriesManagerWindow() {
             var window = (RegistryManagerView)EditorWindow.GetWindow(
@@ -147,20 +164,38 @@ namespace Google.PackageManager {
         List<PackagedPlugin> plugins;
         bool pluginDataDirty = true;
         Stack<string> installPlugins = new Stack<string>();
+        HashSet<string> installingPlugins = new HashSet<string>();
         Stack<string> uninstallPlugins = new Stack<string>();
+        HashSet<string> uninstallingPlugins = new HashSet<string>();
         Stack<string> moreInfoPlugins = new Stack<string>();
+
+        /// <summary>
+        /// Called by Unity editor when the Window is created and becomes active.
+        /// </summary>
+        void OnEnable() {
+            LoggingController.Log("PluginManagerView:OnEnable called - refreshing plugins");
+            plugins = PluginManagerController.GetListOfAllPlugins(true);
+        }
 
         void OnInspectorGUI() {
             EditorUtility.SetDirty(this);
         }
 
+        /// <summary>
+        /// Ensures that the plugin details are up to date for rendering UI elements.
+        /// </summary>
         void RefreshPluginDataForWindow() {
             LoggingController.Log("RefreshPluginDataForWindow()");
-            plugins = PluginManagerController.GetListOfAllPlugins();
+            plugins = PluginManagerController.GetListOfAllPlugins(true);
             LoggingController.Log(
                 string.Format("RefreshPluginDataForWindow: plugin count = {0}", plugins.Count));
         }
 
+        /// <summary>
+        /// Update override method called by Unity editor. The update cycle looks
+        /// for any action events that were generated in the OnGUI method by the
+        /// user and takes action on those events.
+        /// </summary>
         void Update() {
             if (pluginDataDirty) {
                 LoggingController.Log("plugin data marked dirty - refreshing...");
@@ -168,7 +203,7 @@ namespace Google.PackageManager {
                 RefreshPluginDataForWindow();
                 LoggingController.Log(
                     string.Format("plugin data marked dirty - refreshed and sees {0} plugins",
-                                  plugins.Count));
+                        plugins.Count));
             }
 
             while (installPlugins.Count > 0) {
@@ -176,14 +211,15 @@ namespace Google.PackageManager {
                 ResponseCode rc = ProjectManagerController.InstallPlugin(pluginKey);
                 if (ResponseCode.PLUGIN_NOT_INSTALLED == rc) {
                     EditorUtility.DisplayDialog("Plugin Install Error",
-                                      "There was a problem installing the selected plugin.",
-                                      "Ok");
+                        "There was a problem installing the selected plugin.",
+                        "Ok");
                     LoggingController.Log(
                         string.Format("Could not install plugin with key {0}." +
                                       "Got {1} response code.", pluginKey, rc));
                 } else {
                     pluginDataDirty = true;
                 }
+                installingPlugins.Remove(pluginKey);
             }
 
             while (moreInfoPlugins.Count > 0) {
@@ -202,14 +238,15 @@ namespace Google.PackageManager {
                 ResponseCode rc = ProjectManagerController.UninstallPlugin(pluginKey);
                 if (ResponseCode.PLUGIN_NOT_REMOVED == rc) {
                     EditorUtility.DisplayDialog("Plugin Uninstall Error",
-                                      "There was a problem removing the selected plugin.",
-                                      "Ok");
+                        "There was a problem removing the selected plugin.",
+                        "Ok");
                     LoggingController.Log(
                         string.Format("Could not uninstall plugin with key {0}." +
-                                      "Got {1} response code.",pluginKey,rc));
+                            "Got {1} response code.", pluginKey, rc));
                 } else {
                     pluginDataDirty = true;
                 }
+                uninstallingPlugins.Remove(pluginKey);
             }
         }
 
@@ -217,11 +254,11 @@ namespace Google.PackageManager {
             using (var h = new EditorGUILayout.HorizontalScope()) {
                 using (var scrollView = new EditorGUILayout.ScrollViewScope(scrollPos)) {
                     scrollPos = scrollView.scrollPosition;
-                    if (plugins == null) {
-                        plugins = PluginManagerController.GetListOfAllPlugins();
-                    }
                     foreach (var plugin in plugins) {
                         RenderPluginDetails(plugin);
+                    }
+                    if (GUILayout.Button("Force Refresh")) {
+                        pluginDataDirty = true;
                     }
                 }
             }
@@ -229,12 +266,16 @@ namespace Google.PackageManager {
 
         void RenderPluginDetails(PackagedPlugin plugin) {
             GUILayout.Space(5);
+            GUI.backgroundColor = Color.white;
+            EditorGUILayout.Separator();
+            EditorGUILayout.LabelField("Registry: " + plugin.ParentRegistry.GenerateUniqueKey());
+            EditorGUILayout.Separator();
             // Name - Version - Short Desc
             var v = string.Format("{0} - version: {1} '{2}'",
-                                  plugin.MetaData.artifactId,
-                                  plugin.MetaData.version,
-                                  plugin.Description
-                                  .languages[0].shortDesc);
+                plugin.MetaData.artifactId,
+                plugin.MetaData.version,
+                plugin.Description
+                .languages[0].shortDesc);
             var pluginKey = string.Format("{0}", plugin.MetaData.UniqueKey);
 
             EditorGUILayout.LabelField(v);
@@ -251,11 +292,21 @@ namespace Google.PackageManager {
                 GUI.backgroundColor = Color.red;
                 if (GUILayout.Button("Uninstall")) {
                     uninstallPlugins.Push(pluginKey);
+                    uninstallingPlugins.Add(pluginKey);
+                }
+            } else if (installingPlugins.Contains(pluginKey)) {
+                GUI.backgroundColor = Color.gray;
+                if (GUILayout.Button("Installing...")) {
+                }
+            } else if (uninstallingPlugins.Contains(pluginKey)) {
+                GUI.backgroundColor = Color.blue;
+                if (GUILayout.Button("Un-Installing...")) {
                 }
             } else {
                 GUI.backgroundColor = Color.green;
                 if (GUILayout.Button("Install")) {
                     installPlugins.Push(pluginKey);
+                    installingPlugins.Add(pluginKey);
                 }
             }
 
@@ -263,6 +314,9 @@ namespace Google.PackageManager {
             GUILayout.Space(5);
         }
 
+        /// <summary>
+        /// Adds the Plugins menu item in Unity Editor.
+        /// </summary>
         [MenuItem("Assets/Play Services Resolver/Package Manager/Plugins")]
         public static void ShowPluginManagerWindow() {
             var window = (PluginManagerView)GetWindow(
@@ -272,7 +326,8 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Settings manager view.
+    /// Settings manager view allows the user to view and make changes to the settings
+    /// associated with the Package Manager module.
     /// </summary>
     public class SettingsManagerView : EditorWindow {
         void OnInspectorGUI() {
@@ -282,7 +337,7 @@ namespace Google.PackageManager {
         void OnGUI() {
             EditorGUILayout.LabelField("Package Manager Settings");
             /// <summary>
-            /// Download Cache Path
+            /// Download Cache Path where the downloaded binary data will be stored.
             /// </summary>
             SettingsController.DownloadCachePath =
                                   EditorGUILayout.TextField("Download Cache Path:",
@@ -296,7 +351,7 @@ namespace Google.PackageManager {
                                       SettingsController.ShowInstallFiles);
 
             /// <summary>
-            /// Toggle Verbose Logging
+            /// Toggle Verbose Logging.
             /// </summary>
             SettingsController.VerboseLogging = EditorGUILayout.ToggleLeft(
                 "Enable Verbose Logging",
@@ -304,6 +359,9 @@ namespace Google.PackageManager {
 
         }
 
+        /// <summary>
+        /// Actual menu item for showing Settings.
+        /// </summary>
         [MenuItem("Assets/Play Services Resolver/Package Manager/Settings")]
         public static void ShowSettingsWindow() {
             var window = (SettingsManagerView)EditorWindow.GetWindow(
@@ -313,15 +371,16 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Plugin removal context view.
+    /// Plugin removal context view that implements logic allowing for context menu
+    /// option to remove a plugin based on a selected asset.
     /// </summary>
     public static class PluginRemovalContextView {
         static readonly List<string> selectionLabels = new List<string>();
 
         /// <summary>
-        /// Validates the do something.
+        /// Validates the menu context for RemovePlugin based on selected asset.
         /// </summary>
-        /// <returns><c>true</c>, if do something was validated, <c>false</c> otherwise.</returns>
+        /// <returns><c>true</c>, if selected asset validated, <c>false</c> otherwise.</returns>
         [MenuItem("Assets/Remove Associated Plugin", true)]
         static bool ValidateRemovePlugin() {
             selectionLabels.Clear();
@@ -341,6 +400,9 @@ namespace Google.PackageManager {
             return gpmAssetLabelFound;
         }
 
+        /// <summary>
+        /// Actual menu item that allows user to remove a plugin based on a selected asset.
+        /// </summary>
         [MenuItem("Assets/Remove Associated Plugin")]
         public static void RemovePlugin() {
             var candidateRemovals = new List<string>(selectionLabels);
@@ -362,6 +424,7 @@ namespace Google.PackageManager {
         public List<string> candidateRemovals = new List<string>();
 
         void OnGUI() {
+            // TODO: b/34930539
             foreach (var cr in candidateRemovals) {
                 EditorGUILayout.ToggleLeft(cr, true);
             }

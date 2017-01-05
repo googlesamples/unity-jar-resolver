@@ -200,9 +200,7 @@ namespace Google.PackageManager.Tests {
             UnityController.editorPrefs.SetString(Constants.KEY_REGISTRIES,
                                                   rb.SerializeToXMLString());
 
-            var u = new Uri(Path.GetFullPath(Path.Combine(TestData.PATH,
-                                                          "registry2/registry.xml")));
-            var xml = File.ReadAllText(u.AbsolutePath);
+            var u = new Uri(Path.GetFullPath(Path.Combine(TestData.PATH,"registry2/registry.xml")));
             mockFetcher.AddResponse(u.AbsoluteUri,
                                     File.ReadAllText(u.AbsolutePath),
                                     ResponseCode.FETCH_COMPLETE);
@@ -248,6 +246,10 @@ namespace Google.PackageManager.Tests {
             Assert.AreEqual(ResponseCode.REGISTRY_ALREADY_PRESENT,
                            RegistryManagerController.AddRegistry(u));
 
+            // loading the database again should still be in same state
+            RegistryManagerController.LoadRegistryDatabase();
+            Assert.AreEqual(2,RegistryManagerController.AllWrappedRegistries.Count);
+
             Assert.AreEqual(ResponseCode.REGISTRY_REMOVED,
                             RegistryManagerController.RemoveRegistry(u));
 
@@ -258,7 +260,8 @@ namespace Google.PackageManager.Tests {
 
         [Test]
         public void TestPluginManagerController() {
-            Assert.AreEqual(1, RegistryManagerController.AllWrappedRegistries.Count);
+            RegistryManagerController.LoadRegistryDatabase();
+            Assert.AreEqual(1,RegistryManagerController.AllWrappedRegistries.Count);
             RegistryWrapper r = RegistryManagerController.AllWrappedRegistries[0];
 
             var u = new Uri(Path.GetFullPath(Path.Combine(

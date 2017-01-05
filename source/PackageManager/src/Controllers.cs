@@ -301,7 +301,7 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// URI fetcher. TODO(krispy): investigate using external fetch through compiled python lib
+    /// URI fetcher. b/34930031 investigate using external fetch through compiled python lib
     /// </summary>
     public class UriFetcher : IUriDataFetcher {
         byte[] bytesResult;
@@ -344,7 +344,7 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Intermediator URI data fetch controller. Public for testing.
+    /// Intermediator URI data fetch controller.
     /// </summary>
     public static class UriDataFetchController {
         public static IUriDataFetcher uriFetcher = new UriFetcher();
@@ -373,7 +373,9 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Registry wrapper for convenience.
+    /// Registry wrapper pairs Uri of registry with Registry object. This allows
+    /// for a cleaner separation of model and logic. This makes it easier to key
+    /// a specific Registry model object on its registered Uri.
     /// </summary>
     public class RegistryWrapper {
         /// <summary>
@@ -434,7 +436,8 @@ namespace Google.PackageManager {
         }
 
         /// <summary>
-        /// Loads the registry database.
+        /// Inflates the registry database from Unity editor preferences key.
+        /// Force reloading causes a new object instance to be created.
         /// </summary>
         /// <param name="forceReload">If set to <c>true</c> force reload.</param>
         public static void LoadRegistryDatabase(bool forceReload = false) {
@@ -466,7 +469,8 @@ namespace Google.PackageManager {
         }
 
         /// <summary>
-        /// Creates the registry database.
+        /// Creates a new registry database instance with a default registry.
+        /// Will indirectly destroy existing registry database held in memory.
         /// </summary>
         static void CreateRegistryDatabase() {
             regDb = new RegistryDatabase();
@@ -475,14 +479,16 @@ namespace Google.PackageManager {
         }
 
         /// <summary>
-        /// Refreshs the registry cache.
+        /// Refreshs the registry cache for the provided RegistryWrapper.
         /// </summary>
+        /// <param name="wrapper">Wrapper.</param>
         public static void RefreshRegistryCache(RegistryWrapper wrapper = null) {
             var regLocs = new List<string>(regDb.registryLocation);
             if (wrapper != null) {
                 regLocs.Clear();
                 regLocs.Add(wrapper.Location.AbsoluteUri);
             }
+
             foreach (var regUri in regLocs) {
                 var uri = new Uri(regUri);
                 string xmlData;
@@ -533,10 +539,8 @@ namespace Google.PackageManager {
 
             try {
                 var reg = Registry.LoadFromString(xmlData);
-
                 regDb.registryLocation.Add(uri.AbsoluteUri);
                 SaveRegistryDatabase();
-
                 regDb.wrapperCache[uri] = new RegistryWrapper { Location = uri, Model = reg };
                 var xml = regDb.SerializeToXMLString();
                 UnityController.editorPrefs.SetString(Constants.KEY_REGISTRIES, xml);
@@ -680,24 +684,30 @@ namespace Google.PackageManager {
         }
 
         /// <summary>
-        /// Gets the plugin for versionless key.
+        /// Uses the versionless key to lookup and return a packaged plugin. If
+        /// no matching packaged plugin exists then returns null. The format of
+        /// the versionless key is "plugin-groupId:plugin-artifactId".
         /// </summary>
         /// <returns>The plugin for versionless key.</returns>
         /// <param name="versionlessKey">Versionless plugin key.</param>
         public static PackagedPlugin GetPluginForVersionlessKey(string versionlessKey) {
             PackagedPlugin plugin = null;
-            versionlessPluginMap.TryGetValue(versionlessKey, out plugin);
+            versionlessPluginMap.TryGetValue(versionlessKey,out plugin);
             return plugin;
         }
 
         /// <summary>
-        /// Gets the list of all plugins.
+        /// Gets the list of all plugins across all registered registries. If
+        /// refresh is true then the plugin data returned is gaurenteed to be
+        /// up to date since each plugin source data is fetched prior to this
+        /// method returning.
         /// </summary>
         /// <returns>The list of all plugins.</returns>
-        public static List<PackagedPlugin> GetListOfAllPlugins() {
+        /// <param name="refresh">If set to <c>true</c> refresh.</param>
+        public static List<PackagedPlugin> GetListOfAllPlugins(bool refresh=false) {
             var result = new List<PackagedPlugin>();
             foreach (var wr in RegistryManagerController.AllWrappedRegistries) {
-                result.AddRange(GetPluginsForRegistry(wr));
+                result.AddRange(GetPluginsForRegistry(wr,refresh));
             }
             LoggingController.Log(
                 string.Format("GetListOfAllPlugins: map plugin count {0}",
@@ -717,7 +727,7 @@ namespace Google.PackageManager {
             if (regWrapper == null) {
                 return pluginList;
             }
-            if (!refresh) { // just return what ever is known currently
+            if (!refresh) { // Just return what ever is known currently.
                 if (pluginCache.TryGetValue(regWrapper, out pluginList)) {
                     // data available
                     return pluginList;
@@ -788,12 +798,7 @@ namespace Google.PackageManager {
         /// </summary>
         /// <param name="plugin">Plugin.</param>
         static void AddOrUpdateVersionlessPluginMap(PackagedPlugin plugin) {
-            var v = CreateVersionlessKey(plugin);
-            if (versionlessPluginMap.ContainsKey(v)) {
-                versionlessPluginMap[v] = plugin;
-            } else {
-                versionlessPluginMap.Add(v, plugin);
-            }
+            versionlessPluginMap[CreateVersionlessKey(plugin)] = plugin;
         }
 
         /// <summary>
@@ -801,11 +806,7 @@ namespace Google.PackageManager {
         /// </summary>
         /// <param name="plugin">Plugin.</param>
         static void AddOrUpdatePluginMap(PackagedPlugin plugin) {
-            if (pluginMap.ContainsKey(plugin.MetaData.UniqueKey)) {
-                pluginMap[plugin.MetaData.UniqueKey] = plugin;
-            } else {
-                pluginMap.Add(plugin.MetaData.UniqueKey, plugin);
-            }
+            pluginMap[plugin.MetaData.UniqueKey] = plugin;
         }
 
         /// <summary>
@@ -1028,7 +1029,7 @@ namespace Google.PackageManager {
 
     /// <summary>
     /// Project manager controller handles actions related to a project like installing, removing
-    /// and updating plugins.
+    /// plugins.
     /// </summary>
     public static class ProjectManagerController {
         static readonly HashSet<string> allProjectAssetLabels = new HashSet<string>();
