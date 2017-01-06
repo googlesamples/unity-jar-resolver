@@ -22,6 +22,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEngine;
@@ -207,6 +208,11 @@ public static class IOSResolver {
 
     // Version of the Cocoapods installation.
     private static string podsVersion = "";
+
+    // Default iOS target SDK if the selected version is invalid.
+    private const int DEFAULT_TARGET_SDK = 82;
+    // Valid iOS target SDK version.
+    private static Regex TARGET_SDK_REGEX = new Regex("^[0-9]+\\.[0-9]$");
 
     // Search for a file up to a maximum search depth stopping the
     // depth first search each time the specified file is found.
@@ -533,9 +539,27 @@ public static class IOSResolver {
     /// </summary>
     static string TargetSdk {
         get {
-            string name = Enum.GetName(
-                typeof(iOSTargetOSVersion),
-                UnityEditor.PlayerSettings.iOS.targetOSVersion);
+            string name = null;
+            var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
+            // Read the version (Unity 5.5 and above).
+            var osVersionProperty = iosSettingsType.GetProperty(
+                   "targetOSVersionString");
+            if (osVersionProperty != null) {
+                name = (string)osVersionProperty.GetValue(null, null);
+            }
+            if (name == null) {
+                // Read the version (deprecated in Unity 5.5).
+                osVersionProperty = iosSettingsType.GetProperty(
+                   "targetOSVersion");
+                if (osVersionProperty != null) {
+                    var osVersionValue =
+                        osVersionProperty.GetValue(null, null);
+                    if (osVersionValue != null) {
+                        name = Enum.GetName(osVersionValue.GetType(),
+                                            osVersionValue);
+                    }
+                }
+            }
             if (name == null) {
                 // Versions 8.2 and above do not have enum symbols
                 // The values in Unity 5.4.1f1:
@@ -546,16 +570,27 @@ public static class IOSResolver {
                 // 9.1 == 40
                 // Since these are undocumented just report
                 // 8.2 as selected for the moment.
-                return "82";
+                return TargetSdkVersionToString(DEFAULT_TARGET_SDK);
             }
-            return name.Replace("iOS_", "").Replace("_", ".");
+            return name.Trim().Replace("iOS_", "").Replace("_", ".");
         }
 
         set {
-            var targetOSVersion = (iOSTargetOSVersion)System.Enum.Parse(
-                typeof(iOSTargetOSVersion),
-                "iOS_" + value.Replace(".", "_"));
-            UnityEditor.PlayerSettings.iOS.targetOSVersion = targetOSVersion;
+            var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
+            // Write the version (Unity 5.5 and above).
+            var osVersionProperty =
+                iosSettingsType.GetProperty("targetOSVersionString");
+            if (osVersionProperty != null) {
+                osVersionProperty.SetValue(null, value, null);
+            } else {
+                osVersionProperty =
+                    iosSettingsType.GetProperty("targetOSVersion");
+                osVersionProperty.SetValue(
+                    null,
+                    Enum.Parse(osVersionProperty.PropertyType,
+                               "iOS_" + value.Replace(".", "_")),
+                    null);
+            }
         }
     }
 
@@ -574,7 +609,23 @@ public static class IOSResolver {
     /// </summary>
     /// <returns>Integer representation of the SDK.</returns>
     internal static int TargetSdkStringToVersion(string targetSdk) {
-        return Convert.ToInt32(targetSdk.Replace(".", ""));
+        if (TARGET_SDK_REGEX.IsMatch(targetSdk)) {
+            try {
+                return Convert.ToInt32(targetSdk.Replace(".", ""));
+            } catch (FormatException) {
+                // Conversion failed, drop through.
+            }
+        }
+        Log(String.Format(
+            "Invalid iOS target SDK version configured \"{0}\".\n" +
+            "\n" +
+            "Please change this to a valid SDK version (e.g {1}) in:\n" +
+            "  Player Settings -> Other Settings --> " +
+            "Target Minimum iOS Version\n",
+            targetSdk, TargetSdkVersionToString(DEFAULT_TARGET_SDK)),
+            level: LogLevel.Warning);
+        return DEFAULT_TARGET_SDK;
+
     }
 
     /// <summary>
