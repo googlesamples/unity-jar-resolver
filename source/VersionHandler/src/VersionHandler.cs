@@ -401,15 +401,23 @@ public class VersionHandler : AssetPostprocessor {
                     return false;
                 }
             }
-            string error = AssetDatabase.RenameAsset(
-                filename, filenameComponents.basenameNoExtension);
-            if (!String.IsNullOrEmpty(error)) {
-                UnityEngine.Debug.LogError(
-                    "Failed to rename asset " + filename + " to " +
-                    newFilename + " (" + error + ")");
-                return false;
+            try {
+              string error = AssetDatabase.RenameAsset(
+                  filename, filenameComponents.basenameNoExtension);
+              if (!String.IsNullOrEmpty(error)) {
+                  UnityEngine.Debug.LogError(
+                      "Failed to rename asset " + filename + " to " +
+                      newFilename + " (" + error + ")");
+                  return false;
+              }
+              AssetDatabase.ImportAsset(newFilename);
+            } catch (Exception) {
+                // Unity 5.3 and below can end up throw all sorts of
+                // exceptions here when attempting to reload renamed
+                // assemblies.  Since these are completely harmless as
+                // everything will be reloaded and exceptions will be
+                // reported upon AssetDatabase.Refresh(), ignore them.
             }
-            AssetDatabase.ImportAsset(newFilename);
             filename = newFilename;
             UpdateAssetLabels();
             return true;
