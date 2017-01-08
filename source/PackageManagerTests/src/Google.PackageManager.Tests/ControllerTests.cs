@@ -175,7 +175,7 @@ namespace Google.PackageManager.Tests {
     }
 
     /// <summary>
-    /// Package manager controller tests.
+    /// Test case set that excercises the PackageManagerController.
     /// </summary>
     [TestFixture]
     public class ControllerTests {
@@ -197,7 +197,7 @@ namespace Google.PackageManager.Tests {
                                     ResponseCode.FETCH_COMPLETE);
             var rb = new RegistryManagerController.RegistryDatabase();
             rb.registryLocation.Add(TestableConstants.DefaultRegistryLocation);
-            UnityController.editorPrefs.SetString(Constants.KEY_REGISTRIES,
+            UnityController.EditorPrefs.SetString(Constants.KEY_REGISTRIES,
                                                   rb.SerializeToXMLString());
 
             var u = new Uri(Path.GetFullPath(Path.Combine(TestData.PATH,"registry2/registry.xml")));
@@ -206,8 +206,23 @@ namespace Google.PackageManager.Tests {
                                     ResponseCode.FETCH_COMPLETE);
 
             UriDataFetchController.SwapUriDataFetcher(mockFetcher);
+            UnityController.SwapEditorPrefs(TestData.editorPrefs);
+
+            var rdb = new RegistryManagerController.RegistryDatabase();
+            rdb.registryLocation.Add(TestableConstants.DefaultRegistryLocation);
+            /// <summary>
+            /// ISO 8601 format: yyyy-MM-ddTHH:mm:ssZ
+            /// </summary>
+            rdb.lastUpdate = DateTime.UtcNow.ToString("o"); // "o" = ISO 8601 formatting
+            Console.Write(rdb.SerializeToXMLString());
+            TestData.editorPrefs.SetString(Constants.KEY_REGISTRIES, rdb.SerializeToXMLString());
+
         }
 
+        /// <summary>
+        /// Tests the settings controller by toggleing the boolean settings and
+        /// ensuring the DownloadCache location is set by default.
+        /// </summary>
         [Test]
         public void TestSettingsController() {
             // DowloadCachePath should start with a value (system dependent).

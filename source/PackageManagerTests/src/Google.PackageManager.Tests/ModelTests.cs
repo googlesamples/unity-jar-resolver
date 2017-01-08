@@ -17,10 +17,8 @@ namespace Google.PackageManager.Tests {
     using System.IO;
     using PackageManager;
     using NUnit.Framework;
+    using System;
 
-    /// <summary>
-    /// Package manager model tests.
-    /// </summary>
     [TestFixture]
     public class PackageManagerModelTests {
         // Path to test data, contains a mock registry and settings config.
@@ -64,6 +62,43 @@ namespace Google.PackageManager.Tests {
             Assert.NotNull(description.languages);
             Assert.AreEqual(1,description.languages.Count);
         }
-        // TODO(krispy): add test cases - serialization, model differences
+
+        [Test]
+        public void TestPackageDependencies() {
+            var pd = new PackageDependencies();
+            pd.groupId = "my.group.id";
+            pd.artifactId = "my-artifact-id";
+
+            var dep = new AndroidPackageDependency();
+            dep.group = "com.google.android.gms";
+            dep.artifact = "play-services-ads";
+            dep.version = "LATEST";
+
+            var arg = new DependencyArgument();
+            arg.packageIds.Add("extra-google-m2repository");
+            arg.packageIds.Add("extra-google-m2repository");
+            arg.repositories.Add("some-repository");
+
+            dep.args = arg;
+            pd.androidDependencies.Add(dep);
+
+            var xml = pd.SerializeToXMLString();
+            // these can come back out of order on inflate - so we remove them
+            xml = xml.Replace("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"","");
+            xml = xml.Replace("xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"","");
+            Console.WriteLine("Actual: "+xml+"\n\n");
+            xml = xml.Substring(1); // strip BOM for test
+            var expectedXml = File.ReadAllText(
+                Path.Combine(
+                    Path.Combine(
+                        Path.GetFullPath(TestData.PATH),
+                        "flatdeps"),
+                    "group.id.example-artifact.gpm.deps.xml"));
+            // these can come back out of order on inflate - so we remove them
+            expectedXml = expectedXml.Replace("xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"","");
+            expectedXml = expectedXml.Replace("xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"","");
+            Console.WriteLine("Expected: " + xml + "\n\n");
+            Assert.AreEqual(expectedXml,xml);
+        }
     }
 }

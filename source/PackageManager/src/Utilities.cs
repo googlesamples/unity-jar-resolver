@@ -15,8 +15,10 @@
 // </copyright>
 namespace Google.PackageManager {
     using System;
+    using System.Collections.Generic;
     using System.IO;
     using System.Linq;
+    using System.Reflection;
 
     /// <summary>
     /// A collection of useful utility methods.

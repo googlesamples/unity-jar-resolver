@@ -432,7 +432,7 @@ namespace GooglePlayServices
                 string msg = "Replace " + oldDep.Artifact + " version " +
                              oldDep.BestVersion + " with version " + newDep.BestVersion + "?";
                 return EditorUtility.DisplayDialog("Android Jar Dependencies",
-                    msg, "OK", "Keep");
+                    msg,"Replace","Keep");
             }
             return true;
         }

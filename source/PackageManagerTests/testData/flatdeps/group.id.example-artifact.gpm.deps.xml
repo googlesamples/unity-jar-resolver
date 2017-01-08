@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package-dependencies xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <groupId>my.group.id</groupId>
+  <artifactId>my-artifact-id</artifactId>
+  <android-dependencies>
+    <android-dependency>
+      <group>com.google.android.gms</group>
+      <artifact>play-services-ads</artifact>
+      <version>LATEST</version>
+      <args>
+        <android-packages>
+          <android-package>extra-google-m2repository</android-package>
+          <android-package>extra-google-m2repository</android-package>
+        </android-packages>
+        <repositories>
+          <repository>some-repository</repository>
+        </repositories>
+      </args>
+    </android-dependency>
+  </android-dependencies>
+  <ios-pod-dependencies />
+</package-dependencies>

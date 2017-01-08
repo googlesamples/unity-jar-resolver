@@ -33,7 +33,7 @@ namespace Google.PackageManager {
         [XmlElement("xmlModelVersion")]
         public string xmlModelVersion;
 
-        // TODO(krispy): add xmlModelVersion validation.
+        // TODO: b/34936401 add xmlModelVersion validation.
 
         /// <summary>
         /// Deserializes a model from a provided stream containing XML data for the model.
@@ -390,5 +390,12 @@ namespace Google.PackageManager {
         /// </summary>
         [XmlElement("ios-resolved")]
         public bool resolvedForIOS = false;
+
+        [XmlIgnore]
+        public string Name {
+            get {
+                return string.Format("{0}{1}{2}",groupId, Constants.STRING_KEY_BINDER, artifactId);
+            }
+        }
     }
 }

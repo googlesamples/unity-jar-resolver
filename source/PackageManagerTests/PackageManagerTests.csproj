@@ -56,11 +56,15 @@
      <None Include="testData\registry2\com.google.unity.example2\package-manifest.xml" />
      <None Include="testData\registry2\com.google.unity.example2\gpm-example2-plugin\4.3.2.1\description.xml" />
      <None Include="testData\registry2\com.google.unity.example2\gpm-example2-plugin\4.3.2.1\gpm-example2-plugin.unitypackage" />
+     <None Include="testData\flatdeps\group.id.example-artifact.gpm.deps.xml" />
    </ItemGroup>
    <ItemGroup>
      <ProjectReference Include="..\PackageManager\PackageManager.csproj">
        <Project>{8B0A2564-01ED-426B-AF33-33EED4A81828}</Project>
        <Name>PackageManager</Name>
      </ProjectReference>
+   </ItemGroup>
+   <ItemGroup>
+     <Folder Include="testData\flatdeps\" />
    </ItemGroup>
 </Project>

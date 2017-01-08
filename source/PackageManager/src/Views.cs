@@ -173,7 +173,6 @@ namespace Google.PackageManager {
         /// Called by Unity editor when the Window is created and becomes active.
         /// </summary>
         void OnEnable() {
-            LoggingController.Log("PluginManagerView:OnEnable called - refreshing plugins");
             plugins = PluginManagerController.GetListOfAllPlugins(true);
         }
 
@@ -185,10 +184,7 @@ namespace Google.PackageManager {
         /// Ensures that the plugin details are up to date for rendering UI elements.
         /// </summary>
         void RefreshPluginDataForWindow() {
-            LoggingController.Log("RefreshPluginDataForWindow()");
             plugins = PluginManagerController.GetListOfAllPlugins(true);
-            LoggingController.Log(
-                string.Format("RefreshPluginDataForWindow: plugin count = {0}", plugins.Count));
         }
 
         /// <summary>
@@ -198,12 +194,8 @@ namespace Google.PackageManager {
         /// </summary>
         void Update() {
             if (pluginDataDirty) {
-                LoggingController.Log("plugin data marked dirty - refreshing...");
                 pluginDataDirty = false;
                 RefreshPluginDataForWindow();
-                LoggingController.Log(
-                    string.Format("plugin data marked dirty - refreshed and sees {0} plugins",
-                        plugins.Count));
             }
 
             while (installPlugins.Count > 0) {
@@ -213,7 +205,7 @@ namespace Google.PackageManager {
                     EditorUtility.DisplayDialog("Plugin Install Error",
                         "There was a problem installing the selected plugin.",
                         "Ok");
-                    LoggingController.Log(
+                    LoggingController.LogError(
                         string.Format("Could not install plugin with key {0}." +
                                       "Got {1} response code.", pluginKey, rc));
                 } else {
@@ -240,7 +232,7 @@ namespace Google.PackageManager {
                     EditorUtility.DisplayDialog("Plugin Uninstall Error",
                         "There was a problem removing the selected plugin.",
                         "Ok");
-                    LoggingController.Log(
+                    LoggingController.LogError(
                         string.Format("Could not uninstall plugin with key {0}." +
                             "Got {1} response code.", pluginKey, rc));
                 } else {

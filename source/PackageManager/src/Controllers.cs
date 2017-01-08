@@ -1,4 +1,4 @@
-﻿// <copyright file="Controllers.cs" company="Google Inc.">
+// <copyright file="Controllers.cs" company="Google Inc.">
 // Copyright (C) 2016 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,6 +29,10 @@ namespace Google.PackageManager {
     /// </summary>
     public static class LoggingController {
         public static bool testing = false;
+        /// <summary>
+        /// Log the specified msg to the context appropriate console.
+        /// </summary>
+        /// <param name="msg">Message to write to console.</param>
         public static void Log(string msg) {
             if (!testing) {
                 if (SettingsController.VerboseLogging) {
@@ -38,6 +42,10 @@ namespace Google.PackageManager {
                 Console.WriteLine(msg);
             }
         }
+        /// <summary>
+        /// Logs the warning to the context appropriate console.
+        /// </summary>
+        /// <param name="msg">Message to write as a warning to console.</param>
         public static void LogWarning(string msg) {
             if (!testing) {
                 if (SettingsController.VerboseLogging) {
@@ -47,6 +55,10 @@ namespace Google.PackageManager {
                 Console.WriteLine(msg);
             }
         }
+        /// <summary>
+        /// Logs the error to the context appropriate console
+        /// </summary>
+        /// <param name="msg">Message to write as an error to the console.</param>
         public static void LogError(string msg) {
             if (!testing) {
                 Debug.LogError(msg);
@@ -57,7 +69,7 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Unity editor prefs abstraction.
+    /// Unity editor prefs abstraction. Mirrors partial API of Unity EditorPrefs.
     /// </summary>
     public interface IEditorPrefs {
         void DeleteAll();
@@ -74,9 +86,27 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
+    /// Unity environment data abstraction interface to allow decoupling and
+    /// module isolation.
+    /// </summary>
+    public interface IUnityEnvironmentData {
+        string GetApplicationDataPath();
+    }
+
+    /// <summary>
+    /// Unity environment data implementation used as default implementation.
+    /// </summary>
+    public class UnityEnvironmentData : IUnityEnvironmentData {
+        public string GetApplicationDataPath() {
+            return Application.dataPath;
+        }
+    }
+
+    /// <summary>
     /// Unity editor prefs implementation. The reason this exists is to allow for
     /// the separation of UnityEditor calls from the controllers. Used to support
-    /// testing and enforce cleaner separations.
+    /// testing and enforce cleaner separations. Mirrors partial API of Unity
+    /// EditorPrefs class.
     /// </summary>
     public class UnityEditorPrefs : IEditorPrefs {
         public void DeleteAll() {
@@ -129,16 +159,27 @@ namespace Google.PackageManager {
     /// This is useful during testing as it allows separation of concerns.
     /// </summary>
     public static class UnityController {
-        public static IEditorPrefs editorPrefs { get; private set; }
+        public static IEditorPrefs EditorPrefs { get; private set; }
+        public static IUnityEnvironmentData EnvironmentData { get; private set; }
         static UnityController() {
-            editorPrefs = new UnityEditorPrefs();
+            EditorPrefs = new UnityEditorPrefs();
+            EnvironmentData = new UnityEnvironmentData();
         }
+
+        /// <summary>
+        /// Swaps the environment data.
+        /// </summary>
+        /// <param name="newEnvData">New env data.</param>
+        public static void SwapEnvironmentData(IUnityEnvironmentData newEnvData) {
+            EnvironmentData = newEnvData;
+        }
+
         /// <summary>
         /// Swaps the editor prefs. Exposed for testing.
         /// </summary>
         /// <param name="newEditorPrefs">New editor prefs.</param>
         public static void SwapEditorPrefs(IEditorPrefs newEditorPrefs) {
-            editorPrefs = newEditorPrefs;
+            EditorPrefs = newEditorPrefs;
         }
     }
 
@@ -151,12 +192,12 @@ namespace Google.PackageManager {
         /// </summary>
         public static string DownloadCachePath {
             get {
-                return UnityController.editorPrefs.GetString(Constants.KEY_DOWNLOAD_CACHE,
+                return UnityController.EditorPrefs.GetString(Constants.KEY_DOWNLOAD_CACHE,
                                              GetDefaultDownloadPath());
             }
             set {
                 if (Directory.Exists(value)) {
-                    UnityController.editorPrefs.SetString(Constants.KEY_DOWNLOAD_CACHE, value);
+                    UnityController.EditorPrefs.SetString(Constants.KEY_DOWNLOAD_CACHE, value);
                 } else {
                     throw new Exception("Download Cache location does not exist: " +
                                         value);
@@ -164,29 +205,29 @@ namespace Google.PackageManager {
             }
         }
         /// <summary>
-        /// The verbose logging. TODO(krispy): make visible in UI.
+        /// Verbose logging propery flag.
         /// </summary>
         public static bool VerboseLogging {
             get {
-                return UnityController.editorPrefs.GetBool(
+                return UnityController.EditorPrefs.GetBool(
                     Constants.VERBOSE_PACKAGE_MANANGER_LOGGING_KEY, true);
             }
             set {
-                UnityController.editorPrefs.SetBool(
+                UnityController.EditorPrefs.SetBool(
                     Constants.VERBOSE_PACKAGE_MANANGER_LOGGING_KEY, value);
             }
         }
         /// <summary>
         /// Determines if the user should be able to see the plugin package files
-        /// before installing a plugin. TODO(krispy): make visible in UI.
+        /// before installing a plugin.
         /// </summary>
         public static bool ShowInstallFiles {
             get {
-                return UnityController.editorPrefs.GetBool(Constants.SHOW_INSTALL_ASSETS_KEY,
+                return UnityController.EditorPrefs.GetBool(Constants.SHOW_INSTALL_ASSETS_KEY,
                                                            true);
             }
             set {
-                UnityController.editorPrefs.SetBool(Constants.SHOW_INSTALL_ASSETS_KEY, value);
+                UnityController.EditorPrefs.SetBool(Constants.SHOW_INSTALL_ASSETS_KEY, value);
             }
         }
 
@@ -307,6 +348,7 @@ namespace Google.PackageManager {
         byte[] bytesResult;
         string textResult;
         bool isForBytes = false;
+
         private ResponseCode DoBlockingFetch(Uri uri) {
             var www = new WWW(uri.AbsoluteUri);
             double startTime = EditorApplication.timeSinceStartup;
@@ -329,6 +371,14 @@ namespace Google.PackageManager {
             return ResponseCode.FETCH_COMPLETE;
         }
 
+        /// <summary>
+        /// Blocking fetch of URI where the expected result is returned as
+        /// byte information.
+        /// </summary>
+        /// <returns>A byte array.</returns>
+        /// <param name="uri">URI location to fetch from.</param>
+        /// <param name="result">Result is the container that holds the result
+        /// byte data.</param>
         public ResponseCode BlockingFetchAsBytes(Uri uri, out byte[] result) {
             isForBytes = true;
             ResponseCode rc = DoBlockingFetch(uri);
@@ -336,6 +386,14 @@ namespace Google.PackageManager {
             return rc;
         }
 
+        /// <summary>
+        /// Blocking fetch of URI where the expected result is returned as a
+        /// string.
+        /// </summary>
+        /// <returns>A string.</returns>
+        /// <param name="uri">URI location to fetch from.</param>
+        /// <param name="result">Result is the container that holds the result
+        /// string data.</param>
         public ResponseCode BlockingFetchAsString(Uri uri, out string result) {
             ResponseCode rc = DoBlockingFetch(uri);
             result = textResult;
@@ -348,6 +406,11 @@ namespace Google.PackageManager {
     /// </summary>
     public static class UriDataFetchController {
         public static IUriDataFetcher uriFetcher = new UriFetcher();
+        /// <summary>
+        /// Swaps the URI data fetcher with another instance. Used in testcases
+        /// to setup deterministic execution.
+        /// </summary>
+        /// <param name="newFetcher">New fetcher.</param>
         public static void SwapUriDataFetcher(IUriDataFetcher newFetcher) {
             uriFetcher = newFetcher;
         }
@@ -360,13 +423,25 @@ namespace Google.PackageManager {
     public static class TestableConstants {
         public static bool testcase = false;
         static string debugDefaultRegistryLocation = Constants.DEFAULT_REGISTRY_LOCATION;
+
+        /// <summary>
+        /// Gets or sets the default registry location. Is environment context aware.
+        /// </summary>
+        /// <value>The default registry location.</value>
         public static string DefaultRegistryLocation {
             get {
                 return debugDefaultRegistryLocation;
             }
+            /// <summary>
+            /// Sets the default registry location only if testing enabled.
+            /// </summary>
+            /// <param name="value">Value.</param>
             set {
                 if (testcase) {
                     debugDefaultRegistryLocation = value;
+                } else {
+                    LoggingController.LogError(
+                        "Attempted to set DefaultRegistryLocation outside of testcase.");
                 }
             }
         }
@@ -432,7 +507,7 @@ namespace Google.PackageManager {
             }
             regDb.lastUpdate = DateTime.UtcNow.ToString("o");
             var xml = regDb.SerializeToXMLString();
-            UnityController.editorPrefs.SetString(Constants.KEY_REGISTRIES, xml);
+            UnityController.EditorPrefs.SetString(Constants.KEY_REGISTRIES, xml);
         }
 
         /// <summary>
@@ -442,7 +517,7 @@ namespace Google.PackageManager {
         /// <param name="forceReload">If set to <c>true</c> force reload.</param>
         public static void LoadRegistryDatabase(bool forceReload = false) {
             var existingRegDB = regDb;
-            var regDbXml = UnityController.editorPrefs.GetString(Constants.KEY_REGISTRIES, null);
+            var regDbXml = UnityController.EditorPrefs.GetString(Constants.KEY_REGISTRIES, null);
             if ((regDbXml == null || regDbXml.Length == 0) && existingRegDB == null) {
                 CreateRegistryDatabase();
             } else {
@@ -543,7 +618,7 @@ namespace Google.PackageManager {
                 SaveRegistryDatabase();
                 regDb.wrapperCache[uri] = new RegistryWrapper { Location = uri, Model = reg };
                 var xml = regDb.SerializeToXMLString();
-                UnityController.editorPrefs.SetString(Constants.KEY_REGISTRIES, xml);
+                UnityController.EditorPrefs.SetString(Constants.KEY_REGISTRIES, xml);
             } catch (Exception e) {
                 LoggingController.LogError(
                     string.Format("EXCEPTION Adding Registry {0}: \n\n{1}", uri.AbsoluteUri, e));
@@ -577,7 +652,7 @@ namespace Google.PackageManager {
             regDb.registryLocation.Remove(uri.AbsoluteUri);
             SaveRegistryDatabase();
             var xml = regDb.SerializeToXMLString();
-            UnityController.editorPrefs.SetString(Constants.KEY_REGISTRIES, xml);
+            UnityController.EditorPrefs.SetString(Constants.KEY_REGISTRIES, xml);
             return ResponseCode.REGISTRY_REMOVED;
         }
 
@@ -614,7 +689,9 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Packaged plugin wrapper class for convenience.
+    /// Packaged plugin wrapper class that binds multiple models togeather. This
+    /// makes it easier to pass around a bundled representation of a packaged
+    /// plugin.
     /// </summary>
     public class PackagedPlugin {
         /// <summary>
@@ -692,7 +769,7 @@ namespace Google.PackageManager {
         /// <param name="versionlessKey">Versionless plugin key.</param>
         public static PackagedPlugin GetPluginForVersionlessKey(string versionlessKey) {
             PackagedPlugin plugin = null;
-            versionlessPluginMap.TryGetValue(versionlessKey,out plugin);
+            versionlessPluginMap.TryGetValue(versionlessKey, out plugin);
             return plugin;
         }
 
@@ -704,14 +781,11 @@ namespace Google.PackageManager {
         /// </summary>
         /// <returns>The list of all plugins.</returns>
         /// <param name="refresh">If set to <c>true</c> refresh.</param>
-        public static List<PackagedPlugin> GetListOfAllPlugins(bool refresh=false) {
+        public static List<PackagedPlugin> GetListOfAllPlugins(bool refresh = false) {
             var result = new List<PackagedPlugin>();
             foreach (var wr in RegistryManagerController.AllWrappedRegistries) {
-                result.AddRange(GetPluginsForRegistry(wr,refresh));
+                result.AddRange(GetPluginsForRegistry(wr, refresh));
             }
-            LoggingController.Log(
-                string.Format("GetListOfAllPlugins: map plugin count {0}",
-                              versionlessPluginMap.Values.Count));
             return result;
         }
 
@@ -742,7 +816,7 @@ namespace Google.PackageManager {
             // now there is no trace of plugins from the registry - time to rebuild data from source
             // the module locations are known once a registry is resolved
             foreach (var module in regWrapper.Model.modules.module) {
-                // is the loc a remote or local ?
+                // Is the module a remote or local?
                 Uri pluginModuleUri = ResolvePluginModuleUri(regWrapper, module);
                 PackagedPlugin plugin;
                 ResponseCode rc =
@@ -924,7 +998,7 @@ namespace Google.PackageManager {
         }
 
         /// <summary>
-        /// Generates the package binary filename.
+        /// Generates a package binary filename for the plugin.
         /// </summary>
         /// <returns>The binary filename.</returns>
         /// <param name="plugin">Plugin.</param>
@@ -994,6 +1068,7 @@ namespace Google.PackageManager {
     /// databaseProxy instance.
     /// </summary>
     public static class AssetDatabaseController {
+        public static bool ImportInitiatedFromController { get; private set; }
         static IUnityAssetDatabaseProxy databaseProxy = new UnityEngineAssetDatabaseProxy();
         public static void SwapDatabaseProxy(IUnityAssetDatabaseProxy newProxy) {
             databaseProxy = newProxy;
@@ -1014,6 +1089,7 @@ namespace Google.PackageManager {
             databaseProxy.SetLabels(path, labels);
         }
         public static void ImportPackage(string packagePath, bool interactive) {
+            ImportInitiatedFromController = true;
             databaseProxy.ImportPackage(packagePath, interactive);
         }
         public static bool DeleteAsset(string path) {
@@ -1025,14 +1101,391 @@ namespace Google.PackageManager {
         public static void Refresh() {
             databaseProxy.Refresh();
         }
+        public static void ClearImportFlag() {
+            ImportInitiatedFromController = false;
+        }
     }
 
     /// <summary>
     /// Project manager controller handles actions related to a project like installing, removing
     /// plugins.
     /// </summary>
+    [InitializeOnLoad]
     public static class ProjectManagerController {
         static readonly HashSet<string> allProjectAssetLabels = new HashSet<string>();
+        static ProjectPackages gpmPackagesInProject;
+        /// <summary>
+        /// The project dirty flag - set if new plugin package installed or target platform changed
+        /// </summary>
+        static bool projectDirty = false;
+        static BuildTarget currentBuildTarget;
+
+        static ProjectManagerController() {
+            gpmPackagesInProject = InflateProjectRecord(GetProjectRecordPath());
+            EditorApplication.update += Update;
+            currentBuildTarget = EditorUserBuildSettings.activeBuildTarget;
+            EnsurePluginsDirectory();
+        }
+
+        /// <summary>
+        /// Unity editor will call this method during the Unity editor update loop.
+        /// </summary>
+        static void Update() {
+            if (EditorUserBuildSettings.activeBuildTarget != currentBuildTarget) {
+                currentBuildTarget = EditorUserBuildSettings.activeBuildTarget;
+                EnsurePluginsDirectory();
+                projectDirty = true;
+            }
+
+            if (projectDirty) {
+                // check project for re-resolve on target if ditry
+                RefreshProject();
+            }
+        }
+
+        /// <summary>
+        /// Ensures the plugins directory exists, creates if missing.
+        /// </summary>
+        static void EnsurePluginsDirectory() {
+            if (!AssetDatabase.IsValidFolder("Assets/Plugins")) {
+                AssetDatabase.CreateFolder("Assets", "Plugins");
+            }
+            if (!AssetDatabase.IsValidFolder("Assets/Plugins/Android")) {
+                AssetDatabase.CreateFolder("Assets/Plugins", "Android");
+            }
+            if (!AssetDatabase.IsValidFolder("Assets/Plugins/IOS")) {
+                AssetDatabase.CreateFolder("Assets/Plugins", "IOS");
+            }
+
+            AssetDatabase.Refresh();
+        }
+
+        /// <summary>
+        /// Removes the client from the project
+        /// </summary>
+        /// <param name="clientName">Client name.</param>
+        static void RemoveClient(string clientName) {
+            LoggingController.Log(
+                string.Format("Removing Client for Key {0}", clientName));
+            List<ProjectClient> clients = GetAllClients();
+            if (clients == null) {
+                LoggingController.LogError(
+                string.Format("No Client for Key {0}", clientName));
+                return;
+            }
+            ProjectClient removeMe = null;
+            foreach (var client in clients) {
+                if (client.GenerateUniqueKey().StartsWith(clientName)) {
+                    removeMe = client;
+                    LoggingController.Log(
+                        string.Format("Found client object to remove {0}", removeMe));
+                }
+            }
+            if (removeMe != null) {
+                gpmPackagesInProject.clients.Remove(removeMe);
+                WriteProjectPackages();
+                LoggingController.Log(
+                        string.Format("Removed client object for {0}", clientName));
+            }
+        }
+
+        /// <summary>
+        /// Refreshs the client, resolves it's dependencies if needed.
+        /// </summary>
+        /// <param name="client">Client.</param>
+        static void RefreshClient(ProjectClient client) {
+            switch (currentBuildTarget) {
+            case BuildTarget.Android:
+                if (!client.resolvedForAndroid) { // Android deps have not been resolved
+                    EnsureAllAssetsLabeled(client.Name);
+                    PlayServicesSupport support = null;
+                    if (!PlayServicesSupport.instances.TryGetValue(client.Name, out support)) {
+                        support = PlayServicesSupport.CreateInstance(client.Name,
+                                               UnityController.EditorPrefs.GetString(
+                                                   Constants.ANDROID_SDK_ROOT_PREF_KEY),
+                                               Constants.PROJECT_SETTINGS_KEY);
+                    }
+                    foreach (var packageDep in client.clientDependencies.androidDependencies) {
+                        string[] packageIdsArray = null;
+                        if (packageDep.args != null && packageDep.args.packageIds != null) {
+                            packageIdsArray = new string[packageDep.args.packageIds.Count];
+                            packageDep.args.packageIds.CopyTo(packageIdsArray);
+                        }
+                        string[] repositories = null;
+                        if (packageDep.args != null && packageDep.args.repositories != null) {
+                            repositories = new string[packageDep.args.repositories.Count];
+                            packageDep.args.repositories.CopyTo(repositories);
+                        }
+                        support.DependOn(packageDep.group,
+                                         packageDep.artifact,
+                                         packageDep.version,
+                                         packageIdsArray,
+                                         repositories);
+                    }
+
+                    var dependencySet = support.ResolveDependencies(true);
+                    client.depNames.AddRange(dependencySet.Keys);
+                    WriteProjectPackages();
+                    EnsurePluginsDirectory();
+
+                    try {
+                        LoggingController.Log(
+                            string.Format("About to resolve for client: {0}", client.Name));
+                        GooglePlayServices.PlayServicesResolver.Resolver.DoResolution(support,
+                            "Assets/Plugins/Android",
+                            GooglePlayServices.PlayServicesResolver.HandleOverwriteConfirmation,
+                            () => {
+                                AssetDatabase.Refresh();
+                                LoggingController.Log(
+                                    string.Format("Android resolution complete for client: {0}",
+                                                  client.Name));
+                                client.resolvedForAndroid = true;
+                                WriteProjectPackages();
+                                // tag/label all dependency files additive tags if needed
+                                EnsureLabeledDependencies(client.Name);
+                            });
+                    } catch (Exception e) {
+                        LoggingController.LogError(
+                            string.Format("EXCEPTION during Android resolve dependencies: {0}\n{1}",
+                                          e, e.StackTrace));
+                    }
+                }
+                break;
+            case BuildTarget.iOS:
+                // TODO: b/34936552 implement for iOS POD deps
+                break;
+            default:
+                break;
+            }
+        }
+
+        /// <summary>
+        /// Ensures all assets belonging to a packaged plugin are labeled.
+        /// </summary>
+        /// <param name="clientName">Client name.</param>
+        static void EnsureAllAssetsLabeled(string clientName) {
+            var client = GetClientForKey(clientName);
+            if (client == null) {
+                return;
+            }
+            foreach (var assetPath in client.assets) {
+                var asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+                if (asset != null) {
+                    var existingLabels = AssetDatabase.GetLabels(asset);
+                    var labelSet = new HashSet<string>();
+                    labelSet.Add(Constants.GPM_LABEL_MARKER);
+                    labelSet.Add(string.Join(Constants.STRING_KEY_BINDER, new string[] {
+                            Constants.GPM_LABEL_MARKER,
+                            Constants.GPM_LABEL_CLIENT,
+                            clientName
+                        }));
+                    labelSet.Add(string.Join(Constants.STRING_KEY_BINDER, new string[] {
+                            Constants.GPM_LABEL_MARKER,
+                            Constants.GPM_LABEL_KEY,
+                            clientName,
+                            client.version
+                        }));
+                    labelSet.UnionWith(existingLabels);
+                    var labels = new string[labelSet.Count];
+                    labelSet.CopyTo(labels);
+                    AssetDatabase.SetLabels(
+                        asset,
+                        labels);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Ensures the dependency assets are labeled for the client.
+        /// </summary>
+        /// <param name="clientName">Client name.</param>
+        static void EnsureLabeledDependencies(string clientName) {
+            var client = GetClientForKey(clientName);
+            if (client == null) {
+                return;
+            }
+            foreach (var depName in client.depNames) {
+                switch (currentBuildTarget) {
+                case BuildTarget.Android:
+                    var name = depName.Substring(depName.IndexOf(':') + 1);
+                    var assets = AssetDatabase.FindAssets(name, new string[] {
+                        "Assets/Plugins/Android"});
+                    if (assets.Length > 0) {
+                        var asset = AssetDatabase.LoadMainAssetAtPath(
+                            AssetDatabase.GUIDToAssetPath(assets[0]));
+                        if (asset != null) {
+                            var existingLabels = AssetDatabase.GetLabels(asset);
+                            var labelSet = new HashSet<string>();
+                            labelSet.Add(Constants.GPM_LABEL_MARKER);
+                            labelSet.Add(string.Join(Constants.STRING_KEY_BINDER, new string[] {
+                            Constants.GPM_LABEL_MARKER,
+                            Constants.GPM_LABEL_CLIENT,
+                            clientName
+                        }));
+                            labelSet.UnionWith(existingLabels);
+                            var labels = new string[labelSet.Count];
+                            labelSet.CopyTo(labels);
+                            AssetDatabase.SetLabels(
+                                asset,
+                                labels);
+                        }
+                    }
+                    break;
+                case BuildTarget.iOS:
+                    LoggingController.LogError("IOS EnsureLabeledDependencies Not Implemented.");
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Refreshes the project by reading project file, checking each client package to see if
+        /// the current target platform has been resolved and if not then it resolves and updates
+        /// the list of assets associated with the client.
+        /// </summary>
+        static void RefreshProject() {
+            var clients = GetAllClients();
+            foreach (var client in clients) {
+                RefreshClient(client);
+            }
+        }
+
+        /// <summary>
+        /// Reloads the project packages from the xml file living above the Assets directory.
+        /// </summary>
+        static void ReloadProjectPackages() {
+            gpmPackagesInProject = InflateProjectRecord(GetProjectRecordPath());
+        }
+
+        /// <summary>
+        /// Writes the project packages to an xml file living above the Assets directory.
+        /// </summary>
+        static void WriteProjectPackages() {
+            if (gpmPackagesInProject != null) {
+                try {
+                    File.WriteAllText(GetProjectRecordPath(),
+                                      gpmPackagesInProject.SerializeToXMLString());
+                } catch (Exception e) {
+                    LoggingController.LogError(
+                        string.Format("Could not write project file due to exception - {0}", e));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets the client for client name or creates new one.
+        /// </summary>
+        /// <returns>The client for client name.</returns>
+        /// <param name="clientName">Client name (versionless plugin key).</param>
+        public static ProjectClient GetClientForKey(string clientName) {
+            LoggingController.Log(
+                string.Format("Getting Client for Key {0}", clientName));
+            List<ProjectClient> clients = GetAllClients();
+            if (clients == null) {
+                return null;
+            }
+            ProjectClient projectClient = null;
+            foreach (var client in clients) {
+                try {
+                    var v = client.GenerateUniqueKey();
+                    if (PluginManagerController
+                        .VersionedPluginKeyToVersionless(v).Equals(clientName)) {
+                        // client exists in project
+                        LoggingController.Log(
+                            string.Format("Discovered client {0} in project record.", clientName));
+                        projectClient = client;
+                    }
+                } catch {
+                    // an un-initialized client in set - skip
+                    continue;
+                }
+            }
+            if (projectClient == null) {
+                LoggingController.Log(
+                        string.Format("Initialized new client {0}. Call SaveClient to persist.",
+                                      clientName));
+                projectClient = new ProjectClient();
+                string[] keyComponents = clientName.Split(Constants.STRING_KEY_BINDER[0]);
+                projectClient.groupId = keyComponents[0];
+                projectClient.artifactId = keyComponents[1];
+                projectClient.version = Constants.VERSION_UNKNOWN;
+                gpmPackagesInProject.clients.Add(projectClient);
+            }
+            return projectClient;
+        }
+
+        /// <summary>
+        /// Gets all clients listed in the project.xml that lives above the Assets directory.
+        /// </summary>
+        /// <returns>The all clients.</returns>
+        public static List<ProjectClient> GetAllClients() {
+            if (gpmPackagesInProject == null) {
+                ReloadProjectPackages();
+                if (gpmPackagesInProject == null) {
+                    // no project to load
+                    return null;
+                }
+            }
+            return gpmPackagesInProject.clients;
+        }
+
+        /// <summary>
+        /// Removes the client record for key from the project.xml that lives above the Assets
+        /// directory as well as the in memory model object.
+        /// </summary>
+        /// <param name="clientName">Client name.</param>
+        public static void RemoveClientForKey(string clientName) {
+            var client = GetClientForKey(clientName);
+            if (client != null) {
+                gpmPackagesInProject.clients.Remove(client);
+                WriteProjectPackages();
+            }
+        }
+
+        /// <summary>
+        /// Saves the client the project.xml that lives above the Assets directory as well as the
+        /// in memory model object.
+        /// </summary>
+        /// <param name="clientName">Client name.</param>
+        public static void SaveClient(string clientName) {
+            var client = GetClientForKey(clientName);
+            if (client != null) {
+                WriteProjectPackages();
+            }
+        }
+
+        /// <summary>
+        /// Inflates the project record from an xml file at the path provided.
+        /// </summary>
+        /// <returns>The project record.</returns>
+        /// <param name="projectFile">Project file.</param>
+        static ProjectPackages InflateProjectRecord(string projectFile) {
+            ProjectPackages result = null;
+            if (File.Exists(projectFile)) {
+                try {
+                    result = ProjectPackages.LoadFromFile(projectFile);
+                } catch (Exception e) {
+                    LoggingController.LogError(string.Format("Exception loading project meta: {0}",
+                                                             e));
+                }
+            }
+            if (result == null) {
+                result = new ProjectPackages();
+                LoggingController.Log(
+                        string.Format("Project GPM data does not exist. Creating new object."));
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Gets the project record path that lives above the Assets directory.
+        /// </summary>
+        /// <returns>The project record path.</returns>
+        static string GetProjectRecordPath() {
+            return Path.Combine(Path.Combine(
+                UnityController.EnvironmentData.GetApplicationDataPath(), ".."),
+                Constants.PROJECT_RECORD_FILENAME);
+        }
 
         /// <summary>
         /// Refreshs the list of asset labels that are present in the current project.
@@ -1058,25 +1511,38 @@ namespace Google.PackageManager {
         /// otherwise.</returns>
         /// <param name="pluginKey">Plugin key.</param>
         public static bool IsPluginInstalledInProject(string pluginKey) {
-            LoggingController.Log(
-                string.Format("Called IsPluginInstalledInProject for key {0}", pluginKey));
-
-            RefreshListOfAssetLabels();
-
-            foreach (var label in allProjectAssetLabels) {
-                LoggingController.Log(
-                string.Format("Project Asset Label: {0}", label));
+            var versionlessKey = PluginManagerController.VersionedPluginKeyToVersionless(pluginKey);
+            var listOfClients = GetAllClients();
+            if (listOfClients == null) {
+                return false;
             }
+            foreach (var client in listOfClients) {
+                // Versionless comparison here
+                if (PluginManagerController
+                    .VersionedPluginKeyToVersionless(client.GenerateUniqueKey())
+                    .Equals(versionlessKey)) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
-            var stringKey = string.Join(Constants.STRING_KEY_BINDER, new string[] {
-                Constants.GPM_LABEL_MARKER,
-                Constants.GPM_LABEL_KEY,
-                pluginKey
-            });
-            var installed = allProjectAssetLabels.Contains(stringKey);
-            LoggingController.Log(
-                string.Format("IsPluginInstalledInProject? {0} = {1}", pluginKey, installed));
-            return installed;
+        /// <summary>
+        /// Checks if the specific plugin version is installed.
+        /// </summary>
+        /// <returns><c>true</c>, if plugin version in project, <c>false</c> otherwise.</returns>
+        /// <param name="pluginKey">Plugin key (includes version).</param>
+        public static bool IsPluginVersionInProject(string pluginKey) {
+            var listOfClients = GetAllClients();
+            if (listOfClients == null) {
+                return false;
+            }
+            foreach (var client in listOfClients) {
+                if (client.GenerateUniqueKey().Equals(pluginKey)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>
@@ -1094,6 +1560,10 @@ namespace Google.PackageManager {
                 LoggingController.Log("Plugin already installed!");
                 return ResponseCode.PLUGIN_ALREADY_INSTALLED;
             }
+
+            // non-version check
+            bool upgrade = IsPluginInstalledInProject(pluginKey);
+
             var versionlessKey = PluginManagerController.VersionedPluginKeyToVersionless(pluginKey);
             PackagedPlugin plugin =
                 PluginManagerController.GetPluginForVersionlessKey(versionlessKey);
@@ -1157,59 +1627,70 @@ namespace Google.PackageManager {
         /// <returns>The plugin.</returns>
         /// <param name="pluginKey">Plugin key.</param>
         public static ResponseCode UninstallPlugin(string pluginKey) {
-
             LoggingController.Log(
                 string.Format("Remove Plugin for key: {0}", pluginKey));
 
-            var versionlessPluginKey =
+            var clientName =
                 PluginManagerController
                     .VersionedPluginKeyToVersionless(pluginKey);
-            var plugin = PluginManagerController
-                .GetPluginForVersionlessKey(versionlessPluginKey);
 
-            // is the plugin in the project?
-            if (plugin == null) {
-                LoggingController.Log(
-                    string.Format("Plugin not found for versionless key: {0}",
-                              versionlessPluginKey));
+            // Get the client from the project.
+            var client = GetClientForKey(clientName);
+            if (client == null) {
                 return ResponseCode.PLUGIN_NOT_FOUND;
             }
 
-            PlayServicesSupport pluginClient = null;
-            LoggingController.Log(
-                string.Format("Total # of PlayServicesSupport clients: {0}",
-                              PlayServicesSupport.instances.Keys.Count));
-            foreach (var nameKey in PlayServicesSupport.instances.Keys) {
-                LoggingController.Log(
-                string.Format("Found PlayServicesSupport client name {0}",
-                              nameKey));
-                if (versionlessPluginKey.Equals(nameKey)) {
-                    pluginClient = PlayServicesSupport.instances[nameKey];
+            var assetPathsToDelete = new List<string>();
+            var clientSpecificLabels = new HashSet<string>();
+            clientSpecificLabels.Add(string.Join(Constants.STRING_KEY_BINDER, new string[] {
+                            Constants.GPM_LABEL_MARKER,
+                            Constants.GPM_LABEL_CLIENT,
+                            clientName
+                        }));
+            clientSpecificLabels.Add(string.Join(Constants.STRING_KEY_BINDER, new string[] {
+                            Constants.GPM_LABEL_MARKER,
+                            Constants.GPM_LABEL_KEY,
+                            clientName,
+                            client.version
+                        }));
+            // Check for co-ownership through labels of all assets and dependencies.
+            var allAssetPathsToCheck = new List<string>();
+            // All the non-plugins path assets (the ones that were actually imported).
+            allAssetPathsToCheck.AddRange(client.assets);
+
+            // This gets all the deps paths in Android plugins.
+            foreach (var depName in client.depNames) {
+                var name = depName.Substring(depName.IndexOf(':') + 1);
+                var assets = AssetDatabase.FindAssets(name, new string[] {
+                        "Assets/Plugins/Android"});
+                if (assets.Length > 0) {
+                    allAssetPathsToCheck.Add(AssetDatabase.GUIDToAssetPath(assets[0]));
                 }
             }
-            if (pluginClient == null) {
-                // If this case occurs it means that the plugin dependencies
-                // script for the selected plugin is not using the versionless
-                // plugin key as its client name.
-                LoggingController.Log(
-                    string.Format("Failed to find PlayServicesSupport client" +
-                                  " for the requested plugin {0}.",
-                                  versionlessPluginKey));
-                return ResponseCode.PLUGIN_NOT_REMOVED;
-            }
 
-            // what assets need to be removed?
-            // get all the dependences that this specific plugin has
-            var resolvedDependencies = pluginClient.ResolveDependencies(
-                true, "Assets/Plugins/Android");
-            var listOfVersionlessAssetNames = new List<string>();
-            // using for each because logging is important
-            foreach (var rDep in resolvedDependencies.Values) {
-                var artifact = rDep.Artifact;
-                LoggingController.Log(
-                    string.Format("Resolved dependency to remove: {0}",
-                                 artifact));
-                listOfVersionlessAssetNames.Add(artifact);
+            foreach (var assetPath in allAssetPathsToCheck) {
+                var asset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+                if (asset != null) {
+
+                    var existingAssetLabelSet = new HashSet<string>();
+                    existingAssetLabelSet.UnionWith(AssetDatabase.GetLabels(asset));
+
+                    var remaining = new HashSet<string>(existingAssetLabelSet);
+                    remaining.ExceptWith(clientSpecificLabels);
+
+                    if (remaining.Count == 1 && remaining.Contains(Constants.GPM_LABEL_MARKER)) {
+                        // no co-ownership - ok to delete
+                        assetPathsToDelete.Add(assetPath);
+                    } else if (remaining.Count > 1 &&
+                               remaining.Contains(Constants.GPM_LABEL_MARKER)) {
+                        // co-owned - remove client labels
+                        var labels = new string[remaining.Count];
+                        remaining.CopyTo(labels);
+                        AssetDatabase.SetLabels(
+                            asset,
+                            labels);
+                    }
+                }
             }
 
             // Suspend resolution.
@@ -1217,36 +1698,12 @@ namespace Google.PackageManager {
             VersionHandler.Enabled = false;
 
             try {
-                // Remove the assets
-                // Disable the Plugin PlayServicesResolver Client.
-                PlayServicesSupport.instances[versionlessPluginKey] = null;
+                PlayServicesSupport.instances[clientName] = null;
 
-                // Remove the labeled assets.
-                var allAssetsToRemove = new List<string>();
-                var pluginAssetLabel = plugin.MetaData.GenerateAssetLabel();
-                string[] pluginAssets = AssetDatabase.FindAssets(
-                    string.Format("l:{0}", pluginAssetLabel));
-                allAssetsToRemove.AddRange(pluginAssets);
-
-                // Remove the Plugins/Android assets.
-                string[] lookIn = { "Assets/Plugins/Android" };
-                foreach (var assetNamePrefix in listOfVersionlessAssetNames) {
-                    var assets = AssetDatabaseController.FindAssets(assetNamePrefix,
-                                                                    lookIn);
-                    allAssetsToRemove.AddRange(assets);
+                foreach (var assetPathToDelete in assetPathsToDelete) {
+                    AssetDatabase.DeleteAsset(assetPathToDelete);
                 }
-                LoggingController.Log(
-                    string.Format("Found {0} assets for label {1}.",
-                                  pluginAssets.Length,
-                                  pluginAssetLabel));
-
-                foreach (var assetGUID in allAssetsToRemove) {
-                    LoggingController.Log(
-                        string.Format("Removing asset {0} with label {1}",
-                                      assetGUID, pluginAssetLabel));
-                    var assetPath = AssetDatabaseController.GUIDToAssetPath(assetGUID);
-                    AssetDatabaseController.DeleteAsset(assetPath);
-                }
+                RemoveClient(clientName);
 
                 AssetDatabaseController.Refresh();
             } catch (Exception ex) {
@@ -1257,6 +1714,73 @@ namespace Google.PackageManager {
             }
 
             return ResponseCode.PLUGIN_REMOVED;
+        }
+
+        /// <summary>
+        /// Package postprocessor.
+        /// </summary>
+        public class PackagePostprocessor : AssetPostprocessor {
+            /// <summary>
+            /// This is called after importing of any number of assets is complete (when the Assets
+            /// progress bar has reached the end).
+            /// </summary>
+            static void OnPostprocessAllAssets(string[] importedAssets,
+                                               string[] deletedAssets,
+                                               string[] movedAssets,
+                                               string[] movedFromAssetPaths) {
+
+                bool wasTriggeredByPackageManager =
+                    AssetDatabaseController.ImportInitiatedFromController;
+
+                var depsModels = new List<PackageDependencies>();
+                // look for *gpm.dep.xml in importedAssets
+                // TODO: b/34936751 handle case of multiple gpm.dep.xml files found
+                foreach (string str in importedAssets) {
+                    if (str.EndsWith(Constants.GPM_DEPS_XML_POSTFIX)) {
+                        // this is the deps file - resolve fully
+                        var res = File.ReadAllText(Path.GetFullPath(str));
+                        try {
+                            depsModels.Add(PackageDependencies.LoadFromString(res));
+                        } catch (Exception e) {
+                            LoggingController.Log(string.Format("{0}: \n{1}", e, res));
+                        }
+                        LoggingController.Log(
+                            string.Format("OnPostprocessAllAssets: Dependencies xml: {0}", res));
+                    }
+                }
+                foreach (var depsModel in depsModels) {
+                    ProcessDepModel(depsModel, importedAssets);
+                }
+
+                foreach (var deleted in deletedAssets) {
+                    LoggingController.Log(string.Format("Observed deletion of: {0}", deleted));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Processes the dependency model with the assets being imported.
+        /// </summary>
+        /// <param name="depsModel">Deps model.</param>
+        /// <param name="importedAssets">Imported assets.</param>
+        static void ProcessDepModel(PackageDependencies depsModel, string[] importedAssets) {
+            string clientName = string.Format("{0}:{1}", depsModel.groupId, depsModel.artifactId);
+            LoggingController.Log("Dependencies Client: " + clientName);
+            var projectClient = GetClientForKey(clientName);
+            if (projectClient.version.Equals(Constants.VERSION_UNKNOWN)) {
+                // new packaged plugin install
+                projectClient.version = depsModel.version;
+            } else {
+                // new version being installed over an older version?
+                // TODO: b/34936656 version compare - make sure new version is newer or same
+                // - if newer then need to remove all old assets
+            }
+
+            projectClient.assets.AddRange(importedAssets);
+            projectClient.clientDependencies = depsModel;
+            SaveClient(clientName);
+            // mark project dirty
+            projectDirty = true;
         }
     }
 }
