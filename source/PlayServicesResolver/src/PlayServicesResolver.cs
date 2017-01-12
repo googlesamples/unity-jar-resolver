@@ -247,7 +247,7 @@ namespace GooglePlayServices
         private static void Resolve(System.Action resolutionComplete = null)
         {
             DeleteFiles(Resolver.OnBundleId(PlayerSettings.bundleIdentifier));
-            Resolver.DoResolution(svcSupport, "Assets/Plugins/Android",
+            Resolver.DoResolution(svcSupport, "Assets/Plugins/UnityJarResolver/Android",
                                   HandleOverwriteConfirmation,
                                   () => {
                                       AssetDatabase.Refresh();
