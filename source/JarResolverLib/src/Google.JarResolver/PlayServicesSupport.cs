@@ -102,7 +102,7 @@ namespace Google.JarResolver
         {
             get
             {
-                if (sdk == null)
+                if (string.IsNullOrEmpty(sdk))
                 {
                     sdk = System.Environment.GetEnvironmentVariable("ANDROID_HOME");
                 }
