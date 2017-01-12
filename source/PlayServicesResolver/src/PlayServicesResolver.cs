@@ -43,6 +43,11 @@ namespace GooglePlayServices
         private static IResolver _resolver;
 
         /// <summary>
+        /// Folder to copy the dependencies to
+        /// </summary>
+        private static string _destinationFolder = "Assets/Plugins/Android";
+
+        /// <summary>
         /// Flag used to prevent re-entrant auto-resolution.
         /// </summary>
         private static bool autoResolving = false;
@@ -139,6 +144,24 @@ namespace GooglePlayServices
             get
             {
                 return _resolver;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the destination path where the dependencies are
+        /// copied to. The default value is Assets/Plugins/Android
+        /// </summary>
+        /// <value>Destination path</value>
+        public static string DestinationFolder
+        {
+            get
+            {
+                return _destinationFolder;
+            }
+
+            set
+            {
+                _destinationFolder = value;
             }
         }
 
@@ -247,7 +270,7 @@ namespace GooglePlayServices
         private static void Resolve(System.Action resolutionComplete = null)
         {
             DeleteFiles(Resolver.OnBundleId(PlayerSettings.bundleIdentifier));
-            Resolver.DoResolution(svcSupport, "Assets/Plugins/Android",
+            Resolver.DoResolution(svcSupport, DestinationFolder,
                                   HandleOverwriteConfirmation,
                                   () => {
                                       AssetDatabase.Refresh();
