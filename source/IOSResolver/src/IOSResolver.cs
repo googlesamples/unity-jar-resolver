@@ -816,7 +816,8 @@ public static class IOSResolver {
                 "version 1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS + "\n\n" +
                 "'" + POD_EXECUTABLE + " --version' returned status: " +
                 result.exitCode.ToString() + "\n" +
-                "output: " + result.stdout, level: LogLevel.Error);
+                "output: " + result.stdout + "\n\n" +
+                result.stderr, level: LogLevel.Error);
             return;
         }
 
