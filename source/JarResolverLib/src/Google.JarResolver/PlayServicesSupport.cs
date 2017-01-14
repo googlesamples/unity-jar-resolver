@@ -102,11 +102,14 @@ namespace Google.JarResolver
         {
             get
             {
-                if (sdk == null)
-                {
+#if UNITY_EDITOR
+                if (String.IsNullOrEmpty(sdk)) {
+                    sdk = UnityEditor.EditorPrefs.GetString("AndroidSdkRoot");
+                }
+#endif  // UNITY_EDITOR
+                if (String.IsNullOrEmpty(sdk)) {
                     sdk = System.Environment.GetEnvironmentVariable("ANDROID_HOME");
                 }
-
                 return sdk;
             }
         }

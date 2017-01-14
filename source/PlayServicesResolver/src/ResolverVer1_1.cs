@@ -202,9 +202,20 @@ namespace GooglePlayServices
             }
             else
             {
-                toolPath = Path.Combine(
-                    sdkPath, Path.Combine(
-                        "tools", toolName + CommandLine.GetExecutableExtension()));
+                string[] extensions;
+                if (UnityEngine.RuntimePlatform.WindowsEditor ==
+                    UnityEngine.Application.platform) {
+                    extensions = new string[] { CommandLine.GetExecutableExtension(),
+                                                ".bat", ".cmd" };
+                } else {
+                    extensions = new string[] { CommandLine.GetExecutableExtension() };
+                }
+                foreach (var extension in extensions) {
+                  toolPath = Path.Combine(sdkPath, Path.Combine("tools", toolName + extension));
+                  if (File.Exists(toolPath)) {
+                      break;
+                  }
+                }
             }
             if (toolPath == null || !File.Exists(toolPath))
             {
