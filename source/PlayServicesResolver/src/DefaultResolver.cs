@@ -50,7 +50,7 @@ namespace GooglePlayServices
         /// <param name="flag">If set to <c>true</c> flag.</param>
         public virtual void SetAutomaticResolutionEnabled(bool flag)
         {
-            EditorPrefs.GetBool("GooglePlayServices.AutoResolverEnabled", flag);
+            SettingsDialog.EnableAutoResolution = flag;
         }
 
         /// <summary>
@@ -59,8 +59,7 @@ namespace GooglePlayServices
         /// <returns><c>true</c>, if resolution enabled was automaticed, <c>false</c> otherwise.</returns>
         public virtual bool AutomaticResolutionEnabled()
         {
-            return EditorPrefs.GetBool("GooglePlayServices.AutoResolverEnabled",
-                SupportsAarFiles);
+            return SettingsDialog.EnableAutoResolution;
         }
 
         /// <summary>
@@ -70,8 +69,7 @@ namespace GooglePlayServices
         /// </returns>
         public virtual bool AndroidPackageInstallationEnabled()
         {
-            return EditorPrefs.GetBool("GooglePlayServices.AndroidPackageInstallationEnabled",
-                                       true);
+            return SettingsDialog.InstallAndroidPackages;
         }
 
         /// <summary>
@@ -110,7 +108,7 @@ namespace GooglePlayServices
                 // look for deleted android plugins
                 foreach (string s in deletedAssets)
                 {
-                    if (s.StartsWith("Assets/Plugins/Android"))
+                    if (s.StartsWith(SettingsDialog.AndroidPluginsDir))
                     {
                         Debug.Log(s + " deleted, resolving play-services");
                         return true;
@@ -124,11 +122,16 @@ namespace GooglePlayServices
         /// <summary>
         /// Shows the settings dialog.
         /// </summary>
-        public virtual void ShowSettingsDialog()
-        {
+        public virtual void ShowSettingsDialog() { ShowSettings(); }
 
+        /// <summary>
+        /// Show the settings dialog.
+        /// This method is used when a Resolver isn't instanced.
+        /// </summary>
+        internal static void ShowSettings()
+        {
             SettingsDialog window = (SettingsDialog)EditorWindow.GetWindow(
-                typeof(SettingsDialog), true, "Play Services Resolver Settings");
+                typeof(SettingsDialog), true, "Android Resolver Settings");
             window.Initialize();
             window.Show();
         }
@@ -314,39 +317,44 @@ namespace GooglePlayServices
         internal virtual string ProcessAar(string dir, string aarFile)
         {
             string workingDir = Path.Combine(dir, Path.GetFileNameWithoutExtension(aarFile));
+            PlayServicesSupport.DeleteExistingFileOrDirectory(workingDir, includeMetaFiles: true);
             Directory.CreateDirectory(workingDir);
             if (!ExtractAar(aarFile, null, workingDir)) return workingDir;
 
-            // move the classes.jar file to libs.
+            // Create the libs directory to store the classes.jar and non-Java shared libraries.
             string libDir = Path.Combine(workingDir, "libs");
-            if (!Directory.Exists(libDir))
+            Directory.CreateDirectory(libDir);
+
+            // Move the classes.jar file to libs.
+            string classesFile = Path.Combine(workingDir, "classes.jar");
+            if (File.Exists(classesFile))
             {
-                Directory.CreateDirectory(libDir);
+                string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
+                if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
+                File.Move(classesFile, targetClassesFile);
             }
-            if (File.Exists(Path.Combine(libDir, "classes.jar")))
+
+            // Copy non-Java shared libraries (.so) files from the "jni" directory into the
+            // lib directory so that Unity's legacy (Ant-like) build system includes them in the
+            // built APK.
+            string jniLibDir = Path.Combine(workingDir, "jni");
+            if (Directory.Exists(jniLibDir))
             {
-                File.Delete(Path.Combine(libDir, "classes.jar"));
-            }
-            if (File.Exists(Path.Combine(workingDir, "classes.jar")))
-            {
-                File.Move(Path.Combine(workingDir, "classes.jar"),
-                          Path.Combine(libDir, "classes.jar"));
+                PlayServicesSupport.CopyDirectory(jniLibDir, libDir);
+                PlayServicesSupport.DeleteExistingFileOrDirectory(jniLibDir,
+                                                                  includeMetaFiles: true);
             }
 
             // Create the project.properties file which indicates to
             // Unity that this directory is a plugin.
-            if (!File.Exists(Path.Combine(workingDir, "project.properties")))
+            string projectProperties = Path.Combine(workingDir, "project.properties");
+            if (!File.Exists(projectProperties))
             {
-                // write out project.properties
-                string[] props =
-                    {
+                File.WriteAllLines(projectProperties, new [] {
                         "# Project target.",
                         "target=android-9",
                         "android.library=true"
-                    };
-
-                File.WriteAllLines(Path.Combine(workingDir, "project.properties"),
-                                   props);
+                    });
             }
 
             // Clean up the aar file.

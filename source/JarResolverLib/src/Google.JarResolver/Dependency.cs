@@ -32,6 +32,16 @@ namespace Google.JarResolver
     /// </summary>
     public class Dependency
     {
+        // TODO(wilkinsonclay): get the extension from the pom file.
+        internal static string[] Packaging = {
+            ".aar",
+            ".jar",
+            // This allows users to place an aar inside a Unity project and have Unity
+            // ignore the file as part of the build process, but still allow the Jar
+            // Resolver to process the AAR so it can be included in the build.
+            ".srcaar"
+        };
+
         /// <summary>
         /// The version comparator.  This comparator results in a descending sort
         /// order by version.
@@ -64,7 +74,13 @@ namespace Google.JarResolver
             PackageIds = packageIds;
             this.possibleVersions = new List<string>();
             Repositories = repositories;
+            CreatedBy = System.Environment.StackTrace;
         }
+
+        /// <summary>
+        /// Stack trace of the point where this was created.
+        /// </summary>
+        internal string CreatedBy { get; private set; }
 
         /// <summary>
         /// Gets the group ID
@@ -150,6 +166,25 @@ namespace Google.JarResolver
                 }
 
                 return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Get the path to the artifact.
+        /// </summary>
+        public string BestVersionArtifact
+        {
+            get
+            {
+                // TODO(wilkinsonclay): get the extension from the pom file.
+                string filenameWithoutExtension =
+                    Path.Combine(BestVersionPath, Artifact + "-" + BestVersion);
+                foreach (string extension in Packaging)
+                {
+                    string filename = filenameWithoutExtension + extension;
+                    if (File.Exists(filename)) return filename;
+                }
+                return null;
             }
         }
 

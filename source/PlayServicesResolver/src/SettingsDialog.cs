@@ -16,6 +16,7 @@
 
 namespace GooglePlayServices
 {
+    using System.IO;
     using UnityEditor;
     using UnityEngine;
 
@@ -24,9 +25,57 @@ namespace GooglePlayServices
     /// </summary>
     public class SettingsDialog : EditorWindow
     {
+        const string Namespace = "GooglePlayServices.";
+        internal const string AutoResolveKey = Namespace + "AutoResolverEnabled";
+        internal const string PackageInstallKey = Namespace + "AndroidPackageInstallationEnabled";
+        internal const string PackageDirKey = Namespace + "PackageDirectory";
+        internal const string ExplodeAarsKey = Namespace + "ExplodeAars";
 
-        bool mEnableAutoResolution;
-        bool mInstallAndroidPackages;
+        internal const string AndroidPluginsDir = "Assets/Plugins/Android";
+
+        // Unfortunately, Unity currently does not search recursively search subdirectories of
+        // AndroidPluginsDir for Android library plugins.  When this is supported - or we come up
+        // with a workaround - this can be enabled.
+        static bool ConfigurablePackageDir = false;
+        static string DefaultPackageDir = AndroidPluginsDir;
+
+        internal static bool EnableAutoResolution {
+            set { EditorPrefs.SetBool(AutoResolveKey, value); }
+            get { return EditorPrefs.GetBool(AutoResolveKey, true); }
+        }
+
+        internal static bool InstallAndroidPackages {
+            private set { EditorPrefs.SetBool(PackageInstallKey, value); }
+            get { return EditorPrefs.GetBool(PackageInstallKey, true); }
+        }
+
+        internal static string PackageDir {
+            private set { EditorPrefs.SetString(PackageDirKey, value); }
+            get {
+                return ConfigurablePackageDir ?
+                    ValidatePackageDir(EditorPrefs.GetString(PackageDirKey, DefaultPackageDir)) :
+                    DefaultPackageDir;
+            }
+        }
+
+        // Whether AARs that use variable expansion should be exploded when Gradle builds are
+        // enabled.
+        internal static bool ExplodeAars {
+            private set { EditorPrefs.SetBool(ExplodeAarsKey, value); }
+            get { return EditorPrefs.GetBool(ExplodeAarsKey, true); }
+        }
+
+        internal static string ValidatePackageDir(string directory) {
+            if (!directory.StartsWith(AndroidPluginsDir)) {
+                directory = AndroidPluginsDir;
+            }
+            return directory;
+        }
+
+        bool enableAutoResolution;
+        bool installAndroidPackages;
+        string packageDir;
+        bool explodeAars;
 
         public void Initialize()
         {
@@ -37,10 +86,10 @@ namespace GooglePlayServices
 
         public void OnEnable()
         {
-            mEnableAutoResolution =
-                EditorPrefs.GetBool("GooglePlayServices.AutoResolverEnabled", true);
-            mInstallAndroidPackages =
-                EditorPrefs.GetBool("GooglePlayServices.AndroidPackageInstallationEnabled", true);
+            enableAutoResolution = EnableAutoResolution;
+            installAndroidPackages = InstallAndroidPackages;
+            packageDir = PackageDir;
+            explodeAars = ExplodeAars;
         }
 
         /// <summary>
@@ -50,21 +99,67 @@ namespace GooglePlayServices
         {
             GUI.skin.label.wordWrap = true;
             GUILayout.BeginVertical();
-            GUILayout.Label("Enable Background resolution", EditorStyles.boldLabel);
-            mEnableAutoResolution = EditorGUILayout.Toggle(mEnableAutoResolution);
-            GUILayout.Label("Install Android packages", EditorStyles.boldLabel);
-            mInstallAndroidPackages = EditorGUILayout.Toggle(mInstallAndroidPackages);
-            GUILayout.Space(10);
-            if (GUILayout.Button("OK"))
-            {
-                EditorPrefs.SetBool(
-                    "GooglePlayServices.AutoResolverEnabled",
-                    mEnableAutoResolution);
-                EditorPrefs.SetBool(
-                    "GooglePlayServices.AndroidPackageInstallationEnabled",
-                    mInstallAndroidPackages);
-                Close();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Enable Background Resolution", EditorStyles.boldLabel);
+            enableAutoResolution = EditorGUILayout.Toggle(enableAutoResolution);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Install Android Packages", EditorStyles.boldLabel);
+            installAndroidPackages = EditorGUILayout.Toggle(installAndroidPackages);
+            GUILayout.EndHorizontal();
+
+            if (ConfigurablePackageDir) {
+                GUILayout.BeginHorizontal();
+                string previousPackageDir = packageDir;
+                GUILayout.Label("Package Directory", EditorStyles.boldLabel);
+                if (GUILayout.Button("Browse")) {
+                    string path = EditorUtility.OpenFolderPanel("Set Package Directory",
+                                                                PackageDir, "");
+                    int startOfPath = path.IndexOf(AndroidPluginsDir);
+                    if (startOfPath < 0) {
+                        packageDir = "";
+                    } else {
+                        packageDir = path.Substring(startOfPath, path.Length - startOfPath);
+                    }
+                }
+                if (!previousPackageDir.Equals(packageDir)) {
+                    packageDir = ValidatePackageDir(packageDir);
+                }
+                GUILayout.EndHorizontal();
+                packageDir = EditorGUILayout.TextField(packageDir);
             }
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Explode AARs", EditorStyles.boldLabel);
+            explodeAars = EditorGUILayout.Toggle(explodeAars);
+            GUILayout.EndHorizontal();
+            if (explodeAars) {
+                GUILayout.Label("AARs will be exploded (unpacked) when ${applicationId} " +
+                                "variable replacement is required in an AAR's " +
+                                "AndroidManifest.xml.");
+            } else {
+                GUILayout.Label("AAR explosion will be disabled in exported Gradle builds " +
+                                "(Unity 5.5 and above). You will need to set " +
+                                "android.defaultConfig.applicationId to your bundle ID in your " +
+                                "build.gradle to generate a functional APK.");
+            }
+
+            GUILayout.Space(10);
+            GUILayout.BeginHorizontal();
+            bool closeWindow = GUILayout.Button("Cancel");
+            bool ok = GUILayout.Button("OK");
+            closeWindow |= ok;
+            if (ok)
+            {
+                EnableAutoResolution = enableAutoResolution;
+                InstallAndroidPackages = installAndroidPackages;
+                if (ConfigurablePackageDir) PackageDir = packageDir;
+                ExplodeAars = explodeAars;
+            }
+            if (closeWindow) Close();
+            GUILayout.EndHorizontal();
             GUILayout.EndVertical();
         }
     }

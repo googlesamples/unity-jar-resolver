@@ -565,7 +565,8 @@ namespace GooglePlayServices
             List<string> aarsToResolve = new List<string>();
             foreach (KeyValuePair<string, AarExplodeData> kv in aarExplodeData)
             {
-                if (kv.Value.explode && kv.Value.bundleId != bundleId && kv.Value.path != "")
+                if (kv.Value.bundleId != bundleId && kv.Value.path != "" &&
+                    ShouldExplode(kv.Value.path))
                 {
                     packagesToUpdate.Add(kv.Value.path);
                     aarsToResolve.Add(kv.Key);
@@ -590,7 +591,10 @@ namespace GooglePlayServices
             {
                 // Get the collection of dependencies that need to be copied.
                 Dictionary<string, Dependency> deps =
-                    svcSupport.ResolveDependencies(true, destDirectory: destinationDirectory);
+                    svcSupport.ResolveDependencies(true, destDirectory: destinationDirectory,
+                                                   explodeAar: (aarPath) => {
+                                                       return ShouldExplode(aarPath);
+                                                   });
                 // Copy the list
                 svcSupport.CopyDependencies(deps,
                                             destinationDirectory,
@@ -641,10 +645,8 @@ namespace GooglePlayServices
                 else
                 {
                     // Clean up previously expanded / exploded versions of the AAR.
-                    if (Directory.Exists(dirPath))
-                    {
-                        PlayServicesSupport.DeleteExistingFileOrDirectory(dirPath);
-                    }
+                    PlayServicesSupport.DeleteExistingFileOrDirectory(dirPath,
+                                                                      includeMetaFiles: true);
                 }
                 aarExplodeData[f].path = targetPath;
                 aarExplodeData[f].bundleId = PlayerSettings.bundleIdentifier;
@@ -663,43 +665,60 @@ namespace GooglePlayServices
         {
             AarExplodeData aarData = null;
             if (!aarExplodeData.TryGetValue(aarFile, out aarData)) aarData = new AarExplodeData();
-            bool explode = !SupportsAarFiles;
-            if (!explode)
+            bool explosionEnabled = true;
+            // Unfortunately, as of Unity 5.5.0f3, Unity does not set the applicationId variable
+            // in the build.gradle it generates.  This results in non-functional libraries that
+            // require the ${applicationId} variable to be expanded in their AndroidManifest.xml.
+            // To work around this when Gradle builds are enabled, explosion is enabled for all
+            // AARs that require variable expansion unless this behavior is explicitly disabled
+            // in the settings dialog.
+            if (PlayServicesResolver.GradleBuildEnabled &&
+                PlayServicesResolver.ProjectExportEnabled &&
+                !SettingsDialog.ExplodeAars)
             {
-                System.DateTime modificationTime = File.GetLastWriteTime(aarFile);
-                if (modificationTime.CompareTo(aarData.modificationTime) <= 0)
-                {
-                    explode = aarData.explode;
-                }
+                explosionEnabled = false;
             }
-            if (!explode)
+            bool explode = false;
+            if (explosionEnabled)
             {
-                string temporaryDirectory = CreateTemporaryDirectory();
-                if (temporaryDirectory == null) return false;
-                string manifestFilename = "AndroidManifest.xml";
-                try
+                explode = !SupportsAarFiles;
+                if (!explode)
                 {
-                    if (ExtractAar(aarFile, new string[] {manifestFilename},
-                                   temporaryDirectory))
+                    System.DateTime modificationTime = File.GetLastWriteTime(aarFile);
+                    if (modificationTime.CompareTo(aarData.modificationTime) <= 0)
                     {
-                        string manifestPath = Path.Combine(temporaryDirectory,
-                                                           manifestFilename);
-                        if (File.Exists(manifestPath))
-                        {
-                            string manifest = File.ReadAllText(manifestPath);
-                            explode = manifest.IndexOf("${applicationId}") >= 0;
-                        }
-                        aarData.modificationTime = File.GetLastWriteTime(aarFile);
+                        explode = aarData.explode;
                     }
                 }
-                catch (System.Exception e)
+                if (!explode)
                 {
-                    Debug.Log("Unable to examine AAR file " + aarFile + ", err: " + e);
-                    throw e;
-                }
-                finally
-                {
-                    PlayServicesSupport.DeleteExistingFileOrDirectory(temporaryDirectory);
+                    string temporaryDirectory = CreateTemporaryDirectory();
+                    if (temporaryDirectory == null) return false;
+                    string manifestFilename = "AndroidManifest.xml";
+                    try
+                    {
+                        if (ExtractAar(aarFile, new string[] {manifestFilename},
+                                       temporaryDirectory))
+                        {
+                            string manifestPath = Path.Combine(temporaryDirectory,
+                                                               manifestFilename);
+                            if (File.Exists(manifestPath))
+                            {
+                                string manifest = File.ReadAllText(manifestPath);
+                                explode = manifest.IndexOf("${applicationId}") >= 0;
+                            }
+                            aarData.modificationTime = File.GetLastWriteTime(aarFile);
+                        }
+                    }
+                    catch (System.Exception e)
+                    {
+                        Debug.Log("Unable to examine AAR file " + aarFile + ", err: " + e);
+                        throw e;
+                    }
+                    finally
+                    {
+                        PlayServicesSupport.DeleteExistingFileOrDirectory(temporaryDirectory);
+                    }
                 }
             }
             aarData.explode = explode;

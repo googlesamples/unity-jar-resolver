@@ -88,6 +88,89 @@ namespace GooglePlayServices
         public static event EventHandler<BundleIdChangedEventArgs> BundleIdChanged;
 
         /// <summary>
+        /// The value of GradleBuildEnabled when PollBuildSystem() was called.
+        /// </summary>
+        private static bool previousGradleBuildEnabled = false;
+
+        /// <summary>
+        /// The value of ProjectExportEnabled when PollBuildSystem() was called.
+        /// </summary>
+        private static bool previousProjectExportEnabled = false;
+
+        /// <summary>
+        /// Get a boolean property from UnityEditor.EditorUserBuildSettings.
+        /// </summary>
+        /// Properties are introduced over successive versions of Unity so use reflection to
+        /// retrieve them.
+        private static object GetEditorUserBuildSettingsProperty(string name,
+                                                                 object defaultValue)
+        {
+            var editorUserBuildSettingsType = typeof(UnityEditor.EditorUserBuildSettings);
+            var property = editorUserBuildSettingsType.GetProperty(name);
+            if (property != null)
+            {
+                var value = property.GetValue(null, null);
+                if (value != null) return value;
+            }
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// Whether the Gradle build system is enabled.
+        /// </summary>
+        public static bool GradleBuildEnabled
+        {
+            get
+            {
+                return GetEditorUserBuildSettingsProperty(
+                    "androidBuildSystem", "").ToString().Equals("Gradle");
+            }
+        }
+
+        /// <summary>
+        /// Whether project export is enabled.
+        /// </summary>
+        public static bool ProjectExportEnabled
+        {
+            get
+            {
+                var value = GetEditorUserBuildSettingsProperty("exportAsGoogleAndroidProject",
+                                                               null);
+                return value == null ? false : (bool)value;
+            }
+        }
+
+        /// <summary>
+        /// Arguments for the Android build system changed event.
+        /// </summary>
+        public class AndroidBuildSystemChangedArgs : EventArgs {
+            /// <summary>
+            /// Gradle was selected as the build system when this event was fired.
+            /// </summary>
+            public bool GradleBuildEnabled { get; set; }
+
+            /// <summary>
+            /// Whether Gradle was selected as the build system the last time this event was fired.
+            /// </summary>
+            public bool PreviousGradleBuildEnabled { get; set; }
+
+            /// <summary>
+            /// Project export was selected when this event was fired.
+            /// </summary>
+            public bool ProjectExportEnabled { get; set; }
+
+            /// <summary>
+            /// Whether project export was selected when this event was fired.
+            /// </summary>
+            public bool PreviousProjectExportEnabled { get; set; }
+        }
+
+        /// <summary>
+        /// Event which is fired when the Android build system changes.
+        /// </summary>
+        public static event EventHandler<AndroidBuildSystemChangedArgs> AndroidBuildSystemChanged;
+
+        /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver()
@@ -104,9 +187,13 @@ namespace GooglePlayServices
                 EditorApplication.update += AutoResolve;
                 BundleIdChanged -= ResolveOnBundleIdChanged;
                 BundleIdChanged += ResolveOnBundleIdChanged;
+                AndroidBuildSystemChanged -= ResolveOnBuildSystemChanged;
+                AndroidBuildSystemChanged += ResolveOnBuildSystemChanged;
             }
             EditorApplication.update -= PollBundleId;
             EditorApplication.update += PollBundleId;
+            EditorApplication.update -= PollBuildSystem;
+            EditorApplication.update += PollBuildSystem;
         }
 
         /// <summary>
@@ -190,7 +277,6 @@ namespace GooglePlayServices
             }
         }
 
-
         /// <summary>
         /// If the user changes the bundle ID, perform resolution again.
         /// </summary>
@@ -225,6 +311,40 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// If the user changes the Android build system, perform resolution again.
+        /// </summary>
+        private static void ResolveOnBuildSystemChanged(object sender,
+                                                        AndroidBuildSystemChangedArgs args)
+        {
+            AutoResolve();
+        }
+
+        /// <summary>
+        /// Poll the Android build system selection for changes.
+        /// </summary>
+        private static void PollBuildSystem()
+        {
+
+            bool gradleBuildEnabled = GradleBuildEnabled;
+            bool projectExportEnabled = ProjectExportEnabled;
+            if (previousGradleBuildEnabled != gradleBuildEnabled ||
+                previousProjectExportEnabled != projectExportEnabled)
+            {
+                if (AndroidBuildSystemChanged != null)
+                {
+                    AndroidBuildSystemChanged(null, new AndroidBuildSystemChangedArgs {
+                            GradleBuildEnabled = gradleBuildEnabled,
+                            PreviousGradleBuildEnabled = previousGradleBuildEnabled,
+                            ProjectExportEnabled = projectExportEnabled,
+                            PreviousProjectExportEnabled = previousProjectExportEnabled,
+                        });
+                }
+                previousGradleBuildEnabled = gradleBuildEnabled;
+                previousProjectExportEnabled = projectExportEnabled;
+            }
+        }
+
+        /// <summary>
         /// Delete the specified array of files and directories.
         /// </summary>
         /// <param name="filenames">Array of files or directories to delete.</param>
@@ -234,7 +354,8 @@ namespace GooglePlayServices
             if (filenames == null) return false;
             foreach (string artifact in filenames)
             {
-                PlayServicesSupport.DeleteExistingFileOrDirectory(artifact);
+                PlayServicesSupport.DeleteExistingFileOrDirectory(artifact,
+                                                                  includeMetaFiles: true);
             }
             AssetDatabase.Refresh();
             return true;
@@ -247,7 +368,8 @@ namespace GooglePlayServices
         private static void Resolve(System.Action resolutionComplete = null)
         {
             DeleteFiles(Resolver.OnBundleId(PlayerSettings.bundleIdentifier));
-            Resolver.DoResolution(svcSupport, "Assets/Plugins/Android",
+            System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
+            Resolver.DoResolution(svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
                                   HandleOverwriteConfirmation,
                                   () => {
                                       AssetDatabase.Refresh();
@@ -272,11 +394,14 @@ namespace GooglePlayServices
         [MenuItem("Assets/Play Services Resolver/Android Resolver/Settings")]
         public static void SettingsDialog()
         {
-            if (Resolver == null) {
-                NotAvailableDialog();
-                return;
+            if (Resolver != null)
+            {
+                Resolver.ShowSettingsDialog();
             }
-            Resolver.ShowSettingsDialog();
+            else
+            {
+                DefaultResolver.ShowSettings();
+            }
         }
 
         /// <summary>

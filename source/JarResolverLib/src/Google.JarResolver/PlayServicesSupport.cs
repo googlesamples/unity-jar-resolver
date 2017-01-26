@@ -40,7 +40,7 @@ namespace Google.JarResolver
         /// <summary>
         /// The path to the Android SDK.
         /// </summary>
-        private string sdk;
+        private static string sdk;
 
         /// <summary>
         /// Delegate used to specify a log method for this class.  If provided this class
@@ -51,7 +51,7 @@ namespace Google.JarResolver
         /// <summary>
         /// Log function delegate.  If set, this class will write log messages via this method.
         /// </summary>
-        private LogMessage logger;
+        private static LogMessage logger;
 
         /// <summary>
         /// The repository paths.
@@ -72,7 +72,7 @@ namespace Google.JarResolver
         /// <summary>
         /// Extension of Unity metadata files.
         /// </summary>
-        private const string MetaExtension = ".meta";
+        internal const string MetaExtension = ".meta";
 
         /// <summary>
         /// Error message displayed / logged when the Android SDK path isn't configured.
@@ -94,11 +94,13 @@ namespace Google.JarResolver
         public delegate bool OverwriteConfirmation(Dependency oldDep, Dependency newDep);
 
         /// <summary>
-        /// Gets the Android SDK.  If it is not set, the environment
-        /// variable ANDROID_HOME is used.
+        /// Delegate used to determine whether an AAR should be exploded.
         /// </summary>
-        /// <value>The SD.</value>
-        public string SDK
+        /// <param name="aarPath">Path to the AAR file to examine.</param>
+        /// <returns>True if the AAR should be exploded, false otherwise.</returns>
+        public delegate bool ExplodeAar(string aarPath);
+
+        private static string SDKInternal
         {
             get
             {
@@ -115,19 +117,16 @@ namespace Google.JarResolver
         }
 
         /// <summary>
+        /// Gets the Android SDK.  If it is not set, the environment
+        /// variable ANDROID_HOME is used.
+        /// </summary>
+        /// <value>The SD.</value>
+        public string SDK { get { return PlayServicesSupport.SDKInternal; } }
+
+        /// <summary>
         /// Whether verbose logging is enabled.
         /// </summary>
-        internal bool verboseLogging = false;
-
-        // TODO(wilkinsonclay): get the extension from the pom file.
-        private string[] Packaging = {
-            ".aar",
-            ".jar",
-            // This allows users to place an aar inside a Unity project and have Unity
-            // ignore the file as part of the build process, but still allow the Jar
-            // Resolver to process the AAR so it can be included in the build.
-            ".srcaar"
-        };
+        internal static bool verboseLogging = false;
 
         // Set of currently created instances per client.
         public static Dictionary<string, PlayServicesSupport> instances =
@@ -176,8 +175,9 @@ namespace Google.JarResolver
             LogMessage logger = null)
         {
             PlayServicesSupport instance = new PlayServicesSupport();
-            instance.logger = logger;
-            instance.sdk = sdkPath;
+            PlayServicesSupport.logger = PlayServicesSupport.logger ?? logger;
+            PlayServicesSupport.sdk =
+                String.IsNullOrEmpty(sdkPath) ? PlayServicesSupport.sdk : sdkPath;
             string badchars = new string(Path.GetInvalidFileNameChars());
 
             foreach (char ch in clientName)
@@ -211,7 +211,7 @@ namespace Google.JarResolver
         ///     message is a string to write to the log.
         ///   </para>
         /// </remarks>
-        internal void Log(string message, bool verbose = false) {
+        internal static void Log(string message, bool verbose = false) {
             if (logger != null && (!verbose || verboseLogging)) {
                 logger(message);
             }
@@ -242,6 +242,31 @@ namespace Google.JarResolver
             if (includeMetaFiles && !path.EndsWith(MetaExtension))
             {
                 DeleteExistingFileOrDirectory(path + MetaExtension);
+            }
+        }
+
+        /// <summary>
+        /// Copy the contents of a directory to another directory.
+        /// </summary>
+        /// <param name="sourceDir">Path to copy the contents from.</param>
+        /// <param name="targetDir">Path to copy to.</param>
+        public static void CopyDirectory(string sourceDir, string targetDir)
+        {
+            Func<string, string> sourceToTargetPath = (path) => {
+                return Path.Combine(targetDir, path.Substring(sourceDir.Length + 1));
+            };
+            foreach (string sourcePath in
+                     Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories))
+            {
+                Directory.CreateDirectory(sourceToTargetPath(sourcePath));
+            }
+            foreach (string sourcePath in
+                     Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+            {
+                if (!sourcePath.EndsWith(PlayServicesSupport.MetaExtension))
+                {
+                    File.Copy(sourcePath, sourceToTargetPath(sourcePath));
+                }
             }
         }
 
@@ -309,13 +334,30 @@ namespace Google.JarResolver
         /// directory.</param>
         /// <param name="destDirectory">Directory where dependencies are located in the
         /// project.</param>
+        /// <param name="explodeAar">Delegate that determines whether a dependency should be
+        /// exploded.  If a dependency is currently exploded but shouldn't be according to this
+        /// delegate, the dependency is deleted.</param>
+        /// <param name="repoPaths">Set of additional repo paths to search for the
+        /// dependencies.</param>
         /// <returns>Dictionary indexed by Dependency.Key where each item is a tuple of
         /// Dependency instance and the path to the dependency in destDirectory.</returns>
         public static Dictionary<string, KeyValuePair<Dependency, string>> GetCurrentDependencies(
-            Dictionary<string, Dependency> dependencies, string destDirectory)
+            Dictionary<string, Dependency> dependencies, string destDirectory,
+            ExplodeAar explodeAar = null, List<string> repoPaths = null)
         {
             var currentDependencies = new Dictionary<string, KeyValuePair<Dependency, string>>();
             if (dependencies.Count == 0) return currentDependencies;
+
+            // Copy the set of dependencies.
+            var transitiveDependencies = new Dictionary<string, Dependency>(dependencies);
+            // Expand set of transitive dependencies into the dictionary of dependencies.
+            foreach (var rootDependency in dependencies.Values)
+            {
+                foreach (var transitiveDependency in GetDependencies(rootDependency, repoPaths))
+                {
+                    transitiveDependencies[transitiveDependency.Key] = transitiveDependency;
+                }
+            }
             // TODO(smiles): Need a callback that queries Unity's asset DB rather than touching
             // the filesystem here.
             string[] filesInDestDir = Directory.GetFileSystemEntries(destDirectory);
@@ -324,38 +366,55 @@ namespace Google.JarResolver
                 // Ignore Unity's .meta files.
                 if (path.EndsWith(MetaExtension)) continue;
 
-                foreach (var dep in dependencies.Values)
+                string filename = Path.GetFileName(path);
+                // Strip the package extension from filenames.  Directories generated from
+                // unpacked AARs do not have extensions.
+                bool pathIsDirectory = Directory.Exists(path);
+                string filenameWithoutExtension = pathIsDirectory ? filename :
+                    Path.GetFileNameWithoutExtension(filename);
+
+                foreach (var dep in transitiveDependencies.Values)
                 {
-                    string filename = Path.GetFileName(path);
                     // Get the set of artifacts matching artifact-*.
                     // The "-" is important to distinguish art-1.0.0 from artifact-1.0.0
                     // (or base- and basement-).
                     var match = System.Text.RegularExpressions.Regex.Match(
-                        filename, String.Format("^{0}-.*", dep.Artifact));
+                        filenameWithoutExtension, String.Format("^{0}-.*", dep.Artifact));
                     if (match.Success)
                     {
-                        // Strip the package extension from filenames.  Directories generated from
-                        // unpacked AARs do not have extensions.
-                        filename = Directory.Exists(path) ? filename :
-                            Path.GetFileNameWithoutExtension(filename);
-
                         // Extract the version from the filename.
                         // dep.Artifact is the name of the package (prefix)
                         // The regular expression extracts the version number from the filename
                         // handling filenames like foo-1.2.3-alpha.
                         match = System.Text.RegularExpressions.Regex.Match(
-                            filename.Substring(dep.Artifact.Length + 1), "^([0-9.]+)");
+                            filenameWithoutExtension.Substring(
+                                dep.Artifact.Length + 1), "^([0-9.]+)");
                         if (match.Success)
                         {
-                            string artifactVersion = match.Groups[1].Value;
-
-                            Dependency currentDep = new Dependency(
-                                dep.Group, dep.Artifact, artifactVersion,
-                                packageIds: dep.PackageIds, repositories: dep.Repositories);
-                            // Add the artifact version so BestVersion == Version.
-                            currentDep.AddVersion(currentDep.Version);
-                            currentDependencies[currentDep.Key] =
-                                new KeyValuePair<Dependency, string>(currentDep, path);
+                            bool reportDependency = true;
+                            // If the AAR is exploded and it should not be, delete it and do not
+                            // report this dependency.
+                            if (pathIsDirectory && explodeAar != null)
+                            {
+                                string aarFile = dep.BestVersionArtifact;
+                                if (aarFile != null && !explodeAar(aarFile))
+                                {
+                                    DeleteExistingFileOrDirectory(path,
+                                                                  includeMetaFiles: true);
+                                    reportDependency = false;
+                                }
+                            }
+                            if (reportDependency)
+                            {
+                                string artifactVersion = match.Groups[1].Value;
+                                Dependency currentDep = new Dependency(
+                                    dep.Group, dep.Artifact, artifactVersion,
+                                    packageIds: dep.PackageIds, repositories: dep.Repositories);
+                                // Add the artifact version so BestVersion == Version.
+                                currentDep.AddVersion(currentDep.Version);
+                                currentDependencies[currentDep.Key] =
+                                    new KeyValuePair<Dependency, string>(currentDep, path);
+                            }
                             break;
                         }
                     }
@@ -392,18 +451,24 @@ namespace Google.JarResolver
         /// <param name="destDirectory">Directory where dependencies are located in the
         /// project.  If this parameter is null, a dictionary of required dependencies is
         /// always returned.</param>
+        /// <param name="explodeAar">Delegate that determines whether a dependency should be
+        /// exploded.  If a dependency is currently exploded but shouldn't be according to this
+        /// delegate, the dependency is deleted.</param>
         /// <returns>null if all dependencies are present, dictionary of all required dependencies
         /// otherwise.</returns>
-        public Dictionary<string, Dependency> DependenciesPresent(string destDirectory)
+        public Dictionary<string, Dependency> DependenciesPresent(string destDirectory,
+                                                                  ExplodeAar explodeAar = null)
         {
             Dictionary<string, Dependency> dependencyMap =
-                LoadDependencies(true, keepMissing: true, findCandidates: false);
+                LoadDependencies(true, keepMissing: true, findCandidates: true);
             // If a destination directory was specified, determine whether the dependencies
             // referenced by dependencyMap differ to what is present in the project.  If they
             // are the same, we can skip this entire method.
             if (destDirectory != null)
             {
-                if (DependenciesEqual(GetCurrentDependencies(dependencyMap, destDirectory).Keys,
+                if (DependenciesEqual(GetCurrentDependencies(dependencyMap, destDirectory,
+                                                             explodeAar: explodeAar,
+                                                             repoPaths: repositoryPaths).Keys,
                                       dependencyMap.Keys))
                 {
                     Log("All dependencies up to date.", verbose: true);
@@ -425,14 +490,18 @@ namespace Google.JarResolver
         /// if <c>false</c> a ResolutionException is thrown in the case of a conflict.</param>
         /// <param name="destDirectory">Directory dependencies will be copied to using
         /// CopyDependencies().</param>
-        public Dictionary<string, Dependency> ResolveDependencies(bool useLatest,
-                                                                  string destDirectory = null)
+        /// <param name="explodeAar">Delegate that determines whether a dependency should be
+        /// exploded.  If a dependency is currently exploded but shouldn't be according to this
+        /// delegate, the dependency is deleted.</param>
+        public Dictionary<string, Dependency> ResolveDependencies(
+            bool useLatest, string destDirectory = null, ExplodeAar explodeAar = null)
         {
             List<Dependency> unresolved = new List<Dependency>();
 
             Dictionary<string, Dependency> candidates = new Dictionary<string, Dependency>();
 
-            Dictionary<string, Dependency> dependencyMap = DependenciesPresent(destDirectory);
+            Dictionary<string, Dependency> dependencyMap =
+                DependenciesPresent(destDirectory, explodeAar: explodeAar);
             if (dependencyMap == null) return candidates;
 
             // Set of each versioned dependencies for each version-less dependency key.
@@ -637,7 +706,8 @@ namespace Google.JarResolver
             // to simplify looking up dependencies currently in the project based upon filenames.
             var currentDepsByVersionlessKey =
                 new Dictionary<string, KeyValuePair<Dependency, string>>();
-            foreach (var item in GetCurrentDependencies(dependencies, destDirectory))
+            foreach (var item in GetCurrentDependencies(dependencies, destDirectory,
+                                                        repoPaths: repositoryPaths))
             {
                 currentDepsByVersionlessKey[item.Value.Key.VersionlessKey] = item.Value;
             }
@@ -660,25 +730,12 @@ namespace Google.JarResolver
                     }
                 }
 
-                string aarFile = null;
-
-                // TODO(wilkinsonclay): get the extension from the pom file.
-                string baseName = null;
-                string extension = null;
-                foreach (string ext in Packaging)
-                {
-                    string fname = Path.Combine(dep.BestVersionPath,
-                        dep.Artifact + "-" + dep.BestVersion + ext);
-                    if (File.Exists(fname))
-                    {
-                        baseName = dep.Artifact + "-" + dep.BestVersion;
-                        aarFile = fname;
-                        extension = ext;
-                    }
-                }
+                string aarFile = dep.BestVersionArtifact;
 
                 if (aarFile != null)
                 {
+                    string baseName = Path.GetFileNameWithoutExtension(aarFile);
+                    string extension = Path.GetExtension(aarFile);
                     string destName = Path.Combine(destDirectory, baseName) +
                         (extension == ".srcaar" ? ".aar" : extension);
                     string destNameUnpacked = Path.Combine(
@@ -732,7 +789,7 @@ namespace Google.JarResolver
         /// </summary>
         /// <param name="dep">Dependency to process</param>
         /// <param name="fname">file name of the metadata.</param>
-        internal void ProcessMetadata(Dependency dep, string fname)
+        internal static void ProcessMetadata(Dependency dep, string fname)
         {
             XmlTextReader reader = new XmlTextReader(new StreamReader(fname));
 
@@ -752,6 +809,11 @@ namespace Google.JarResolver
 
         internal Dependency FindCandidate(Dependency dep)
         {
+            return FindCandidate(dep, repositoryPaths);
+        }
+
+        internal static Dependency FindCandidate(Dependency dep, List<string> repoPaths)
+        {
             // If artifacts associated with dependencies have been found, return this dependency..
             if (!String.IsNullOrEmpty(dep.RepoPath) && dep.HasPossibleVersions) return dep;
 
@@ -759,7 +821,7 @@ namespace Google.JarResolver
             List<string> searchPaths = new List<string>();
             if (!String.IsNullOrEmpty(dep.RepoPath)) searchPaths.Add(dep.RepoPath);
             searchPaths.AddRange(dep.Repositories ?? new string[] {});
-            searchPaths.AddRange(repositoryPaths);
+            if (repoPaths != null) searchPaths.AddRange(repoPaths);
 
             // Search for the dependency.
             foreach(string repo in UniqueList(searchPaths))
@@ -767,11 +829,11 @@ namespace Google.JarResolver
                 string repoPath;
                 if (repo.StartsWith(SdkVariable))
                 {
-                    if (String.IsNullOrEmpty(SDK))
+                    if (String.IsNullOrEmpty(SDKInternal))
                     {
                         throw new ResolutionException(AndroidSdkConfigurationError);
                     }
-                    repoPath = repo.Replace(SdkVariable, SDK);
+                    repoPath = repo.Replace(SdkVariable, SDKInternal);
                 }
                 else
                 {
@@ -790,9 +852,10 @@ namespace Google.JarResolver
                     Log("Repo not found: " + Path.GetFullPath(repoPath));
                 }
             }
-            Log("ERROR: Unable to find dependency " + dep.Group + " " + dep.Artifact + " " +
-                dep.Version + " in (" +
-                String.Join(", ", new List<string>(repositoryPaths).ToArray()) + ")");
+            Log(String.Format("ERROR: Unable to find dependency {0} in paths ({1}).\n\n" +
+                              "{0} was referenced by:\n{2}\n\n",
+                              dep.Key, String.Join(", ", new List<string>(repoPaths).ToArray()),
+                              dep.CreatedBy));
             return null;
         }
 
@@ -802,7 +865,7 @@ namespace Google.JarResolver
         /// <returns>The dependency modified so BestVersion returns the best version.</returns>
         /// <param name="repoPath">The path to the artifact repository.</param>
         /// <param name="dep">The dependency to find a specific version for.</param>
-        internal Dependency FindCandidate(string repoPath, Dependency dep)
+        internal static Dependency FindCandidate(string repoPath, Dependency dep)
         {
             string basePath = Path.Combine(dep.Group, dep.Artifact);
             basePath = basePath.Replace(".", Path.DirectorySeparatorChar.ToString());
@@ -815,20 +878,20 @@ namespace Google.JarResolver
                 dep.RepoPath = repoPath;
                 while (dep.HasPossibleVersions)
                 {
-                    // TODO(wilkinsonclay): get the packaging from the pom.
                     // Check for the actual file existing, otherwise skip this version.
-                    foreach (string ext in Packaging)
-                    {
-                        string basename = dep.Artifact + "-" + dep.BestVersion + ext;
-                        string fname = Path.Combine(dep.BestVersionPath, basename);
-                        if (File.Exists(fname)) return dep;
-                    }
+                    string aarFile = dep.BestVersionArtifact;
+                    if (aarFile != null) return dep;
                     Log(dep.Key + " version " + dep.BestVersion + " not available, ignoring.",
                         verbose: true);
                     dep.RemovePossibleVersion(dep.BestVersion);
                 }
             }
             return null;
+        }
+
+        internal IEnumerable<Dependency> GetDependencies(Dependency dep)
+        {
+            return GetDependencies(dep, repositoryPaths);
         }
 
         /// <summary>
@@ -838,13 +901,17 @@ namespace Google.JarResolver
         /// </summary>
         /// <returns>The dependencies.</returns>
         /// <param name="dep">Dependency to process</param>
-        internal IEnumerable<Dependency> GetDependencies(Dependency dep)
+        /// <param name="repoPaths">Set of additional repo paths to search for the
+        /// dependencies.</param>
+        internal static IEnumerable<Dependency> GetDependencies(Dependency dep,
+                                                                List<string> repoPaths)
         {
             List<Dependency> dependencyList = new List<Dependency>();
             if (String.IsNullOrEmpty(dep.BestVersion))
             {
-                Log("ERROR: no compatible versions of " + dep.Key +
-                    "given the set of dependencies");
+                Log(String.Format("ERROR: No compatible versions of {0} found given the set of " +
+                                  "required dependencies.\n\n{0} was referenced by:\n{1}\n\n",
+                                  dep.Key, dep.CreatedBy));
                 return dependencyList;
             }
 
@@ -894,7 +961,8 @@ namespace Google.JarResolver
                     // Unfortunately, the Maven POM doesn't contain metadata to map the package
                     // to each Android SDK package ID so the list "packageIds" is left as null in
                     // this case.
-                    Dependency d = FindCandidate(new Dependency(groupId, artifactId, version));
+                    Dependency d = FindCandidate(new Dependency(groupId, artifactId, version),
+                                                 repoPaths);
                     if (d == null)
                     {
                         throw new ResolutionException("Cannot find candidate artifact for " +
