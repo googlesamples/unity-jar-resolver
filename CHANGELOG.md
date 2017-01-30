@@ -1,3 +1,15 @@
+# Version 1.2.11 - Jan 30, 2017
+## New Features
+    * Added support for Android Studio builds.
+    * Added support for native (C/C++) shared libraries in AARs.
+
+# Version 1.2.10 - Jan 11, 2017
+## Bug Fixes
+    * Fixed SDK manager path retrieval.
+    * Also, report stderr when it's not possible to run the "pod" tool.
+    * Handle exceptions thrown by Unity.Cecil on asset rename
+    * Fixed IOSResolver to handle PlayerSettings.iOS.targetOSVersionString
+
 # Version 1.2.9 - Dec 7, 2016
 ## Bug Fixes
     * Improved error reporting when "pod repo update" fails.

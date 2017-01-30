@@ -1,7 +1,7 @@
 fileFormatVersion: 2
-guid: eda5ca45d13645c1a4892ece4f3b2275
+guid: 6331018ea8ec488b8a0659ab64245e64
 labels:
-- gvh_v1.2.10.0
+- gvh_v1.2.11.0
 - gvh
 - gvh_teditor
 timeCreated: 1473798236
@@ -16,7 +16,7 @@ PluginImporter:
       enabled: 0
       settings: {}
     Editor:
-      enabled: 0
+      enabled: 1
       settings:
         DefaultValueInitialized: true
   userData: 

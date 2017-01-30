@@ -104,7 +104,7 @@ namespace Google.Editor.Tests
             var instance = PlayServicesSupport.CreateInstance(
                 instanceName ?? "testInstance", sdkPath ?? PATH,
                 additionalRepositories, Path.GetTempPath(), logger: logger ?? Console.WriteLine);
-            instance.verboseLogging = VERBOSE_LOGGING;
+            PlayServicesSupport.verboseLogging = VERBOSE_LOGGING;
             return instance;
         }
 
@@ -486,10 +486,9 @@ namespace Google.Editor.Tests
         {
             List<string> messageList = new List<string>();
             string logMessage = "this is a test";
-            PlayServicesSupport support =
-                TestData.CreateInstance(logger: (message) => messageList.Add(message));
+            PlayServicesSupport.logger = (message) => messageList.Add(message);
             Assert.AreEqual(0, messageList.Count);
-            support.Log(logMessage);
+            PlayServicesSupport.Log(logMessage);
             Assert.AreEqual(1, messageList.Count);
             Assert.AreEqual(logMessage, messageList[0]);
         }

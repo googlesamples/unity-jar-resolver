@@ -51,7 +51,7 @@ namespace Google.JarResolver
         /// <summary>
         /// Log function delegate.  If set, this class will write log messages via this method.
         /// </summary>
-        private static LogMessage logger;
+        internal static LogMessage logger;
 
         /// <summary>
         /// The repository paths.
