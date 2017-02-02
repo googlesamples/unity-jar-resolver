@@ -48,6 +48,14 @@ namespace Google.PackageManager {
         /// would be returned as
         ///
         /// http://domain.com/segment1/segment2/
+        ///
+        /// Also:
+        ///
+        /// http://domain.com/segment1/segment2/segment3
+        /// and
+        /// http://domain.com/segment1/segment2/segment3/
+        ///
+        /// would be treated the same regardless of the trailing slash.
         /// </summary>
         /// <returns>The absolute Uri minus the last segment.</returns>
         /// <param name="uri">URI to remove segment from</param>

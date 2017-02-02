@@ -156,7 +156,7 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Plugin manager view. Shows the available plugins and allows user to install/remove plugins
+    /// Shows the available plugins and allows user to install/remove plugins
     /// from project using UI.
     /// </summary>
     public class PluginManagerView : EditorWindow {
@@ -318,7 +318,7 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Settings manager view allows the user to view and make changes to the settings
+    /// Allows the user to view and make changes to the settings
     /// associated with the Package Manager module.
     /// </summary>
     public class SettingsManagerView : EditorWindow {
@@ -363,7 +363,7 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Plugin removal context view that implements logic allowing for context menu
+    /// A view that implements logic allowing for context menu
     /// option to remove a plugin based on a selected asset.
     /// </summary>
     public static class PluginRemovalContextView {
@@ -406,7 +406,9 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Plugin candidate removal window.
+    /// Plugin candidate removal window. Displays the information required for the
+    /// user to select what plugins they would like to remove after selecting an asset
+    /// and choosing to remove the associated plugin.
     /// </summary>
     public class PluginCandidateRemovalWindow : EditorWindow {
         void OnInspectorGUI() {

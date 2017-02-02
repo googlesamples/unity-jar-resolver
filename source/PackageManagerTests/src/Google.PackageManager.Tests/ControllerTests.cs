@@ -210,9 +210,8 @@ namespace Google.PackageManager.Tests {
 
             var rdb = new RegistryManagerController.RegistryDatabase();
             rdb.registryLocation.Add(TestableConstants.DefaultRegistryLocation);
-            /// <summary>
+
             /// ISO 8601 format: yyyy-MM-ddTHH:mm:ssZ
-            /// </summary>
             rdb.lastUpdate = DateTime.UtcNow.ToString("o"); // "o" = ISO 8601 formatting
             Console.Write(rdb.SerializeToXMLString());
             TestData.editorPrefs.SetString(Constants.KEY_REGISTRIES, rdb.SerializeToXMLString());

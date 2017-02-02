@@ -172,7 +172,7 @@ namespace Google.PackageManager {
         /// 1) A groupId of a packaged plugin, if that packaged plugin is relative to the registry.
         ///    (meaning that it has a path that is a decendent of the registry Uri path)
         /// 2) An absolute Uri to a location of a packaged plugin's package-manifest.xml
-        /// 
+        ///
         /// Note: It is permitted to mix representations in a registry model. Meaning you can have
         /// a mix of groupId representations and absolute Uri repesentations in the same registry.
         /// </summary>
@@ -187,18 +187,34 @@ namespace Google.PackageManager {
     /// </summary>
     [XmlRoot("metadata")]
     public class PluginMetaData : PackageManagerLabeledModel<PluginMetaData> {
+        /// <summary>
+        /// Format eg. 1.2.3
+        /// </summary>
         [XmlElement("modelVersion")]
         public string modelVersion;
 
+        /// <summary>
+        /// What format the binary package is in. Will usually be "unitypackage".
+        /// </summary>
         [XmlElement("packaging")]
         public string packaging;
 
+        /// <summary>
+        /// A container element that holds a list of all versions the plugin has.
+        /// </summary>
         [XmlElement("versioning")]
         public Versioning versioning = new Versioning();
 
+        /// <summary>
+        /// The ISO 8601 date this plugin was last updated.
+        /// </summary>
         [XmlElement("lastUpdated")]
         public long lastUpdated;
 
+        /// <summary>
+        /// UniqueKey format: groupId:artifactId:version
+        /// </summary>
+        /// <value>The unique key.</value>
         [XmlIgnore]
         public string UniqueKey {
             get {
@@ -281,7 +297,7 @@ namespace Google.PackageManager {
     [XmlRoot("package-dependencies")]
     public class PackageDependencies : PackageManagerLabeledModel<PackageDependencies> {
         /// <summary>
-        /// The dependencies that the Unity plugin package has
+        /// The root dependencies that the Unity plugin package has.
         /// </summary>
         [XmlArray("android-dependencies")]
         [XmlArrayItem("android-dependency")]
@@ -299,8 +315,14 @@ namespace Google.PackageManager {
     /// IOS Package dependency model representing a specific iOS dependency.
     /// </summary>
     public class IOSPodDependency : PackageManagerModel<IOSPodDependency> {
+        /// <summary>
+        /// The name of the POD.
+        /// </summary>
         [XmlElement("name")]
         public string name;
+        /// <summary>
+        /// The version of the POD.
+        /// </summary>
         [XmlElement("version")]
         public string version;
     }
@@ -362,6 +384,10 @@ namespace Google.PackageManager {
         public List<ProjectClient> clients = new List<ProjectClient>();
     }
 
+    /// <summary>
+    /// Project client represents an installed packaged plugin with all known
+    /// data associated with its installation into a project.
+    /// </summary>
     public class ProjectClient : PackageManagerLabeledModel<ProjectClient> {
         /// <summary>
         /// The client dependencies declared in the gpm.dep.xml for the package
