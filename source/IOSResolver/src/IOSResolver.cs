@@ -560,7 +560,7 @@ public static class IOSResolver {
                     }
                 }
             }
-            if (name == null) {
+            if (String.IsNullOrEmpty(name)) {
                 // Versions 8.2 and above do not have enum symbols
                 // The values in Unity 5.4.1f1:
                 // 8.2 == 32
