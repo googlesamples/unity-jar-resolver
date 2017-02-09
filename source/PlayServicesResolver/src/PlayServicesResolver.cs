@@ -39,10 +39,21 @@ namespace GooglePlayServices
         /// </summary>
         private static PlayServicesSupport svcSupport;
 
+        /// <summar>
+        /// Selects between different types of IResolver implementations that can be used.
+        /// </summary>
+        public enum ResolverType
+        {
+            Default,            // Standard versioned resolver
+            GradlePrebuild,     // Used if registered and enabled in the settings.
+        }
+
         /// <summary>
         /// The resolver to use, injected to allow for version updating.
         /// </summary>
-        private static IResolver _resolver;
+        private static Dictionary<ResolverType, IResolver> _resolvers =
+            new Dictionary<ResolverType, IResolver>();
+
 
         /// <summary>
         /// Flag used to prevent re-entrant auto-resolution.
@@ -250,6 +261,9 @@ namespace GooglePlayServices
         {
             if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android)
             {
+                RegisterResolver(new ResolverVer1_1());
+                RegisterResolver(new GradlePreBuildResolver(), ResolverType.GradlePrebuild);
+
                 svcSupport = PlayServicesSupport.CreateInstance(
                     "PlayServicesResolver",
                     EditorPrefs.GetString("AndroidSdkRoot"),
@@ -281,17 +295,29 @@ namespace GooglePlayServices
         /// </remarks>
         /// <returns>The resolver.</returns>
         /// <param name="resolverImpl">Resolver impl.</param>
-        public static IResolver RegisterResolver(IResolver resolverImpl)
+        public static IResolver RegisterResolver(IResolver resolverImpl,
+                                                 ResolverType resolverType=ResolverType.Default)
         {
             if (resolverImpl == null)
             {
-                return _resolver;
+                return Resolver;
             }
-            if (_resolver == null || _resolver.Version() < resolverImpl.Version())
+
+            IResolver destResolver;
+            if (!_resolvers.TryGetValue(resolverType, out destResolver) ||
+                destResolver.Version() < resolverImpl.Version())
             {
-                _resolver = resolverImpl;
+                _resolvers[resolverType] = resolverImpl;
             }
-            return _resolver;
+            return resolverImpl;
+        }
+
+        private static ResolverType CurrentResolverType
+        {
+            get {
+                return GooglePlayServices.SettingsDialog.PrebuildWithGradle ?
+                    ResolverType.GradlePrebuild : ResolverType.Default;
+            }
         }
 
         /// <summary>
@@ -302,7 +328,14 @@ namespace GooglePlayServices
         {
             get
             {
-                return _resolver;
+                IResolver resolver = null;
+                if (GooglePlayServices.SettingsDialog.PrebuildWithGradle) {
+                    _resolvers.TryGetValue(ResolverType.GradlePrebuild, out resolver);
+                }
+                if (resolver == null) {
+                    _resolvers.TryGetValue(ResolverType.Default, out resolver);
+                }
+                return resolver;
             }
         }
 

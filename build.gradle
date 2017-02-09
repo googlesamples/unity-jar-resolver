@@ -135,6 +135,8 @@ project.ext {
 
     pluginSrc = file('plugin').absolutePath
     pluginProj = file('build/PluginSrc').absolutePath
+    scriptsSrc = file('source/PlayServicesResolver/scripts').absolutePath
+    scriptsDst = 'Assets/PlayServicesResolver'
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
     dllDir = 'Assets/PlayServicesResolver/Editor'
@@ -257,7 +259,7 @@ def build_pluginDll(projectName, assemblyDllBasename) {
   def copyTask = tasks.create(name: "copy_" + projectName,
                               type: Copy,
                               description: ('Copy ' + projectName +
-                                            ' to unity packaging folder'),
+                                            ' to the Unity packaging folder'),
                               dependsOn: compileTask)
   copyTask.from(files(assemblyDllSource, dllMeta))
   copyTask.into("${pluginProj}/${dllDir}")
@@ -306,7 +308,17 @@ task copy_pluginTemplate(type: Copy, dependsOn: update_metadataForVersion) {
   ext.remoteTaskPhase = 'build'
 }
 
+task copy_GenGradleScripts(type: Copy, dependsOn: compile_packageManagerTests) {
+  description 'Copy the Gradle prebuild scripts to the Unity packaging dir.'
+  from "${scriptsSrc}"
+  into "${pluginProj}/${scriptsDst}"
+  exclude 'sample', 'readme*', 'README'
+  duplicatesStrategy 'include'
+  ext.remoteTaskPhase = 'build'
+}
+
 task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
+                                             copy_GenGradleScripts,
                                              'copy_PlayServicesResolver',
                                              'copy_VersionHandler',
                                              'copy_IOSResolver',

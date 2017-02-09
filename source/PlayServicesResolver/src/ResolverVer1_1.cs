@@ -26,7 +26,6 @@ namespace GooglePlayServices
     using System.Text.RegularExpressions;
     using System.Xml;
 
-    [InitializeOnLoad]
     public class ResolverVer1_1 : DefaultResolver
     {
         // Caches data associated with an aar so that it doesn't need to be queried to determine
@@ -65,14 +64,8 @@ namespace GooglePlayServices
         private const int MinorVersion = 1;
         private const int PointVersion = 0;
 
-        static ResolverVer1_1()
-        {
-            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android)
-            {
-                ResolverVer1_1 resolver = new ResolverVer1_1();
-                resolver.LoadAarExplodeCache();
-                PlayServicesResolver.RegisterResolver(resolver);
-            }
+        public ResolverVer1_1() {
+            LoadAarExplodeCache();
         }
 
         /// <summary>
@@ -553,13 +546,6 @@ namespace GooglePlayServices
                 });
         }
 
-        public override void DoResolution(
-            PlayServicesSupport svcSupport, string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation)
-        {
-            DoResolution(svcSupport, destinationDirectory, handleOverwriteConfirmation,
-                         () => {});
-        }
 
         /// <summary>
         /// Called during Update to allow the resolver to check any build settings of managed

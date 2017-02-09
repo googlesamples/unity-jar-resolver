@@ -27,6 +27,8 @@ namespace GooglePlayServices
     {
         const string Namespace = "GooglePlayServices.";
         internal const string AutoResolveKey = Namespace + "AutoResolverEnabled";
+        internal const string PrebuildWithGradleKey = Namespace + "PrebuildWithGradle";
+
         internal const string PackageInstallKey = Namespace + "AndroidPackageInstallationEnabled";
         internal const string PackageDirKey = Namespace + "PackageDirectory";
         internal const string ExplodeAarsKey = Namespace + "ExplodeAars";
@@ -42,6 +44,11 @@ namespace GooglePlayServices
         internal static bool EnableAutoResolution {
             set { EditorPrefs.SetBool(AutoResolveKey, value); }
             get { return EditorPrefs.GetBool(AutoResolveKey, true); }
+        }
+
+        internal static bool PrebuildWithGradle {
+            private set { EditorPrefs.SetBool(PrebuildWithGradleKey, value); }
+            get { return EditorPrefs.GetBool(PrebuildWithGradleKey, false); }
         }
 
         internal static bool InstallAndroidPackages {
@@ -73,6 +80,7 @@ namespace GooglePlayServices
         }
 
         bool enableAutoResolution;
+        bool prebuildWithGradle;
         bool installAndroidPackages;
         string packageDir;
         bool explodeAars;
@@ -87,6 +95,7 @@ namespace GooglePlayServices
         public void OnEnable()
         {
             enableAutoResolution = EnableAutoResolution;
+            prebuildWithGradle = PrebuildWithGradle;
             installAndroidPackages = InstallAndroidPackages;
             packageDir = PackageDir;
             explodeAars = ExplodeAars;
@@ -101,6 +110,12 @@ namespace GooglePlayServices
             GUILayout.BeginVertical();
 
             GUILayout.BeginHorizontal();
+            GUILayout.Label("Prebuild With Gradle (Experimental)", EditorStyles.boldLabel);
+            prebuildWithGradle = EditorGUILayout.Toggle(prebuildWithGradle);
+            GUILayout.EndHorizontal();
+
+            EditorGUI.BeginDisabledGroup(prebuildWithGradle == true);
+            GUILayout.BeginHorizontal();
             GUILayout.Label("Enable Background Resolution", EditorStyles.boldLabel);
             enableAutoResolution = EditorGUILayout.Toggle(enableAutoResolution);
             GUILayout.EndHorizontal();
@@ -109,6 +124,7 @@ namespace GooglePlayServices
             GUILayout.Label("Install Android Packages", EditorStyles.boldLabel);
             installAndroidPackages = EditorGUILayout.Toggle(installAndroidPackages);
             GUILayout.EndHorizontal();
+
 
             if (ConfigurablePackageDir) {
                 GUILayout.BeginHorizontal();
@@ -146,6 +162,7 @@ namespace GooglePlayServices
                                 "android.defaultConfig.applicationId to your bundle ID in your " +
                                 "build.gradle to generate a functional APK.");
             }
+            EditorGUI.EndDisabledGroup();
 
             GUILayout.Space(10);
             GUILayout.BeginHorizontal();
@@ -154,6 +171,7 @@ namespace GooglePlayServices
             closeWindow |= ok;
             if (ok)
             {
+                PrebuildWithGradle = prebuildWithGradle;
                 EnableAutoResolution = enableAutoResolution;
                 InstallAndroidPackages = installAndroidPackages;
                 if (ConfigurablePackageDir) PackageDir = packageDir;

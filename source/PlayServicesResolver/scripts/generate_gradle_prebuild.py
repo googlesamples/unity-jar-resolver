@@ -38,7 +38,7 @@ DEFAULT_OUTPUT_PATH = "MergedDeps"
 # The TEMPLATE_ZIP and INTERMEDIATE_PATHS_CONFIG are assumed to be in the same
 # place as this script. This may change in the future when adding support for
 # users to have finer control over the gradle build.
-TEMPLATE_ZIP = "gradle_template.zip"
+TEMPLATE_ZIP = "gradle-template.zip"
 INTERMEDIATE_PATHS_CONFIG = "volatile_paths.json"
 SRCAAR_EXT = "srcaar"
 

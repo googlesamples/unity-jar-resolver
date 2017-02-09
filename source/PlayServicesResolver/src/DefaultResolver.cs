@@ -59,7 +59,7 @@ namespace GooglePlayServices
         /// <returns><c>true</c>, if resolution enabled was automaticed, <c>false</c> otherwise.</returns>
         public virtual bool AutomaticResolutionEnabled()
         {
-            return SettingsDialog.EnableAutoResolution;
+            return !SettingsDialog.PrebuildWithGradle && SettingsDialog.EnableAutoResolution;
         }
 
         /// <summary>
@@ -119,11 +119,11 @@ namespace GooglePlayServices
         /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
         /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
         public virtual void DoResolution(
-            PlayServicesSupport svcSupport, string destinationDirectory,
+            PlayServicesSupport svcSupport,
+            string destinationDirectory,
             PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
             System.Action resolutionComplete)
         {
-            DoResolution(svcSupport, destinationDirectory, handleOverwriteConfirmation);
             resolutionComplete();
         }
 
@@ -154,9 +154,14 @@ namespace GooglePlayServices
         /// <param name="svcSupport">Svc support.</param>
         /// <param name="destinationDirectory">Destination directory.</param>
         /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
-        public abstract void DoResolution(
-            PlayServicesSupport svcSupport, string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation);
+        public virtual void DoResolution(
+            PlayServicesSupport svcSupport,
+            string destinationDirectory,
+            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation)
+        {
+            DoResolution(svcSupport, destinationDirectory, handleOverwriteConfirmation,
+                () => {});
+        }
 
         /// <summary>
         /// Makes the version number.

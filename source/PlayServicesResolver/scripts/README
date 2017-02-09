@@ -5,7 +5,7 @@ within unity.
 
 sample/sampledeps.json is a sample config passed to generate_gradle_prebuild.py.
 
-The files in gradle_template.zip are not meant to be edited and are referenced
+The files in gradle-template.zip are not meant to be edited and are referenced
 by the script to generate the gradle build.
 
 Here's an example invocation of the script:

@@ -67,7 +67,7 @@ namespace Google.JarResolver
         /// <summary>
         /// String that is expanded with the path of the Android SDK.
         /// </summary>
-        private const string SdkVariable = "$SDK";
+        internal const string SdkVariable = "$SDK";
 
         /// <summary>
         /// Extension of Unity metadata files.
