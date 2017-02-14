@@ -118,7 +118,7 @@ project.ext {
 // nunit-console is used to run tests.
     if (os_windows) {
         nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
-            fileTree(dir: unity_root).matching { include '**/Mono/bin/nunut-console2.bat'})
+            fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2.bat'})
     } else if (os_osx) {
         nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
             fileTree(dir: unity_root).matching { include '**/nunit-console2'})
