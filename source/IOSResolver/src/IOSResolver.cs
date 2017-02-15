@@ -187,12 +187,15 @@ public static class IOSResolver {
     public static string TARGET_NAME = null;
 
     // Keys in the editor preferences which control the behavior of this module.
-    private const string PREFERENCE_ENABLED = "Google.IOSResolver.Enabled";
-
-    /// <summary>
-    /// Whether verbose logging is enabled.
-    /// </summary>
-    internal static bool verboseLogging = false;
+    private const string PREFERENCE_NAMESPACE = "Google.IOSResolver.";
+    // Whether Cocoapod installation is enabled.
+    private const string PREFERENCE_COCOAPODS_INSTALL_ENABLED = PREFERENCE_NAMESPACE + "Enabled";
+    // Whether the Podfile generation is enabled.
+    private const string PREFERENCE_PODFILE_GENERATION_ENABLED =
+        PREFERENCE_NAMESPACE + "PodfileEnabled";
+    // Whether verbose logging is enabled.
+    private const string PREFERENCE_VERBOSE_LOGGING_ENABLED =
+        PREFERENCE_NAMESPACE + "VerboseLoggingEnabled";
 
     // Whether the xcode extension was successfully loaded.
     private static bool iOSXcodeExtensionLoaded = true;
@@ -333,6 +336,16 @@ public static class IOSResolver {
         }
     }
 
+    // Display the iOS resolver settings menu.
+    [MenuItem("Assets/Play Services Resolver/iOS Resolver/Settings")]
+    public static void SettingsDialog() {
+        IOSResolverSettingsDialog window = (IOSResolverSettingsDialog)
+            EditorWindow.GetWindow(typeof(IOSResolverSettingsDialog), true,
+                                   "iOS Resolver Settings");
+        window.Initialize();
+        window.Show();
+    }
+
     /// <summary>
     /// Initialize the TARGET_NAME property.
     /// </summary>
@@ -349,13 +362,35 @@ public static class IOSResolver {
     }
 
     /// <summary>
-    /// Enable / disable iOS dependency injection.
+    /// Enable / disable Cocoapods installation.
     /// </summary>
-    public static bool Enabled {
-        get { return EditorPrefs.GetBool(PREFERENCE_ENABLED,
-                                         defaultValue: true) &&
-                iOSXcodeExtensionLoaded; }
-        set { EditorPrefs.SetBool(PREFERENCE_ENABLED, value); }
+    public static bool CocoapodsInstallEnabled {
+        get { return EditorPrefs.GetBool(PREFERENCE_COCOAPODS_INSTALL_ENABLED,
+                                         defaultValue: true); }
+        set { EditorPrefs.SetBool(PREFERENCE_COCOAPODS_INSTALL_ENABLED, value); }
+    }
+
+    /// <summary>
+    /// Enable / disable Podfile generation.
+    /// </summary>
+    public static bool PodfileGenerationEnabled {
+        get { return EditorPrefs.GetBool(PREFERENCE_PODFILE_GENERATION_ENABLED,
+                                         defaultValue: true); }
+        set { EditorPrefs.SetBool(PREFERENCE_PODFILE_GENERATION_ENABLED, value); }
+    }
+
+    /// <summary>
+    /// Determine whether it's possible to perform iOS dependency injection.
+    /// </summary>
+    public static bool Enabled { get { return iOSXcodeExtensionLoaded; } }
+
+    /// <summary>
+    /// Enable / disable verbose logging.
+    /// </summary>
+    public static bool VerboseLoggingEnabled {
+        get { return EditorPrefs.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
+                                         defaultValue: false); }
+        set { EditorPrefs.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
     }
 
     /// <summary>
@@ -372,7 +407,7 @@ public static class IOSResolver {
     /// </summary>
     internal static void Log(string message, bool verbose = false,
                              LogLevel level = LogLevel.Info) {
-        if (!verbose || verboseLogging) {
+        if (!verbose || VerboseLoggingEnabled) {
             switch (level) {
                 case LogLevel.Info:
                     Debug.Log(message);
@@ -658,7 +693,7 @@ public static class IOSResolver {
     [PostProcessBuildAttribute(BUILD_ORDER_PATCH_PROJECT)]
     public static void OnPostProcessPatchProject(BuildTarget buildTarget,
                                                  string pathToBuiltProject) {
-        if (!InjectDependencies()) return;
+        if (!InjectDependencies() || !PodfileGenerationEnabled || !CocoapodsInstallEnabled) return;
         PatchProject(buildTarget, pathToBuiltProject);
     }
 
@@ -704,8 +739,15 @@ public static class IOSResolver {
     [PostProcessBuildAttribute(BUILD_ORDER_GEN_PODFILE)]
     public static void OnPostProcessGenPodfile(BuildTarget buildTarget,
                                                string pathToBuiltProject) {
-        if (!InjectDependencies()) return;
+        if (!InjectDependencies() || !PodfileGenerationEnabled) return;
         GenPodfile(buildTarget, pathToBuiltProject);
+    }
+
+    /// <summary>
+    /// Get the path to the generated Podfile.
+    /// </summary>
+    private static string GetPodfilePath(string pathToBuiltProject) {
+        return Path.Combine(pathToBuiltProject, "Podfile");
     }
 
     // Implementation of OnPostProcessGenPodfile().
@@ -714,13 +756,16 @@ public static class IOSResolver {
     // processing step.
     public static void GenPodfile(BuildTarget buildTarget,
                                   string pathToBuiltProject) {
-        using (StreamWriter file =
-               new StreamWriter(Path.Combine(pathToBuiltProject, "Podfile"))) {
+        string podfilePath = GetPodfilePath(pathToBuiltProject);
+        Log(String.Format("Generating Podfile {0} with target integration {1}",
+                          podfilePath, CocoapodsInstallEnabled ? "disabled" : "enabled"),
+            verbose: true);
+        using (StreamWriter file = new StreamWriter(podfilePath)) {
             file.Write("source 'https://github.com/CocoaPods/Specs.git'\n" +
-                "install! 'cocoapods', :integrate_targets => false\n" +
-                string.Format("platform :ios, '{0}'\n\n", TargetSdk) +
-                "target '" + TARGET_NAME + "' do\n"
-            );
+                       (CocoapodsInstallEnabled ?
+                        "install! 'cocoapods', :integrate_targets => false\n" : "") +
+                       String.Format("platform :ios, '{0}'\n\n", TargetSdk) +
+                       "target '" + TARGET_NAME + "' do\n");
             foreach(var pod in pods.Values) {
                 file.WriteLine(pod.PodFilePodLine);
             }
@@ -803,8 +848,20 @@ public static class IOSResolver {
     [PostProcessBuildAttribute(BUILD_ORDER_INSTALL_PODS)]
     public static void OnPostProcessInstallPods(BuildTarget buildTarget,
                                                 string pathToBuiltProject) {
-        if (!InjectDependencies()) return;
+        if (!InjectDependencies() || !PodfileGenerationEnabled) return;
         if (UpdateTargetSdk()) return;
+        if (!CocoapodsInstallEnabled) {
+            Log(String.Format(
+                "Cocoapod installation is disabled.\n" +
+                "If Cocoapods are not installed in your project it will not link.\n\n" +
+                "The command '{0} install' must be executed from the {1} directory to generate\n" +
+                "a Xcode workspace that includes the Cocoapods referenced by {2}.\n" +
+                "For more information see:\n" +
+                "  https://guides.cocoapods.org/using/using-cocoapods.html\n\n",
+                POD_EXECUTABLE, pathToBuiltProject, GetPodfilePath(pathToBuiltProject)),
+                level: LogLevel.Warning);
+            return;
+        }
 
         // Require at least version 1.0.0
         CommandLine.Result result;
@@ -882,7 +939,7 @@ public static class IOSResolver {
     [PostProcessBuildAttribute(BUILD_ORDER_UPDATE_DEPS)]
     public static void OnPostProcessUpdateProjectDeps(
             BuildTarget buildTarget, string pathToBuiltProject) {
-        if (!InjectDependencies()) return;
+        if (!InjectDependencies() || !PodfileGenerationEnabled || !CocoapodsInstallEnabled) return;
         UpdateProjectDeps(buildTarget, pathToBuiltProject);
     }
 
