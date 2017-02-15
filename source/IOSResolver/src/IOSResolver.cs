@@ -1024,6 +1024,12 @@ public static class IOSResolver {
                 project.AddFile(podPathProjectPath.Value,
                                 podPathProjectPath.Value,
                                 UnityEditor.iOS.Xcode.PBXSourceTree.Source));
+            // Some source pods (e.g Protobuf) can include files relative to the Pod root,
+            // add include paths relative to the Pod's source files for this use case.
+            project.UpdateBuildProperty(target, "HEADER_SEARCH_PATHS",
+                                        new [] { "$(SRCROOT)/" +
+                                                 Path.GetDirectoryName(podPathProjectPath.Value) },
+                                        new string[] {});
         }
 
         // Attempt to read per-file compile / build settings from the Pods
