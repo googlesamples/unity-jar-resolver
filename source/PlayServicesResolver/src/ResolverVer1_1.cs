@@ -563,7 +563,8 @@ namespace GooglePlayServices
             // Determine which packages need to be updated.
             List<string> packagesToUpdate = new List<string>();
             List<string> aarsToResolve = new List<string>();
-            foreach (KeyValuePair<string, AarExplodeData> kv in aarExplodeData)
+            var aarExplodeDataCopy = new Dictionary<string, AarExplodeData>(aarExplodeData);
+            foreach (var kv in aarExplodeDataCopy)
             {
                 if (kv.Value.bundleId != bundleId && kv.Value.path != "" &&
                     ShouldExplode(kv.Value.path))
@@ -575,6 +576,7 @@ namespace GooglePlayServices
             // Remove AARs that will be resolved from the dictionary so the next call to
             // OnBundleId triggers another resolution process.
             foreach (string aar in aarsToResolve) aarExplodeData.Remove(aar);
+            SaveAarExplodeCache();
             return packagesToUpdate.Count > 0 ? packagesToUpdate.ToArray() : null;
         }
 
@@ -612,8 +614,6 @@ namespace GooglePlayServices
             // e.g. ${applicationId}.  Unity does not understand how to process
             // these, so we handle it here.
             ProcessAars(destinationDirectory);
-
-            SaveAarExplodeCache();
         }
 
         /// <summary>
@@ -651,20 +651,38 @@ namespace GooglePlayServices
                 aarExplodeData[f].path = targetPath;
                 aarExplodeData[f].bundleId = PlayerSettings.bundleIdentifier;
             }
+            SaveAarExplodeCache();
         }
 
         /// <summary>
-        /// Determined whether an aar file should be exploded (extracted).
+        /// Determines whether an aar file should be exploded (extracted).
         ///
         /// This is required for some aars so that the Unity Jar Resolver can perform variable
         /// expansion on manifests in the package before they're merged by aapt.
         /// </summary>
         /// <returns><c>true</c>, if the aar should be exploded, <c>false</c> otherwise.</returns>
-        /// <param name="aarFile">The aar file.</param>
-        internal virtual bool ShouldExplode(string aarFile)
+        /// <param name="aarPath">Path of the AAR file to query whether it should be exploded or
+        /// the path to the exploded AAR directory to determine whether the AAR should still be
+        /// exploded.</param>
+        internal virtual bool ShouldExplode(string aarPath)
         {
             AarExplodeData aarData = null;
-            if (!aarExplodeData.TryGetValue(aarFile, out aarData)) aarData = new AarExplodeData();
+            // The argument to this method could be the exploded folder rather than the source
+            // package (e.g some-package rather than some-package.aar).  Therefore search the
+            // cache for the original / unexploded package if the specified file isn't found.
+            var packageExtensions = new List<string>();
+            packageExtensions.Add("");  // Search for aarPath first.
+            packageExtensions.AddRange(Dependency.Packaging);
+            foreach (var extension in packageExtensions)
+            {
+                AarExplodeData data;
+                if (aarExplodeData.TryGetValue(aarPath + extension, out data))
+                {
+                    aarData = data;
+                    break;
+                }
+            }
+            aarData = aarData ?? new AarExplodeData();
             bool explosionEnabled = true;
             // Unfortunately, as of Unity 5.5.0f3, Unity does not set the applicationId variable
             // in the build.gradle it generates.  This results in non-functional libraries that
@@ -682,9 +700,12 @@ namespace GooglePlayServices
             if (explosionEnabled)
             {
                 explode = !SupportsAarFiles;
+                // If the path is a directory then the caller is referencing an AAR that has
+                // already been exploded in which case we keep explosion enabled.
+                explode = explode || Directory.Exists(aarPath);
                 if (!explode)
                 {
-                    System.DateTime modificationTime = File.GetLastWriteTime(aarFile);
+                    System.DateTime modificationTime = File.GetLastWriteTime(aarPath);
                     if (modificationTime.CompareTo(aarData.modificationTime) <= 0)
                     {
                         explode = aarData.explode;
@@ -697,7 +718,7 @@ namespace GooglePlayServices
                     string manifestFilename = "AndroidManifest.xml";
                     try
                     {
-                        if (ExtractAar(aarFile, new string[] {manifestFilename},
+                        if (ExtractAar(aarPath, new string[] {manifestFilename},
                                        temporaryDirectory))
                         {
                             string manifestPath = Path.Combine(temporaryDirectory,
@@ -707,12 +728,12 @@ namespace GooglePlayServices
                                 string manifest = File.ReadAllText(manifestPath);
                                 explode = manifest.IndexOf("${applicationId}") >= 0;
                             }
-                            aarData.modificationTime = File.GetLastWriteTime(aarFile);
+                            aarData.modificationTime = File.GetLastWriteTime(aarPath);
                         }
                     }
                     catch (System.Exception e)
                     {
-                        Debug.Log("Unable to examine AAR file " + aarFile + ", err: " + e);
+                        Debug.Log("Unable to examine AAR file " + aarPath + ", err: " + e);
                         throw e;
                     }
                     finally
@@ -722,7 +743,7 @@ namespace GooglePlayServices
                 }
             }
             aarData.explode = explode;
-            aarExplodeData[aarFile] = aarData;
+            aarExplodeData[aarPath] = aarData;
             return explode;
         }
 

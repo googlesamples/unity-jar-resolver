@@ -1,3 +1,7 @@
+# Version 1.2.12 - Feb 14, 2017
+## Bug Fixes
+    * Fixed re-explosion of AARs when the bundle ID is modified.
+
 # Version 1.2.11 - Jan 30, 2017
 ## New Features
     * Added support for Android Studio builds.

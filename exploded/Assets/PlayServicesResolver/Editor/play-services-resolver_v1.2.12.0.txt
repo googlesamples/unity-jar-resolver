@@ -1,0 +1,4 @@
+Assets/PlayServicesResolver/Editor/Google.IOSResolver_v1.2.12.0.dll
+Assets/PlayServicesResolver/Editor/Google.JarResolver_v1.2.12.0.dll
+Assets/PlayServicesResolver/Editor/Google.PackageManager_v1.2.12.0.dll
+Assets/PlayServicesResolver/Editor/Google.VersionHandler_v1.2.12.0.dll
