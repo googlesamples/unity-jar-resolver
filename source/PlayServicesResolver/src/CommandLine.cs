@@ -517,7 +517,7 @@ namespace GooglePlayServices
                     }
                 }
             }
-            process.StartInfo.RedirectStandardInput = useShellExecution && (ioHandler != null);
+            process.StartInfo.RedirectStandardInput = !useShellExecution && (ioHandler != null);
             process.StartInfo.FileName = toolPath;
             process.StartInfo.WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory;
 

@@ -23,6 +23,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEngine;
@@ -145,10 +146,11 @@ public static class IOSResolver {
         new SortedDictionary<string, Pod>();
 
     // Order of post processing operations.
-    private const int BUILD_ORDER_PATCH_PROJECT = 1;
-    private const int BUILD_ORDER_GEN_PODFILE = 2;
-    private const int BUILD_ORDER_INSTALL_PODS = 3;
-    private const int BUILD_ORDER_UPDATE_DEPS = 4;
+    private const int BUILD_ORDER_CHECK_COCOAPODS_INSTALL = 1;
+    private const int BUILD_ORDER_PATCH_PROJECT = 2;
+    private const int BUILD_ORDER_GEN_PODFILE = 3;
+    private const int BUILD_ORDER_INSTALL_PODS = 4;
+    private const int BUILD_ORDER_UPDATE_DEPS = 5;
 
     // Installation instructions for the Cocoapods command line tool.
     private const string COCOAPOD_INSTALL_INSTRUCTIONS = (
@@ -164,6 +166,8 @@ public static class IOSResolver {
         "/usr/local/bin",
         "/usr/bin",
     };
+    // Ruby Gem executable filename.
+    private static string GEM_EXECUTABLE = "gem";
 
     // Extensions of pod source files to include in the project.
     private static HashSet<string> SOURCE_FILE_EXTENSIONS = new HashSet<string>(
@@ -199,9 +203,14 @@ public static class IOSResolver {
     // Whether execution of the pod tool is performed via the shell.
     private const string PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED =
         PREFERENCE_NAMESPACE + "PodToolExecutionViaShellEnabled";
+    // Whether to try to install Cocoapods tools when iOS is selected as the target platform.
+    private const string PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR =
+        PREFERENCE_NAMESPACE + "AutoPodToolInstallInEditor";
 
     // Whether the xcode extension was successfully loaded.
     private static bool iOSXcodeExtensionLoaded = true;
+    // Whether a functioning Cocoapods install is present.
+    private static bool cocoapodsInstallPresent = false;
 
     private static string IOS_PLAYBACK_ENGINES_PATH =
         Path.Combine("PlaybackEngines", "iOSSupport");
@@ -219,6 +228,11 @@ public static class IOSResolver {
     private const int DEFAULT_TARGET_SDK = 82;
     // Valid iOS target SDK version.
     private static Regex TARGET_SDK_REGEX = new Regex("^[0-9]+\\.[0-9]$");
+
+    // Current window being used for a long running shell command.
+    private static CommandLineDialog commandLineDialog = null;
+    // Mutex for access to commandLineDialog.
+    private static System.Object commandLineDialogLock = new System.Object();
 
     // Search for a file up to a maximum search depth stopping the
     // depth first search each time the specified file is found.
@@ -337,6 +351,15 @@ public static class IOSResolver {
                 }
             }
         }
+
+        // If Cocoapod tool auto-installation is enabled try installing on the first update of
+        // the editor when the editor environment has been initialized.
+        if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
+            AutoPodToolInstallInEditorEnabled && CocoapodsInstallEnabled &&
+            !System.Environment.CommandLine.Contains("-batchmode")) {
+            EditorApplication.update -= AutoInstallCocoapods;
+            EditorApplication.update += AutoInstallCocoapods;
+        }
     }
 
     // Display the iOS resolver settings menu.
@@ -392,6 +415,16 @@ public static class IOSResolver {
     }
 
     /// <summary>
+    /// Enable automated pod tool installation in the editor.  This is only performed when the
+    /// editor isn't launched in batch mode.
+    /// </summary>
+    public static bool AutoPodToolInstallInEditorEnabled {
+        get { return EditorPrefs.GetBool(PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR,
+                                         defaultValue: true); }
+        set { EditorPrefs.SetBool(PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR, value); }
+    }
+
+    /// <summary>
     /// Determine whether it's possible to perform iOS dependency injection.
     /// </summary>
     public static bool Enabled { get { return iOSXcodeExtensionLoaded; } }
@@ -414,6 +447,9 @@ public static class IOSResolver {
         Error,
     };
 
+    private delegate void LogMessageDelegate(string message, bool verbose = false,
+                                            LogLevel level = LogLevel.Info);
+
     /// <summary>
     /// Log a message.
     /// </summary>
@@ -432,6 +468,15 @@ public static class IOSResolver {
                     break;
             }
         }
+    }
+
+    /// <summary>
+    /// Display a message in a dialog and log to the console.
+    /// </summary>
+    internal static void LogToDialog(string message, bool verbose = false,
+                             LogLevel level = LogLevel.Info) {
+        EditorUtility.DisplayDialog("iOS Resolver", message, "OK");
+        Log(message, verbose: verbose, level: level);
     }
 
     /// <summary>
@@ -700,12 +745,157 @@ public static class IOSResolver {
     }
 
     /// <summary>
+    /// Menu item that installs Cocoapods if it's not already installed.
+    /// </summary>
+    [MenuItem("Assets/Play Services Resolver/iOS Resolver/Install Cocoapods")]
+    public static void InstallCocoapodsMenu() {
+        InstallCocoapodsInteractive();
+    }
+
+    /// <summary>
+    /// Auto install Cocoapods tools if they're not already installed.
+    /// </summary>
+    public static void AutoInstallCocoapods() {
+        InstallCocoapodsInteractive(displayAlreadyInstalled: false);
+        EditorApplication.update -= AutoInstallCocoapods;
+    }
+
+    /// <summary>
+    /// Interactively installs Cocoapods if it's not already installed.
+    /// </summary>
+    public static void InstallCocoapodsInteractive(bool displayAlreadyInstalled = true) {
+        bool installCocoapods = true;
+        lock (commandLineDialogLock) {
+            if (commandLineDialog != null) {
+                // If the installation is still in progress, display the dialog.
+                commandLineDialog.Show();
+                installCocoapods = false;
+            }
+        }
+        if (installCocoapods) {
+            InstallCocoapods(true, ".", displayAlreadyInstalled: displayAlreadyInstalled);
+        }
+    }
+
+    /// <summary>
+    /// Install Cocoapods if it's not already installed.
+    /// </summary>
+    /// <param name="interactive">Whether this method should display information in pop-up
+    /// dialogs.</param>
+    /// <param name="workingDirectory">Where to run the pod tool's setup command.</param>
+    /// <param name="displayAlreadyInstalled">Whether to display whether the tools are already
+    /// installed.</param>
+    public static void InstallCocoapods(bool interactive, string workingDirectory,
+                                        bool displayAlreadyInstalled = true) {
+        cocoapodsInstallPresent = false;
+        // Cocoapod tools are currently only available on OSX, don't attempt to install them
+        // otherwise.
+        if (UnityEngine.RuntimePlatform.OSXEditor != UnityEngine.Application.platform) {
+            return;
+        }
+
+        LogMessageDelegate logMessage = null;
+        if (interactive) {
+            logMessage = LogToDialog;
+        } else {
+            logMessage = Log;
+        }
+        var podToolPath = FindPodTool();
+        if (!String.IsNullOrEmpty(podToolPath)) {
+            var installationFoundMessage = "Cocoapods installation detected " + podToolPath;
+            if (displayAlreadyInstalled) logMessage(installationFoundMessage, verbose: true);
+            cocoapodsInstallPresent = true;
+            return;
+        }
+
+        var complete = new AutoResetEvent(false);
+        var gemInstallArgs = "install cocoapods --user-install";
+        RunCommandAsync(
+            GEM_EXECUTABLE, gemInstallArgs,
+            (CommandLine.Result gemInstallResult) => {
+                var commonInstallErrorMessage =
+                    "It will not be possible to install Cocoapods in the generated Xcode " +
+                    "project which will result in link errors when building your " +
+                    "application.\n\n" +
+                    "For more information see:\n" +
+                    "  https://guides.cocoapods.org/using/getting-started.html\n\n";
+                if (gemInstallResult.exitCode != 0) {
+                    logMessage(String.Format(
+                        "Failed to install Cocoapods for the current user.\n\n" +
+                        "{0}\n" +
+                        "'{1} {2}' failed with code ({3}):\n" +
+                        "{4}\n\n" +
+                        "{5}\n",
+                        commonInstallErrorMessage, GEM_EXECUTABLE, gemInstallArgs,
+                        gemInstallResult.exitCode,
+                        gemInstallResult.stdout, gemInstallResult.stderr), level: LogLevel.Error);
+                    complete.Set();
+                    return;
+                }
+
+                podToolPath = FindPodTool();
+                if (String.IsNullOrEmpty(podToolPath)) {
+                    logMessage(String.Format(
+                        "'{0} {1}' succeeded but the {2} tool cannot be found.\n\n" +
+                        "{3}\n", GEM_EXECUTABLE, gemInstallArgs, POD_EXECUTABLE,
+                        commonInstallErrorMessage), level: LogLevel.Error);
+                    complete.Set();
+                    return;
+                }
+
+                // Setup the Cocoapod environment.
+                RunPodCommandAsync(
+                    "setup", workingDirectory,
+                    (CommandLine.Result podSetupResult) => {
+                        if (podSetupResult.exitCode != 0) {
+                            logMessage(String.Format(
+                                "'{0} setup' failed.\n\n" +
+                                "{1}\n" +
+                                "'{2} setup' failed with code ({3}):\n" +
+                                "{4}\n\n" +
+                                "{5}\n",
+                                POD_EXECUTABLE, commonInstallErrorMessage, podToolPath,
+                                podSetupResult.exitCode, podSetupResult.stdout,
+                                podSetupResult.stderr), level: LogLevel.Error);
+                            complete.Set();
+                            return;
+                        }
+                        complete.Set();
+                        logMessage("Cocoapods tools successfully installed.");
+                        cocoapodsInstallPresent = true;
+                    },
+                    displayDialog: interactive,
+                    summaryText: ("Downloading Cocoapods Master Repository\n" +
+                                  "(this can take a while)"));
+            },
+            displayDialog: interactive,
+            summaryText: "Installing Cocoapods Gem...");
+
+        // If this wasn't started interactively, block until execution is complete.
+        if (!interactive) complete.WaitOne();
+    }
+
+    /// <summary>
+    /// If Cocoapod installation is enabled, prompt the user to install Cocoapods if it's not
+    /// present on the machine.
+    /// </summary>
+    [PostProcessBuildAttribute(BUILD_ORDER_CHECK_COCOAPODS_INSTALL)]
+    public static void OnPostProcessEnsurePodsInstallation(BuildTarget buildTarget,
+                                                           string pathToBuiltProject) {
+        if (!CocoapodsInstallEnabled) return;
+        InstallCocoapods(false, pathToBuiltProject);
+    }
+
+    /// <summary>
     /// Post-processing build step to patch the generated project files.
     /// </summary>
     [PostProcessBuildAttribute(BUILD_ORDER_PATCH_PROJECT)]
     public static void OnPostProcessPatchProject(BuildTarget buildTarget,
                                                  string pathToBuiltProject) {
-        if (!InjectDependencies() || !PodfileGenerationEnabled || !CocoapodsInstallEnabled) return;
+        if (!InjectDependencies() || !PodfileGenerationEnabled || !CocoapodsInstallEnabled ||
+            !cocoapodsInstallPresent) {
+            return;
+        }
         PatchProject(buildTarget, pathToBuiltProject);
     }
 
@@ -800,23 +990,42 @@ public static class IOSResolver {
             }
         }
         Log("Querying gems for cocoapods install path", verbose: true);
-        var result = CommandLine.Run("gem", "environment");
+        var result = RunCommand(GEM_EXECUTABLE, "environment");
         if (result.exitCode == 0) {
             // gem environment outputs YAML for all config variables,
             // the following code only parses the executable dir from the
             // output.
-            const string executableDir = "- EXECUTABLE DIRECTORY:";
+            const string listItemPrefix = "- ";
+            const string executableDir = listItemPrefix + "EXECUTABLE DIRECTORY:";
+            const string gemPaths = listItemPrefix + "GEM PATHS:";
+            int gemPathIndentSize = -1;
             char[] variableSeparator = new char[] { ':' };
             foreach (var line in result.stdout.Split(
                          new char[] { '\r', '\n' })) {
-                if (line.Trim().StartsWith(executableDir)) {
-                    string path = line.Split(variableSeparator)[1].Trim();
-                    string podPath = Path.Combine(path, POD_EXECUTABLE);
-                    Log("Checking gems install path for cocoapods tool " +
-                        podPath, verbose: true);
+                var trimmedLine = line.Trim();
+                var indentSize = line.Length - trimmedLine.Length;
+                var searchPath = "";
+                if (trimmedLine.StartsWith(executableDir)) {
+                    searchPath = line.Split(variableSeparator)[1].Trim();
+                } else if (trimmedLine.StartsWith(gemPaths)) {
+                    gemPathIndentSize = indentSize;
+                } else if (gemPathIndentSize > 0) {
+                    // While reading the list of gem paths...
+                    if (indentSize > gemPathIndentSize && trimmedLine.StartsWith(listItemPrefix)) {
+                        // Search the bin/ directory under the current gem path.
+                        string gemPath = trimmedLine.Substring(listItemPrefix.Length).Trim();
+                        if (!String.IsNullOrEmpty(gemPath)) {
+                            searchPath = Path.Combine(gemPath, "bin");
+                        }
+                    } else {
+                        gemPathIndentSize = -1;
+                    }
+                }
+                if (!String.IsNullOrEmpty(searchPath)) {
+                    string podPath = Path.Combine(searchPath, POD_EXECUTABLE);
+                    Log("Checking gems install path for cocoapods tool " + podPath, verbose: true);
                     if (File.Exists(podPath)) {
-                        Log("Found cocoapods tool in " + podPath,
-                            verbose: true);
+                        Log("Found cocoapods tool in " + podPath, verbose: true);
                         return podPath;
                     }
                 }
@@ -826,33 +1035,128 @@ public static class IOSResolver {
     }
 
     /// <summary>
+    /// Run a command, optionally displaying a dialog.
+    /// </summary>
+    /// <param name="command">Command to execute.</param>
+    /// <param name="commandArgs">Arguments passed to the command.</param>
+    /// <param name="completionDelegate">Called when the command is complete.</param>
+    /// <param name="workingDirectory">Where to run the command.</param>
+    /// <param name="displayDialog">Whether to show a dialog while executing.</param>
+    /// <param name="summaryText">Text to display at the top of the dialog.</param>
+    private static void RunCommandAsync(string command, string commandArgs,
+                                        CommandLine.CompletionHandler completionDelegate,
+                                        string workingDirectory = null,
+                                        bool displayDialog = false, string summaryText = null) {
+        var envVars = new Dictionary<string,string>() {
+            // Cocoapods requires a UTF-8 terminal, otherwise it displays a warning.
+            {"LANG", (System.Environment.GetEnvironmentVariable("LANG") ??
+                      "en_US.UTF-8").Split('.')[0] + ".UTF-8"},
+            {"PATH", ("/usr/local/bin:" +
+                      (System.Environment.GetEnvironmentVariable("PATH") ?? ""))},
+        };
+
+        if (displayDialog) {
+            var dialog = CommandLineDialog.CreateCommandLineDialog("iOS Resolver");
+            dialog.modal = false;
+            dialog.autoScrollToBottom = true;
+            dialog.summaryText = String.Format("{0}{1} {2}",
+                                               String.IsNullOrEmpty(summaryText) ?
+                                                  "" : summaryText + "\n\n",
+                                               command, commandArgs);
+            dialog.RunAsync(
+                command, commandArgs,
+                (CommandLine.Result asyncResult) => {
+                    if (asyncResult.exitCode == 0) dialog.Close();
+                    lock (commandLineDialogLock) {
+                        commandLineDialog = null;
+                    }
+                    completionDelegate(asyncResult);
+                },
+                workingDirectory: workingDirectory, envVars: envVars);
+            dialog.Show();
+            lock (commandLineDialogLock) {
+                commandLineDialog = dialog;
+            }
+        } else {
+            if (!String.IsNullOrEmpty(summaryText)) Log(summaryText);
+            completionDelegate(CommandLine.Run(
+                command, commandArgs, workingDirectory: workingDirectory,
+                envVars: envVars, useShellExecution: PodToolExecutionViaShellEnabled));
+        }
+    }
+
+    /// <summary>
+    /// Run a command, optionally displaying a dialog.
+    /// </summary>
+    /// <param name="command">Command to execute.</param>
+    /// <param name="commandArgs">Arguments passed to the command.</param>
+    /// <param name="workingDirectory">Where to run the command.</param>
+    /// <param name="displayDialog">Whether to show a dialog while executing.</param>
+    /// <returns>The CommandLine.Result from running the command.</returns>
+    private static CommandLine.Result RunCommand(string command, string commandArgs,
+                                                 string workingDirectory = null,
+                                                 bool displayDialog = false) {
+        CommandLine.Result result = null;
+        var complete = new AutoResetEvent(false);
+        RunCommandAsync(command, commandArgs,
+                        (CommandLine.Result asyncResult) => {
+                            result = asyncResult;
+                            complete.Set();
+                        }, workingDirectory: workingDirectory, displayDialog: displayDialog);
+        complete.WaitOne();
+        return result;
+
+    }
+
+    /// <summary>
     /// Finds and executes the pod command on the command line, using the
     /// correct environment.
     /// </summary>
     /// <param name="podArgs">Arguments passed to the pod command.</param>
     /// <param name="pathToBuiltProject">The path to the unity project, given
     /// from the unity [PostProcessBuildAttribute()] function.</param>
-    /// <returns>The CommandLine.Result from running the command.</returns>
-    private static CommandLine.Result RunPodCommand(string podArgs,
-                                                    string pathToBuiltProject) {
-        string pod_command = FindPodTool();
-        if (String.IsNullOrEmpty(pod_command)) {
-            CommandLine.Result r = new CommandLine.Result();
-            r.exitCode = 1;
-            r.stderr = "'pod' command not found; unable to generate a usable" +
-                " Xcode project. " + COCOAPOD_INSTALL_INSTRUCTIONS;
-            Log(r.stderr, level: LogLevel.Error);
-            return r;
+    /// <param name="completionDelegate">Called when the command is complete.</param>
+    /// <param name="displayDialog">Whether to execute in a dialog.</param>
+    /// <param name="summaryText">Text to display at the top of the dialog.</param>
+    private static void RunPodCommandAsync(
+            string podArgs, string pathToBuiltProject,
+            CommandLine.CompletionHandler completionDelegate,
+            bool displayDialog = false, string summaryText = null) {
+        string podCommand = FindPodTool();
+        if (String.IsNullOrEmpty(podCommand)) {
+            var result = new CommandLine.Result();
+            result.exitCode = 1;
+            result.stderr = String.Format(
+                "'{0}' command not found; unable to generate a usable Xcode project.\n{1}",
+                POD_EXECUTABLE, COCOAPOD_INSTALL_INSTRUCTIONS);
+            Log(result.stderr, level: LogLevel.Error);
+            completionDelegate(result);
         }
+        RunCommandAsync(podCommand, podArgs, completionDelegate,
+                        workingDirectory: pathToBuiltProject, displayDialog: displayDialog,
+                        summaryText: summaryText);
+    }
 
-        return CommandLine.Run(
-            pod_command, podArgs, pathToBuiltProject,
-            // cocoapods seems to require this, or it spits out a warning.
-            envVars: new Dictionary<string,string>() {
-                {"LANG", (System.Environment.GetEnvironmentVariable("LANG") ??
-                    "en_US.UTF-8").Split('.')[0] + ".UTF-8"}
-            },
-            useShellExecution: PodToolExecutionViaShellEnabled);
+    /// <summary>
+    /// Finds and executes the pod command on the command line, using the
+    /// correct environment.
+    /// </summary>
+    /// <param name="podArgs">Arguments passed to the pod command.</param>
+    /// <param name="pathToBuiltProject">The path to the unity project, given
+    /// from the unity [PostProcessBuildAttribute()] function.</param>
+    /// <param name="displayDialog">Whether to execute in a dialog.</param>
+    /// <returns>The CommandLine.Result from running the command.</returns>
+    private static CommandLine.Result RunPodCommand(
+            string podArgs, string pathToBuiltProject, bool displayDialog = false) {
+        CommandLine.Result result = null;
+        var complete = new AutoResetEvent(false);
+        RunPodCommandAsync(podArgs, pathToBuiltProject,
+                           (CommandLine.Result asyncResult) => {
+                               result = asyncResult;
+                               complete.Set();
+                           }, displayDialog: displayDialog);
+        complete.WaitOne();
+        return result;
     }
 
     /// <summary>
@@ -863,11 +1167,11 @@ public static class IOSResolver {
                                                 string pathToBuiltProject) {
         if (!InjectDependencies() || !PodfileGenerationEnabled) return;
         if (UpdateTargetSdk()) return;
-        if (!CocoapodsInstallEnabled) {
+        if (!CocoapodsInstallEnabled || !cocoapodsInstallPresent) {
             Log(String.Format(
                 "Cocoapod installation is disabled.\n" +
                 "If Cocoapods are not installed in your project it will not link.\n\n" +
-                "The command '{0} install' must be executed from the {1} directory to generate\n" +
+                "The command '{0} install' must be executed from the {1} directory to generate " +
                 "a Xcode workspace that includes the Cocoapods referenced by {2}.\n" +
                 "For more information see:\n" +
                 "  https://guides.cocoapods.org/using/using-cocoapods.html\n\n",
@@ -953,7 +1257,10 @@ public static class IOSResolver {
     [PostProcessBuildAttribute(BUILD_ORDER_UPDATE_DEPS)]
     public static void OnPostProcessUpdateProjectDeps(
             BuildTarget buildTarget, string pathToBuiltProject) {
-        if (!InjectDependencies() || !PodfileGenerationEnabled || !CocoapodsInstallEnabled) return;
+        if (!InjectDependencies() || !PodfileGenerationEnabled || !CocoapodsInstallEnabled ||
+            !cocoapodsInstallPresent) {
+            return;
+        }
         UpdateProjectDeps(buildTarget, pathToBuiltProject);
     }
 

@@ -28,10 +28,11 @@ public class IOSResolverSettingsDialog : EditorWindow
     bool cocoapodsInstallEnabled;
     bool podfileGenerationEnabled;
     bool podToolExecutionViaShellEnabled;
+    bool autoPodToolInstallInEditorEnabled;
     bool verboseLoggingEnabled;
 
     public void Initialize() {
-        minSize = new Vector2(300, 200);
+        minSize = new Vector2(300, 250);
         position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
     }
@@ -40,6 +41,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         cocoapodsInstallEnabled = IOSResolver.CocoapodsInstallEnabled;
         podfileGenerationEnabled = IOSResolver.PodfileGenerationEnabled;
         podToolExecutionViaShellEnabled = IOSResolver.PodToolExecutionViaShellEnabled;
+        autoPodToolInstallInEditorEnabled = IOSResolver.AutoPodToolInstallInEditorEnabled;
         verboseLoggingEnabled = IOSResolver.VerboseLoggingEnabled;
     }
 
@@ -60,7 +62,7 @@ public class IOSResolverSettingsDialog : EditorWindow
 
         EditorGUI.BeginDisabledGroup(podfileGenerationEnabled == false);
         GUILayout.BeginHorizontal();
-        GUILayout.Label("Cocoapods Installation", EditorStyles.boldLabel);
+        GUILayout.Label("Add Cocoapods to Generated Xcode Project", EditorStyles.boldLabel);
         cocoapodsInstallEnabled = EditorGUILayout.Toggle(cocoapodsInstallEnabled);
         GUILayout.EndHorizontal();
         if (!podfileGenerationEnabled) {
@@ -74,6 +76,19 @@ public class IOSResolverSettingsDialog : EditorWindow
         if (podToolExecutionViaShellEnabled) {
             GUILayout.Label("When shell execution is enabled it is not possible to redirect " +
                             "error messages to Unity's console window.");
+        }
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Auto Install Cocoapod Tools in Editor", EditorStyles.boldLabel);
+        autoPodToolInstallInEditorEnabled =
+            EditorGUILayout.Toggle(autoPodToolInstallInEditorEnabled);
+        GUILayout.EndHorizontal();
+        if (autoPodToolInstallInEditorEnabled) {
+            GUILayout.Label("Automatically installs the Cocoapod tool if the editor isn't " +
+                            "running in batch mode");
+        } else {
+            GUILayout.Label("Cocoapod tool installation can be performed via the menu option: " +
+                            "Assets > Play Services Resolver > iOS Resolver > Install Cocoapods");
         }
         EditorGUI.EndDisabledGroup();
 
@@ -92,6 +107,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             IOSResolver.PodfileGenerationEnabled = podfileGenerationEnabled;
             IOSResolver.CocoapodsInstallEnabled = cocoapodsInstallEnabled;
             IOSResolver.PodToolExecutionViaShellEnabled = podToolExecutionViaShellEnabled;
+            IOSResolver.AutoPodToolInstallInEditorEnabled = autoPodToolInstallInEditorEnabled;
             IOSResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
         }
         if (closeWindow) Close();
