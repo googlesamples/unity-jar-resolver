@@ -487,31 +487,37 @@ namespace GooglePlayServices
         /// <param name="envVars">Additional environment variables to set for the command.</param>
         /// <param name="ioHandler">Allows a caller to provide interactive input and also handle
         /// both output and error streams from a single delegate.</param>
+        /// <param name="useShellExecution">Execute the command via the shell.  This disables
+        /// I/O redirection and causes a window to be popped up when the command is executed.
+        /// </param>
         /// <returns>CommandLineTool result if successful, raises an exception if it's not
         /// possible to execute the tool.</returns>
         public static Result Run(string toolPath, string arguments, string workingDirectory = null,
                                  Dictionary<string, string> envVars = null,
-                                 IOHandler ioHandler = null)
-        {
+                                 IOHandler ioHandler = null, bool useShellExecution = false) {
             System.Text.Encoding inputEncoding = Console.InputEncoding;
             System.Text.Encoding outputEncoding = Console.OutputEncoding;
             Console.InputEncoding = System.Text.Encoding.UTF8;
             Console.OutputEncoding = System.Text.Encoding.UTF8;
 
             Process process = new Process();
-            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.UseShellExecute = useShellExecution;
             process.StartInfo.Arguments = arguments;
-            process.StartInfo.CreateNoWindow = true;
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-            if (envVars != null)
-            {
-                foreach (var env in envVars)
-                {
-                    process.StartInfo.EnvironmentVariables[env.Key] = env.Value;
+            if (useShellExecution) {
+                process.StartInfo.CreateNoWindow = false;
+                process.StartInfo.RedirectStandardOutput = false;
+                process.StartInfo.RedirectStandardError = false;
+            } else {
+                process.StartInfo.CreateNoWindow = true;
+                process.StartInfo.RedirectStandardOutput = true;
+                process.StartInfo.RedirectStandardError = true;
+                if (envVars != null) {
+                    foreach (var env in envVars) {
+                        process.StartInfo.EnvironmentVariables[env.Key] = env.Value;
+                    }
                 }
             }
-            process.StartInfo.RedirectStandardInput = (ioHandler != null);
+            process.StartInfo.RedirectStandardInput = useShellExecution && (ioHandler != null);
             process.StartInfo.FileName = toolPath;
             process.StartInfo.WorkingDirectory = workingDirectory ?? Environment.CurrentDirectory;
 
@@ -521,25 +527,30 @@ namespace GooglePlayServices
             // handle before output data is sent to it.
             if (ioHandler != null) ioHandler(process, process.StandardInput, StreamData.Empty);
 
-            AutoResetEvent complete = new AutoResetEvent(false);
-            List<string>[] stdouterr = new List<string>[] { new List<string>(),
-                                                            new List<string>() };
-            // Read raw output from the process.
-            AsyncStreamReader[] readers = AsyncStreamReader.CreateFromStreams(
-                new Stream[] { process.StandardOutput.BaseStream,
-                               process.StandardError.BaseStream }, 1);
-            new AsyncStreamReaderMultiplexer(
-                readers,
-                (StreamData data) => {
-                    stdouterr[data.handle].Add(data.text);
-                    if (ioHandler != null) ioHandler(process, process.StandardInput, data);
-                },
-                complete: () => { complete.Set(); });
-            foreach (AsyncStreamReader reader in readers) reader.Start();
+            List<string>[] stdouterr = new List<string>[] {
+                new List<string>(), new List<string>() };
 
-            process.WaitForExit();
-            // Wait for the reading threads to complete.
-            complete.WaitOne();
+            if (useShellExecution) {
+                process.WaitForExit();
+            } else {
+                AutoResetEvent complete = new AutoResetEvent(false);
+                // Read raw output from the process.
+                AsyncStreamReader[] readers = AsyncStreamReader.CreateFromStreams(
+                    new Stream[] { process.StandardOutput.BaseStream,
+                                   process.StandardError.BaseStream }, 1);
+                new AsyncStreamReaderMultiplexer(
+                    readers,
+                    (StreamData data) => {
+                        stdouterr[data.handle].Add(data.text);
+                        if (ioHandler != null) ioHandler(process, process.StandardInput, data);
+                    },
+                    complete: () => { complete.Set(); });
+                foreach (AsyncStreamReader reader in readers) reader.Start();
+
+                process.WaitForExit();
+                // Wait for the reading threads to complete.
+                complete.WaitOne();
+            }
 
             Result result = new Result();
             result.stdout = String.Join("", stdouterr[0].ToArray());

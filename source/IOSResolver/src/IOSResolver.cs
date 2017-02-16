@@ -196,6 +196,9 @@ public static class IOSResolver {
     // Whether verbose logging is enabled.
     private const string PREFERENCE_VERBOSE_LOGGING_ENABLED =
         PREFERENCE_NAMESPACE + "VerboseLoggingEnabled";
+    // Whether execution of the pod tool is performed via the shell.
+    private const string PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED =
+        PREFERENCE_NAMESPACE + "PodToolExecutionViaShellEnabled";
 
     // Whether the xcode extension was successfully loaded.
     private static bool iOSXcodeExtensionLoaded = true;
@@ -377,6 +380,15 @@ public static class IOSResolver {
         get { return EditorPrefs.GetBool(PREFERENCE_PODFILE_GENERATION_ENABLED,
                                          defaultValue: true); }
         set { EditorPrefs.SetBool(PREFERENCE_PODFILE_GENERATION_ENABLED, value); }
+    }
+
+    /// <summary>
+    /// Enable / disable execution of the pod tool via the shell.
+    /// </summary>
+    public static bool PodToolExecutionViaShellEnabled {
+        get { return EditorPrefs.GetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED,
+                                         defaultValue: false); }
+        set { EditorPrefs.SetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED, value); }
     }
 
     /// <summary>
@@ -839,7 +851,8 @@ public static class IOSResolver {
             envVars: new Dictionary<string,string>() {
                 {"LANG", (System.Environment.GetEnvironmentVariable("LANG") ??
                     "en_US.UTF-8").Split('.')[0] + ".UTF-8"}
-            });
+            },
+            useShellExecution: PodToolExecutionViaShellEnabled);
     }
 
     /// <summary>
@@ -868,7 +881,8 @@ public static class IOSResolver {
         result = RunPodCommand("--version", pathToBuiltProject);
         if (result.exitCode == 0) podsVersion = result.stdout.Trim();
 
-        if (result.exitCode != 0 || podsVersion[0] == '0') {
+        if (result.exitCode != 0 ||
+            (!String.IsNullOrEmpty(podsVersion) && podsVersion[0] == '0')) {
             Log("Error running cocoapods. Please ensure you have at least " +
                 "version 1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS + "\n\n" +
                 "'" + POD_EXECUTABLE + " --version' returned status: " +

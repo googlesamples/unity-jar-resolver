@@ -27,6 +27,7 @@ public class IOSResolverSettingsDialog : EditorWindow
 {
     bool cocoapodsInstallEnabled;
     bool podfileGenerationEnabled;
+    bool podToolExecutionViaShellEnabled;
     bool verboseLoggingEnabled;
 
     public void Initialize() {
@@ -38,6 +39,7 @@ public class IOSResolverSettingsDialog : EditorWindow
     public void OnEnable() {
         cocoapodsInstallEnabled = IOSResolver.CocoapodsInstallEnabled;
         podfileGenerationEnabled = IOSResolver.PodfileGenerationEnabled;
+        podToolExecutionViaShellEnabled = IOSResolver.PodToolExecutionViaShellEnabled;
         verboseLoggingEnabled = IOSResolver.VerboseLoggingEnabled;
     }
 
@@ -49,7 +51,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         GUILayout.BeginVertical();
 
         GUILayout.BeginHorizontal();
-        GUILayout.Label("Enable Podfile Generation", EditorStyles.boldLabel);
+        GUILayout.Label("Podfile Generation", EditorStyles.boldLabel);
         podfileGenerationEnabled = EditorGUILayout.Toggle(podfileGenerationEnabled);
         GUILayout.EndHorizontal();
         GUILayout.Label("Podfile generation is required to install Cocoapods.  " +
@@ -58,16 +60,25 @@ public class IOSResolverSettingsDialog : EditorWindow
 
         EditorGUI.BeginDisabledGroup(podfileGenerationEnabled == false);
         GUILayout.BeginHorizontal();
-        GUILayout.Label("Enable Cocoapods Installation", EditorStyles.boldLabel);
+        GUILayout.Label("Cocoapods Installation", EditorStyles.boldLabel);
         cocoapodsInstallEnabled = EditorGUILayout.Toggle(cocoapodsInstallEnabled);
         GUILayout.EndHorizontal();
         if (!podfileGenerationEnabled) {
             GUILayout.Label("Cocoapod installation requires Podfile generation to be enabled.");
         }
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Use Shell to Execute Cocoapod Tool", EditorStyles.boldLabel);
+        podToolExecutionViaShellEnabled = EditorGUILayout.Toggle(podToolExecutionViaShellEnabled);
+        GUILayout.EndHorizontal();
+        if (podToolExecutionViaShellEnabled) {
+            GUILayout.Label("When shell execution is enabled it is not possible to redirect " +
+                            "error messages to Unity's console window.");
+        }
         EditorGUI.EndDisabledGroup();
 
         GUILayout.BeginHorizontal();
-        GUILayout.Label("Enable Verbose Logging", EditorStyles.boldLabel);
+        GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
         verboseLoggingEnabled = EditorGUILayout.Toggle(verboseLoggingEnabled);
         GUILayout.EndHorizontal();
 
@@ -80,6 +91,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         {
             IOSResolver.PodfileGenerationEnabled = podfileGenerationEnabled;
             IOSResolver.CocoapodsInstallEnabled = cocoapodsInstallEnabled;
+            IOSResolver.PodToolExecutionViaShellEnabled = podToolExecutionViaShellEnabled;
             IOSResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
         }
         if (closeWindow) Close();
