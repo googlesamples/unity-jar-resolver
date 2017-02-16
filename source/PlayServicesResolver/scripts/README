@@ -1,0 +1,19 @@
+The script generate_gradle_prebuild.py takes a set of android dependencies and,
+using gradle, builds a merged pre-built proguard-stripped package in Eclipse /
+Ant package format. This is primarily meant to be used to add Proguard support
+within unity.
+
+sample/sampledeps.json is a sample config passed to generate_gradle_prebuild.py.
+
+The files in gradle_template.zip are not meant to be edited and are referenced
+by the script to generate the gradle build.
+
+Here's an example invocation of the script:
+
+python generate_gradle_prebuild.py -c sample/sampledeps.json
+
+By default the output is written to MergedDeps/ relative to the current working
+directory and GenGradle/ contains the intermediate gradle build files.
+Subsequent use of the same intermediate build directory will result in
+incremental builds. These directories and other settings can be configured,
+see python generate_gradle_prebuild.py -h for help.
