@@ -220,6 +220,10 @@ public static class IOSResolver {
     private const string PODS_DIR = "Pods";
     // Name of the project within PODS_DIR that references downloaded Cocoapods.
     private const string PODS_PROJECT_NAME = "Pods";
+    // Prefix for static library filenames.
+    private const string LIBRARY_FILENAME_PREFIX = "lib";
+    // Extension for static library filenames.
+    private const string LIBRARY_FILENAME_EXTENSION = ".a";
 
     // Version of the Cocoapods installation.
     private static string podsVersion = "";
@@ -922,10 +926,13 @@ public static class IOSResolver {
         project.AddBuildProperty(target, "OTHER_CFLAGS", "$(inherited)");
         project.AddBuildProperty(target, "HEADER_SEARCH_PATHS",
                                  "$(inherited)");
+        project.AddBuildProperty(target, "HEADER_SEARCH_PATHS",
+                                 "$(PROJECT_DIR)/" + PODS_DIR + "/Headers/Public");
         project.AddBuildProperty(target, "FRAMEWORK_SEARCH_PATHS",
                                  "$(inherited)");
         project.AddBuildProperty(target, "FRAMEWORK_SEARCH_PATHS",
                                  "$(PROJECT_DIR)/Frameworks");
+        project.AddBuildProperty(target, "LIBRARY_SEARCH_PATHS", "$(inherited)");
         project.AddBuildProperty(target, "OTHER_LDFLAGS", "-ObjC");
         // GTMSessionFetcher requires Obj-C exceptions.
         project.SetBuildProperty(target, "GCC_ENABLE_OBJC_EXCEPTIONS", "YES");
@@ -1275,6 +1282,7 @@ public static class IOSResolver {
         var podsDir = Path.Combine(pathToBuiltProject, PODS_DIR);
         if (!Directory.Exists(podsDir)) return;
 
+        var pathToBuiltProjectFullPath = Path.GetFullPath(pathToBuiltProject);
         Directory.CreateDirectory(Path.Combine(pathToBuiltProject,
                                                "Frameworks"));
         Directory.CreateDirectory(Path.Combine(pathToBuiltProject,
@@ -1373,6 +1381,27 @@ public static class IOSResolver {
                             UnityEditor.iOS.Xcode.PBXSourceTree.Source));
                 }
             }
+        }
+
+        // Add static libraries to the project.
+        foreach (var libraryFullPath in Directory.GetFiles(Path.GetFullPath(podsDir),
+                                                           LIBRARY_FILENAME_PREFIX + "*" +
+                                                           LIBRARY_FILENAME_EXTENSION,
+                                                           SearchOption.AllDirectories)) {
+            string libraryRelativePath =
+                libraryFullPath.Substring(pathToBuiltProjectFullPath.Length + 1);
+            project.AddFileToBuild(
+                target, project.AddFile(libraryRelativePath, libraryRelativePath,
+                                        UnityEditor.iOS.Xcode.PBXSourceTree.Source));
+            // Add the library to the linker command line removing the prefix and extension.
+            var libraryBasename = Path.GetFileName(libraryRelativePath);
+            linkFlags.Add("-l" + libraryBasename.Substring(
+                LIBRARY_FILENAME_PREFIX.Length,
+                libraryBasename.Length - (LIBRARY_FILENAME_PREFIX.Length +
+                                          LIBRARY_FILENAME_EXTENSION.Length)));
+            project.AddBuildProperty(
+                target, "LIBRARY_SEARCH_PATHS",
+                "$(PROJECT_DIR)/" + Path.GetDirectoryName(libraryRelativePath));
         }
 
         foreach (var framework in frameworks) {
