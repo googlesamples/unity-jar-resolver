@@ -487,14 +487,33 @@ namespace GooglePlayServices
         /// <param name="envVars">Additional environment variables to set for the command.</param>
         /// <param name="ioHandler">Allows a caller to provide interactive input and also handle
         /// both output and error streams from a single delegate.</param>
+        /// <returns>CommandLineTool result if successful, raises an exception if it's not
+        /// possible to execute the tool.</returns>
+        public static Result Run(string toolPath, string arguments, string workingDirectory = null,
+                                 Dictionary<string, string> envVars = null,
+                                 IOHandler ioHandler = null) {
+            return RunViaShell(toolPath, arguments, workingDirectory: workingDirectory,
+                               envVars: envVars, ioHandler: ioHandler, useShellExecution: false);
+        }
+
+        /// <summary>
+        /// Execute a command line tool.
+        /// </summary>
+        /// <param name="toolPath">Tool to execute.</param>
+        /// <param name="arguments">String to pass to the tools' command line.</param>
+        /// <param name="workingDirectory">Directory to execute the tool from.</param>
+        /// <param name="envVars">Additional environment variables to set for the command.</param>
+        /// <param name="ioHandler">Allows a caller to provide interactive input and also handle
+        /// both output and error streams from a single delegate.</param>
         /// <param name="useShellExecution">Execute the command via the shell.  This disables
         /// I/O redirection and causes a window to be popped up when the command is executed.
         /// </param>
         /// <returns>CommandLineTool result if successful, raises an exception if it's not
         /// possible to execute the tool.</returns>
-        public static Result Run(string toolPath, string arguments, string workingDirectory = null,
-                                 Dictionary<string, string> envVars = null,
-                                 IOHandler ioHandler = null, bool useShellExecution = false) {
+        public static Result RunViaShell(
+                string toolPath, string arguments, string workingDirectory = null,
+                Dictionary<string, string> envVars = null,
+                IOHandler ioHandler = null, bool useShellExecution = false) {
             System.Text.Encoding inputEncoding = Console.InputEncoding;
             System.Text.Encoding outputEncoding = Console.OutputEncoding;
             Console.InputEncoding = System.Text.Encoding.UTF8;
