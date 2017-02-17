@@ -221,9 +221,14 @@ namespace Google.JarResolver
         /// Delete a file or directory if it exists.
         /// </summary>
         /// <param name="path">Path to the file or directory to delete if it exists.</param>
-        public static void DeleteExistingFileOrDirectory(string path,
+        public static bool DeleteExistingFileOrDirectory(string path,
                                                          bool includeMetaFiles = false)
         {
+            bool deletedFileOrDirectory = false;
+            if (includeMetaFiles && !path.EndsWith(MetaExtension))
+            {
+                deletedFileOrDirectory = DeleteExistingFileOrDirectory(path + MetaExtension);
+            }
             if (Directory.Exists(path))
             {
                 var di = new DirectoryInfo(path);
@@ -233,16 +238,15 @@ namespace Google.JarResolver
                     DeleteExistingFileOrDirectory(file, includeMetaFiles: includeMetaFiles);
                 }
                 Directory.Delete(path);
+                deletedFileOrDirectory = true;
             }
             else if (File.Exists(path))
             {
                 File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
                 File.Delete(path);
+                deletedFileOrDirectory = true;
             }
-            if (includeMetaFiles && !path.EndsWith(MetaExtension))
-            {
-                DeleteExistingFileOrDirectory(path + MetaExtension);
-            }
+            return deletedFileOrDirectory;
         }
 
         /// <summary>

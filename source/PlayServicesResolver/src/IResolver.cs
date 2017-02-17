@@ -88,12 +88,12 @@ namespace GooglePlayServices
                           PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation);
 
         /// <summary>
-        /// Called during Update to allow the resolver to check the bundle ID of the application
-        /// to see whether resolution should be triggered again.
+        /// Called during Update to allow the resolver to check any build settings of managed
+        /// packages to see whether resolution should be triggered again.
         /// </summary>
         /// <returns>Array of packages that should be re-resolved if resolution should occur,
         /// null otherwise.</returns>
-        string[] OnBundleId(string bundleId);
+        string[] OnBuildSettings();
     }
 }
 

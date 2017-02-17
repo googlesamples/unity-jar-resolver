@@ -91,26 +91,18 @@ namespace GooglePlayServices
             string[] importedAssets,
             string[] deletedAssets,
             string[] movedAssets,
-            string[] movedFromAssetPaths)
-        {
-            if (AutomaticResolutionEnabled())
-            {
+            string[] movedFromAssetPaths) {
+            if (AutomaticResolutionEnabled()) {
                 // look for imported scripts
-                foreach (string s in importedAssets)
-                {
-                    if (s.EndsWith(".cs") || s.EndsWith(".js"))
-                    {
-                        Debug.Log(s + " imported, resolving play-services");
+                foreach (string s in importedAssets) {
+                    if (s.EndsWith(".cs") || s.EndsWith(".js")) {
                         return true;
                     }
                 }
 
                 // look for deleted android plugins
-                foreach (string s in deletedAssets)
-                {
-                    if (s.StartsWith(SettingsDialog.AndroidPluginsDir))
-                    {
-                        Debug.Log(s + " deleted, resolving play-services");
+                foreach (string s in deletedAssets) {
+                    if (s.StartsWith(SettingsDialog.AndroidPluginsDir)) {
                         return true;
                     }
                 }
@@ -153,15 +145,12 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Called during Update to allow the resolver to check the bundle ID of the application
-        /// to see whether resolution should be triggered again.
+        /// Called during Update to allow the resolver to check any build settings of managed
+        /// packages to see whether resolution should be triggered again.
         /// </summary>
         /// <returns>Array of packages that should be re-resolved if resolution should occur,
         /// null otherwise.</returns>
-        public virtual string[] OnBundleId(string bundleId)
-        {
-            return null;
-        }
+        public virtual string[] OnBuildSettings() { return null; }
 
         #endregion
 
@@ -307,6 +296,16 @@ namespace GooglePlayServices
             return true;
         }
 
+        // Native library ABI subdirectories supported by Unity.
+        internal const string NATIVE_LIBRARY_ABI_DIRECTORY_ARMEABI_V7A = "armeabi-v7a";
+        internal const string NATIVE_LIBRARY_ABI_DIRECTORY_X86 = "x86";
+        // Directories that contain native libraries within a Unity Android library project.
+        internal static string[] NATIVE_LIBRARY_DIRECTORIES = new string[] { "libs", "jni" };
+        // Map of Unity ABIs (see AndroidTargetDeviceAbi) to the ABI directory.
+        internal static Dictionary<string, string> UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY =
+            new Dictionary<string, string> { {"armv7", NATIVE_LIBRARY_ABI_DIRECTORY_ARMEABI_V7A},
+                                             {"x86", NATIVE_LIBRARY_ABI_DIRECTORY_X86} };
+
         /// <summary>
         /// Explodes a single aar file.  This is done by calling the
         /// JDK "jar" command, then moving the classes.jar file.
@@ -343,6 +342,23 @@ namespace GooglePlayServices
                 PlayServicesSupport.CopyDirectory(jniLibDir, libDir);
                 PlayServicesSupport.DeleteExistingFileOrDirectory(jniLibDir,
                                                                   includeMetaFiles: true);
+                // Remove shared libraries for all ABIs that are not required for the selected
+                // target ABI.
+                var activeAbis = new HashSet<string>();
+                var currentAbi = PlayServicesResolver.AndroidTargetDeviceAbi.ToLower();
+                foreach (var kv in UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY) {
+                    if (currentAbi == kv.Key) activeAbis.Add(kv.Value);
+                }
+                if (activeAbis.Count == 0) {
+                    activeAbis.UnionWith(UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY.Values);
+                }
+                foreach (var directory in Directory.GetDirectories(libDir)) {
+                    var abiDir = Path.GetFileName(directory);
+                    if (!activeAbis.Contains(abiDir)) {
+                        PlayServicesSupport.DeleteExistingFileOrDirectory(
+                            directory, includeMetaFiles: true);
+                    }
+                }
             }
 
             // Create the project.properties file which indicates to
@@ -359,7 +375,6 @@ namespace GooglePlayServices
 
             // Clean up the aar file.
             File.Delete(Path.GetFullPath(aarFile));
-            Debug.Log(aarFile + " expanded successfully");
             return workingDir;
         }
     }

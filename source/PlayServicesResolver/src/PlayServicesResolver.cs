@@ -17,6 +17,7 @@
 namespace GooglePlayServices
 {
     using System;
+    using System.Collections.Generic;
     using Google.JarResolver;
     using UnityEditor;
     using UnityEngine;
@@ -46,6 +47,11 @@ namespace GooglePlayServices
         /// Flag used to prevent re-entrant auto-resolution.
         /// </summary>
         private static bool autoResolving = false;
+
+        /// <summary>
+        /// Flag used to prevent re-entrant resolution when a build configuration changes.
+        /// </summary>
+        private static bool buildConfigChanged = false;
 
         /// <summary>
         /// Seconds to wait until re-resolving dependencies after the bundle ID has changed.
@@ -141,6 +147,16 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// If Gradle project export is enabled.
+        /// </summary>
+        public static bool GradleProjectExportEnabled {
+            get {
+                return PlayServicesResolver.GradleBuildEnabled &&
+                    PlayServicesResolver.ProjectExportEnabled;
+            }
+        }
+
+        /// <summary>
         /// Arguments for the Android build system changed event.
         /// </summary>
         public class AndroidBuildSystemChangedArgs : EventArgs {
@@ -171,6 +187,62 @@ namespace GooglePlayServices
         public static event EventHandler<AndroidBuildSystemChangedArgs> AndroidBuildSystemChanged;
 
         /// <summary>
+        /// Name of the property on UnityEditor.PlayerSettings.Android which describes the
+        /// target ABI.
+        /// </summary>
+        private const string ANDROID_TARGET_DEVICE_ABI_PROPERTY_NAME = "targetDevice";
+
+        /// <summary>
+        /// Default target ABI for Android projects.
+        /// </summary>
+        internal const string DEFAULT_ANDROID_TARGET_DEVICE_ABI = "fat";
+
+        /// <summary>
+        /// The string value of UnityEditor.PlayerSettings.Android.targetDevice when
+        /// PollTargetDevice() was called.
+        /// </summary>
+        private static string previousAndroidTargetDeviceAbi = DEFAULT_ANDROID_TARGET_DEVICE_ABI;
+
+        /// <summary>
+        /// Get a string representation of the target ABI.
+        /// </summary>
+        /// This uses reflection to retrieve the property as it is not present in Unity version
+        /// less than 5.x.
+        internal static string AndroidTargetDeviceAbi {
+            get {
+                var targetDeviceAbi = DEFAULT_ANDROID_TARGET_DEVICE_ABI;
+                var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty(
+                    ANDROID_TARGET_DEVICE_ABI_PROPERTY_NAME);
+                if (property != null) {
+                    var value = property.GetValue(null, null);
+                    if (value != null) targetDeviceAbi = value.ToString();
+                }
+                return targetDeviceAbi.ToLower();
+            }
+        }
+
+        /// <summary>
+        /// Arguments for the Android build system changed event.
+        /// </summary>
+        public class AndroidTargetDeviceAbiChangedArgs : EventArgs {
+            /// <summary>
+            /// Target device ABI before it changed.
+            /// </summary>
+            public string PreviousAndroidTargetDeviceAbi { get; set; }
+
+            /// <summary>
+            /// Target device ABI when this event was fired.
+            /// </summary>
+            public string AndroidTargetDeviceAbi { get; set; }
+        }
+
+        /// <summary>
+        /// Event which is fired when the Android target device ABI changes.
+        /// </summary>
+        public static event EventHandler<AndroidTargetDeviceAbiChangedArgs>
+            AndroidTargetDeviceAbiChanged;
+
+        /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver()
@@ -189,11 +261,15 @@ namespace GooglePlayServices
                 BundleIdChanged += ResolveOnBundleIdChanged;
                 AndroidBuildSystemChanged -= ResolveOnBuildSystemChanged;
                 AndroidBuildSystemChanged += ResolveOnBuildSystemChanged;
+                AndroidTargetDeviceAbiChanged -= ResolveOnTargetDeviceAbiChanged;
+                AndroidTargetDeviceAbiChanged += ResolveOnTargetDeviceAbiChanged;
             }
             EditorApplication.update -= PollBundleId;
             EditorApplication.update += PollBundleId;
             EditorApplication.update -= PollBuildSystem;
             EditorApplication.update += PollBuildSystem;
+            EditorApplication.update -= PollTargetDeviceAbi;
+            EditorApplication.update += PollTargetDeviceAbi;
         }
 
         /// <summary>
@@ -267,14 +343,28 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Determine which packages - if any - should be re-resolved.
+        /// </summary>
+        /// <returns>Array of packages that should be re-resolved, null otherwise.</returns>
+        delegate string[] ReevaluatePackages();
+
+        /// <summary>
+        /// Auto-resolve if any packages need to be resolved.
+        /// </summary>
+        private static void Reresolve() {
+            if (Resolver.AutomaticResolutionEnabled()) {
+                buildConfigChanged = true;
+                if (DeleteFiles(Resolver.OnBuildSettings())) AutoResolve();
+                buildConfigChanged = false;
+            }
+        }
+
+        /// <summary>
         /// If the user changes the bundle ID, perform resolution again.
         /// </summary>
-        private static void ResolveOnBundleIdChanged(object sender, BundleIdChangedEventArgs args)
-        {
-            if (Resolver.AutomaticResolutionEnabled())
-            {
-                if (DeleteFiles(Resolver.OnBundleId(args.BundleId))) AutoResolve();
-            }
+        private static void ResolveOnBundleIdChanged(object sender,
+                                                     BundleIdChangedEventArgs args) {
+            Reresolve();
         }
 
         /// <summary>
@@ -314,9 +404,8 @@ namespace GooglePlayServices
         /// If the user changes the Android build system, perform resolution again.
         /// </summary>
         private static void ResolveOnBuildSystemChanged(object sender,
-                                                        AndroidBuildSystemChangedArgs args)
-        {
-            AutoResolve();
+                                                        AndroidBuildSystemChangedArgs args) {
+            Reresolve();
         }
 
         /// <summary>
@@ -324,7 +413,6 @@ namespace GooglePlayServices
         /// </summary>
         private static void PollBuildSystem()
         {
-
             bool gradleBuildEnabled = GradleBuildEnabled;
             bool projectExportEnabled = ProjectExportEnabled;
             if (previousGradleBuildEnabled != gradleBuildEnabled ||
@@ -345,6 +433,30 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Poll the target device ABI for changes.
+        /// </summary>
+        private static void PollTargetDeviceAbi() {
+            string currentAbi = AndroidTargetDeviceAbi;
+            if (currentAbi != previousAndroidTargetDeviceAbi &&
+                AndroidTargetDeviceAbiChanged != null) {
+                AndroidTargetDeviceAbiChanged(null, new AndroidTargetDeviceAbiChangedArgs {
+                        PreviousAndroidTargetDeviceAbi = previousAndroidTargetDeviceAbi,
+                        AndroidTargetDeviceAbi = currentAbi
+                    });
+            }
+            previousAndroidTargetDeviceAbi = currentAbi;
+        }
+
+        /// <summary>
+        /// Hide shared libraries from Unity's build system that do not target the currently
+        /// selected ABI.
+        /// </summary>
+        private static void ResolveOnTargetDeviceAbiChanged(
+                object sender, AndroidTargetDeviceAbiChangedArgs args) {
+            Reresolve();
+        }
+
+        /// <summary>
         /// Delete the specified array of files and directories.
         /// </summary>
         /// <param name="filenames">Array of files or directories to delete.</param>
@@ -352,13 +464,13 @@ namespace GooglePlayServices
         private static bool DeleteFiles(string[] filenames)
         {
             if (filenames == null) return false;
-            foreach (string artifact in filenames)
-            {
-                PlayServicesSupport.DeleteExistingFileOrDirectory(artifact,
-                                                                  includeMetaFiles: true);
+            bool deletedFiles = false;
+            foreach (string artifact in filenames) {
+                deletedFiles |= PlayServicesSupport.DeleteExistingFileOrDirectory(
+                    artifact, includeMetaFiles: true);
             }
-            AssetDatabase.Refresh();
-            return true;
+            if (deletedFiles) AssetDatabase.Refresh();
+            return deletedFiles;
         }
 
         /// <summary>
@@ -367,7 +479,7 @@ namespace GooglePlayServices
         /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
         private static void Resolve(System.Action resolutionComplete = null)
         {
-            DeleteFiles(Resolver.OnBundleId(PlayerSettings.bundleIdentifier));
+            if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
             System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
             Resolver.DoResolution(svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
                                   HandleOverwriteConfirmation,

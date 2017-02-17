@@ -138,7 +138,8 @@ namespace GooglePlayServices
             if (explodeAars) {
                 GUILayout.Label("AARs will be exploded (unpacked) when ${applicationId} " +
                                 "variable replacement is required in an AAR's " +
-                                "AndroidManifest.xml.");
+                                "AndroidManifest.xml or a single target ABI is selected " +
+                                "without a compatible build system.");
             } else {
                 GUILayout.Label("AAR explosion will be disabled in exported Gradle builds " +
                                 "(Unity 5.5 and above). You will need to set " +
