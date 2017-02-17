@@ -1086,7 +1086,7 @@ public static class IOSResolver {
             }
         } else {
             if (!String.IsNullOrEmpty(summaryText)) Log(summaryText);
-            completionDelegate(CommandLine.Run(
+            completionDelegate(CommandLine.RunViaShell(
                 command, commandArgs, workingDirectory: workingDirectory,
                 envVars: envVars, useShellExecution: PodToolExecutionViaShellEnabled));
         }
