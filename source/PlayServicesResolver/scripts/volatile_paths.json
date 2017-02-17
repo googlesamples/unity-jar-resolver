@@ -12,7 +12,7 @@
   "proj_properties": {
     "search_path": "project.properties",
     "search_re": "",
-    "dest_path": "propject.properties"
+    "dest_path": "project.properties"
   },
   "jni_libs": {
     "search_path": "build/intermediates/exploded-aar",
