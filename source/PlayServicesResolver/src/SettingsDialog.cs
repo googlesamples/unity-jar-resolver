@@ -31,7 +31,7 @@ namespace GooglePlayServices
         internal const string PackageDirKey = Namespace + "PackageDirectory";
         internal const string ExplodeAarsKey = Namespace + "ExplodeAars";
 
-        internal const string AndroidPluginsDir = "Assets/Plugins/Android";
+        private const string AndroidPluginsDir = "Assets/Plugins/Android";
 
         // Unfortunately, Unity currently does not search recursively search subdirectories of
         // AndroidPluginsDir for Android library plugins.  When this is supported - or we come up

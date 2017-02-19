@@ -87,29 +87,12 @@ namespace GooglePlayServices
         /// <param name="deletedAssets">Deleted assets.</param>
         /// <param name="movedAssets">Moved assets.</param>
         /// <param name="movedFromAssetPaths">Moved from asset paths.</param>
+        [Obsolete]
         public virtual bool ShouldAutoResolve(
             string[] importedAssets,
             string[] deletedAssets,
             string[] movedAssets,
-            string[] movedFromAssetPaths) {
-            if (AutomaticResolutionEnabled()) {
-                // look for imported scripts
-                foreach (string s in importedAssets) {
-                    if (s.EndsWith(".cs") || s.EndsWith(".js")) {
-                        return true;
-                    }
-                }
-
-                // look for deleted android plugins
-                foreach (string s in deletedAssets) {
-                    if (s.StartsWith(SettingsDialog.AndroidPluginsDir)) {
-                        return true;
-                    }
-                }
-                // don't resolve if assets are moved around.
-            }
-            return false;
-        }
+            string[] movedFromAssetPaths) { return false; }
 
         /// <summary>
         /// Shows the settings dialog.
@@ -143,6 +126,17 @@ namespace GooglePlayServices
             DoResolution(svcSupport, destinationDirectory, handleOverwriteConfirmation);
             resolutionComplete();
         }
+
+        /// <summary>
+        /// Called during Update to allow the resolver to check the bundle ID of the application
+        /// to see whether resolution should be triggered again.
+        /// </summary>
+        /// <remarks>
+        ///   <para>
+        ///      <returns>Array of packages that should be re-resolved if resolution should occur,
+        /// null otherwise.</returns>
+        [Obsolete]
+        public virtual string[] OnBundleId(string bundleId) { return OnBuildSettings(); }
 
         /// <summary>
         /// Called during Update to allow the resolver to check any build settings of managed

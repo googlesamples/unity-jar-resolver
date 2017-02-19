@@ -18,6 +18,7 @@ namespace GooglePlayServices
 {
     using System;
     using System.Collections.Generic;
+    using System.Text.RegularExpressions;
     using Google.JarResolver;
     using UnityEditor;
     using UnityEngine;
@@ -305,6 +306,47 @@ namespace GooglePlayServices
             }
         }
 
+
+        /// <summary>
+        /// Patterns of files that are monitored to trigger auto resolution.
+        /// </summary>
+        private static HashSet<Regex> autoResolveFilePatterns = new HashSet<Regex>();
+
+        /// <summary>
+        /// Assets that have been imported since the last auto resolution.
+        /// </summary>
+        private static HashSet<string> importedAssetsSinceLastResolve = new HashSet<string>();
+
+        /// <summary>
+        /// Add file patterns to monitor to trigger auto resolution.
+        /// </summary>
+        /// <param name="patterns">Set of file patterns to monitor to trigger auto
+        /// resolution.</param>
+        public static void AddAutoResolutionFilePatterns(IEnumerable<Regex> patterns) {
+            autoResolveFilePatterns.UnionWith(patterns);
+        }
+
+        /// <summary>
+        /// Check the set of recently imported assets to see whether resolution should be
+        /// triggered.
+        /// </summary>
+        private static void CheckImportedAssets() {
+            var filesToCheck = new HashSet<string>(importedAssetsSinceLastResolve);
+            importedAssetsSinceLastResolve.Clear();
+            bool resolve = false;
+            foreach (var asset in filesToCheck) {
+                foreach (var pattern in autoResolveFilePatterns) {
+                    if (pattern.Match(asset).Success) {
+                        UnityEngine.Debug.Log("Found a matching asset " + asset +
+                                              " running resolution");
+                        resolve = true;
+                        break;
+                    }
+                }
+            }
+            if (resolve) AutoResolve();
+        }
+
         /// <summary>
         /// Called by Unity when all assets have been updated. This
         /// is used to kick off resolving the dependendencies declared.
@@ -313,17 +355,26 @@ namespace GooglePlayServices
         /// <param name="deletedAssets">Deleted assets. (unused)</param>
         /// <param name="movedAssets">Moved assets. (unused)</param>
         /// <param name="movedFromAssetPaths">Moved from asset paths. (unused)</param>
-        static void OnPostprocessAllAssets(string[] importedAssets,
-                                           string[] deletedAssets,
-                                           string[] movedAssets,
-                                           string[] movedFromAssetPaths)
-        {
-            if (Resolver == null) return;
-
-            if (Resolver.ShouldAutoResolve(importedAssets, deletedAssets,
-                                           movedAssets, movedFromAssetPaths))
-            {
-                AutoResolve();
+        private static void OnPostprocessAllAssets(string[] importedAssets,
+                                                   string[] deletedAssets,
+                                                   string[] movedAssets,
+                                                   string[] movedFromAssetPaths) {
+            if (Resolver != null && Resolver.AutomaticResolutionEnabled()) {
+                // If anything has been removed from the packaging directory schedule resolution.
+                foreach (string asset in deletedAssets) {
+                    if (asset.StartsWith(GooglePlayServices.SettingsDialog.PackageDir)) {
+                        EditorApplication.update -= AutoResolve;
+                        EditorApplication.update += AutoResolve;
+                        return;
+                    }
+                }
+                // Schedule a check of imported assets.
+                if (importedAssets.Length > 0 && autoResolveFilePatterns.Count > 0) {
+                    importedAssetsSinceLastResolve = new HashSet<string>(importedAssets);
+                    EditorApplication.update -= CheckImportedAssets;
+                    EditorApplication.update += CheckImportedAssets;
+                    return;
+                }
             }
         }
 

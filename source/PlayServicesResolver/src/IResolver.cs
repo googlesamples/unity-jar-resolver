@@ -17,6 +17,7 @@
 namespace GooglePlayServices
 {
     using Google.JarResolver;
+    using System;
 
     public interface IResolver
     {
@@ -55,6 +56,7 @@ namespace GooglePlayServices
         /// <param name="deletedAssets">Deleted assets.</param>
         /// <param name="movedAssets">Moved assets.</param>
         /// <param name="movedFromAssetPaths">Moved from asset paths.</param>
+        [Obsolete]
         bool ShouldAutoResolve(string[] importedAssets,
             string[] deletedAssets,
             string[] movedAssets,
@@ -87,6 +89,20 @@ namespace GooglePlayServices
                           string destinationDirectory,
                           PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation);
 
+        /// <summary>
+        /// Called during Update to allow the resolver to check the bundle ID of the application
+        /// to see whether resolution should be triggered again.
+        /// </summary>
+        /// <remarks>
+        ///   <para>
+        ///      <returns>Array of packages that should be re-resolved if resolution should occur,
+        /// null otherwise.</returns>
+        [Obsolete]
+        string[] OnBundleId(string bundleId);
+
+        ///   </para>
+        /// </remarks>
+        /// </summary>
         /// <summary>
         /// Called during Update to allow the resolver to check any build settings of managed
         /// packages to see whether resolution should be triggered again.
