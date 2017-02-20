@@ -359,8 +359,7 @@ public static class IOSResolver {
         // If Cocoapod tool auto-installation is enabled try installing on the first update of
         // the editor when the editor environment has been initialized.
         if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
-            AutoPodToolInstallInEditorEnabled && CocoapodsInstallEnabled &&
-            !System.Environment.CommandLine.Contains("-batchmode")) {
+            AutoPodToolInstallInEditorEnabled && CocoapodsInstallEnabled && !InBatchMode) {
             EditorApplication.update -= AutoInstallCocoapods;
             EditorApplication.update += AutoInstallCocoapods;
         }
@@ -443,6 +442,13 @@ public static class IOSResolver {
     }
 
     /// <summary>
+    /// Whether the editor was launched in batch mode.
+    /// </summary>
+    private static bool InBatchMode {
+        get { return System.Environment.CommandLine.Contains("-batchmode"); }
+    }
+
+    /// <summary>
     /// Log severity.
     /// </summary>
     internal enum LogLevel {
@@ -457,9 +463,13 @@ public static class IOSResolver {
     /// <summary>
     /// Log a message.
     /// </summary>
+    /// <param name="message">Message to log.</param>
+    /// <param name="verbose">Whether the message should only be displayed if verbose logging is
+    /// enabled.</param>
+    /// <param name="level">Severity of the message.</param>
     internal static void Log(string message, bool verbose = false,
                              LogLevel level = LogLevel.Info) {
-        if (!verbose || VerboseLoggingEnabled) {
+        if (!verbose || VerboseLoggingEnabled || InBatchMode) {
             switch (level) {
                 case LogLevel.Info:
                     Debug.Log(message);
@@ -479,7 +489,7 @@ public static class IOSResolver {
     /// </summary>
     internal static void LogToDialog(string message, bool verbose = false,
                              LogLevel level = LogLevel.Info) {
-        EditorUtility.DisplayDialog("iOS Resolver", message, "OK");
+        if (!verbose) EditorUtility.DisplayDialog("iOS Resolver", message, "OK");
         Log(message, verbose: verbose, level: level);
     }
 
@@ -782,6 +792,42 @@ public static class IOSResolver {
     }
 
     /// <summary>
+    /// Determine whether a gem (Ruby package) is installed.
+    /// </summary>
+    /// <param name="gemPackageName">Name of the package to check.</param>
+    /// <param name="logMessage">Delegate use to log a failure message if the package manager
+    /// returns an error code.</param>
+    /// <returns>true if the package is installed, false otherwise.</returns>
+    private static bool QueryGemInstalled(string gemPackageName,
+                                          LogMessageDelegate logMessage = null) {
+        logMessage = logMessage ?? Log;
+        logMessage(String.Format("Determine whether Ruby Gem {0} is installed", gemPackageName),
+                   verbose: true);
+        var query = String.Format("list {0} --no-versions", gemPackageName);
+        var result = RunCommand(GEM_EXECUTABLE, query);
+        if (result.exitCode == 0) {
+            foreach (var line in result.stdout.Split(new string[] { Environment.NewLine },
+                                                     StringSplitOptions.None)) {
+                if (line == gemPackageName) {
+                    logMessage(String.Format("{0} is installed", gemPackageName), verbose: true);
+                    return true;
+                }
+            }
+        } else {
+            logMessage(
+                String.Format("Unable to determine whether the {0} gem is " +
+                              "installed, will attempt to install anyway.\n\n" +
+                              "'{1} {2}' failed with error code ({3}):\n" +
+                              "{4}\n" +
+                              "{5}\n",
+                              gemPackageName, GEM_EXECUTABLE, query, result.exitCode,
+                              result.stdout, result.stderr),
+                level: LogLevel.Warning);
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Install Cocoapods if it's not already installed.
     /// </summary>
     /// <param name="interactive">Whether this method should display information in pop-up
@@ -813,67 +859,96 @@ public static class IOSResolver {
         }
 
         var complete = new AutoResetEvent(false);
-        var gemInstallArgs = "install cocoapods --user-install";
-        RunCommandAsync(
-            GEM_EXECUTABLE, gemInstallArgs,
-            (CommandLine.Result gemInstallResult) => {
-                var commonInstallErrorMessage =
-                    "It will not be possible to install Cocoapods in the generated Xcode " +
-                    "project which will result in link errors when building your " +
-                    "application.\n\n" +
-                    "For more information see:\n" +
-                    "  https://guides.cocoapods.org/using/getting-started.html\n\n";
-                if (gemInstallResult.exitCode != 0) {
+        var commonInstallErrorMessage =
+            "It will not be possible to install Cocoapods in the generated Xcode " +
+            "project which will result in link errors when building your " +
+            "application.\n\n" +
+            "For more information see:\n" +
+            "  https://guides.cocoapods.org/using/getting-started.html\n\n";
+
+        // Log the set of install pods.
+        RunCommand(GEM_EXECUTABLE, "list");
+
+        // Gem is being executed in an RVM directory it's already configured to perform a
+        // user install.  When RVM is configured "--user-install" ends up installing gems
+        // in the wrong directory such that they're not visible to either the package manager
+        // or Ruby.
+        var gemEnvironment = ReadGemsEnvironment();
+        string installArgs = "--user-install";
+        if (gemEnvironment != null) {
+            List<string> installationDir;
+            if (gemEnvironment.TryGetValue("INSTALLATION DIRECTORY", out installationDir)) {
+                foreach (var dir in installationDir) {
+                    if (dir.IndexOf("/.rvm/") >= 0) {
+                        installArgs = "";
+                        break;
+                    }
+                }
+            }
+        }
+        if (VerboseLoggingEnabled || InBatchMode) {
+            installArgs += " --verbose";
+        }
+
+        var commandList = new List<CommandItem>();
+        if (!QueryGemInstalled("activesupport", logMessage: logMessage)) {
+            // Workaround activesupport (dependency of the Cocoapods gem) requiring
+            // Ruby 2.2.2 and above.
+            // https://github.com/CocoaPods/CocoaPods/issues/4711
+            commandList.Add(
+                new CommandItem {
+                    Command = GEM_EXECUTABLE,
+                    Arguments = "install activesupport -v 4.2.6 " + installArgs
+                });
+        }
+        commandList.Add(new CommandItem {
+                Command = GEM_EXECUTABLE,
+                Arguments = "install cocoapods " + installArgs
+            });
+        commandList.Add(new CommandItem { Command = POD_EXECUTABLE, Arguments = "setup" });
+
+        RunCommandsAsync(
+            commandList.ToArray(),
+            (int commandIndex, CommandItem[] commands, CommandLine.Result result,
+                CommandLineDialog dialog) => {
+                var lastCommand = commands[commandIndex];
+                commandIndex += 1;
+                if (result.exitCode != 0) {
                     logMessage(String.Format(
                         "Failed to install Cocoapods for the current user.\n\n" +
                         "{0}\n" +
                         "'{1} {2}' failed with code ({3}):\n" +
                         "{4}\n\n" +
                         "{5}\n",
-                        commonInstallErrorMessage, GEM_EXECUTABLE, gemInstallArgs,
-                        gemInstallResult.exitCode,
-                        gemInstallResult.stdout, gemInstallResult.stderr), level: LogLevel.Error);
+                        commonInstallErrorMessage, lastCommand.Command,
+                        lastCommand.Arguments, result.exitCode, result.stdout,
+                        result.stderr), level: LogLevel.Error);
                     complete.Set();
-                    return;
+                    return -1;
                 }
-
-                podToolPath = FindPodTool();
-                if (String.IsNullOrEmpty(podToolPath)) {
-                    logMessage(String.Format(
-                        "'{0} {1}' succeeded but the {2} tool cannot be found.\n\n" +
-                        "{3}\n", GEM_EXECUTABLE, gemInstallArgs, POD_EXECUTABLE,
-                        commonInstallErrorMessage), level: LogLevel.Error);
-                    complete.Set();
-                    return;
-                }
-
-                // Setup the Cocoapod environment.
-                RunPodCommandAsync(
-                    "setup", workingDirectory,
-                    (CommandLine.Result podSetupResult) => {
-                        if (podSetupResult.exitCode != 0) {
-                            logMessage(String.Format(
-                                "'{0} setup' failed.\n\n" +
-                                "{1}\n" +
-                                "'{2} setup' failed with code ({3}):\n" +
-                                "{4}\n\n" +
-                                "{5}\n",
-                                POD_EXECUTABLE, commonInstallErrorMessage, podToolPath,
-                                podSetupResult.exitCode, podSetupResult.stdout,
-                                podSetupResult.stderr), level: LogLevel.Error);
-                            complete.Set();
-                            return;
-                        }
+                // Pod setup process (should be the last command in the list).
+                if (commandIndex == commands.Length - 1) {
+                    podToolPath = FindPodTool();
+                    if (String.IsNullOrEmpty(podToolPath)) {
+                        logMessage(String.Format(
+                            "'{0} {1}' succeeded but the {2} tool cannot be found.\n\n" +
+                            "{3}\n", lastCommand.Command, lastCommand.Arguments,
+                            POD_EXECUTABLE, commonInstallErrorMessage), level: LogLevel.Error);
                         complete.Set();
-                        logMessage("Cocoapods tools successfully installed.");
-                        cocoapodsInstallPresent = true;
-                    },
-                    displayDialog: interactive,
-                    summaryText: ("Downloading Cocoapods Master Repository\n" +
-                                  "(this can take a while)"));
-            },
-            displayDialog: interactive,
-            summaryText: "Installing Cocoapods Gem...");
+                        return -1;
+                    }
+                    if (dialog != null) {
+                        dialog.bodyText += ("\n\nDownloading Cocoapods Master Repository\n" +
+                                            "(this can take a while)\n");
+                    }
+                    commands[commandIndex].Command = podToolPath;
+                } else if (commandIndex == commands.Length) {
+                    complete.Set();
+                    logMessage("Cocoapods tools successfully installed.");
+                    cocoapodsInstallPresent = true;
+                }
+                return commandIndex;
+            }, displayDialog: interactive, summaryText: "Installing Cocoapods...");
 
         // If this wasn't started interactively, block until execution is complete.
         if (!interactive) complete.WaitOne();
@@ -983,6 +1058,50 @@ public static class IOSResolver {
     }
 
     /// <summary>
+    /// Read the Gems environment.
+    /// </summary>
+    /// <returns>Dictionary of environment properties or null if there was a problem reading
+    /// the environment.</returns>
+    private static Dictionary<string, List<string>> ReadGemsEnvironment() {
+        var result = RunCommand(GEM_EXECUTABLE, "environment");
+        if (result.exitCode != 0) {
+            return null;
+        }
+        // gem environment outputs YAML for all config variables.  Perform some very rough YAML
+        // parsing to get the environment into a usable form.
+        var gemEnvironment = new Dictionary<string, List<string>>();
+        const string listItemPrefix = "- ";
+        int previousIndentSize = 0;
+        List<string> currentList = null;
+        char[] listToken = new char[] { ':' };
+        foreach (var line in result.stdout.Split(new char[] { '\r', '\n' })) {
+            var trimmedLine = line.Trim();
+            var indentSize = line.Length - trimmedLine.Length;
+            if (indentSize < previousIndentSize) currentList = null;
+
+            if (trimmedLine.StartsWith(listItemPrefix)) {
+                trimmedLine = trimmedLine.Substring(listItemPrefix.Length).Trim();
+                if (currentList == null) {
+                    var tokens = trimmedLine.Split(listToken);
+                    currentList = new List<string>();
+                    gemEnvironment[tokens[0].Trim()] = currentList;
+                    var value = tokens.Length == 2 ? tokens[1].Trim() : null;
+                    if (!String.IsNullOrEmpty(value)) {
+                        currentList.Add(value);
+                        currentList = null;
+                    }
+                } else if (indentSize >= previousIndentSize) {
+                    currentList.Add(trimmedLine);
+                }
+            } else {
+                currentList = null;
+            }
+            previousIndentSize = indentSize;
+        }
+        return gemEnvironment;
+    }
+
+    /// <summary>
     /// Find the "pod" tool.
     /// </summary>
     /// <returns>Path to the pod tool if successful, null otherwise.</returns>
@@ -997,49 +1116,171 @@ public static class IOSResolver {
             }
         }
         Log("Querying gems for cocoapods install path", verbose: true);
-        var result = RunCommand(GEM_EXECUTABLE, "environment");
-        if (result.exitCode == 0) {
-            // gem environment outputs YAML for all config variables,
-            // the following code only parses the executable dir from the
-            // output.
-            const string listItemPrefix = "- ";
-            const string executableDir = listItemPrefix + "EXECUTABLE DIRECTORY:";
-            const string gemPaths = listItemPrefix + "GEM PATHS:";
-            int gemPathIndentSize = -1;
-            char[] variableSeparator = new char[] { ':' };
-            foreach (var line in result.stdout.Split(
-                         new char[] { '\r', '\n' })) {
-                var trimmedLine = line.Trim();
-                var indentSize = line.Length - trimmedLine.Length;
-                var searchPath = "";
-                if (trimmedLine.StartsWith(executableDir)) {
-                    searchPath = line.Split(variableSeparator)[1].Trim();
-                } else if (trimmedLine.StartsWith(gemPaths)) {
-                    gemPathIndentSize = indentSize;
-                } else if (gemPathIndentSize > 0) {
-                    // While reading the list of gem paths...
-                    if (indentSize > gemPathIndentSize && trimmedLine.StartsWith(listItemPrefix)) {
-                        // Search the bin/ directory under the current gem path.
-                        string gemPath = trimmedLine.Substring(listItemPrefix.Length).Trim();
-                        if (!String.IsNullOrEmpty(gemPath)) {
-                            searchPath = Path.Combine(gemPath, "bin");
+        var environment = ReadGemsEnvironment();
+        if (environment != null) {
+            const string executableDir = "EXECUTABLE DIRECTORY";
+            foreach (string environmentVariable in new [] { executableDir, "GEM PATHS" }) {
+                List<string> paths;
+                if (environment.TryGetValue(environmentVariable, out paths)) {
+                    foreach (var path in paths) {
+                        var binPath = environmentVariable == executableDir ? path :
+                            Path.Combine(path, "bin");
+                        var podPath = Path.Combine(binPath, POD_EXECUTABLE);
+                        Log("Checking gems install path for cocoapods tool " + podPath,
+                            verbose: true);
+                        if (File.Exists(podPath)) {
+                            Log("Found cocoapods tool in " + podPath, verbose: true);
+                            return podPath;
                         }
-                    } else {
-                        gemPathIndentSize = -1;
-                    }
-                }
-                if (!String.IsNullOrEmpty(searchPath)) {
-                    string podPath = Path.Combine(searchPath, POD_EXECUTABLE);
-                    Log("Checking gems install path for cocoapods tool " + podPath, verbose: true);
-                    if (File.Exists(podPath)) {
-                        Log("Found cocoapods tool in " + podPath, verbose: true);
-                        return podPath;
                     }
                 }
             }
         }
         return null;
     }
+
+
+    /// <summary>
+    /// Command line command to execute.
+    /// </summary>
+    private class CommandItem {
+        /// <summary>
+        /// Command to excecute.
+        /// </summary>
+        public string Command { get; set; }
+        /// <summary>
+        /// Arguments for the command.
+        /// </summary>
+        public string Arguments { get; set; }
+        /// <summary>
+        /// Directory to execute the command.
+        /// </summary>
+        public string WorkingDirectory { get; set; }
+        /// <summary>
+        /// Get a string representation of the command line.
+        /// </summary>
+        public override string ToString() {
+            return String.Format("{0} {1}", Command, Arguments ?? "");
+        }
+    };
+
+    /// <summary>
+    /// Called when one of the commands complete in RunCommandsAsync().
+    /// </summary>
+    /// <param name="commandIndex">Index of the completed command in commands.</param>
+    /// <param name="commands">Array of commands being executed.</param>
+    /// <param name="result">Result of the last command.</param>
+    /// <param name="dialog">Dialog box, if the command was executed in a dialog.</param>
+    /// <returns>Reference to the next command in the list to execute,
+    /// -1 or commands.Length to stop execution.</returns>
+    private delegate int CommandItemCompletionHandler(
+         int commandIndex, CommandItem[] commands,
+         CommandLine.Result result, CommandLineDialog dialog);
+
+    /// <summary>
+    /// Container for a delegate which enables a lambda to reference itself.
+    /// </summary>
+    private class DelegateContainer<T> {
+        /// <summary>
+        /// Delegate method associated with the container.  This enables the
+        /// following pattern:
+        ///
+        /// var container = new DelegateContainer<CommandLine.CompletionHandler>();
+        /// container.Handler = (CommandLine.Result result) => { RunNext(container.Handler); };
+        /// </summary>
+        public T Handler { get; set; }
+    }
+
+    /// <summary>
+    /// Write the result of a command to the log.
+    /// </summary>
+    /// <param name="command">Command that was executed.</param>
+    /// <param name="result">Result of the command.</param>
+    private static void LogCommandLineResult(string command, CommandLine.Result result) {
+        Log(String.Format("'{0}' completed with code {1}\n\n" +
+                          "{2}\n" +
+                          "{3}\n", command, result.exitCode, result.stdout, result.stderr),
+            verbose: true);
+    }
+
+    /// <summary>
+    /// Run a series of commands asynchronously optionally displaying a dialog.
+    /// </summary>
+    /// <param name="commands">Commands to execute.</param>
+    /// <param name="completionDelegate">Called when the command is complete.</param>
+    /// <param name="displayDialog">Whether to show a dialog while executing.</param>
+    /// <param name="summaryText">Text to display at the top of the dialog.</param>
+    private static void RunCommandsAsync(CommandItem[] commands,
+                                         CommandItemCompletionHandler completionDelegate,
+                                         bool displayDialog = false, string summaryText = null) {
+        var envVars = new Dictionary<string,string>() {
+            // Cocoapods requires a UTF-8 terminal, otherwise it displays a warning.
+            {"LANG", (System.Environment.GetEnvironmentVariable("LANG") ??
+                      "en_US.UTF-8").Split('.')[0] + ".UTF-8"},
+            {"PATH", ("/usr/local/bin:" +
+                      (System.Environment.GetEnvironmentVariable("PATH") ?? ""))},
+        };
+
+        if (displayDialog) {
+            var dialog = CommandLineDialog.CreateCommandLineDialog("iOS Resolver");
+            dialog.modal = false;
+            dialog.autoScrollToBottom = true;
+            dialog.bodyText = commands[0].ToString() + "\n";
+            dialog.summaryText = summaryText ?? dialog.bodyText;
+
+            int index = 0;
+            var handlerContainer = new DelegateContainer<CommandLine.CompletionHandler>();
+            handlerContainer.Handler = (CommandLine.Result asyncResult) => {
+                var command = commands[index];
+                LogCommandLineResult(command.ToString(), asyncResult);
+
+                index = completionDelegate(index, commands, asyncResult, dialog);
+                bool endOfCommandList = index < 0 || index >= commands.Length;
+                if (endOfCommandList) {
+                    // If this is the last command and it has completed successfully, close the
+                    // dialog.
+                    if (asyncResult.exitCode == 0) {
+                        dialog.Close();
+                    }
+                    lock (commandLineDialogLock) {
+                        commandLineDialog = null;
+                    }
+                } else {
+                    command = commands[index];
+                    var commandLogLine = command.ToString();
+                    dialog.bodyText += "\n" + commandLogLine + "\n\n";
+                    Log(commandLogLine, verbose: true);
+                    dialog.RunAsync(command.Command, command.Arguments, handlerContainer.Handler,
+                                    workingDirectory: command.WorkingDirectory,
+                                    envVars: envVars);
+                }
+            };
+
+            Log(commands[0].ToString(), verbose: true);
+            dialog.RunAsync(
+                commands[index].Command, commands[index].Arguments,
+                handlerContainer.Handler, workingDirectory: commands[index].WorkingDirectory,
+                envVars: envVars);
+            dialog.Show();
+            lock (commandLineDialogLock) {
+                commandLineDialog = dialog;
+            }
+        } else {
+            if (!String.IsNullOrEmpty(summaryText)) Log(summaryText);
+
+            int index = 0;
+            while (index >= 0 && index < commands.Length) {
+                var command = commands[index];
+                Log(command.ToString(), verbose: true);
+                var result = CommandLine.RunViaShell(
+                    command.Command, command.Arguments, workingDirectory: command.WorkingDirectory,
+                    envVars: envVars, useShellExecution: PodToolExecutionViaShellEnabled);
+                LogCommandLineResult(command.ToString(), result);
+                index = completionDelegate(index, commands, result, null);
+            }
+        }
+    }
+
 
     /// <summary>
     /// Run a command, optionally displaying a dialog.
@@ -1054,42 +1295,14 @@ public static class IOSResolver {
                                         CommandLine.CompletionHandler completionDelegate,
                                         string workingDirectory = null,
                                         bool displayDialog = false, string summaryText = null) {
-        var envVars = new Dictionary<string,string>() {
-            // Cocoapods requires a UTF-8 terminal, otherwise it displays a warning.
-            {"LANG", (System.Environment.GetEnvironmentVariable("LANG") ??
-                      "en_US.UTF-8").Split('.')[0] + ".UTF-8"},
-            {"PATH", ("/usr/local/bin:" +
-                      (System.Environment.GetEnvironmentVariable("PATH") ?? ""))},
-        };
-
-        if (displayDialog) {
-            var dialog = CommandLineDialog.CreateCommandLineDialog("iOS Resolver");
-            dialog.modal = false;
-            dialog.autoScrollToBottom = true;
-            dialog.summaryText = String.Format("{0}{1} {2}",
-                                               String.IsNullOrEmpty(summaryText) ?
-                                                  "" : summaryText + "\n\n",
-                                               command, commandArgs);
-            dialog.RunAsync(
-                command, commandArgs,
-                (CommandLine.Result asyncResult) => {
-                    if (asyncResult.exitCode == 0) dialog.Close();
-                    lock (commandLineDialogLock) {
-                        commandLineDialog = null;
-                    }
-                    completionDelegate(asyncResult);
-                },
-                workingDirectory: workingDirectory, envVars: envVars);
-            dialog.Show();
-            lock (commandLineDialogLock) {
-                commandLineDialog = dialog;
-            }
-        } else {
-            if (!String.IsNullOrEmpty(summaryText)) Log(summaryText);
-            completionDelegate(CommandLine.RunViaShell(
-                command, commandArgs, workingDirectory: workingDirectory,
-                envVars: envVars, useShellExecution: PodToolExecutionViaShellEnabled));
-        }
+        RunCommandsAsync(
+            new [] { new CommandItem { Command = command, Arguments = commandArgs,
+                                       WorkingDirectory = workingDirectory } },
+            (int commandIndex, CommandItem[] commands, CommandLine.Result result,
+             CommandLineDialog dialog) => {
+                completionDelegate(result);
+                return -1;
+            }, displayDialog: displayDialog, summaryText: summaryText);
     }
 
     /// <summary>
