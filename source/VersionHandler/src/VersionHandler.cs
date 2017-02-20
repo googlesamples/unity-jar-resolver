@@ -402,6 +402,7 @@ public class VersionHandler : AssetPostprocessor {
                 }
             }
             try {
+              // b/35587604 this is *really* slow.
               string error = AssetDatabase.RenameAsset(
                   filename, filenameComponents.basenameNoExtension);
               if (!String.IsNullOrEmpty(error)) {
@@ -410,7 +411,6 @@ public class VersionHandler : AssetPostprocessor {
                       newFilename + " (" + error + ")");
                   return false;
               }
-              AssetDatabase.ImportAsset(newFilename);
             } catch (Exception) {
                 // Unity 5.3 and below can end up throw all sorts of
                 // exceptions here when attempting to reload renamed
@@ -524,6 +524,20 @@ public class VersionHandler : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Get the most referenced FileMetadata from this object.
+        /// </summary>
+        /// <returns>FileMetadata instance if this object contains at least one version, null
+        /// otherwise.</returns>
+        public FileMetadata MostRecentVersion {
+            get {
+                var numberOfVersions = metadataByVersion.Count;
+                return numberOfVersions > 0 ?
+                    (FileMetadata)(
+                        (new ArrayList(metadataByVersion.Values))[numberOfVersions - 1]) : null;
+            }
+        }
+
+        /// <summary>
         /// Determine whether the PluginImporter class is available in
         /// UnityEditor. Unity 4 does not have the PluginImporter class so
         /// it's not possible to modify asset metadata without hacking the
@@ -569,9 +583,7 @@ public class VersionHandler : AssetPostprocessor {
 
             // If the canonical file is out of date, update it.
             if (numberOfVersions > 0) {
-                FileMetadata mostRecentVersion =
-                    (FileMetadata)((new ArrayList(metadataByVersion.Values))
-                                   [numberOfVersions - 1]);
+                FileMetadata mostRecentVersion = MostRecentVersion;
                 if (mostRecentVersion.filename != filenameCanonical) {
                     FileMetadata canonicalMetadata = null;
                     foreach (var metadata in metadataByVersion.Values) {
@@ -642,9 +654,6 @@ public class VersionHandler : AssetPostprocessor {
                       UnityEngine.Debug.LogWarning(
                         "Unexpected error enumerating targets: " + e.Message);
                     }
-                }
-                if (modifiedThisVersion) {
-                    pluginImporter.SaveAndReimport();
                 }
                 // If the version was modified and it's obsolete keep track of
                 // it to log it later.
@@ -833,6 +842,11 @@ public class VersionHandler : AssetPostprocessor {
         public FileMetadata currentMetadata = null;
 
         /// <summary>
+        /// Metadata for each version of this manifest.
+        /// </summary>
+        public FileMetadataByVersion metadataByVersion = null;
+
+        /// <summary>
         /// Set of current files in this package.
         /// </summary>
         public HashSet<string> currentFiles = new HashSet<string>();
@@ -870,6 +884,7 @@ public class VersionHandler : AssetPostprocessor {
             foreach (FileMetadata metadata in metadataByVersion.Values) {
                 versionIndex++;
                 if (!metadata.isManifest) return false;
+                this.metadataByVersion = metadataByVersion;
                 bool manifestNeedsUpdate = false;
                 HashSet<string> filesInManifest =
                     versionIndex < numberOfVersions ?
@@ -950,10 +965,20 @@ public class VersionHandler : AssetPostprocessor {
         public HashSet<string> unreferenced;
 
         /// <summary>
+        /// Same as the "unreferenced" member exluding manifest files.
+        /// </summary>
+        public HashSet<string> unreferencedExcludingManifests;
+
+        /// <summary>
         /// Obsolete files that are referenced by manifests.  Each item in
         /// the dictionary contains a list of manifests referencing the file.
         /// </summary>
         public Dictionary<string, List<string>> referenced;
+
+        /// <summary>
+        /// Same as the "referenced" member exluding manifest files.
+        /// </summary>
+        public Dictionary<string, List<string>> referencedExcludingManifests;
 
         /// <summary>
         /// Build an ObsoleteFiles instance searching a set of
@@ -975,14 +1000,21 @@ public class VersionHandler : AssetPostprocessor {
             // global sets.
             var currentFiles = new HashSet<string>();
             var obsoleteFiles = new HashSet<string>();
+            var manifestFilenames = new HashSet<string>();
             foreach (var manifestReferences in manifestReferencesList) {
                 currentFiles.UnionWith(manifestReferences.currentFiles);
                 obsoleteFiles.UnionWith(manifestReferences.obsoleteFiles);
+                foreach (var manifestMetadata in manifestReferences.metadataByVersion.Values) {
+                    manifestFilenames.Add(manifestMetadata.filename);
+                }
             }
             // Fold in obsolete files that are not referenced by manifests.
             foreach (var metadataByVersion in metadataSet.Values) {
-                obsoleteFiles.UnionWith(
-                    metadataByVersion.FindObsoleteVersions());
+                var obsoleteVersions = metadataByVersion.FindObsoleteVersions();
+                obsoleteFiles.UnionWith(obsoleteVersions);
+                if (metadataByVersion.MostRecentVersion.isManifest) {
+                    manifestFilenames.UnionWith(obsoleteVersions);
+                }
             }
             // Filter the obsoleteFiles set for all obsolete files currently
             // in use and add to a dictionary indexed by filename
@@ -990,7 +1022,9 @@ public class VersionHandler : AssetPostprocessor {
             // each file.
             var referencedObsoleteFiles =
                 new Dictionary<string, List<string>>();
+            var referencedObsoleteFilesExcludingManifests = new Dictionary<string, List<string>>();
             var obsoleteFilesToDelete = new HashSet<string>();
+            var obsoleteFilesToDeleteExcludingManifests = new HashSet<string>();
             foreach (var obsoleteFile in obsoleteFiles) {
                 var manifestsReferencingFile = new List<string>();
                 foreach (var manifestReferences in manifestReferencesList) {
@@ -1004,15 +1038,25 @@ public class VersionHandler : AssetPostprocessor {
                 if (!File.Exists(obsoleteFile)) {
                     continue;
                 }
+                bool isManifest = manifestFilenames.Contains(obsoleteFile);
                 if (manifestsReferencingFile.Count > 0) {
                     referencedObsoleteFiles[obsoleteFile] =
                         manifestsReferencingFile;
+                    if (!isManifest) {
+                        referencedObsoleteFilesExcludingManifests[obsoleteFile] =
+                            manifestsReferencingFile;
+                    }
                 } else {
                     obsoleteFilesToDelete.Add(obsoleteFile);
+                    if (!isManifest) {
+                        obsoleteFilesToDeleteExcludingManifests.Add(obsoleteFile);
+                    }
                 }
             }
             unreferenced = obsoleteFilesToDelete;
+            unreferencedExcludingManifests = obsoleteFilesToDeleteExcludingManifests;
             referenced = referencedObsoleteFiles;
+            referencedExcludingManifests = referencedObsoleteFilesExcludingManifests;
         }
     }
 
@@ -1153,7 +1197,6 @@ public class VersionHandler : AssetPostprocessor {
 
         var metadataSet = FileMetadataSet.FindWithPendingUpdates(
             FileMetadataSet.ParseFromFilenames(FindAllAssets()));
-
         if (metadataSet.EnableMostRecentPlugins()) {
             AssetDatabase.Refresh();
         }
@@ -1166,13 +1209,14 @@ public class VersionHandler : AssetPostprocessor {
         // enabled.
         bool deleteFiles = true;
         if (obsoleteFiles.unreferenced.Count > 0) {
-            if (CleanUpPromptEnabled && deleteFiles) {
+            if (CleanUpPromptEnabled && deleteFiles &&
+                obsoleteFiles.unreferencedExcludingManifests.Count > 0) {
                 deleteFiles = EditorUtility.DisplayDialog(
                     PLUGIN_NAME,
                     "Would you like to delete the following obsolete files " +
                     "in your project?\n\n" +
                     String.Join("\n", new List<string>(
-                                        obsoleteFiles.unreferenced).ToArray()),
+                                        obsoleteFiles.unreferencedExcludingManifests).ToArray()),
                     "Yes", cancel: "No");
             }
             foreach (var filename in obsoleteFiles.unreferenced) {
@@ -1189,21 +1233,20 @@ public class VersionHandler : AssetPostprocessor {
         // confirmation of deletion.
         if (obsoleteFiles.referenced.Count > 0) {
             List<string> referencesString = new List<string>();
-            foreach (var item in obsoleteFiles.referenced) {
+            foreach (var item in obsoleteFiles.referencedExcludingManifests) {
                 List<string> lines = new List<string>();
-                lines.Add(item.Key);
                 foreach (var reference in item.Value) {
-                    lines.Add("    " + reference);
+                    lines.Add(String.Format("{0}: {1}", reference, item.Key));
                 }
                 referencesString.Add(String.Join("\n", lines.ToArray()));
             }
-            deleteFiles = EditorUtility.DisplayDialog(
-               PLUGIN_NAME,
-               "The following obsolete files are referenced by packages in " +
-               "your project, would you like to delete them?\n\n" +
-               String.Join("\n", referencesString.ToArray()),
-               "Yes", cancel: "No");
-
+            deleteFiles = obsoleteFiles.referencedExcludingManifests.Values.Count == 0 ||
+                EditorUtility.DisplayDialog(
+                   PLUGIN_NAME,
+                   "The following obsolete files are referenced by packages in " +
+                   "your project, would you like to delete them?\n\n" +
+                   String.Join("\n", referencesString.ToArray()),
+                   "Yes", cancel: "No");
             foreach (var item in obsoleteFiles.referenced) {
                 if (deleteFiles) {
                     MoveAssetToTrash(item.Key);
