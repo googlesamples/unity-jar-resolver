@@ -28,10 +28,10 @@ namespace GooglePlayServices
         const string Namespace = "GooglePlayServices.";
         internal const string AutoResolveKey = Namespace + "AutoResolverEnabled";
         internal const string PrebuildWithGradleKey = Namespace + "PrebuildWithGradle";
-
         internal const string PackageInstallKey = Namespace + "AndroidPackageInstallationEnabled";
         internal const string PackageDirKey = Namespace + "PackageDirectory";
         internal const string ExplodeAarsKey = Namespace + "ExplodeAars";
+        private const string VerboseLoggingKey = Namespace + "VerboseLogging";
 
         private const string AndroidPluginsDir = "Assets/Plugins/Android";
 
@@ -72,6 +72,11 @@ namespace GooglePlayServices
             get { return EditorPrefs.GetBool(ExplodeAarsKey, true); }
         }
 
+        internal static bool VerboseLogging {
+            private set { EditorPrefs.SetBool(VerboseLoggingKey, value); }
+            get { return EditorPrefs.GetBool(VerboseLoggingKey, false); }
+        }
+
         internal static string ValidatePackageDir(string directory) {
             if (!directory.StartsWith(AndroidPluginsDir)) {
                 directory = AndroidPluginsDir;
@@ -84,6 +89,7 @@ namespace GooglePlayServices
         bool installAndroidPackages;
         string packageDir;
         bool explodeAars;
+        bool verboseLogging;
 
         public void Initialize()
         {
@@ -99,6 +105,7 @@ namespace GooglePlayServices
             installAndroidPackages = InstallAndroidPackages;
             packageDir = PackageDir;
             explodeAars = ExplodeAars;
+            verboseLogging = VerboseLogging;
         }
 
         /// <summary>
@@ -164,6 +171,11 @@ namespace GooglePlayServices
             }
             EditorGUI.EndDisabledGroup();
 
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
+            verboseLogging = EditorGUILayout.Toggle(verboseLogging);
+            GUILayout.EndHorizontal();
+
             GUILayout.Space(10);
             GUILayout.BeginHorizontal();
             bool closeWindow = GUILayout.Button("Cancel");
@@ -176,6 +188,8 @@ namespace GooglePlayServices
                 InstallAndroidPackages = installAndroidPackages;
                 if (ConfigurablePackageDir) PackageDir = packageDir;
                 ExplodeAars = explodeAars;
+                VerboseLogging = verboseLogging;
+                PlayServicesResolver.OnSettingsChanged();
             }
             if (closeWindow) Close();
             GUILayout.EndHorizontal();

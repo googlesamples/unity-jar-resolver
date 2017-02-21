@@ -46,13 +46,13 @@ namespace Google.JarResolver
         /// The version comparator.  This comparator results in a descending sort
         /// order by version.
         /// </summary>
-        private readonly VersionComparer versionComparison = new VersionComparer();
+        internal static readonly VersionComparer versionComparer = new VersionComparer();
 
         /// <summary>
         /// The possible versions found in the repository.  This list is mutable
         /// and will change as the constraints are applied.
         /// </summary>
-        private List<string> possibleVersions;
+        private List<string> possibleVersions = new List<string>();
 
         /// <summary>
         /// Initializes a new instance of the
@@ -72,9 +72,27 @@ namespace Google.JarResolver
             Artifact = artifact;
             Version = version;
             PackageIds = packageIds;
-            this.possibleVersions = new List<string>();
             Repositories = repositories;
             CreatedBy = System.Environment.StackTrace;
+        }
+
+        /// <summary>
+        /// Copy Dependency.
+        /// </summary>
+        /// <param name="dependency">Dependency to copy.</param>
+        public Dependency(Dependency dependency) {
+            Group = dependency.Group;
+            Artifact = dependency.Artifact;
+            Version = dependency.Version;
+            if (dependency.PackageIds != null) {
+                PackageIds = (string[])dependency.PackageIds.Clone();
+            }
+            possibleVersions = new List<string>(dependency.possibleVersions);
+            if (dependency.Repositories != null) {
+                Repositories = (string[])dependency.Repositories.Clone();
+            }
+            CreatedBy = dependency.CreatedBy;
+            RepoPath = dependency.RepoPath;
         }
 
         /// <summary>
@@ -94,11 +112,26 @@ namespace Google.JarResolver
         /// <value>The artifact.</value>
         public string Artifact { get; private set; }
 
+
+        /// <summary>
+        /// Backing store for Version.
+        /// </summary>
+        private string versionInternal;
+
         /// <summary>
         /// Gets the version constraint.
         /// </summary>
         /// <value>The version.</value>
-        public string Version { get; private set; }
+        public string Version {
+            get { return versionInternal; }
+
+            internal set {
+                // Filter the possible versions by the new version constraint.  If this results
+                // in an empty list of available versions the depenency POM will be re-evaluated.
+                possibleVersions = FilterAcceptableVersions(value, possibleVersions);
+                versionInternal = value;
+            }
+        }
 
         /// <summary>
         /// Array of Android SDK identifiers for packages that are required for this
@@ -250,41 +283,53 @@ namespace Google.JarResolver
         }
 
         /// <summary>
-        /// Determines whether this instance is acceptable based
-        ///  on the version constraint.
+        /// Determines whether the specified version matches the Dependency.Version constraint.
         /// </summary>
-        /// <returns><c>true</c> if this instance is acceptable
-        ///  version the specified ver.</returns>
-        /// <param name="ver">Version to check.</param>
-        public bool IsAcceptableVersion(string ver)
-        {
-            bool hasPlus = Version.Contains("+");
-            bool latest = Version.ToUpper().Equals("LATEST");
-            if (latest)
-            {
-                return string.IsNullOrEmpty(BestVersion) ||
-                IsGreater(ver, BestVersion);
-            }
+        /// <param name="version">Version to check.</param>
+        /// <returns>true if the specified version matches the Dependency.Version constraint,
+        /// false otherwise.</returns>
+        public bool IsAcceptableVersion(string versionToCheck) {
+            return IsAcceptableVersion(Version, versionToCheck, bestVersion: BestVersion);
+        }
 
-            if (!hasPlus)
-            {
-                if (ver.Equals(Version))
-                {
-                    return true;
-                }
-                else
-                {
-                    string[] myParts = Version.Split('.');
-                    string[] parts = ver.Split('.');
-                    return AreEquivalent(myParts, parts);
+        /// <summary>
+        /// Determines whether the specified version matches a constraint.
+        /// </summary>
+        /// <param name="versionConstraint">Version constraint to test with.</param>
+        /// <param name="bestVersion">If the constraint specifies the latest revision, determine
+        /// whether the current version is greater than or equal to the specified best
+        /// version.</param>
+        /// <param name="versionToCheck">Version to check.</param>
+        /// <returns>true if the specified version matches the constraint,
+        /// false otherwise.</returns>
+        private static bool IsAcceptableVersion(string versionConstraint, string versionToCheck,
+                                                string bestVersion = null) {
+            if (versionConstraint.ToUpper().Equals("LATEST")) {
+                return string.IsNullOrEmpty(bestVersion) ||
+                    versionToCheck.Equals(bestVersion) ||
+                    IsGreater(versionToCheck, bestVersion);
+            }
+            var versionConstraintComponents = versionConstraint.Split('.');
+            var versionToCheckComponents = versionToCheck.Split('.');
+            if (!versionConstraint.Contains("+")) {
+                if (versionToCheck.Equals(versionConstraint)) return true;
+                return AreEquivalent(versionConstraintComponents, versionToCheckComponents);
+            }
+            return IsAcceptable(versionConstraintComponents, versionToCheckComponents);
+        }
+
+        /// <summary>
+        /// Get the set of versions that match the version constraint.
+        /// </summary>
+        private static List<string> FilterAcceptableVersions(string versionConstraint,
+                                                             IEnumerable<string> versionsToCheck) {
+            var acceptableVersions = new List<string>();
+            foreach (var versionToCheck in versionsToCheck) {
+                if (IsAcceptableVersion(versionConstraint, versionToCheck)) {
+                    acceptableVersions.Add(versionToCheck);
                 }
             }
-            else
-            {
-                string[] myParts = Version.Split('.');
-                string[] parts = ver.Split('.');
-                return IsAcceptable(myParts, parts);
-            }
+            return acceptableVersions;
         }
 
         /// <summary>
@@ -296,24 +341,7 @@ namespace Google.JarResolver
         /// <param name="candidate">Candidate to test versions with.</param>
         public bool RefineVersionRange(Dependency candidate)
         {
-            // remove all possible versions that are not acceptable to the
-            // candidate
-            List<string> removals = new List<string>();
-
-            // add the possible versions to both, so the sets are the same.
-            foreach (string v in possibleVersions)
-            {
-                if (!candidate.IsAcceptableVersion(v))
-                {
-                    removals.Add(v);
-                }
-            }
-
-            foreach (string v in removals)
-            {
-                possibleVersions.Remove(v);
-            }
-
+            possibleVersions = FilterAcceptableVersions(candidate.Version, possibleVersions);
             return HasPossibleVersions;
         }
 
@@ -331,20 +359,12 @@ namespace Google.JarResolver
         /// Acceptable versions meet the version constraint and are not already in
         /// the list.
         /// </summary>
-        /// <param name="ver">Version to add</param>
-        public void AddVersion(string ver)
-        {
-            if (possibleVersions.Contains(ver))
-            {
-                return;
+        /// <param name="version">Version to add.</param>
+        public void AddVersion(string version) {
+            if (!possibleVersions.Contains(version) && IsAcceptableVersion(version)) {
+                possibleVersions.Add(version);
+                possibleVersions.Sort(versionComparer);
             }
-
-            if (IsAcceptableVersion(ver))
-            {
-                possibleVersions.Add(ver);
-            }
-
-            possibleVersions.Sort(versionComparison);
         }
 
         /// <summary>
@@ -465,7 +485,7 @@ namespace Google.JarResolver
         /// <returns><c>true</c> if ver2 is acceptable to ver1.</returns>
         /// <param name="ver1">Version 1</param>
         /// <param name="ver2">Version 2</param>
-        internal bool IsAcceptable(string[] ver1, string[] ver2)
+        internal static bool IsAcceptable(string[] ver1, string[] ver2)
         {
             int i1 = 0;
             int i2 = 0;
@@ -551,7 +571,7 @@ namespace Google.JarResolver
         /// <returns><c>true</c>, if equivalent <c>false</c> otherwise.</returns>
         /// <param name="ours">our version parsed into an array.</param>
         /// <param name="theirs">Theirs parsed into an array.</param>
-        internal bool AreEquivalent(string[] ours, string[] theirs)
+        internal static bool AreEquivalent(string[] ours, string[] theirs)
         {
             int ourIndex = 0;
             int theirIndex = 0;

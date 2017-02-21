@@ -20,6 +20,7 @@ namespace Google.JarResolver
     using System.Diagnostics;
     using System.Collections.Generic;
     using System.IO;
+    using System.Text.RegularExpressions;
     using System.Xml;
 
     /// <summary>
@@ -43,15 +44,32 @@ namespace Google.JarResolver
         private static string sdk;
 
         /// <summary>
+        /// Log severity.
+        /// </summary>
+        public enum LogLevel {
+            Info,
+            Warning,
+            Error,
+        };
+
+        /// <summary>
         /// Delegate used to specify a log method for this class.  If provided this class
         /// will log messages via this delegate.
         /// </summary>
         public delegate void LogMessage(string message);
 
         /// <summary>
+        /// Delegate used to specify a log method for this class.  If provided this class
+        /// will log messages via this delegate.
+        /// </summary>
+        /// <param name="message">Message to log.</param>
+        /// <param name="level">Severity of the log message.</param>
+        public delegate void LogMessageWithLevel(string message, LogLevel level);
+
+        /// <summary>
         /// Log function delegate.  If set, this class will write log messages via this method.
         /// </summary>
-        internal static LogMessage logger;
+        internal static LogMessageWithLevel logger;
 
         /// <summary>
         /// The repository paths.
@@ -100,6 +118,20 @@ namespace Google.JarResolver
         /// <returns>True if the AAR should be exploded, false otherwise.</returns>
         public delegate bool ExplodeAar(string aarPath);
 
+        /// <summary>
+        /// Whether the editor was launched in batch mode.
+        /// </summary>
+        private static bool InBatchMode {
+            get {
+#if UNITY_EDITOR
+                return System.Environment.CommandLine.Contains("-batchmode");
+#else
+                return true;
+#endif  // UNITY_EDITOR
+            }
+        }
+
+
         private static string SDKInternal
         {
             get
@@ -113,6 +145,29 @@ namespace Google.JarResolver
                     sdk = System.Environment.GetEnvironmentVariable("ANDROID_HOME");
                 }
                 return sdk;
+            }
+        }
+
+        const string PlayServicesVersionValidatorEnabledPreferenceKey =
+            "PlayServicesSupport.PlayServicesVersionCheck";
+
+        /// <summary>
+        /// Whether the Play Services package version validator is enabled.
+        /// </summary>
+        public bool PlayServicesVersionValidatorEnabled {
+            set {
+#if UNITY_EDITOR
+                UnityEditor.EditorPrefs.SetBool(PlayServicesVersionValidatorEnabledPreferenceKey,
+                                                value);
+#endif  // UNITY_EDITOR
+            }
+            get {
+#if UNITY_EDITOR
+                return UnityEditor.EditorPrefs.GetBool(
+                    PlayServicesVersionValidatorEnabledPreferenceKey, true);
+#else
+                return true;
+#endif  // UNITY_EDITOR
             }
         }
 
@@ -144,13 +199,13 @@ namespace Google.JarResolver
         /// <param name="sdkPath">Sdk path for Android SDK.</param>
         /// <param name="settingsDirectory">This parameter is obsolete.</param>
         /// <param name="logger">Delegate used to write messages to the log.</param>
+        /// <param name="logMessageWithLevel">Delegate used to write messages to the log.  If
+        /// this is specified "logger" is ignored.</param>
         public static PlayServicesSupport CreateInstance(
-            string clientName,
-            string sdkPath,
-            string settingsDirectory,
-            LogMessage logger = null)
-        {
-            return CreateInstance(clientName, sdkPath, null, settingsDirectory, logger: logger);
+                string clientName, string sdkPath, string settingsDirectory,
+                LogMessage logger = null, LogMessageWithLevel logMessageWithLevel = null) {
+            return CreateInstance(clientName, sdkPath, null, settingsDirectory, logger: logger,
+                                  logMessageWithLevel: logMessageWithLevel);
         }
 
         /// <summary>
@@ -167,15 +222,19 @@ namespace Google.JarResolver
         /// null</param>
         /// <param name="settingsDirectory">This parameter is obsolete.</param>
         /// <param name="logger">Delegate used to write messages to the log.</param>
+        /// <param name="logMessageWithLevel">Delegate used to write messages to the log.  If
+        /// this is specified "logger" is ignored.</param>
         internal static PlayServicesSupport CreateInstance(
-            string clientName,
-            string sdkPath,
-            string[] additionalRepositories,
-            string settingsDirectory,
-            LogMessage logger = null)
+                string clientName, string sdkPath, string[] additionalRepositories,
+                string settingsDirectory, LogMessage logger = null,
+                LogMessageWithLevel logMessageWithLevel = null)
         {
             PlayServicesSupport instance = new PlayServicesSupport();
-            PlayServicesSupport.logger = PlayServicesSupport.logger ?? logger;
+            LogMessageWithLevel legacyLogger = (string message, LogLevel level) => {
+                if (logger != null) logger(message);
+            };
+            PlayServicesSupport.logger =
+                PlayServicesSupport.logger ?? (logMessageWithLevel ?? legacyLogger);
             PlayServicesSupport.sdk =
                 String.IsNullOrEmpty(sdkPath) ? PlayServicesSupport.sdk : sdkPath;
             string badchars = new string(Path.GetInvalidFileNameChars());
@@ -206,14 +265,14 @@ namespace Google.JarResolver
         /// <summary>
         /// Log a message to the currently set logger.
         /// </summary>
-        /// <remarks>
-        ///   <para>
-        ///     message is a string to write to the log.
-        ///   </para>
-        /// </remarks>
-        internal static void Log(string message, bool verbose = false) {
-            if (logger != null && (!verbose || verboseLogging)) {
-                logger(message);
+        /// <param name="message">Message to log.</param>
+        /// <param name="level">Severity of the log message.</param>
+        /// <param name="verbose">Whether the message should only be displayed with verbose
+        /// logging enabled.</param>
+        internal static void Log(string message, LogLevel level = LogLevel.Info,
+                                 bool verbose = false) {
+            if (logger != null && (!verbose || verboseLogging || InBatchMode)) {
+                logger(message, level);
             }
         }
 
@@ -483,6 +542,102 @@ namespace Google.JarResolver
         }
 
         /// <summary>
+        /// Some groups of dependencies are released in lock step.  This forces all
+        /// dependencies within the specified set of groups to a common version.
+        /// </summary>
+        /// <param name="dependenciesToProcess">Set of dependencies to process indexed by
+        /// Dependency.Key.</param>
+        /// <param name="versionLockedGroupIds>Groups which contain packages that should all
+        /// use the same version.</param>
+        /// <param name="packageSetName">String used to summarize the set of matching packages in
+        /// log messages.</param>
+        /// <param name="artifactFilter">Regular expression which excludes packages by their
+        /// the artifact name within the specified group.</param>
+        /// <returns>List of dependencies where all packages that match versionLockedGroupIds
+        /// are configured with the same version.</return>
+        public List<Dependency> ProcessVersionLockedDependencies(
+                IEnumerable<Dependency> dependenciesToProcess,
+                HashSet<string> versionLockedGroupIds,
+                string packageSetName, Regex artifactNameFilter = null) {
+            var versionLockedPackages = new Dictionary<string, Dependency>();
+            // Versions of each version locked package.
+            var versionLockedPackageVersions = new HashSet<string>();
+            foreach (var dependency in dependenciesToProcess) {
+                if (!versionLockedGroupIds.Contains(dependency.Group) ||
+                    (artifactNameFilter != null &&
+                     artifactNameFilter.Match(dependency.Artifact).Success)) {
+                    continue;
+                }
+                var dependencyWithConstraintsApplied = new Dependency(dependency);
+                // If this results in no available versions for the specified set of
+                // constraints, ignore this version.  The final resolution step will report
+                // an error for the case of no matching versions.
+                if (dependencyWithConstraintsApplied.RefineVersionRange(dependency)) {
+                    versionLockedPackageVersions.UnionWith(new HashSet<string>(
+                        dependencyWithConstraintsApplied.PossibleVersions));
+                    versionLockedPackages[dependencyWithConstraintsApplied.Key] =
+                        dependencyWithConstraintsApplied;
+                }
+            }
+            // If no version locked packages are in the set, return the dependencies unmodified.
+            if (versionLockedPackages.Count == 0) {
+                return new List<Dependency>(dependenciesToProcess);
+            }
+
+            // Calculate the set of versions supported by all packages.
+            var commonlySupportedVersions = new HashSet<string>(versionLockedPackageVersions);
+            foreach (var dependency in versionLockedPackages.Values) {
+                var supportedVersions = new HashSet<string>(dependency.PossibleVersions);
+                commonlySupportedVersions.IntersectWith(supportedVersions);
+            }
+
+            var commonlySupportedVersionsFound = commonlySupportedVersions.Count > 0;
+            var sortedVersions = new List<string>(
+                 commonlySupportedVersionsFound ?
+                 commonlySupportedVersions : versionLockedPackageVersions);
+            sortedVersions.Sort(Dependency.versionComparer);
+            var mostRecentSupportedVersion = sortedVersions[0];
+
+            var dependencyKeyAndCreationLocations = new List<string>();
+            foreach (var dependency in versionLockedPackages) {
+                dependencyKeyAndCreationLocations.Add(String.Format(
+                    "--- {0}\n{1}\n", dependency.Key, dependency.Value.CreatedBy));
+            }
+
+            Log(String.Format(
+                    "{0} packages found with incompatible versions.\n" +
+                    "\n" +
+                    "All packages in {0} must be at the same version.\n" +
+                    "Attempting to resolve the problem by using the most " +
+                    "recent{1}version ({2}) of all packages.\n" +
+                    "\n" +
+                    "Found the following package references:\n" +
+                    "{3}\n" +
+                    "\n" +
+                    "This functionality can be disabled using the {4} editor preference.\n\n" +
+                    "Packages references are:\n" +
+                    "{5}",
+                    packageSetName, commonlySupportedVersionsFound ? " *compatible* " : " ",
+                    mostRecentSupportedVersion,
+                    String.Join("\n", new List<string>(versionLockedPackages.Keys).ToArray()),
+                    PlayServicesVersionValidatorEnabledPreferenceKey,
+                    String.Join("\n", dependencyKeyAndCreationLocations.ToArray())),
+                level: commonlySupportedVersionsFound ? LogLevel.Info : LogLevel.Warning,
+                verbose: commonlySupportedVersionsFound);
+
+            // Set all dependencies to the version.
+            var fixedDependencies = new Dictionary<string, Dependency>();
+            foreach (var dependency in dependenciesToProcess) {
+                if (versionLockedPackages.ContainsKey(dependency.Key)) {
+                    dependency.Version = mostRecentSupportedVersion;
+                }
+                fixedDependencies[dependency.Key] = dependency;
+            }
+            return new List<Dependency>(LoadDependencies(fixedDependencies, repositoryPaths,
+                                                         keepMissing: true).Values);
+        }
+
+        /// <summary>
         /// Performs the resolution process.  This determines the versions of the
         /// dependencies that should be used.  Transitive dependencies are also
         /// processed.
@@ -492,20 +647,18 @@ namespace Google.JarResolver
         /// <param name="useLatest">If set to <c>true</c> use latest version of a conflicting
         /// dependency.
         /// if <c>false</c> a ResolutionException is thrown in the case of a conflict.</param>
+        /// <param name="dependencyMap">Set of dependencies used to perform the resolution process
+        /// indexed by Dependency.Key.  If this argument is null, this method returns an empty
+        /// dictionary of candidates.</param>
         /// <param name="destDirectory">Directory dependencies will be copied to using
         /// CopyDependencies().</param>
         /// <param name="explodeAar">Delegate that determines whether a dependency should be
         /// exploded.  If a dependency is currently exploded but shouldn't be according to this
         /// delegate, the dependency is deleted.</param>
-        public Dictionary<string, Dependency> ResolveDependencies(
-            bool useLatest, string destDirectory = null, ExplodeAar explodeAar = null)
-        {
-            List<Dependency> unresolved = new List<Dependency>();
-
+        internal Dictionary<string, Dependency> ResolveDependencies(
+                bool useLatest, Dictionary<string, Dependency> dependencyMap,
+                string destDirectory, ExplodeAar explodeAar) {
             Dictionary<string, Dependency> candidates = new Dictionary<string, Dependency>();
-
-            Dictionary<string, Dependency> dependencyMap =
-                DependenciesPresent(destDirectory, explodeAar: explodeAar);
             if (dependencyMap == null) return candidates;
 
             // Set of each versioned dependencies for each version-less dependency key.
@@ -514,10 +667,36 @@ namespace Google.JarResolver
             var warnings = new HashSet<string>();
 
             // All dependencies are added to the "unresolved" list.
-            foreach (var dependency in dependencyMap.Values)
-            {
-                unresolved.Add(FindCandidate(dependency));
+            var unresolved = new List<Dependency>();
+            foreach (var dependency in dependencyMap.Values) {
+                // Since the resolution process may need to be restarted with a different
+                // set of baseline packages during resolution, we copy each dependency so the
+                // starting state can be restored.
+                unresolved.Add(new Dependency(FindCandidate(dependency)));
             }
+
+            // To speed up the process of dependency resolution - and workaround the deficiencies
+            // in the resolution logic - we can apply some things that we know about some
+            // dependencies:
+            // * com.google.android.gms.* packages are released a single set that typically are
+            //   not compatible between revisions.  e.g If a user depends upon
+            //   play-services-games:9.8.0 they'll also require play-services-base:9.8.0 etc.
+            // * com.google.firebase.* packages are versioned in the same way as
+            //   com.google.android.gms.* with dependencies upon the gms (Play Services)
+            //   components.
+            //
+            // Given this knowledge, find all top level incompatible dependencies and select the
+            // most recent compatible versions for all matching packages.
+            if (PlayServicesVersionValidatorEnabled) {
+                unresolved = new List<Dependency>(ProcessVersionLockedDependencies(
+                    unresolved, new HashSet<string> { "com.google.android.gms",
+                                                      "com.google.firebase" },
+                    "Google Play Services", artifactNameFilter: new Regex("-unity$")));
+            }
+
+            // Copy unresolved dependencies into the map to be resolved.
+            dependencyMap = new Dictionary<string, Dependency>();
+            foreach (var dependency in unresolved) dependencyMap[dependency.Key] = dependency;
 
             do
             {
@@ -617,11 +796,12 @@ namespace Google.JarResolver
                                             requiredByString = requiredByMessage;
                                         }
                                     }
-                                    Log(String.Join("\n", dependenciesMessage.ToArray()));
                                     Log(String.Format(
-                                        "WARNING: No compatible versions of {0}, will try using " +
-                                        "the latest version {1}", requiredByString,
-                                        currentDep.BestVersion));
+                                            "No compatible versions of {0}, will try using " +
+                                            "the latest version {1}\n\n" +
+                                            "{2}\n", requiredByString, currentDep.BestVersion,
+                                            String.Join("\n", dependenciesMessage.ToArray())),
+                                        level: LogLevel.Warning);
                                     warnings.Add(currentDep.VersionlessKey);
                                 }
                             }
@@ -684,6 +864,28 @@ namespace Google.JarResolver
             while (unresolved.Count > 0);
 
             return candidates;
+        }
+
+        /// <summary>
+        /// Performs the resolution process.  This determines the versions of the
+        /// dependencies that should be used.  Transitive dependencies are also
+        /// processed.
+        /// </summary>
+        /// <returns>The dependencies.  The key is the "versionless" key of the dependency.
+        /// </returns>
+        /// <param name="useLatest">If set to <c>true</c> use latest version of a conflicting
+        /// dependency.
+        /// if <c>false</c> a ResolutionException is thrown in the case of a conflict.</param>
+        /// <param name="destDirectory">Directory dependencies will be copied to using
+        /// CopyDependencies().</param>
+        /// <param name="explodeAar">Delegate that determines whether a dependency should be
+        /// exploded.  If a dependency is currently exploded but shouldn't be according to this
+        /// delegate, the dependency is deleted.</param>
+        public Dictionary<string, Dependency> ResolveDependencies(
+                bool useLatest, string destDirectory = null, ExplodeAar explodeAar = null) {
+            return ResolveDependencies(useLatest,
+                                       DependenciesPresent(destDirectory, explodeAar: explodeAar),
+                                       destDirectory, explodeAar);
         }
 
         /// <summary>
@@ -796,8 +998,8 @@ namespace Google.JarResolver
         internal static void ProcessMetadata(Dependency dep, string fname)
         {
             XmlTextReader reader = new XmlTextReader(new StreamReader(fname));
-
             bool inVersions = false;
+            var availableVersions = new List<string>();
             while (reader.Read())
             {
                 if (reader.Name == "versions")
@@ -806,9 +1008,17 @@ namespace Google.JarResolver
                 }
                 else if (inVersions && reader.Name == "version")
                 {
-                    dep.AddVersion(reader.ReadString());
+                    var version = reader.ReadString();
+                    availableVersions.Add(version);
+                    dep.AddVersion(version);
                 }
             }
+            Log(String.Format(
+                "Read metadata for {0} found compatible versions ({1}) from available " +
+                "versions ({2})",
+                dep.Key, String.Join(", ", (new List<string>(dep.PossibleVersions)).ToArray()),
+                String.Join(", ", availableVersions.ToArray())), verbose: true);
+
         }
 
         internal Dependency FindCandidate(Dependency dep)
@@ -856,21 +1066,24 @@ namespace Google.JarResolver
                     Log("Repo not found: " + Path.GetFullPath(repoPath));
                 }
             }
-            Log(String.Format("ERROR: Unable to find dependency {0} in paths ({1}).\n\n" +
+            Log(String.Format("Unable to find dependency {0} in paths ({1}).\n\n" +
                               "{0} was referenced by:\n{2}\n\n",
                               dep.Key, String.Join(", ", new List<string>(repoPaths).ToArray()),
-                              dep.CreatedBy));
+                              dep.CreatedBy), level: LogLevel.Error);
             return null;
         }
 
         /// <summary>
         /// Finds an acceptable candidate for the given dependency.
         /// </summary>
-        /// <returns>The dependency modified so BestVersion returns the best version.</returns>
+        /// <returns>The dependency modified so BestVersion returns the best version and all
+        /// missing versions are removed from Dependency.PossibleVersions.</returns>
         /// <param name="repoPath">The path to the artifact repository.</param>
         /// <param name="dep">The dependency to find a specific version for.</param>
         internal static Dependency FindCandidate(string repoPath, Dependency dep)
         {
+            Log(String.Format("Reading {0} from repository {1}", dep.Key, repoPath),
+                verbose: true);
             string basePath = Path.Combine(dep.Group, dep.Artifact);
             basePath = basePath.Replace(".", Path.DirectorySeparatorChar.ToString());
 
@@ -885,7 +1098,8 @@ namespace Google.JarResolver
                     // Check for the actual file existing, otherwise skip this version.
                     string aarFile = dep.BestVersionArtifact;
                     if (aarFile != null) return dep;
-                    Log(dep.Key + " version " + dep.BestVersion + " not available, ignoring.",
+                    Log(String.Format("Artifact {0} not found for {1} version {2}",
+                                      dep.BestVersionPath, dep.Key, dep.BestVersion),
                         verbose: true);
                     dep.RemovePossibleVersion(dep.BestVersion);
                 }
@@ -913,17 +1127,18 @@ namespace Google.JarResolver
             List<Dependency> dependencyList = new List<Dependency>();
             if (String.IsNullOrEmpty(dep.BestVersion))
             {
-                Log(String.Format("ERROR: No compatible versions of {0} found given the set of " +
+                Log(String.Format("No compatible versions of {0} found given the set of " +
                                   "required dependencies.\n\n{0} was referenced by:\n{1}\n\n",
-                                  dep.Key, dep.CreatedBy));
+                                  dep.Key, dep.CreatedBy), level: LogLevel.Error);
                 return dependencyList;
             }
 
             string basename = dep.Artifact + "-" + dep.BestVersion + ".pom";
             string pomFile = Path.Combine(dep.BestVersionPath, basename);
-            Log("GetDependencies - reading pom of " + basename + " pom: " + pomFile + " " +
-                " versions: " +
-                String.Join(", ", (new List<string>(dep.PossibleVersions)).ToArray()),
+            Log(String.Format(
+                   "Reading Maven POM of {0}, pom: {1}, versions: {2}",
+                   dep.VersionlessKey, pomFile,
+                   String.Join(", ", (new List<string>(dep.PossibleVersions)).ToArray())),
                 verbose: true);
 
             XmlTextReader reader = new XmlTextReader(new StreamReader(pomFile));
@@ -992,6 +1207,37 @@ namespace Google.JarResolver
         }
 
         /// <summary>
+        /// Read Maven package groups for the specified set of dependencies.
+        /// </summary>
+        /// <param name="dependencies">Dependencies to load.</param>
+        /// <param name="repoPaths">Set of additional repo paths to search for the
+        /// dependencies.</param>
+        /// <param name="keepMissing">If false, missing dependencies result in a
+        /// ResolutionException being thrown.  If true, each missing dependency is included in
+        /// the returned set with RepoPath set to an empty string.</param>
+        /// <param name="findCandidates">Search repositories for each candidate dependency.</param>
+        /// <returns>Dictionary of dependencies with Dependency.PossibleVersions populated with
+        /// available versions in the Maven repo.</returns>
+        internal static Dictionary<string, Dependency> LoadDependencies(
+                Dictionary<string, Dependency> dependencies, List<string> repoPaths,
+                bool keepMissing = false, bool findCandidates = true) {
+            Dictionary<string, Dependency> dependencyMap = new Dictionary<string, Dependency>();
+            foreach (var dependencyItem in dependencies) {
+                Dependency foundDependency =
+                    findCandidates ? FindCandidate(dependencyItem.Value, repoPaths) : null;
+                if (foundDependency == null) {
+                    if (!keepMissing) {
+                        throw new ResolutionException("Cannot find candidate artifacts for " +
+                                                      dependencyItem.Value.Key);
+                    }
+                    foundDependency = dependencyItem.Value;
+                }
+                dependencyMap[foundDependency.Key] = foundDependency;
+            }
+            return dependencyMap;
+        }
+
+        /// <summary>
         /// Loads the dependencies from the current PlayServicesSupport instances.
         /// </summary>
         /// <param name="allClients">If true, all client dependencies are loaded and returned
@@ -1002,35 +1248,18 @@ namespace Google.JarResolver
         /// <param name="findCandidates">Search repositories for each candidate dependency.</param>
         /// <returns>Dictionary of dependencies</returns>
         public Dictionary<string, Dependency> LoadDependencies(
-            bool allClients, bool keepMissing = false, bool findCandidates = true)
-        {
+                bool allClients, bool keepMissing = false, bool findCandidates = true) {
             Dictionary<string, Dependency> dependencyMap =
                 new Dictionary<string, Dependency>();
             // Aggregate dependencies of the specified set of PlayServicesSupport instances.
-            PlayServicesSupport[] playServicesSupportInstances;
-            playServicesSupportInstances = allClients ?
-                (new List<PlayServicesSupport>(instances.Values)).ToArray() : new [] { this };;
-            foreach (var instance in playServicesSupportInstances)
-            {
-                var newMap = new Dictionary<string, Dependency>();
-                foreach (var dependencyItem in instance.clientDependenciesMap)
-                {
-                    Dependency foundDependency = null;
-                    if (findCandidates)
-                    {
-                        foundDependency = instance.FindCandidate(dependencyItem.Value);
-                    }
-                    if (foundDependency == null)
-                    {
-                        if (!keepMissing)
-                        {
-                            throw new ResolutionException("Cannot find candidate artifact for " +
-                                                          dependencyItem.Value.Key);
-                        }
-                        foundDependency = dependencyItem.Value;
-                    }
-                    newMap[foundDependency.Key] = foundDependency;
-                    dependencyMap[foundDependency.Key] = foundDependency;
+            PlayServicesSupport[] playServicesSupportInstances = allClients ?
+                (new List<PlayServicesSupport>(instances.Values)).ToArray() : new [] { this };
+            foreach (var instance in playServicesSupportInstances) {
+                var newMap = LoadDependencies(
+                    instance.clientDependenciesMap, instance.repositoryPaths,
+                    keepMissing: keepMissing, findCandidates: findCandidates);
+                foreach (var dependency in newMap) {
+                    dependencyMap[dependency.Key] = dependency.Value;
                 }
                 instance.clientDependenciesMap = newMap;
             }

@@ -268,7 +268,21 @@ namespace GooglePlayServices
                     "PlayServicesResolver",
                     EditorPrefs.GetString("AndroidSdkRoot"),
                     "ProjectSettings",
-                    logger: UnityEngine.Debug.Log);
+                    logMessageWithLevel: (string message, PlayServicesSupport.LogLevel level) => {
+                        switch (level) {
+                            case PlayServicesSupport.LogLevel.Info:
+                                UnityEngine.Debug.Log(message);
+                                break;
+                            case PlayServicesSupport.LogLevel.Warning:
+                                UnityEngine.Debug.LogWarning(message);
+                                break;
+                            case PlayServicesSupport.LogLevel.Error:
+                                UnityEngine.Debug.LogError(message);
+                                break;
+                            default:
+                                break;
+                        }
+                    });
 
                 EditorApplication.update -= AutoResolve;
                 EditorApplication.update += AutoResolve;
@@ -285,6 +299,7 @@ namespace GooglePlayServices
             EditorApplication.update += PollBuildSystem;
             EditorApplication.update -= PollTargetDeviceAbi;
             EditorApplication.update += PollTargetDeviceAbi;
+            OnSettingsChanged();
         }
 
         /// <summary>
@@ -612,6 +627,13 @@ namespace GooglePlayServices
             }
             Resolve(() => { EditorUtility.DisplayDialog("Android Jar Dependencies",
                                                         "Resolution Complete", "OK"); });
+        }
+
+        /// <summary>
+        /// Called when settings change.
+        /// </summary>
+        internal static void OnSettingsChanged() {
+            PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;
         }
 
         /// <summary>
