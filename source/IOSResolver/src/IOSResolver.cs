@@ -853,7 +853,7 @@ public static class IOSResolver {
         var podToolPath = FindPodTool();
         if (!String.IsNullOrEmpty(podToolPath)) {
             var installationFoundMessage = "Cocoapods installation detected " + podToolPath;
-            if (displayAlreadyInstalled) logMessage(installationFoundMessage, verbose: true);
+            if (displayAlreadyInstalled) logMessage(installationFoundMessage);
             cocoapodsInstallPresent = true;
             return;
         }
