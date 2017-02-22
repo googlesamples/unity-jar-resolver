@@ -18,6 +18,7 @@ namespace GooglePlayServices
 {
     using System;
     using System.Collections.Generic;
+    using System.IO;
     using System.Text.RegularExpressions;
     using Google.JarResolver;
     using UnityEditor;
@@ -114,6 +115,11 @@ namespace GooglePlayServices
         /// The value of ProjectExportEnabled when PollBuildSystem() was called.
         /// </summary>
         private static bool previousProjectExportEnabled = false;
+
+        /// <summary>
+        /// Asset label applied to files managed by this plugin.
+        /// </summary>
+        private const string ManagedAssetLabel = "gpsr";
 
         /// <summary>
         /// Get a boolean property from UnityEditor.EditorUserBuildSettings.
@@ -653,6 +659,75 @@ namespace GooglePlayServices
                     msg,"Replace","Keep");
             }
             return true;
+        }
+
+        /// <summary>
+        /// Label a set of assets that should be managed by this plugin.
+        /// </summary>
+        /// <param name="assetPaths">Set of assets to label.</param>
+        /// <param name="displayWarning">Whether to display a warning if assets can't be
+        /// labeled.</param>
+        /// <param name="recursive">Whether to label assets in subdirectories of the specified
+        /// assetPaths.</param>
+        /// <returns>List of assets that could not be labeled.</returns>
+        internal static HashSet<string> LabelAssets(IEnumerable<string> assetPaths,
+                                                    bool displayWarning = true,
+                                                    bool recursive = false) {
+            var assetsWithoutAssetImporter = new HashSet<string>(assetPaths);
+            if (assetsWithoutAssetImporter.Count == 0) return assetsWithoutAssetImporter;
+            var projectDataFolder = Path.GetFullPath(Application.dataPath);
+            foreach (var assetPath in new List<string>(assetsWithoutAssetImporter)) {
+                // Ignore asset meta files which are used to store the labels and files that
+                // are not in the project.
+                var fullAssetPath = Path.GetFullPath(assetPath);
+                if (assetPath.EndsWith(".meta") || !fullAssetPath.StartsWith(projectDataFolder)) {
+                    assetsWithoutAssetImporter.Remove(assetPath);
+                    continue;
+                }
+
+                // Get the relative path of this asset.
+                var relativeAssetPath = Path.Combine(
+                    Path.GetFileName(projectDataFolder),
+                    fullAssetPath.Substring(projectDataFolder.Length +1));
+
+                // If the asset is a directory, add labels to the contents.
+                if (recursive && Directory.Exists(relativeAssetPath)) {
+                    assetsWithoutAssetImporter.UnionWith(
+                        LabelAssets(Directory.GetFileSystemEntries(relativeAssetPath),
+                                    displayWarning: false));
+                }
+
+                // It's likely files have been added or removed without using AssetDatabase methods
+                // so (re)import the asset to make sure it's in the AssetDatabase.
+                AssetDatabase.ImportAsset(relativeAssetPath,
+                                          options: ImportAssetOptions.ForceSynchronousImport);
+
+                // Add the label to the asset.
+                AssetImporter importer = AssetImporter.GetAtPath(relativeAssetPath);
+                if (importer != null) {
+                    var labels = new HashSet<string>(AssetDatabase.GetLabels(importer));
+                    labels.Add(ManagedAssetLabel);
+                    AssetDatabase.SetLabels(importer, (new List<string>(labels)).ToArray());
+                    assetsWithoutAssetImporter.Remove(assetPath);
+                }
+            }
+            if (assetsWithoutAssetImporter.Count > 0 && displayWarning) {
+                Debug.LogWarning(String.Format(
+                    "Failed to add tracking label {0} to some assets.\n\n" +
+                    "The following files will not be managed by this module:\n" +
+                    "{1}\n", ManagedAssetLabel,
+                    String.Join("\n", new List<string>(assetsWithoutAssetImporter).ToArray())));
+            }
+            return assetsWithoutAssetImporter;
+        }
+
+        /// <summary>
+        /// Find the set of assets managed by this plugin.
+        /// </summary>
+        internal static IEnumerable<string> FindLabeledAssets() {
+            foreach (string assetGuid in AssetDatabase.FindAssets("l:" + ManagedAssetLabel)) {
+                yield return AssetDatabase.GUIDToAssetPath(assetGuid);
+            }
         }
     }
 }

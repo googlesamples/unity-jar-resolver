@@ -373,7 +373,11 @@ namespace GooglePlayServices
             }
 
             // Clean up the aar file.
-            File.Delete(Path.GetFullPath(aarFile));
+            PlayServicesSupport.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile),
+                                                              includeMetaFiles: true);
+
+            // Add a tracking label to the exploded files.
+            PlayServicesResolver.LabelAssets(new [] { workingDir });
             return workingDir;
         }
     }

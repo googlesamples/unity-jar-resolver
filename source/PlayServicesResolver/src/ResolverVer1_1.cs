@@ -370,8 +370,30 @@ namespace GooglePlayServices
                 resolutionComplete();
             };
 
-            var dependencies = svcSupport.DependenciesPresent(destinationDirectory);
+            Dictionary<string, string> pathsByDependencyKey;
+            var dependencies = svcSupport.FindMissingDependencyPaths(destinationDirectory,
+                                                                     out pathsByDependencyKey);
             if (dependencies == null) return;
+
+            // If any dependencies are no longer present we'll assume dependencies have been
+            // added or removed so clean all stale tracked dependencies.
+            var currentDependencyPaths = new HashSet<string>(pathsByDependencyKey.Values);
+            foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
+                var assetBasename = Directory.Exists(assetPath) ?
+                    assetPath : Path.Combine(Path.GetDirectoryName(assetPath),
+                                             Path.GetFileNameWithoutExtension(assetPath));
+                var assetTargetPaths = new List<string> { assetBasename };
+                foreach (var extension in Dependency.Packaging) {
+                    assetTargetPaths.Add(assetBasename + extension);
+                }
+                if (!assetTargetPaths.Exists(
+                         targetPath => currentDependencyPaths.Contains(targetPath))) {
+                    PlayServicesSupport.Log("Deleting stale dependency" + assetPath,
+                                            verbose: true);
+                    PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
+                                                                      includeMetaFiles: true);
+                }
+            }
 
             // Set of packages that need to be installed.
             Dictionary<string, bool> installPackages = new Dictionary<string, bool>();
@@ -646,10 +668,11 @@ namespace GooglePlayServices
                                                        return ShouldExplode(aarPath);
                                                    });
                 // Copy the list
-                svcSupport.CopyDependencies(deps,
-                                            destinationDirectory,
-                                            handleOverwriteConfirmation);
-
+                var copiedFiles = svcSupport.CopyDependencies(deps, destinationDirectory,
+                                                              handleOverwriteConfirmation);
+                // Label all copied files so they can be cleaned up if resolution needs to be
+                // triggered again.
+                PlayServicesResolver.LabelAssets(copiedFiles.Values);
             }
             catch (Google.JarResolver.ResolutionException e)
             {

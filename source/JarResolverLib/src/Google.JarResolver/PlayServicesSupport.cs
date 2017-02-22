@@ -413,12 +413,22 @@ namespace Google.JarResolver
 
             // Copy the set of dependencies.
             var transitiveDependencies = new Dictionary<string, Dependency>(dependencies);
+            // Transitive dependencies that have not been queried for packages they're dependent
+            // upon.
+            var pendingTransitiveDependencies =
+                new Dictionary<string, Dependency>(transitiveDependencies);
             // Expand set of transitive dependencies into the dictionary of dependencies.
-            foreach (var rootDependency in dependencies.Values)
-            {
-                foreach (var transitiveDependency in GetDependencies(rootDependency, repoPaths))
-                {
-                    transitiveDependencies[transitiveDependency.Key] = transitiveDependency;
+            while (pendingTransitiveDependencies.Count > 0) {
+                var dependenciesToEvaluate = new Dictionary<string, Dependency>(
+                    pendingTransitiveDependencies);
+                foreach (var dependencyItem in dependenciesToEvaluate) {
+                    pendingTransitiveDependencies.Remove(dependencyItem.Key);
+                    foreach (var transitiveDependency in GetDependencies(dependencyItem.Value,
+                                                                         repoPaths)) {
+                        transitiveDependencies[transitiveDependency.Key] = transitiveDependency;
+                        pendingTransitiveDependencies[transitiveDependency.Key] =
+                            transitiveDependency;
+                    }
                 }
             }
             // TODO(smiles): Need a callback that queries Unity's asset DB rather than touching
@@ -507,33 +517,63 @@ namespace Google.JarResolver
             return true;
         }
 
+
         /// <summary>
-        /// Determine whether the current set of artifacts in the project matches the set of
-        /// specified dependencies.
+        /// Find the set of artifacts in the project missing from the set of specified
+        /// dependencies.
         /// </summary>
-        /// <param name="destDirectory">Directory where dependencies are located in the
+        /// <param name="destinationDirectory">Directory where dependencies are located in the
         /// project.  If this parameter is null, a dictionary of required dependencies is
         /// always returned.</param>
+        /// <param name="dependencyPaths">If not null, the dictionary is populated with
+        /// dependency paths in the destDirectory indexed by the Dependency.Key of each
+        /// dependency.</param>
         /// <param name="explodeAar">Delegate that determines whether a dependency should be
         /// exploded.  If a dependency is currently exploded but shouldn't be according to this
         /// delegate, the dependency is deleted.</param>
         /// <returns>null if all dependencies are present, dictionary of all required dependencies
         /// otherwise.</returns>
-        public Dictionary<string, Dependency> DependenciesPresent(string destDirectory,
-                                                                  ExplodeAar explodeAar = null)
-        {
+        public Dictionary<string, Dependency> FindMissingDependencies(
+                string destinationDirectory, ExplodeAar explodeAar = null) {
+            Dictionary<string, string> paths;
+            return FindMissingDependencyPaths(destinationDirectory, out paths,
+                                              explodeAar: explodeAar);
+        }
+
+        /// <summary>
+        /// Find the set of artifacts in the project missing from the set of specified
+        /// dependencies.
+        /// </summary>
+        /// <param name="destinationDirectory">Directory where dependencies are located in the
+        /// project.  If this parameter is null, a dictionary of required dependencies is
+        /// always returned.</param>
+        /// <param name="dependencyPaths">If not null, the dictionary is populated with
+        /// dependency paths in the destDirectory indexed by the Dependency.Key of each
+        /// dependency.</param>
+        /// <param name="explodeAar">Delegate that determines whether a dependency should be
+        /// exploded.  If a dependency is currently exploded but shouldn't be according to this
+        /// delegate, the dependency is deleted.</param>
+        /// <returns>null if all dependencies are present, dictionary of all required dependencies
+        /// otherwise.</returns>
+        internal Dictionary<string, Dependency> FindMissingDependencyPaths(
+                string destinationDirectory, out Dictionary<string, string> dependencyPaths,
+                ExplodeAar explodeAar = null) {
             Dictionary<string, Dependency> dependencyMap =
                 LoadDependencies(true, keepMissing: true, findCandidates: true);
+            dependencyPaths = null;
             // If a destination directory was specified, determine whether the dependencies
             // referenced by dependencyMap differ to what is present in the project.  If they
             // are the same, we can skip this entire method.
-            if (destDirectory != null)
-            {
-                if (DependenciesEqual(GetCurrentDependencies(dependencyMap, destDirectory,
-                                                             explodeAar: explodeAar,
-                                                             repoPaths: repositoryPaths).Keys,
-                                      dependencyMap.Keys))
-                {
+            if (destinationDirectory != null) {
+                var currentDependencies = GetCurrentDependencies(
+                    dependencyMap, destinationDirectory, explodeAar: explodeAar,
+                    repoPaths: repositoryPaths);
+                // Copy the destination path of each dependency into dependencyPaths.
+                dependencyPaths = new Dictionary<string, string>();
+                foreach (var currentDependency in currentDependencies) {
+                    dependencyPaths[currentDependency.Key] = currentDependency.Value.Value;
+                }
+                if (DependenciesEqual(currentDependencies.Keys, dependencyMap.Keys)) {
                     Log("All dependencies up to date.", verbose: true);
                     return null;
                 }
@@ -884,7 +924,8 @@ namespace Google.JarResolver
         public Dictionary<string, Dependency> ResolveDependencies(
                 bool useLatest, string destDirectory = null, ExplodeAar explodeAar = null) {
             return ResolveDependencies(useLatest,
-                                       DependenciesPresent(destDirectory, explodeAar: explodeAar),
+                                       FindMissingDependencies(destDirectory,
+                                                               explodeAar: explodeAar),
                                        destDirectory, explodeAar);
         }
 
@@ -898,48 +939,39 @@ namespace Google.JarResolver
         /// <param name="dependencies">The dependencies to copy.</param>
         /// <param name="destDirectory">Destination directory.</param>
         /// <param name="confirmer">Confirmer - the delegate for confirming overwriting.</param>
-        public void CopyDependencies(
+        /// <returns>Dictionary of destination files copied keyed by their source paths.</return>
+        public Dictionary<string, string> CopyDependencies(
             Dictionary<string, Dependency> dependencies,
             string destDirectory,
             OverwriteConfirmation confirmer)
         {
-            if (!Directory.Exists(destDirectory))
-            {
-                Directory.CreateDirectory(destDirectory);
-            }
+            var copiedFiles = new Dictionary<string, string>();
+            if (!Directory.Exists(destDirectory)) Directory.CreateDirectory(destDirectory);
 
             // Build a dictionary of the source dependencies without the version in the key
             // to simplify looking up dependencies currently in the project based upon filenames.
             var currentDepsByVersionlessKey =
                 new Dictionary<string, KeyValuePair<Dependency, string>>();
             foreach (var item in GetCurrentDependencies(dependencies, destDirectory,
-                                                        repoPaths: repositoryPaths))
-            {
+                                                        repoPaths: repositoryPaths)) {
                 currentDepsByVersionlessKey[item.Value.Key.VersionlessKey] = item.Value;
             }
 
-            foreach (var dep in dependencies.Values)
-            {
+            foreach (var dep in dependencies.Values) {
                 KeyValuePair<Dependency, string> oldDepFilenamePair;
                 if (currentDepsByVersionlessKey.TryGetValue(dep.VersionlessKey,
-                                                            out oldDepFilenamePair))
-                {
+                                                            out oldDepFilenamePair)) {
                     if (oldDepFilenamePair.Key.BestVersion != dep.BestVersion &&
-                        (confirmer == null || confirmer(oldDepFilenamePair.Key, dep)))
-                    {
+                        (confirmer == null || confirmer(oldDepFilenamePair.Key, dep))) {
                         DeleteExistingFileOrDirectory(oldDepFilenamePair.Value,
                                                       includeMetaFiles: true);
-                    }
-                    else
-                    {
+                    } else {
                         continue;
                     }
                 }
 
                 string aarFile = dep.BestVersionArtifact;
-
-                if (aarFile != null)
-                {
+                if (aarFile != null) {
                     string baseName = Path.GetFileNameWithoutExtension(aarFile);
                     string extension = Path.GetExtension(aarFile);
                     string destName = Path.Combine(destDirectory, baseName) +
@@ -951,26 +983,23 @@ namespace Google.JarResolver
                         Directory.Exists(destNameUnpacked) ? destNameUnpacked : null;
 
                     bool doCopy = true;
-                    if (existingName != null)
-                    {
+                    if (existingName != null) {
                         doCopy = File.GetLastWriteTime(existingName).CompareTo(
                             File.GetLastWriteTime(aarFile)) < 0;
-                        if (doCopy)
-                        {
+                        if (doCopy) {
                             DeleteExistingFileOrDirectory(existingName,
                                                           includeMetaFiles: true);
                         }
                     }
-                    if (doCopy)
-                    {
+                    if (doCopy) {
                         File.Copy(aarFile, destName);
+                        copiedFiles[aarFile] = destName;
                     }
-                }
-                else
-                {
+                } else {
                     throw new ResolutionException("Cannot find artifact for " + dep);
                 }
             }
+            return copiedFiles;
         }
 
         /// <summary>
