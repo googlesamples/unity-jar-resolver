@@ -587,7 +587,10 @@ namespace GooglePlayServices
             if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
             System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
             Resolver.DoResolution(svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
-                                  HandleOverwriteConfirmation,
+                                  (oldDependency, newDependency) => {
+                                      return Resolver.ShouldReplaceDependency(oldDependency,
+                                                                              newDependency);
+                                  },
                                   () => {
                                       AssetDatabase.Refresh();
                                       if (resolutionComplete != null) resolutionComplete();

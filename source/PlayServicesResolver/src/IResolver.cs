@@ -93,23 +93,25 @@ namespace GooglePlayServices
         /// Called during Update to allow the resolver to check the bundle ID of the application
         /// to see whether resolution should be triggered again.
         /// </summary>
-        /// <remarks>
-        ///   <para>
-        ///      <returns>Array of packages that should be re-resolved if resolution should occur,
+        /// <returns>Array of packages that should be re-resolved if resolution should occur,
         /// null otherwise.</returns>
         [Obsolete]
         string[] OnBundleId(string bundleId);
 
-        ///   </para>
-        /// </remarks>
-        /// </summary>
-        /// <summary>
         /// Called during Update to allow the resolver to check any build settings of managed
         /// packages to see whether resolution should be triggered again.
         /// </summary>
         /// <returns>Array of packages that should be re-resolved if resolution should occur,
         /// null otherwise.</returns>
         string[] OnBuildSettings();
+
+        /// <summary>
+        /// Determine whether to replace a dependency with a new version.
+        /// </summary>
+        /// <param name="oldDependency">Previous version of the dependency.</param>
+        /// <param name="newDependency">New version of the dependency.</param>
+        /// <returns>true if the dependency should be replaced, false otherwise.</returns>
+        bool ShouldReplaceDependency(Dependency oldDependency, Dependency newDependency);
     }
 }
 

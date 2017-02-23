@@ -146,6 +146,17 @@ namespace GooglePlayServices
         /// null otherwise.</returns>
         public virtual string[] OnBuildSettings() { return null; }
 
+        /// <summary>
+        /// Determine whether to replace a dependency with a new version.
+        /// </summary>
+        /// <param name="oldDependency">Previous version of the dependency.</param>
+        /// <param name="newDependency">New version of the dependency.</param>
+        /// <returns>true if the dependency should be replaced, false otherwise.</returns>
+        public virtual bool ShouldReplaceDependency(Dependency oldDependency,
+                                                    Dependency newDependency) {
+            return false;
+        }
+
         #endregion
 
         /// <summary>

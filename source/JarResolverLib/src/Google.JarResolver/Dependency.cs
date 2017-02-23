@@ -203,15 +203,21 @@ namespace Google.JarResolver
         }
 
         /// <summary>
-        /// Get the path to the artifact.
+        /// Get the path to the artifact without the artifact extension.
+        /// </summary>
+        public string BestVersionArtifactPath {
+            get { return Path.Combine(BestVersionPath, Artifact + "-" + BestVersion); }
+        }
+
+        /// <summary>
+        /// Get the path to the artifact if it exists.
         /// </summary>
         public string BestVersionArtifact
         {
             get
             {
                 // TODO(wilkinsonclay): get the extension from the pom file.
-                string filenameWithoutExtension =
-                    Path.Combine(BestVersionPath, Artifact + "-" + BestVersion);
+                string filenameWithoutExtension = BestVersionArtifactPath;
                 foreach (string extension in Packaging)
                 {
                     string filename = filenameWithoutExtension + extension;

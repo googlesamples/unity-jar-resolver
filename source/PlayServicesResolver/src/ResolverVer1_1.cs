@@ -48,6 +48,61 @@ namespace GooglePlayServices
             public bool gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
             // Whether gradle export is enabeld.
             public bool gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
+            // AAR version that should be ignored when attempting to overwrite an existing
+            // dependency.  This is reset when the dependency is updated to a version different
+            // to this.
+            // NOTE: This is not considered in AarExplodeDataIsDirty() as we do not want to
+            // re-explode an AAR if this changes.
+            public string ignoredVersion = "";
+
+            /// <summary>
+            /// Default constructor.
+            /// </summary>
+            public AarExplodeData() {}
+
+            /// <summary>
+            /// Copy an instance of this object.
+            /// </summary>
+            public AarExplodeData(AarExplodeData dataToCopy) {
+                modificationTime = dataToCopy.modificationTime;
+                explode = dataToCopy.explode;
+                bundleId = dataToCopy.bundleId;
+                path = dataToCopy.path;
+                targetAbi = dataToCopy.targetAbi;
+                gradleBuildSystem = dataToCopy.gradleBuildSystem;
+                gradleExport = dataToCopy.gradleExport;
+                ignoredVersion = dataToCopy.ignoredVersion;
+            }
+
+            /// <summary>
+            /// Compare with this object.
+            /// </summary>
+            /// <param name="obj">Object to compare with.</param>
+            /// <returns>true if both objects have the same contents, false otherwise.</returns>
+            public override bool Equals(System.Object obj)  {
+                var data = obj as AarExplodeData;
+                return data != null &&
+                    modificationTime == data.modificationTime &&
+                    explode == data.explode &&
+                    bundleId == data.bundleId &&
+                    path == data.path &&
+                    targetAbi == data.targetAbi &&
+                    gradleBuildSystem == data.gradleBuildSystem &&
+                    gradleExport == data.gradleExport &&
+                    ignoredVersion == data.ignoredVersion;
+            }
+
+            /// <summary>
+            /// Copy AAR explode data.
+            /// </summary>
+            public static Dictionary<string, AarExplodeData> CopyDictionary(
+                    Dictionary<string, AarExplodeData> dataToCopy) {
+                var copy = new Dictionary<string, AarExplodeData>();
+                foreach (var item in dataToCopy) {
+                    copy[item.Key] = new AarExplodeData(item.Value);
+                }
+                return copy;
+            }
         }
 
         // Data that should be stored in the explode cache.
@@ -76,10 +131,18 @@ namespace GooglePlayServices
             if (explodeData1 == explodeData2) return true;
             if (explodeData1 == null || explodeData2 == null) return false;
             if (explodeData1.Count != explodeData2.Count) return false;
-            foreach (var item in explodeData1) {
-                AarExplodeData data = null;
-                if (!explodeData2.TryGetValue(item.Key, out data)) return false;
-                if (!item.Value.Equals(data)) return false;
+            var keys = new HashSet<string>(explodeData1.Keys);
+            keys.UnionWith(new HashSet<string>(explodeData2.Keys));
+            foreach (var key in keys) {
+                AarExplodeData data1;
+                AarExplodeData data2;
+                if (!(explodeData1.TryGetValue(key, out data1) &&
+                      explodeData2.TryGetValue(key, out data2))) {
+                    return false;
+                }
+                if (!data1.Equals(data2)) {
+                    return false;
+                }
             }
             return true;
         }
@@ -122,6 +185,8 @@ namespace GooglePlayServices
                                                 reader.ReadContentAsBoolean();
                                         } else if (elementName == "gradleExport") {
                                             aarData.gradleExport = reader.ReadContentAsBoolean();
+                                        } else if (elementName == "ignoredVersion") {
+                                            aarData.ignoredVersion = reader.ReadContentAsString();
                                         }
                                     }
                                 }
@@ -132,7 +197,7 @@ namespace GooglePlayServices
                     }
                 }
             }
-            aarExplodeDataSaved = new Dictionary<string, AarExplodeData>(aarExplodeData);
+            aarExplodeDataSaved = AarExplodeData.CopyDictionary(aarExplodeData);
         }
 
         /// <summary>
@@ -177,12 +242,15 @@ namespace GooglePlayServices
                 writer.WriteStartElement("gradleExport");
                 writer.WriteValue(kv.Value.gradleExport);
                 writer.WriteEndElement();
+                writer.WriteStartElement("ignoredVersion");
+                writer.WriteValue(kv.Value.ignoredVersion);
+                writer.WriteEndElement();
                 writer.WriteEndElement();
             }
             writer.WriteEndElement();
             writer.Flush();
             writer.Close();
-            aarExplodeDataSaved = new Dictionary<string, AarExplodeData>(aarExplodeData);
+            aarExplodeDataSaved = AarExplodeData.CopyDictionary(aarExplodeData);
         }
 
         /// <summary>
@@ -597,6 +665,33 @@ namespace GooglePlayServices
             SaveAarExplodeCache();
             return packagesToUpdate.Count > 0 ? packagesToUpdate.ToArray() : null;
         }
+
+        /// <summary>
+        /// Determine whether to replace a dependency with a new version.
+        /// </summary>
+        /// <param name="oldDependency">Previous version of the dependency.</param>
+        /// <param name="newDependency">New version of the dependency.</param>
+        /// <returns>true if the dependency should be replaced, false otherwise.</returns>
+        public override bool ShouldReplaceDependency(Dependency oldDependency,
+                                                     Dependency newDependency) {
+            var artifactPath = FindAarInTargetPath(oldDependency.BestVersionArtifactPath);
+            // ShouldExplode() creates an AarExplodeData entry if it isn't present.
+            ShouldExplode(artifactPath);
+            // NOTE: explodeData will only be null here if the artifact was deleted prior to
+            // the call to ShouldExplode().
+            AarExplodeData explodeData = FindAarExplodeDataEntry(artifactPath);
+            if (explodeData != null && explodeData.ignoredVersion == newDependency.BestVersion) {
+                return false;
+            }
+            var overwrite = PlayServicesResolver.HandleOverwriteConfirmation(oldDependency,
+                                                                             newDependency);
+            if (explodeData != null) {
+                explodeData.ignoredVersion = overwrite ? "" : newDependency.BestVersion;
+            }
+            SaveAarExplodeCache();
+            return overwrite;
+        }
+
         #endregion
 
         /// <summary>
@@ -695,6 +790,21 @@ namespace GooglePlayServices
         private string DetermineExplodedAarPath(string aarPath) {
             return Path.Combine(GooglePlayServices.SettingsDialog.PackageDir,
                                 AarPathToPackageName(aarPath));
+        }
+
+        /// <summary>
+        /// Get the path of an existing AAR or exploded directory within the target directory.
+        /// </summary>
+        /// <param name="artifactName">Name of the artifact to search for.</param>
+        /// <returns>Path to the artifact if found, null otherwise.</returns>
+        private string FindAarInTargetPath(string aarPath) {
+            var basePath = DetermineExplodedAarPath(aarPath);
+            if (Directory.Exists(basePath)) return basePath;
+            foreach (var extension in Dependency.Packaging) {
+                var packagePath = basePath + extension;
+                if (File.Exists(packagePath)) return packagePath;
+            }
+            return null;
         }
 
         /// <summary>
