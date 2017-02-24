@@ -47,6 +47,7 @@ LOCAL_PROPS_TEMPLATE = "local.properties"
 BUILD_TEMPLATE = "build.gradle"
 
 M2REPO_LOCAL_COPY = "m2repository"
+PROGUARD_USER_FILE = "proguard-user.txt"
 
 
 def merge_dir_tree(src, dst, ignore=None):
@@ -207,6 +208,15 @@ def generate_gradle_build(build_path, json_config):
 
     # Replace any packages with .srcaar extensions with .aar.
     _fix_package_names(dest_repo_path)
+
+  # Merge all passed in proguard configs into a USER config
+  extra_proguard_configs = json_config.get("extra_proguard_configs")
+  if extra_proguard_configs:
+    dest_proguard_config = os.path.join(build_path, PROGUARD_USER_FILE)
+    with open(dest_proguard_config, "a") as output_config:
+      for proguard_config in extra_proguard_configs:
+        with open(proguard_config, "r") as input_config:
+          output_config.write(input_config.read())
 
   # Gradle doesn't seem to expand env vars in local.properties, so we'll just do
   # the expansion here.

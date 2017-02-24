@@ -31,6 +31,8 @@ class GradlePreBuildResolver : DefaultResolver {
     private const string GENERATE_GRADLE_EXE_WINDOWS = "generate_gradle_prebuild.exe";
     private static string GENERATE_GRADLE_BUILD_PATH = Path.Combine("Temp", "GenGradle");
     private static string GENERATE_CONFIG_PATH = Path.Combine("Temp", "config.json");
+    private static string PROGUARD_UNITY_CONFIG = "proguard-unity.txt";
+    private static string PROGUARD_MSG_FIX_CONFIG = "proguard-messaging-workaround.txt";
     private const string GENERATE_GRADLE_OUTPUT_DIR = "MergedDependencies";
 
     /// <summary>
@@ -194,6 +196,11 @@ class GradlePreBuildResolver : DefaultResolver {
             dependencies.SelectMany(d => d.Value.Repositories)
                         .Where(s => !s.Contains(PlayServicesSupport.SdkVariable)));
 
+        var proguard_config_paths = new List<string>() {
+            Path.Combine(GRADLE_SCRIPT_LOCATION, PROGUARD_UNITY_CONFIG),
+            Path.Combine(GRADLE_SCRIPT_LOCATION, PROGUARD_MSG_FIX_CONFIG)
+        };
+
         // Build the full json config as a string.
         string json_config = @"{{
 ""config"": {{
@@ -204,10 +211,15 @@ class GradlePreBuildResolver : DefaultResolver {
 ],
 ""extra_m2repositories"": [
 {2}
+],
+""extra_proguard_configs"": [
+{3}
 ]
 }}";
         json_config = String.Format(json_config, ToJSONDictionary(config),
-                                    ToJSONList(depLines, ",\n", 4, true), ToJSONList(repoLines));
+                                    ToJSONList(depLines, ",\n", 4, true),
+                                    ToJSONList(repoLines, ",\n", 4),
+                                    ToJSONList(proguard_config_paths, ",\n", 4));
 
         System.IO.File.WriteAllText(GENERATE_CONFIG_PATH, json_config);
 
