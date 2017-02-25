@@ -1511,6 +1511,7 @@ public static class IOSResolver {
         foreach (var frameworkFullPath in
                  Directory.GetDirectories(podsDir, "*.framework",
                                           SearchOption.AllDirectories)) {
+            Log(String.Format("Inspecting framework {0}", frameworkFullPath), verbose: true);
             string frameworkName = new DirectoryInfo(frameworkFullPath).Name;
             string destFrameworkPath = Path.Combine("Frameworks",
                                                     frameworkName);
@@ -1523,9 +1524,12 @@ public static class IOSResolver {
                     frameworkFullPath,
                     Path.GetFileName(frameworkFullPath)
                         .Replace(".framework", "")))) {
+                Log(String.Format("Ignoring framework {0}", frameworkFullPath), verbose: true);
                 continue;
             }
 
+            Log(String.Format("Moving framework {0} --> {1}", frameworkFullPath,
+                              destFrameworkFullPath), verbose: true);
             PlayServicesSupport.DeleteExistingFileOrDirectory(
                 destFrameworkFullPath);
             Directory.Move(frameworkFullPath, destFrameworkFullPath);
@@ -1540,6 +1544,7 @@ public static class IOSResolver {
                              "module.modulemap");
 
             if (File.Exists(moduleMapPath)) {
+                Log(String.Format("Reading module map {0}", moduleMapPath), verbose: true);
                 // Parse the modulemap, format spec here:
                 // http://clang.llvm.org/docs/Modules.html#module-map-language
                 using (StreamReader moduleMapFile =
@@ -1563,35 +1568,46 @@ public static class IOSResolver {
                 }
             }
 
-            string resourcesFolder = Path.Combine(destFrameworkFullPath,
-                                                  "Resources");
-            if (Directory.Exists(resourcesFolder)) {
-                string[] resFiles = Directory.GetFiles(resourcesFolder);
-                string[] resFolders =
-                    Directory.GetDirectories(resourcesFolder);
-                foreach (var resFile in resFiles) {
-                    string destFile = Path.Combine("Resources",
-                                                   Path.GetFileName(resFile));
-                    File.Copy(resFile, Path.Combine(pathToBuiltProject,
-                                                    destFile), true);
-                    project.AddFileToBuild(
-                        target, project.AddFile(
-                            destFile, destFile,
-                            UnityEditor.iOS.Xcode.PBXSourceTree.Source));
-                }
-                foreach (var resFolder in resFolders) {
-                    string destFolder =
-                        Path.Combine("Resources",
-                                     new DirectoryInfo(resFolder).Name);
-                    string destFolderFullPath =
-                        Path.Combine(pathToBuiltProject, destFolder);
-                    PlayServicesSupport.DeleteExistingFileOrDirectory(
-                        destFolderFullPath);
-                    Directory.Move(resFolder, destFolderFullPath);
-                    project.AddFileToBuild(
-                        target, project.AddFile(
-                            destFolder, destFolder,
-                            UnityEditor.iOS.Xcode.PBXSourceTree.Source));
+            foreach (var resourcesSearchPath in
+                     new [] { destFrameworkFullPath,
+                              Path.GetDirectoryName(Path.GetDirectoryName(frameworkFullPath)) }) {
+                string resourcesFolder = Path.Combine(resourcesSearchPath, "Resources");
+                Log(String.Format("Looking for resources folder {0}", resourcesFolder),
+                    verbose: true);
+                if (Directory.Exists(resourcesFolder)) {
+                    Log(String.Format("Found resources {0}", resourcesFolder), verbose: true);
+                    string[] resFiles = Directory.GetFiles(resourcesFolder);
+                    string[] resFolders =
+                        Directory.GetDirectories(resourcesFolder);
+                    foreach (var resFile in resFiles) {
+                        string destFile = Path.Combine("Resources",
+                                                       Path.GetFileName(resFile));
+                        File.Copy(resFile, Path.Combine(pathToBuiltProject,
+                                                        destFile), true);
+                        Log(String.Format("Copying resource file {0} --> {1}", resourcesFolder,
+                                          Path.Combine(pathToBuiltProject, destFile)),
+                            verbose: true);
+                        project.AddFileToBuild(
+                            target, project.AddFile(
+                                destFile, destFile,
+                                UnityEditor.iOS.Xcode.PBXSourceTree.Source));
+                    }
+                    foreach (var resFolder in resFolders) {
+                        string destFolder =
+                            Path.Combine("Resources",
+                                         new DirectoryInfo(resFolder).Name);
+                        string destFolderFullPath =
+                            Path.Combine(pathToBuiltProject, destFolder);
+                        PlayServicesSupport.DeleteExistingFileOrDirectory(
+                            destFolderFullPath);
+                        Log(String.Format("Moving resource directory {0} --> {1}", resFolder,
+                                          destFolderFullPath), verbose: true);
+                        Directory.Move(resFolder, destFolderFullPath);
+                        project.AddFileToBuild(
+                            target, project.AddFile(
+                                destFolder, destFolder,
+                                UnityEditor.iOS.Xcode.PBXSourceTree.Source));
+                    }
                 }
             }
         }
