@@ -1050,7 +1050,7 @@ namespace Google.JarResolver
                     }
                     if (doCopy) {
                         Log(String.Format("Copying Android dependency {0} --> {1}", aarFile,
-                                          destName));
+                                          destName), verbose: true);
                         File.Copy(aarFile, destName);
                         copiedFiles[aarFile] = destName;
                     }
