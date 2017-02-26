@@ -433,6 +433,7 @@ namespace GooglePlayServices
             System.Action resolutionComplete)
         {
             System.Action resolve = () => {
+                PlayServicesSupport.Log("Performing Android Dependency Resolution", verbose: true);
                 DoResolutionNoAndroidPackageChecks(svcSupport, destinationDirectory,
                                                    handleOverwriteConfirmation);
                 resolutionComplete();
@@ -441,27 +442,45 @@ namespace GooglePlayServices
             Dictionary<string, string> pathsByDependencyKey;
             var dependencies = svcSupport.FindMissingDependencyPaths(destinationDirectory,
                                                                      out pathsByDependencyKey);
-            if (dependencies == null) return;
 
             // If any dependencies are no longer present we'll assume dependencies have been
             // added or removed so clean all stale tracked dependencies.
-            var currentDependencyPaths = new HashSet<string>(pathsByDependencyKey.Values);
+            var currentDependencyPaths = new HashSet<string>();
+            // Normalize paths Windows paths to compare with POSIX file systems (used by Maven).
+            foreach (var assetPath in pathsByDependencyKey.Values) {
+                currentDependencyPaths.Add(assetPath.Replace("\\", "/"));
+            }
             foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
                 var assetBasename = Directory.Exists(assetPath) ?
                     assetPath : Path.Combine(Path.GetDirectoryName(assetPath),
                                              Path.GetFileNameWithoutExtension(assetPath));
+                assetBasename = assetBasename.Replace("\\", "/");
                 var assetTargetPaths = new List<string> { assetBasename };
                 foreach (var extension in Dependency.Packaging) {
                     assetTargetPaths.Add(assetBasename + extension);
                 }
                 if (!assetTargetPaths.Exists(
                          targetPath => currentDependencyPaths.Contains(targetPath))) {
-                    PlayServicesSupport.Log("Deleting stale dependency" + assetPath,
-                                            verbose: true);
+                    PlayServicesSupport.Log(
+                        String.Format(
+                            "Deleting stale dependency {0} not in required paths:\n{1}", assetPath,
+                            String.Join("\n",
+                                        (new List<string>(currentDependencyPaths)).ToArray())),
+                        verbose: true);
                     PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
                                                                       includeMetaFiles: true);
                 }
             }
+
+            // If dependencies are not missing, don't perform resolution.
+            if (dependencies == null) {
+                PlayServicesSupport.Log("No missing or stale Android dependencies found.",
+                                        verbose: true);
+                resolutionComplete();
+                return;
+            }
+            PlayServicesSupport.Log("Found missing Android dependencies, resolving.",
+                                    verbose: true);
 
             // Set of packages that need to be installed.
             Dictionary<string, bool> installPackages = new Dictionary<string, bool>();

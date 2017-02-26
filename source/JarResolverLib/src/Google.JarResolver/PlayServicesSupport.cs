@@ -391,6 +391,45 @@ namespace Google.JarResolver
         }
 
         /// <summary>
+        /// Expand the set of transitive dependencies.
+        /// </summary>
+        /// <param name="dependencies">Dependencies to walk for the set of transitive
+        /// dependencies.</param>
+        /// <param name="repoPaths">Set of additional repo paths to search for the
+        /// dependencies.</param>
+        /// <returns>Dictionary of Dependency instances indexed by Dependency.Key.</returns>
+        public static Dictionary<string, Dependency> GetTransitiveDependencies(
+                Dictionary<string, Dependency> dependencies, List<string> repoPaths = null) {
+            // Copy the set of dependencies.
+            var transitiveDependencies = new Dictionary<string, Dependency>(dependencies);
+            // Transitive dependencies that have not been queried for packages they're dependent
+            // upon.
+            var pendingTransitiveDependencies =
+                new Dictionary<string, Dependency>(transitiveDependencies);
+            // Set of keys of dependencies that have already been processed.
+            var processedDependencies = new HashSet<string>();
+            // Expand set of transitive dependencies into the dictionary of dependencies.
+            while (pendingTransitiveDependencies.Count > 0) {
+                var dependenciesToEvaluate = new Dictionary<string, Dependency>(
+                    pendingTransitiveDependencies);
+                foreach (var dependencyItem in dependenciesToEvaluate) {
+                    pendingTransitiveDependencies.Remove(dependencyItem.Key);
+                    processedDependencies.Add(dependencyItem.Key);
+                    foreach (var transitiveDependency in GetDependencies(dependencyItem.Value,
+                                                                         repoPaths)) {
+                        if (!processedDependencies.Contains(transitiveDependency.Key)) {
+                            transitiveDependencies[transitiveDependency.Key] =
+                                transitiveDependency;
+                            pendingTransitiveDependencies[transitiveDependency.Key] =
+                                transitiveDependency;
+                        }
+                    }
+                }
+            }
+            return transitiveDependencies;
+        }
+
+        /// <summary>
         /// Get the current set of dependencies referenced by the project.
         /// </summary>
         /// <param name="dependencies">Dependencies to search for in the specified
@@ -405,32 +444,14 @@ namespace Google.JarResolver
         /// <returns>Dictionary indexed by Dependency.Key where each item is a tuple of
         /// Dependency instance and the path to the dependency in destDirectory.</returns>
         public static Dictionary<string, KeyValuePair<Dependency, string>> GetCurrentDependencies(
-            Dictionary<string, Dependency> dependencies, string destDirectory,
-            ExplodeAar explodeAar = null, List<string> repoPaths = null)
-        {
+                Dictionary<string, Dependency> dependencies, string destDirectory,
+                ExplodeAar explodeAar = null, List<string> repoPaths = null) {
             var currentDependencies = new Dictionary<string, KeyValuePair<Dependency, string>>();
             if (dependencies.Count == 0) return currentDependencies;
 
-            // Copy the set of dependencies.
-            var transitiveDependencies = new Dictionary<string, Dependency>(dependencies);
-            // Transitive dependencies that have not been queried for packages they're dependent
-            // upon.
-            var pendingTransitiveDependencies =
-                new Dictionary<string, Dependency>(transitiveDependencies);
-            // Expand set of transitive dependencies into the dictionary of dependencies.
-            while (pendingTransitiveDependencies.Count > 0) {
-                var dependenciesToEvaluate = new Dictionary<string, Dependency>(
-                    pendingTransitiveDependencies);
-                foreach (var dependencyItem in dependenciesToEvaluate) {
-                    pendingTransitiveDependencies.Remove(dependencyItem.Key);
-                    foreach (var transitiveDependency in GetDependencies(dependencyItem.Value,
-                                                                         repoPaths)) {
-                        transitiveDependencies[transitiveDependency.Key] = transitiveDependency;
-                        pendingTransitiveDependencies[transitiveDependency.Key] =
-                            transitiveDependency;
-                    }
-                }
-            }
+            // Get the transitive set of dependencies.
+            var transitiveDependencies = GetTransitiveDependencies(dependencies,
+                                                                   repoPaths: repoPaths);
             // TODO(smiles): Need a callback that queries Unity's asset DB rather than touching
             // the filesystem here.
             string[] filesInDestDir = Directory.GetFileSystemEntries(destDirectory);
@@ -455,6 +476,10 @@ namespace Google.JarResolver
                         filenameWithoutExtension, String.Format("^{0}-.*", dep.Artifact));
                     if (match.Success)
                     {
+                        Log(String.Format("Found potential Android package {0} {1}",
+                                          pathIsDirectory ? "directory " : "file",
+                                          filenameWithoutExtension), verbose: true);
+
                         // Extract the version from the filename.
                         // dep.Artifact is the name of the package (prefix)
                         // The regular expression extracts the version number from the filename
@@ -472,6 +497,9 @@ namespace Google.JarResolver
                                 string aarFile = dep.BestVersionArtifact;
                                 if (aarFile != null && !explodeAar(aarFile))
                                 {
+                                    Log(String.Format(
+                                        "Deleting exploded AAR ({0}) that should not be exploded.",
+                                        aarFile), verbose: true);
                                     DeleteExistingFileOrDirectory(path,
                                                                   includeMetaFiles: true);
                                     reportDependency = false;
@@ -559,7 +587,9 @@ namespace Google.JarResolver
                 string destinationDirectory, out Dictionary<string, string> dependencyPaths,
                 ExplodeAar explodeAar = null) {
             Dictionary<string, Dependency> dependencyMap =
-                LoadDependencies(true, keepMissing: true, findCandidates: true);
+                GetTransitiveDependencies(LoadDependencies(true, keepMissing: true,
+                                                           findCandidates: true),
+                                          repoPaths: repositoryPaths);
             dependencyPaths = null;
             // If a destination directory was specified, determine whether the dependencies
             // referenced by dependencyMap differ to what is present in the project.  If they
@@ -577,6 +607,19 @@ namespace Google.JarResolver
                     Log("All dependencies up to date.", verbose: true);
                     return null;
                 }
+                var currentDependenciesSortedByKey = new List<string>(currentDependencies.Keys);
+                currentDependenciesSortedByKey.Sort();
+                var requiredDependenciesSortedByKey = new List<string>(dependencyMap.Keys);
+                requiredDependenciesSortedByKey.Sort();
+                Log(String.Format(
+                    "Current Android packages mismatch required packages:\n\n" +
+                    "Current:\n" +
+                    "{0}\n\n" +
+                    "Required:\n" +
+                    "{1}\n",
+                    String.Join("\n", currentDependenciesSortedByKey.ToArray()),
+                    String.Join("\n", requiredDependenciesSortedByKey.ToArray())),
+                    verbose: true);
             }
             return dependencyMap;
         }
@@ -637,6 +680,20 @@ namespace Google.JarResolver
                  commonlySupportedVersions : versionLockedPackageVersions);
             sortedVersions.Sort(Dependency.versionComparer);
             var mostRecentSupportedVersion = sortedVersions[0];
+
+            // Determine whether all dependencies support the most recent common version.
+            bool allSupportCommonVersion = true;
+            foreach (var dependency in (new List<Dependency>(versionLockedPackages.Values))) {
+                var dependencyToCheckForMostRecentVersion = new Dependency(dependency);
+                dependencyToCheckForMostRecentVersion.Version = mostRecentSupportedVersion;
+                if (!dependencyToCheckForMostRecentVersion.RefineVersionRange(
+                        dependencyToCheckForMostRecentVersion)) {
+                    allSupportCommonVersion = false;
+                    break;
+                }
+            }
+            // If all dependencies support a common version, return the dependencies unmodified.
+            if (allSupportCommonVersion) return new List<Dependency>(dependenciesToProcess);
 
             var dependencyKeyAndCreationLocations = new List<string>();
             foreach (var dependency in versionLockedPackages) {
@@ -992,6 +1049,8 @@ namespace Google.JarResolver
                         }
                     }
                     if (doCopy) {
+                        Log(String.Format("Copying Android dependency {0} --> {1}", aarFile,
+                                          destName));
                         File.Copy(aarFile, destName);
                         copiedFiles[aarFile] = destName;
                     }
