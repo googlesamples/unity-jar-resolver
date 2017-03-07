@@ -121,7 +121,7 @@ namespace Google.JarResolver
         /// <summary>
         /// Whether the editor was launched in batch mode.
         /// </summary>
-        private static bool InBatchMode {
+        internal static bool InBatchMode {
             get {
 #if UNITY_EDITOR
                 return System.Environment.CommandLine.Contains("-batchmode");
@@ -380,6 +380,20 @@ namespace Google.JarResolver
                                      packageIds: packageIds,
                                      repositories: UniqueList(depRepoList).ToArray());
             clientDependenciesMap[dep.Key] = dep;
+        }
+
+        /// <summary>
+        /// Get the current list of dependencies for all clients.
+        /// </summary>
+        /// <returns>Dictionary of Dependency instances indexed by Dependency.Key.</returns>
+        public static Dictionary<string, Dependency> GetAllDependencies() {
+            var allDependencies = new Dictionary<string, Dependency>();
+            foreach (var instance in instances.Values) {
+                foreach (var dependencyByKey in instance.clientDependenciesMap) {
+                    allDependencies[dependencyByKey.Key] = new Dependency(dependencyByKey.Value);
+                }
+            }
+            return allDependencies;
         }
 
         /// <summary>

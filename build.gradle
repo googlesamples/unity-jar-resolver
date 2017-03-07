@@ -140,7 +140,7 @@ project.ext {
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
     dllDir = 'Assets/PlayServicesResolver/Editor'
-    pluginVersion = '1.2.12.0'
+    pluginVersion = '1.2.14.0'
     currentPluginPath = file('.').absolutePath
     currentPluginBasename = 'play-services-resolver'
     currentPluginName = (currentPluginBasename + '-' + pluginVersion +
@@ -273,7 +273,6 @@ def build_pluginDll(projectName, assemblyDllBasename) {
                       }
                       return fn
                   })
-  copyTask.ext.remoteTaskPhase = "build"
 }
 
 build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll")
@@ -321,8 +320,7 @@ task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
                                              copy_GenGradleScripts,
                                              'copy_PlayServicesResolver',
                                              'copy_VersionHandler',
-                                             'copy_IOSResolver',
-                                             'copy_PackageManager']) {
+                                             'copy_IOSResolver']) {
   description 'Inject the version number into the plugin\'s meta files.'
   ext.remoteTaskPhase = 'build'
   doLast {

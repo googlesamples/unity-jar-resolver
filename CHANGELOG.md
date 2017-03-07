@@ -1,3 +1,29 @@
+# Version 1.2.14 - Mar 7, 2017
+## New Features
+    * Added experimental Android resolution using Gradle.
+      This alternative resolver supports proguard stripping with Unity's
+      internal build system.
+    * Added Android support for single ABI builds when using AARs include
+      native libraries.
+    * Disabled Android resolution on changes to all .cs and .js files.
+      File patterns that are monitored for auto-resolution can be added
+      using PlayServicesResolver.AddAutoResolutionFilePatterns().
+    * Added tracking of resolved AARs and JARs so they can be cleaned up
+      if they're no longer referenced by a project.
+    * Added persistence of AAR / JAR version replacement for each Unity
+      session.
+    * Added settings dialog to the iOS resolver.
+    * Integrated Cocoapod tool installation in the iOS resolver.
+    * Added option to run pod tool via the shell.
+## Bug Fixes
+    * Fixed build of some source Cocoapods (e.g Protobuf).
+    * VersionHandler no longer prompts to delete obsolete manifests.
+    * iOS resolver handles Cocoapod installation when using Ruby < 2.2.2.
+    * Added workaround for package version selection when including
+    Google Play Services on Android.
+    * Fixed support for pods that reference static libraries.
+    * Fixed support for resource-only pods.
+
 # Version 1.2.12 - Feb 14, 2017
 ## Bug Fixes
     * Fixed re-explosion of AARs when the bundle ID is modified.

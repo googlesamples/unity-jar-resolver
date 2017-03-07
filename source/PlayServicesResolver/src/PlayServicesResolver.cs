@@ -261,6 +261,12 @@ namespace GooglePlayServices
             AndroidTargetDeviceAbiChanged;
 
         /// <summary>
+        /// Whether the PlayServicesResolver() class is initialized.  This is false until the
+        /// first editor update is complete.
+        /// </summary>
+        internal static bool Initialized { get; private set; }
+
+        /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver()
@@ -305,7 +311,16 @@ namespace GooglePlayServices
             EditorApplication.update += PollBuildSystem;
             EditorApplication.update -= PollTargetDeviceAbi;
             EditorApplication.update += PollTargetDeviceAbi;
+            EditorApplication.update -= InitializationComplete;
+            EditorApplication.update += InitializationComplete;
             OnSettingsChanged();
+        }
+
+        /// <summary>
+        /// Called from EditorApplication.update to signal the class has been initialized.
+        /// </summary>
+        private static void InitializationComplete() {
+            Initialized = true;
         }
 
         /// <summary>
@@ -391,8 +406,11 @@ namespace GooglePlayServices
             foreach (var asset in filesToCheck) {
                 foreach (var pattern in autoResolveFilePatterns) {
                     if (pattern.Match(asset).Success) {
-                        UnityEngine.Debug.Log("Found a matching asset " + asset +
-                                              " running resolution");
+                        PlayServicesSupport.Log(
+                            String.Format("Found asset {0} matching {1}, attempting " +
+                                          "auto-resolution.",
+                                          asset, pattern.ToString()),
+                            level: PlayServicesSupport.LogLevel.Info, verbose: true);
                         resolve = true;
                         break;
                     }
@@ -435,16 +453,38 @@ namespace GooglePlayServices
         /// <summary>
         /// Resolve dependencies if auto-resolution is enabled.
         /// </summary>
-        private static void AutoResolve()
-        {
-            if (Resolver.AutomaticResolutionEnabled() && !autoResolving)
-            {
-                EditorApplication.update -= AutoResolve;
-                // Prevent resolution on the call to OnPostprocessAllAssets().
-                autoResolving = true;
-                Resolve();
-                autoResolving = false;
+        private static void AutoResolve() {
+            if (!autoResolving) {
+                if (Resolver.AutomaticResolutionEnabled()) {
+                    // Prevent resolution on the call to OnPostprocessAllAssets().
+                    autoResolving = true;
+                    Resolve();
+                    autoResolving = false;
+                } else if (!PlayServicesSupport.InBatchMode &&
+                           GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning &&
+                           PlayServicesSupport.GetAllDependencies().Count > 0) {
+                    switch (EditorUtility.DisplayDialogComplex(
+                        "Warning: Auto-resolution of Android dependencies is disabled!",
+                        "Would you like to enable auto-resolution of Android dependencies?\n\n" +
+                        "With auto-resolution of Android dependencies disabled you must " +
+                        "manually resolve dependencies using the " +
+                        "\"Assets > Play Services Resolver > Android Resolver > " +
+                        "Resolve Client Jars\" menu item.\n\nFailure to resolve Android " +
+                        "dependencies will result in an non-functional application.",
+                        "Yes", "Not Now", "Silence Warning")) {
+                        case 0:  // Yes
+                            GooglePlayServices.SettingsDialog.EnableAutoResolution = true;
+                            break;
+                        case 1:  // Not now
+                            break;
+                        case 2:  // Ignore
+                            GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning =
+                                false;
+                            break;
+                    }
+                }
             }
+            EditorApplication.update -= AutoResolve;
         }
 
         /// <summary>
@@ -643,6 +683,9 @@ namespace GooglePlayServices
         /// </summary>
         internal static void OnSettingsChanged() {
             PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;
+            if (Initialized) {
+                if (Resolver != null && Resolver.AutomaticResolutionEnabled()) AutoResolve();
+            }
         }
 
         /// <summary>

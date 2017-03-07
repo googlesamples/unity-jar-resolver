@@ -26,12 +26,14 @@ namespace GooglePlayServices
     public class SettingsDialog : EditorWindow
     {
         const string Namespace = "GooglePlayServices.";
-        internal const string AutoResolveKey = Namespace + "AutoResolverEnabled";
-        internal const string PrebuildWithGradleKey = Namespace + "PrebuildWithGradle";
-        internal const string PackageInstallKey = Namespace + "AndroidPackageInstallationEnabled";
-        internal const string PackageDirKey = Namespace + "PackageDirectory";
-        internal const string ExplodeAarsKey = Namespace + "ExplodeAars";
+        private const string AutoResolveKey = Namespace + "AutoResolverEnabled";
+        private const string PrebuildWithGradleKey = Namespace + "PrebuildWithGradle";
+        private const string PackageInstallKey = Namespace + "AndroidPackageInstallationEnabled";
+        private const string PackageDirKey = Namespace + "PackageDirectory";
+        private const string ExplodeAarsKey = Namespace + "ExplodeAars";
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
+        private const string AutoResolutionDisabledWarningKey =
+            Namespace + "AutoResolutionDisabledWarning";
 
         private const string AndroidPluginsDir = "Assets/Plugins/Android";
 
@@ -65,6 +67,11 @@ namespace GooglePlayServices
             }
         }
 
+        internal static bool AutoResolutionDisabledWarning {
+            set { EditorPrefs.SetBool(AutoResolutionDisabledWarningKey, value); }
+            get { return EditorPrefs.GetBool(AutoResolutionDisabledWarningKey, true); }
+        }
+
         // Whether AARs that use variable expansion should be exploded when Gradle builds are
         // enabled.
         internal static bool ExplodeAars {
@@ -90,6 +97,7 @@ namespace GooglePlayServices
         string packageDir;
         bool explodeAars;
         bool verboseLogging;
+        bool autoResolutionDisabledWarning;
 
         public void Initialize()
         {
@@ -106,6 +114,7 @@ namespace GooglePlayServices
             packageDir = PackageDir;
             explodeAars = ExplodeAars;
             verboseLogging = VerboseLogging;
+            autoResolutionDisabledWarning = AutoResolutionDisabledWarning;
         }
 
         /// <summary>
@@ -123,7 +132,7 @@ namespace GooglePlayServices
 
             EditorGUI.BeginDisabledGroup(prebuildWithGradle == true);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Enable Background Resolution", EditorStyles.boldLabel);
+            GUILayout.Label("Enable Auto-Resolution", EditorStyles.boldLabel);
             enableAutoResolution = EditorGUILayout.Toggle(enableAutoResolution);
             GUILayout.EndHorizontal();
 
@@ -171,6 +180,13 @@ namespace GooglePlayServices
             }
             EditorGUI.EndDisabledGroup();
 
+            EditorGUI.BeginDisabledGroup(enableAutoResolution);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Auto-Resolution Disabled Warning", EditorStyles.boldLabel);
+            autoResolutionDisabledWarning = EditorGUILayout.Toggle(autoResolutionDisabledWarning);
+            GUILayout.EndHorizontal();
+            EditorGUI.EndDisabledGroup();
+
             GUILayout.BeginHorizontal();
             GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
             verboseLogging = EditorGUILayout.Toggle(verboseLogging);
@@ -189,6 +205,7 @@ namespace GooglePlayServices
                 if (ConfigurablePackageDir) PackageDir = packageDir;
                 ExplodeAars = explodeAars;
                 VerboseLogging = verboseLogging;
+                AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
                 PlayServicesResolver.OnSettingsChanged();
             }
             if (closeWindow) Close();

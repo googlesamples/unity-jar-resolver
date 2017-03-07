@@ -486,7 +486,7 @@ namespace Google.Editor.Tests
         {
             List<string> messageList = new List<string>();
             string logMessage = "this is a test";
-            PlayServicesSupport.logger = (message) => messageList.Add(message);
+            PlayServicesSupport.logger = (message, level) => messageList.Add(message);
             Assert.AreEqual(0, messageList.Count);
             PlayServicesSupport.Log(logMessage);
             Assert.AreEqual(1, messageList.Count);
