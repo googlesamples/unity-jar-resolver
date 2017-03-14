@@ -198,15 +198,32 @@ public class UnityCompat {
     }
 
     /// <summary>
-    /// Get the bundle / application ID.
+    /// Get the application / bundle ID property.
+    /// </summary>
+    /// <returns>Application / bundle ID property or null if it can't be found.</returns>
+    private static PropertyInfo GetApplicationIdProperty() {
+        var playerSettingsType = typeof(UnityEditor.PlayerSettings);
+        var property = playerSettingsType.GetProperty("applicationIdentifier");
+        property = property ?? playerSettingsType.GetProperty("bundleIdentifier");
+        if (property != null) {
+            Debug.LogWarning("Unable to retrieve PlayerSettings.applicationIdentifier property");
+        }
+        return property;
+    }
+
+    /// <summary>
+    /// Get / set the bundle / application ID.
     /// </summary>
     /// This uses reflection to retrieve the property as it was renamed in Unity 5.6.
     public static string ApplicationId {
         get {
-            var playerSettingsType = typeof(UnityEditor.PlayerSettings);
-            var property = playerSettingsType.GetProperty("applicationIdentifier");
-            if (property == null) playerSettingsType.GetProperty("bundleIdentifier");
+            var property = GetApplicationIdProperty();
             return property != null ? (string)property.GetValue(null, null) : null;
+        }
+
+        set {
+            var property = GetApplicationIdProperty();
+            if (property != null) property.SetValue(null, value, null);
         }
     }
 }
