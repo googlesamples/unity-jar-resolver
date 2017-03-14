@@ -196,5 +196,18 @@ public class UnityCompat {
             ANDROID_BUILD_TOOLS_FALLBACK_KEY + ": " + AndroidBuildToolsVersionFallback);
         return AndroidBuildToolsVersionFallback;
     }
+
+    /// <summary>
+    /// Get the bundle / application ID.
+    /// </summary>
+    /// This uses reflection to retrieve the property as it was renamed in Unity 5.6.
+    public static string ApplicationId {
+        get {
+            var playerSettingsType = typeof(UnityEditor.PlayerSettings);
+            var property = playerSettingsType.GetProperty("applicationIdentifier");
+            if (property == null) playerSettingsType.GetProperty("bundleIdentifier");
+            return property != null ? (string)property.GetValue(null, null) : null;
+        }
+    }
 }
 }

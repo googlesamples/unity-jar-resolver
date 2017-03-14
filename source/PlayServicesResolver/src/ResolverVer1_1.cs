@@ -93,6 +93,21 @@ namespace GooglePlayServices
             }
 
             /// <summary>
+            /// Generate a hash of this object.
+            /// </summary>
+            /// <returns></returns>
+            public override int GetHashCode() {
+                return modificationTime.GetHashCode() ^
+                    explode.GetHashCode() ^
+                    bundleId.GetHashCode() ^
+                    path.GetHashCode() ^
+                    targetAbi.GetHashCode() ^
+                    gradleBuildSystem.GetHashCode() ^
+                    gradleExport.GetHashCode() ^
+                    ignoredVersion.GetHashCode();
+            }
+
+            /// <summary>
             /// Copy AAR explode data.
             /// </summary>
             public static Dictionary<string, AarExplodeData> CopyDictionary(
@@ -228,7 +243,7 @@ namespace GooglePlayServices
                 writer.WriteValue(kv.Value.explode);
                 writer.WriteEndElement();
                 writer.WriteStartElement("bundleId");
-                writer.WriteValue(PlayerSettings.bundleIdentifier);
+                writer.WriteValue(UnityCompat.ApplicationId);
                 writer.WriteEndElement();
                 writer.WriteStartElement("path");
                 writer.WriteValue(kv.Value.path);
@@ -672,8 +687,12 @@ namespace GooglePlayServices
                 var aarData = kv.Value;
                 // If the cached file has been removed, ditch it from the cache.
                 if (!(File.Exists(aarData.path) || Directory.Exists(aarData.path))) {
+                    PlayServicesSupport.Log(String.Format("Found missing AAR {0}", aarData.path),
+                                            verbose: true);
                     aarsToResolve.Add(aar);
                 } else if (AarExplodeDataIsDirty(aarData)) {
+                    PlayServicesSupport.Log(String.Format("AAR {0} needs to be refreshed",
+                                                          aarData.path), verbose: true);
                     packagesToUpdate.Add(aarData.path);
                     aarsToResolve.Add(aar);
                 }
@@ -758,12 +777,13 @@ namespace GooglePlayServices
         /// <param name="aarData">Path of the AAR to query.</param>
         /// <returns>true if the cache entry is dirty, false otherwise.</returns>
         private bool AarExplodeDataIsDirty(AarExplodeData aarData) {
-            return aarData.bundleId != PlayerSettings.bundleIdentifier ||
+            return aarData.bundleId != UnityCompat.ApplicationId ||
                 (aarData.targetAbi != AarExplodeData.ABI_UNIVERSAL &&
                  aarData.targetAbi != PlayServicesResolver.AndroidTargetDeviceAbi) ||
                 aarData.gradleBuildSystem != PlayServicesResolver.GradleBuildEnabled ||
                 aarData.gradleExport != PlayServicesResolver.GradleProjectExportEnabled ||
-                (aarData.explode ? !Directory.Exists(aarData.path) : !File.Exists(aarData.path));
+                (aarData.explode && !PlayServicesResolver.GradleBuildEnabled ?
+                 !Directory.Exists(aarData.path) : !File.Exists(aarData.path));
         }
 
         /// <summary>
@@ -852,9 +872,10 @@ namespace GooglePlayServices
                 var aarData = FindAarExplodeDataEntry(aarPath);
                 if (AarExplodeDataIsDirty(aarData)) {
                     if (explode && File.Exists(aarPath)) {
-                        ReplaceVariables(ProcessAar(Path.GetFullPath(dir), aarPath));
-                        aarData.targetAbi =
-                            AarDirectoryDetermineAbi(DetermineExplodedAarPath(aarPath));
+                        ProcessAar(Path.GetFullPath(dir), aarPath,
+                                   !PlayServicesResolver.GradleBuildEnabled,
+                                   out aarData.targetAbi);
+                        aarData.targetAbi = aarData.targetAbi ?? AarExplodeData.ABI_UNIVERSAL;
                     } else {
                         // Clean up previously expanded / exploded versions of the AAR.
                         PlayServicesSupport.DeleteExistingFileOrDirectory(
@@ -989,35 +1010,14 @@ namespace GooglePlayServices
             // If this is a new cache entry populate the target ABI and bundle ID fields.
             if (newAarData) {
                 aarData.targetAbi = targetAbi;
-                aarData.bundleId = PlayerSettings.bundleIdentifier;
+                aarData.bundleId = UnityCompat.ApplicationId;
             }
-            aarData.path = explode ? explodeDirectory : aarPath;
+            aarData.path = explode && !PlayServicesResolver.GradleBuildEnabled ?
+                explodeDirectory : aarPath;
             aarData.explode = explode;
             aarExplodeData[AarPathToPackageName(aarPath)] = aarData;
             SaveAarExplodeCache();
             return explode;
-        }
-
-        /// <summary>
-        /// Replaces the variables in the AndroidManifest file.
-        /// </summary>
-        /// <param name="exploded">Exploded.</param>
-        void ReplaceVariables(string exploded)
-        {
-            string manifest = Path.Combine(exploded, "AndroidManifest.xml");
-            if (File.Exists(manifest))
-            {
-                StreamReader sr = new StreamReader(manifest);
-                string body = sr.ReadToEnd();
-                sr.Close();
-
-                body = body.Replace("${applicationId}", PlayerSettings.bundleIdentifier);
-
-                using (var wr = new StreamWriter(manifest, false))
-                {
-                    wr.Write(body);
-                }
-            }
         }
     }
 }

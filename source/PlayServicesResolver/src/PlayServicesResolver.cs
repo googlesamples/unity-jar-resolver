@@ -79,12 +79,12 @@ namespace GooglePlayServices
         /// <summary>
         /// Last bundle ID value.
         /// </summary>
-        private static string lastBundleId = PlayerSettings.bundleIdentifier;
+        private static string lastBundleId = UnityCompat.ApplicationId;
 
         /// <summary>
         /// Last value of bundle ID since the last time OnBundleId() was called.
         /// </summary>
-        private static string bundleId = PlayerSettings.bundleIdentifier;
+        private static string bundleId = UnityCompat.ApplicationId;
 
         /// <summary>
         /// Arguments for the bundle ID update event.
@@ -517,7 +517,7 @@ namespace GooglePlayServices
         /// </summary>
         private static void PollBundleId()
         {
-            string currentBundleId = PlayerSettings.bundleIdentifier;
+            string currentBundleId = UnityCompat.ApplicationId;
             DateTime currentPollTime = DateTime.Now;
             if (currentBundleId != bundleId)
             {

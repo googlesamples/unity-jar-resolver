@@ -282,8 +282,7 @@ namespace GooglePlayServices
         internal virtual bool ExtractAar(string aarFile, string[] extractFilenames,
                                          string outputDirectory)
         {
-            try
-            {
+            try {
                 string aarPath = Path.GetFullPath(aarFile);
                 string extractFilesArg = extractFilenames != null && extractFilenames.Length > 0 ?
                     " \"" + String.Join("\" \"", extractFilenames) + "\"" : "";
@@ -291,16 +290,43 @@ namespace GooglePlayServices
                                                             "xvf " + "\"" + aarPath + "\"" +
                                                             extractFilesArg,
                                                             workingDirectory: outputDirectory);
-                if (result.exitCode != 0)
-                {
+                if (result.exitCode != 0) {
                     Debug.LogError("Error expanding " + aarPath + " err: " +
                                    result.exitCode + ": " + result.stderr);
                     return false;
                 }
             }
-            catch (Exception e)
-            {
-                Debug.Log(e);
+            catch (Exception e) {
+                Debug.LogError(e);
+                throw e;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Create an AAR from the specified directory.
+        /// </summary>
+        /// <param name="aarFile">AAR file to create.</param>
+        /// <param name="inputDirectory">Directory which contains the set of files to store
+        /// in the AAR.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        internal virtual bool ArchiveAar(string aarFile, string inputDirectory) {
+            try {
+                string aarPath = Path.GetFullPath(aarFile);
+                CommandLine.Result result = CommandLine.Run(
+                    FindJavaTool("jar"),
+                    String.Format("cvf \"{0}\" -C \"{1}\" .", aarPath, inputDirectory));
+                if (result.exitCode != 0) {
+                    Debug.LogError(String.Format("Error archiving {0}\n" +
+                                                 "Exit code: {1}\n" +
+                                                 "{2}\n" +
+                                                 "{3}\n",
+                                                 aarPath, result.exitCode, result.stdout,
+                                                 result.stderr));
+                    return false;
+                }
+            } catch (Exception e) {
+                Debug.LogError(e);
                 throw e;
             }
             return true;
@@ -317,41 +343,69 @@ namespace GooglePlayServices
                                              {"x86", NATIVE_LIBRARY_ABI_DIRECTORY_X86} };
 
         /// <summary>
+        /// Replaces the variables in the AndroidManifest file.
+        /// </summary>
+        /// <param name="exploded">Exploded.</param>
+        internal void ReplaceVariables(string exploded) {
+            string manifest = Path.Combine(exploded, "AndroidManifest.xml");
+            if (File.Exists(manifest)) {
+                StreamReader sr = new StreamReader(manifest);
+                string body = sr.ReadToEnd();
+                sr.Close();
+                body = body.Replace("${applicationId}", UnityCompat.ApplicationId);
+                using (var wr = new StreamWriter(manifest, false)) {
+                    wr.Write(body);
+                }
+            }
+        }
+
+        /// <summary>
         /// Explodes a single aar file.  This is done by calling the
         /// JDK "jar" command, then moving the classes.jar file.
         /// </summary>
         /// <param name="dir">the parent directory of the plugin.</param>
         /// <param name="aarFile">Aar file to explode.</param>
-        /// <returns>The path to the exploded aar.
-        internal virtual string ProcessAar(string dir, string aarFile)
-        {
+        /// <param name="antProject">true to explode into an Ant style project or false
+        /// to repack the processed AAR as a new AAR.</param>
+        /// <param name="abi">ABI of the AAR or null if it's universal.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        internal virtual bool ProcessAar(string dir, string aarFile, bool antProject,
+                                         out string abi) {
+            abi = null;
             string workingDir = Path.Combine(dir, Path.GetFileNameWithoutExtension(aarFile));
             PlayServicesSupport.DeleteExistingFileOrDirectory(workingDir, includeMetaFiles: true);
             Directory.CreateDirectory(workingDir);
-            if (!ExtractAar(aarFile, null, workingDir)) return workingDir;
+            if (!ExtractAar(aarFile, null, workingDir)) return false;
+            ReplaceVariables(workingDir);
 
-            // Create the libs directory to store the classes.jar and non-Java shared libraries.
-            string libDir = Path.Combine(workingDir, "libs");
-            Directory.CreateDirectory(libDir);
+            string nativeLibsDir = null;
+            if (antProject) {
+                // Create the libs directory to store the classes.jar and non-Java shared
+                // libraries.
+                string libDir = Path.Combine(workingDir, "libs");
+                nativeLibsDir = libDir;
+                Directory.CreateDirectory(libDir);
 
-            // Move the classes.jar file to libs.
-            string classesFile = Path.Combine(workingDir, "classes.jar");
-            if (File.Exists(classesFile))
-            {
-                string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
-                if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
-                File.Move(classesFile, targetClassesFile);
+                // Move the classes.jar file to libs.
+                string classesFile = Path.Combine(workingDir, "classes.jar");
+                if (File.Exists(classesFile)) {
+                    string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
+                    if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
+                    File.Move(classesFile, targetClassesFile);
+                }
             }
 
             // Copy non-Java shared libraries (.so) files from the "jni" directory into the
             // lib directory so that Unity's legacy (Ant-like) build system includes them in the
             // built APK.
             string jniLibDir = Path.Combine(workingDir, "jni");
-            if (Directory.Exists(jniLibDir))
-            {
-                PlayServicesSupport.CopyDirectory(jniLibDir, libDir);
-                PlayServicesSupport.DeleteExistingFileOrDirectory(jniLibDir,
-                                                                  includeMetaFiles: true);
+            nativeLibsDir = nativeLibsDir ?? jniLibDir;
+            if (Directory.Exists(jniLibDir)) {
+                if (jniLibDir != nativeLibsDir) {
+                    PlayServicesSupport.CopyDirectory(jniLibDir, nativeLibsDir);
+                    PlayServicesSupport.DeleteExistingFileOrDirectory(jniLibDir,
+                                                                      includeMetaFiles: true);
+                }
                 // Remove shared libraries for all ABIs that are not required for the selected
                 // target ABI.
                 var activeAbis = new HashSet<string>();
@@ -362,34 +416,44 @@ namespace GooglePlayServices
                 if (activeAbis.Count == 0) {
                     activeAbis.UnionWith(UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY.Values);
                 }
-                foreach (var directory in Directory.GetDirectories(libDir)) {
+                foreach (var directory in Directory.GetDirectories(nativeLibsDir)) {
                     var abiDir = Path.GetFileName(directory);
                     if (!activeAbis.Contains(abiDir)) {
                         PlayServicesSupport.DeleteExistingFileOrDirectory(
                             directory, includeMetaFiles: true);
                     }
                 }
+                abi = currentAbi;
             }
 
-            // Create the project.properties file which indicates to
-            // Unity that this directory is a plugin.
-            string projectProperties = Path.Combine(workingDir, "project.properties");
-            if (!File.Exists(projectProperties))
-            {
-                File.WriteAllLines(projectProperties, new [] {
+            if (antProject) {
+                // Create the project.properties file which indicates to
+                // Unity that this directory is a plugin.
+                string projectProperties = Path.Combine(workingDir, "project.properties");
+                if (!File.Exists(projectProperties)) {
+                    File.WriteAllLines(projectProperties, new [] {
                         "# Project target.",
                         "target=android-9",
                         "android.library=true"
                     });
+                }
+                // Clean up the aar file.
+                PlayServicesSupport.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile),
+                                                                  includeMetaFiles: true);
+                // Add a tracking label to the exploded files.
+                PlayServicesResolver.LabelAssets(new [] { workingDir });
+            } else {
+                // Add a tracking label to the exploded files just in-case packaging fails.
+                PlayServicesResolver.LabelAssets(new [] { workingDir });
+                // Create a new AAR file.
+                PlayServicesSupport.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile),
+                                                                  includeMetaFiles: true);
+                if (!ArchiveAar(aarFile, workingDir)) return false;
+                // Clean up the exploded directory.
+                PlayServicesSupport.DeleteExistingFileOrDirectory(workingDir,
+                                                                  includeMetaFiles: true);
             }
-
-            // Clean up the aar file.
-            PlayServicesSupport.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile),
-                                                              includeMetaFiles: true);
-
-            // Add a tracking label to the exploded files.
-            PlayServicesResolver.LabelAssets(new [] { workingDir });
-            return workingDir;
+            return true;
         }
     }
 }

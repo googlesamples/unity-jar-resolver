@@ -178,7 +178,7 @@ class GradlePreBuildResolver : DefaultResolver {
         string buildToolsVersion = UnityCompat.GetAndroidBuildToolsVersion();
 
         var config = new Dictionary<string, string>() {
-            {"app_id", PlayerSettings.bundleIdentifier},
+            {"app_id", UnityCompat.ApplicationId},
             {"sdk_version", targetSdkVersion},
             {"min_sdk_version", minSdkVersion},
             {"build_tools_version", buildToolsVersion},
