@@ -684,7 +684,7 @@ namespace GooglePlayServices
         internal static void OnSettingsChanged() {
             PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;
             if (Initialized) {
-                if (Resolver != null && Resolver.AutomaticResolutionEnabled()) AutoResolve();
+                if (Resolver != null) AutoResolve();
             }
         }
 
