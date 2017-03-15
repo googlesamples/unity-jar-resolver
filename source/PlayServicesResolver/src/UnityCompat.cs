@@ -205,7 +205,7 @@ public class UnityCompat {
         var playerSettingsType = typeof(UnityEditor.PlayerSettings);
         var property = playerSettingsType.GetProperty("applicationIdentifier");
         property = property ?? playerSettingsType.GetProperty("bundleIdentifier");
-        if (property != null) {
+        if (property == null) {
             Debug.LogWarning("Unable to retrieve PlayerSettings.applicationIdentifier property");
         }
         return property;
