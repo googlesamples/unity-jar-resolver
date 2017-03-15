@@ -793,6 +793,7 @@ namespace GooglePlayServices
             PlayServicesSupport svcSupport, string destinationDirectory,
             PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation)
         {
+            var updatedAars = new HashSet<string>();
             try
             {
                 // Get the collection of dependencies that need to be copied.
@@ -802,11 +803,11 @@ namespace GooglePlayServices
                                                        return ShouldExplode(aarPath);
                                                    });
                 // Copy the list
-                var copiedFiles = svcSupport.CopyDependencies(deps, destinationDirectory,
-                                                              handleOverwriteConfirmation);
+                updatedAars.UnionWith(svcSupport.CopyDependencies(
+                    deps, destinationDirectory, handleOverwriteConfirmation).Values);
                 // Label all copied files so they can be cleaned up if resolution needs to be
                 // triggered again.
-                PlayServicesResolver.LabelAssets(copiedFiles.Values);
+                PlayServicesResolver.LabelAssets(updatedAars);
             }
             catch (Google.JarResolver.ResolutionException e)
             {
@@ -818,7 +819,7 @@ namespace GooglePlayServices
             // Some aars have variables in their AndroidManifest.xml file,
             // e.g. ${applicationId}.  Unity does not understand how to process
             // these, so we handle it here.
-            ProcessAars(destinationDirectory);
+            ProcessAars(destinationDirectory, updatedAars);
         }
 
         /// <summary>
@@ -860,7 +861,9 @@ namespace GooglePlayServices
         /// Unity uses.
         /// </para>
         /// <param name="dir">The directory to process.</param>
-        private void ProcessAars(string dir) {
+        /// <param name="updatedFiles">Set of files that were recently updated and should be
+        /// processed.</param>
+        private void ProcessAars(string dir, HashSet<string> updatedFiles) {
             var aars = new HashSet<string>();
             // Build set of AAR files and directories.
             foreach (var aarFilename in Directory.GetFiles(dir, "*.aar")) {
@@ -870,7 +873,7 @@ namespace GooglePlayServices
             foreach (string aarPath in aars) {
                 bool explode = ShouldExplode(aarPath);
                 var aarData = FindAarExplodeDataEntry(aarPath);
-                if (AarExplodeDataIsDirty(aarData)) {
+                if (AarExplodeDataIsDirty(aarData) || updatedFiles.Contains(aarPath)) {
                     if (explode && File.Exists(aarPath)) {
                         ProcessAar(Path.GetFullPath(dir), aarPath,
                                    !PlayServicesResolver.GradleBuildEnabled,
