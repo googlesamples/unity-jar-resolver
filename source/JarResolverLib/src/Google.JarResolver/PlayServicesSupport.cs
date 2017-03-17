@@ -429,8 +429,14 @@ namespace Google.JarResolver
                 foreach (var dependencyItem in dependenciesToEvaluate) {
                     pendingTransitiveDependencies.Remove(dependencyItem.Key);
                     processedDependencies.Add(dependencyItem.Key);
+
+                    var combinedRepos =
+                        new List<string>(dependencyItem.Value.Repositories ?? new string[] {});
+                    combinedRepos.AddRange(repoPaths);
+                    combinedRepos = UniqueList<string>(combinedRepos);
+
                     foreach (var transitiveDependency in GetDependencies(dependencyItem.Value,
-                                                                         repoPaths)) {
+                                                                         combinedRepos)) {
                         if (!processedDependencies.Contains(transitiveDependency.Key)) {
                             transitiveDependencies[transitiveDependency.Key] =
                                 transitiveDependency;
@@ -644,7 +650,7 @@ namespace Google.JarResolver
         /// </summary>
         /// <param name="dependenciesToProcess">Set of dependencies to process indexed by
         /// Dependency.Key.</param>
-        /// <param name="versionLockedGroupIds>Groups which contain packages that should all
+        /// <param name="versionLockedGroupIds">Groups which contain packages that should all
         /// use the same version.</param>
         /// <param name="packageSetName">String used to summarize the set of matching packages in
         /// log messages.</param>
@@ -1076,12 +1082,14 @@ namespace Google.JarResolver
         }
 
         /// <summary>
-        /// Create a unique sorted list of items from a list with duplicate items.
+        /// Create a unique ordered list of items from a list with duplicate items.
+        /// Only the first occurrence of items in the original list are kept.
         /// </summary>
         private static List<T> UniqueList<T>(List<T> list)
         {
+            // We can't just copy hash to list since we are preserving order.
             HashSet<T> hashSet = new HashSet<T>();
-            List<T> outputList = new List<T>(list);
+            List<T> outputList = new List<T>();
             foreach (var item in list)
             {
                 if (hashSet.Contains(item)) continue;
@@ -1211,7 +1219,13 @@ namespace Google.JarResolver
 
         internal IEnumerable<Dependency> GetDependencies(Dependency dep)
         {
-            return GetDependencies(dep, repositoryPaths);
+            // Combine the instance repos with the repos defined for the dep.
+            HashSet<string> combinedRepos = new HashSet<string>(repositoryPaths);
+            if (dep.Repositories != null) {
+                combinedRepos.UnionWith(dep.Repositories);
+            }
+
+            return GetDependencies(dep, new List<string>(combinedRepos));
         }
 
         /// <summary>
@@ -1282,7 +1296,8 @@ namespace Google.JarResolver
                     // Unfortunately, the Maven POM doesn't contain metadata to map the package
                     // to each Android SDK package ID so the list "packageIds" is left as null in
                     // this case.
-                    Dependency d = FindCandidate(new Dependency(groupId, artifactId, version),
+                    Dependency d = FindCandidate(new Dependency(groupId, artifactId, version,
+                                                                repositories: repoPaths.ToArray()),
                                                  repoPaths);
                     if (d == null)
                     {
