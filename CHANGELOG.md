@@ -1,3 +1,11 @@
+# Version 1.2.15 - Mar 17, 2017
+## New Features
+    * Added warning when the Jar Resolver's background resolution is
+      disabled.
+## Bug Fixes
+    * Fixed support of AARs with native libraries when using Gradle.
+    * Fixed extra repository paths when resolving dependencies.
+
 # Version 1.2.14 - Mar 7, 2017
 ## New Features
     * Added experimental Android resolution using Gradle.
