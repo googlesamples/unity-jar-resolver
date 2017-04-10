@@ -50,7 +50,7 @@ namespace GooglePlayServices
         /// <param name="flag">If set to <c>true</c> flag.</param>
         public virtual void SetAutomaticResolutionEnabled(bool flag)
         {
-            EditorPrefs.GetBool("GooglePlayServices.AutoResolverEnabled", flag);
+            SettingsDialog.EnableAutoResolution = flag;
         }
 
         /// <summary>
@@ -59,8 +59,7 @@ namespace GooglePlayServices
         /// <returns><c>true</c>, if resolution enabled was automaticed, <c>false</c> otherwise.</returns>
         public virtual bool AutomaticResolutionEnabled()
         {
-            return EditorPrefs.GetBool("GooglePlayServices.AutoResolverEnabled",
-                SupportsAarFiles);
+            return !SettingsDialog.PrebuildWithGradle && SettingsDialog.EnableAutoResolution;
         }
 
         /// <summary>
@@ -70,8 +69,7 @@ namespace GooglePlayServices
         /// </returns>
         public virtual bool AndroidPackageInstallationEnabled()
         {
-            return EditorPrefs.GetBool("GooglePlayServices.AndroidPackageInstallationEnabled",
-                                       true);
+            return SettingsDialog.InstallAndroidPackages;
         }
 
         /// <summary>
@@ -89,46 +87,26 @@ namespace GooglePlayServices
         /// <param name="deletedAssets">Deleted assets.</param>
         /// <param name="movedAssets">Moved assets.</param>
         /// <param name="movedFromAssetPaths">Moved from asset paths.</param>
+        [Obsolete]
         public virtual bool ShouldAutoResolve(
             string[] importedAssets,
             string[] deletedAssets,
             string[] movedAssets,
-            string[] movedFromAssetPaths)
-        {
-            if (AutomaticResolutionEnabled())
-            {
-                // look for imported scripts
-                foreach (string s in importedAssets)
-                {
-                    if (s.EndsWith(".cs") || s.EndsWith(".js"))
-                    {
-                        Debug.Log(s + " imported, resolving play-services");
-                        return true;
-                    }
-                }
-
-                // look for deleted android plugins
-                foreach (string s in deletedAssets)
-                {
-                    if (s.StartsWith("Assets/Plugins/Android"))
-                    {
-                        Debug.Log(s + " deleted, resolving play-services");
-                        return true;
-                    }
-                }
-                // don't resolve if assets are moved around.
-            }
-            return false;
-        }
+            string[] movedFromAssetPaths) { return false; }
 
         /// <summary>
         /// Shows the settings dialog.
         /// </summary>
-        public virtual void ShowSettingsDialog()
-        {
+        public virtual void ShowSettingsDialog() { ShowSettings(); }
 
+        /// <summary>
+        /// Show the settings dialog.
+        /// This method is used when a Resolver isn't instanced.
+        /// </summary>
+        internal static void ShowSettings()
+        {
             SettingsDialog window = (SettingsDialog)EditorWindow.GetWindow(
-                typeof(SettingsDialog), true, "Play Services Resolver Settings");
+                typeof(SettingsDialog), true, "Android Resolver Settings");
             window.Initialize();
             window.Show();
         }
@@ -141,11 +119,11 @@ namespace GooglePlayServices
         /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
         /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
         public virtual void DoResolution(
-            PlayServicesSupport svcSupport, string destinationDirectory,
+            PlayServicesSupport svcSupport,
+            string destinationDirectory,
             PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
             System.Action resolutionComplete)
         {
-            DoResolution(svcSupport, destinationDirectory, handleOverwriteConfirmation);
             resolutionComplete();
         }
 
@@ -153,11 +131,30 @@ namespace GooglePlayServices
         /// Called during Update to allow the resolver to check the bundle ID of the application
         /// to see whether resolution should be triggered again.
         /// </summary>
+        /// <remarks>
+        ///   <para>
+        ///      <returns>Array of packages that should be re-resolved if resolution should occur,
+        /// null otherwise.</returns>
+        [Obsolete]
+        public virtual string[] OnBundleId(string bundleId) { return OnBuildSettings(); }
+
+        /// <summary>
+        /// Called during Update to allow the resolver to check any build settings of managed
+        /// packages to see whether resolution should be triggered again.
+        /// </summary>
         /// <returns>Array of packages that should be re-resolved if resolution should occur,
         /// null otherwise.</returns>
-        public virtual string[] OnBundleId(string bundleId)
-        {
-            return null;
+        public virtual string[] OnBuildSettings() { return null; }
+
+        /// <summary>
+        /// Determine whether to replace a dependency with a new version.
+        /// </summary>
+        /// <param name="oldDependency">Previous version of the dependency.</param>
+        /// <param name="newDependency">New version of the dependency.</param>
+        /// <returns>true if the dependency should be replaced, false otherwise.</returns>
+        public virtual bool ShouldReplaceDependency(Dependency oldDependency,
+                                                    Dependency newDependency) {
+            return false;
         }
 
         #endregion
@@ -168,9 +165,14 @@ namespace GooglePlayServices
         /// <param name="svcSupport">Svc support.</param>
         /// <param name="destinationDirectory">Destination directory.</param>
         /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
-        public abstract void DoResolution(
-            PlayServicesSupport svcSupport, string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation);
+        public virtual void DoResolution(
+            PlayServicesSupport svcSupport,
+            string destinationDirectory,
+            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation)
+        {
+            DoResolution(svcSupport, destinationDirectory, handleOverwriteConfirmation,
+                () => {});
+        }
 
         /// <summary>
         /// Makes the version number.
@@ -213,7 +215,11 @@ namespace GooglePlayServices
         /// <param name="toolName">Name of the tool to search for.</param>
         private string FindJavaTool(string javaTool)
         {
-            string javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+            string javaHome = UnityEditor.EditorPrefs.GetString("JdkPath");
+            if (string.IsNullOrEmpty(javaHome))
+            {
+                javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+            }
             string toolPath;
             if (javaHome != null)
             {
@@ -279,8 +285,7 @@ namespace GooglePlayServices
         internal virtual bool ExtractAar(string aarFile, string[] extractFilenames,
                                          string outputDirectory)
         {
-            try
-            {
+            try {
                 string aarPath = Path.GetFullPath(aarFile);
                 string extractFilesArg = extractFilenames != null && extractFilenames.Length > 0 ?
                     " \"" + String.Join("\" \"", extractFilenames) + "\"" : "";
@@ -288,19 +293,73 @@ namespace GooglePlayServices
                                                             "xvf " + "\"" + aarPath + "\"" +
                                                             extractFilesArg,
                                                             workingDirectory: outputDirectory);
-                if (result.exitCode != 0)
-                {
+                if (result.exitCode != 0) {
                     Debug.LogError("Error expanding " + aarPath + " err: " +
                                    result.exitCode + ": " + result.stderr);
                     return false;
                 }
             }
-            catch (Exception e)
-            {
-                Debug.Log(e);
+            catch (Exception e) {
+                Debug.LogError(e);
                 throw e;
             }
             return true;
+        }
+
+        /// <summary>
+        /// Create an AAR from the specified directory.
+        /// </summary>
+        /// <param name="aarFile">AAR file to create.</param>
+        /// <param name="inputDirectory">Directory which contains the set of files to store
+        /// in the AAR.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        internal virtual bool ArchiveAar(string aarFile, string inputDirectory) {
+            try {
+                string aarPath = Path.GetFullPath(aarFile);
+                CommandLine.Result result = CommandLine.Run(
+                    FindJavaTool("jar"),
+                    String.Format("cvf \"{0}\" -C \"{1}\" .", aarPath, inputDirectory));
+                if (result.exitCode != 0) {
+                    Debug.LogError(String.Format("Error archiving {0}\n" +
+                                                 "Exit code: {1}\n" +
+                                                 "{2}\n" +
+                                                 "{3}\n",
+                                                 aarPath, result.exitCode, result.stdout,
+                                                 result.stderr));
+                    return false;
+                }
+            } catch (Exception e) {
+                Debug.LogError(e);
+                throw e;
+            }
+            return true;
+        }
+
+        // Native library ABI subdirectories supported by Unity.
+        internal const string NATIVE_LIBRARY_ABI_DIRECTORY_ARMEABI_V7A = "armeabi-v7a";
+        internal const string NATIVE_LIBRARY_ABI_DIRECTORY_X86 = "x86";
+        // Directories that contain native libraries within a Unity Android library project.
+        internal static string[] NATIVE_LIBRARY_DIRECTORIES = new string[] { "libs", "jni" };
+        // Map of Unity ABIs (see AndroidTargetDeviceAbi) to the ABI directory.
+        internal static Dictionary<string, string> UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY =
+            new Dictionary<string, string> { {"armv7", NATIVE_LIBRARY_ABI_DIRECTORY_ARMEABI_V7A},
+                                             {"x86", NATIVE_LIBRARY_ABI_DIRECTORY_X86} };
+
+        /// <summary>
+        /// Replaces the variables in the AndroidManifest file.
+        /// </summary>
+        /// <param name="exploded">Exploded.</param>
+        internal void ReplaceVariables(string exploded) {
+            string manifest = Path.Combine(exploded, "AndroidManifest.xml");
+            if (File.Exists(manifest)) {
+                StreamReader sr = new StreamReader(manifest);
+                string body = sr.ReadToEnd();
+                sr.Close();
+                body = body.Replace("${applicationId}", UnityCompat.ApplicationId);
+                using (var wr = new StreamWriter(manifest, false)) {
+                    wr.Write(body);
+                }
+            }
         }
 
         /// <summary>
@@ -309,49 +368,95 @@ namespace GooglePlayServices
         /// </summary>
         /// <param name="dir">the parent directory of the plugin.</param>
         /// <param name="aarFile">Aar file to explode.</param>
-        /// <returns>The path to the exploded aar.
-        internal virtual string ProcessAar(string dir, string aarFile)
-        {
+        /// <param name="antProject">true to explode into an Ant style project or false
+        /// to repack the processed AAR as a new AAR.</param>
+        /// <param name="abi">ABI of the AAR or null if it's universal.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        internal virtual bool ProcessAar(string dir, string aarFile, bool antProject,
+                                         out string abi) {
+            abi = null;
             string workingDir = Path.Combine(dir, Path.GetFileNameWithoutExtension(aarFile));
+            PlayServicesSupport.DeleteExistingFileOrDirectory(workingDir, includeMetaFiles: true);
             Directory.CreateDirectory(workingDir);
-            if (!ExtractAar(aarFile, null, workingDir)) return workingDir;
+            if (!ExtractAar(aarFile, null, workingDir)) return false;
+            ReplaceVariables(workingDir);
 
-            // move the classes.jar file to libs.
-            string libDir = Path.Combine(workingDir, "libs");
-            if (!Directory.Exists(libDir))
-            {
+            string nativeLibsDir = null;
+            if (antProject) {
+                // Create the libs directory to store the classes.jar and non-Java shared
+                // libraries.
+                string libDir = Path.Combine(workingDir, "libs");
+                nativeLibsDir = libDir;
                 Directory.CreateDirectory(libDir);
-            }
-            if (File.Exists(Path.Combine(libDir, "classes.jar")))
-            {
-                File.Delete(Path.Combine(libDir, "classes.jar"));
-            }
-            if (File.Exists(Path.Combine(workingDir, "classes.jar")))
-            {
-                File.Move(Path.Combine(workingDir, "classes.jar"),
-                          Path.Combine(libDir, "classes.jar"));
+
+                // Move the classes.jar file to libs.
+                string classesFile = Path.Combine(workingDir, "classes.jar");
+                if (File.Exists(classesFile)) {
+                    string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
+                    if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
+                    File.Move(classesFile, targetClassesFile);
+                }
             }
 
-            // Create the project.properties file which indicates to
-            // Unity that this directory is a plugin.
-            if (!File.Exists(Path.Combine(workingDir, "project.properties")))
-            {
-                // write out project.properties
-                string[] props =
-                    {
+            // Copy non-Java shared libraries (.so) files from the "jni" directory into the
+            // lib directory so that Unity's legacy (Ant-like) build system includes them in the
+            // built APK.
+            string jniLibDir = Path.Combine(workingDir, "jni");
+            nativeLibsDir = nativeLibsDir ?? jniLibDir;
+            if (Directory.Exists(jniLibDir)) {
+                if (jniLibDir != nativeLibsDir) {
+                    PlayServicesSupport.CopyDirectory(jniLibDir, nativeLibsDir);
+                    PlayServicesSupport.DeleteExistingFileOrDirectory(jniLibDir,
+                                                                      includeMetaFiles: true);
+                }
+                // Remove shared libraries for all ABIs that are not required for the selected
+                // target ABI.
+                var activeAbis = new HashSet<string>();
+                var currentAbi = PlayServicesResolver.AndroidTargetDeviceAbi.ToLower();
+                foreach (var kv in UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY) {
+                    if (currentAbi == kv.Key) activeAbis.Add(kv.Value);
+                }
+                if (activeAbis.Count == 0) {
+                    activeAbis.UnionWith(UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY.Values);
+                }
+                foreach (var directory in Directory.GetDirectories(nativeLibsDir)) {
+                    var abiDir = Path.GetFileName(directory);
+                    if (!activeAbis.Contains(abiDir)) {
+                        PlayServicesSupport.DeleteExistingFileOrDirectory(
+                            directory, includeMetaFiles: true);
+                    }
+                }
+                abi = currentAbi;
+            }
+
+            if (antProject) {
+                // Create the project.properties file which indicates to
+                // Unity that this directory is a plugin.
+                string projectProperties = Path.Combine(workingDir, "project.properties");
+                if (!File.Exists(projectProperties)) {
+                    File.WriteAllLines(projectProperties, new [] {
                         "# Project target.",
                         "target=android-9",
                         "android.library=true"
-                    };
-
-                File.WriteAllLines(Path.Combine(workingDir, "project.properties"),
-                                   props);
+                    });
+                }
+                // Clean up the aar file.
+                PlayServicesSupport.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile),
+                                                                  includeMetaFiles: true);
+                // Add a tracking label to the exploded files.
+                PlayServicesResolver.LabelAssets(new [] { workingDir });
+            } else {
+                // Add a tracking label to the exploded files just in-case packaging fails.
+                PlayServicesResolver.LabelAssets(new [] { workingDir });
+                // Create a new AAR file.
+                PlayServicesSupport.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile),
+                                                                  includeMetaFiles: true);
+                if (!ArchiveAar(aarFile, workingDir)) return false;
+                // Clean up the exploded directory.
+                PlayServicesSupport.DeleteExistingFileOrDirectory(workingDir,
+                                                                  includeMetaFiles: true);
             }
-
-            // Clean up the aar file.
-            File.Delete(Path.GetFullPath(aarFile));
-            Debug.Log(aarFile + " expanded successfully");
-            return workingDir;
+            return true;
         }
     }
 }

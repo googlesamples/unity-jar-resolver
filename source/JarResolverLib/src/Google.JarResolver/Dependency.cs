@@ -21,7 +21,7 @@ namespace Google.JarResolver
     using System.IO;
 
     /// <summary>
-    /// Represents a dependency.  A dependency is defined by a groupId, 
+    /// Represents a dependency.  A dependency is defined by a groupId,
     /// artifactId and version constraint.  This information is used to search
     /// the repositories of artifacts to find a version that meets the version
     /// contraints (as well as be compatible with other dependencies' constraints).
@@ -32,48 +32,27 @@ namespace Google.JarResolver
     /// </summary>
     public class Dependency
     {
+        // TODO(wilkinsonclay): get the extension from the pom file.
+        internal static string[] Packaging = {
+            ".aar",
+            ".jar",
+            // This allows users to place an aar inside a Unity project and have Unity
+            // ignore the file as part of the build process, but still allow the Jar
+            // Resolver to process the AAR so it can be included in the build.
+            ".srcaar"
+        };
+
         /// <summary>
         /// The version comparator.  This comparator results in a descending sort
         /// order by version.
         /// </summary>
-        private readonly VersionComparer versionComparison = new VersionComparer();
-
-        /// <summary>
-        /// The group ID.
-        /// </summary>
-        private string group;
-
-        /// <summary>
-        /// The artifact ID.
-        /// </summary>
-        private string artifact;
-
-        /// <summary>
-        /// The version constraint.
-        /// </summary>
-        private string version;
-
-        /// <summary>
-        /// The path to the respository where this dependency is found first.
-        /// </summary>
-        private string repoPath;
+        internal static readonly VersionComparer versionComparer = new VersionComparer();
 
         /// <summary>
         /// The possible versions found in the repository.  This list is mutable
         /// and will change as the constraints are applied.
         /// </summary>
-        private List<string> possibleVersions;
-
-        /// <summary>
-        /// Optional array of Android SDK identifiers for packages that are required for this
-        /// artifact.
-        /// </summary>
-        private string[] packageIds;
-
-        /// <summary>
-        /// Optional array of repository directories to search for this artifact.
-        /// </summary>
-        private string[] repositories;
+        private List<string> possibleVersions = new List<string>();
 
         /// <summary>
         /// Initializes a new instance of the
@@ -89,47 +68,68 @@ namespace Google.JarResolver
         public Dependency(string group, string artifact, string version, string[] packageIds=null,
                           string[] repositories=null)
         {
-            this.group = group;
-            this.artifact = artifact;
-            this.version = version;
-            this.packageIds = packageIds;
-            this.possibleVersions = new List<string>();
-            this.repositories = repositories;
+            Group = group;
+            Artifact = artifact;
+            Version = version;
+            PackageIds = packageIds;
+            Repositories = repositories;
+            CreatedBy = System.Environment.StackTrace;
         }
+
+        /// <summary>
+        /// Copy Dependency.
+        /// </summary>
+        /// <param name="dependency">Dependency to copy.</param>
+        public Dependency(Dependency dependency) {
+            Group = dependency.Group;
+            Artifact = dependency.Artifact;
+            Version = dependency.Version;
+            if (dependency.PackageIds != null) {
+                PackageIds = (string[])dependency.PackageIds.Clone();
+            }
+            possibleVersions = new List<string>(dependency.possibleVersions);
+            if (dependency.Repositories != null) {
+                Repositories = (string[])dependency.Repositories.Clone();
+            }
+            CreatedBy = dependency.CreatedBy;
+            RepoPath = dependency.RepoPath;
+        }
+
+        /// <summary>
+        /// Stack trace of the point where this was created.
+        /// </summary>
+        internal string CreatedBy { get; private set; }
 
         /// <summary>
         /// Gets the group ID
         /// </summary>
         /// <value>The group.</value>
-        public string Group
-        {
-            get
-            {
-                return group;
-            }
-        }
+        public string Group { get; private set; }
 
         /// <summary>
         /// Gets the artifact ID.
         /// </summary>
         /// <value>The artifact.</value>
-        public string Artifact
-        {
-            get
-            {
-                return artifact;
-            }
-        }
+        public string Artifact { get; private set; }
+
+
+        /// <summary>
+        /// Backing store for Version.
+        /// </summary>
+        private string versionInternal;
 
         /// <summary>
         /// Gets the version constraint.
         /// </summary>
         /// <value>The version.</value>
-        public string Version
-        {
-            get
-            {
-                return version;
+        public string Version {
+            get { return versionInternal; }
+
+            internal set {
+                // Filter the possible versions by the new version constraint.  If this results
+                // in an empty list of available versions the depenency POM will be re-evaluated.
+                possibleVersions = FilterAcceptableVersions(value, possibleVersions);
+                versionInternal = value;
             }
         }
 
@@ -138,31 +138,19 @@ namespace Google.JarResolver
         /// artifact.
         /// </summary>
         /// <value>Package identifiers if set or null.</value>
-        public string[] PackageIds
-        {
-            get
-            {
-                return packageIds;
-            }
-        }
+        public string[] PackageIds { get; private set; }
 
         /// <summary>
         /// Array of repositories to search for this artifact.
         /// </summary>
         /// <value>List of repository directories if set or null.</value>
-        public string[] Repositories
-        {
-            get
-            {
-                return repositories;
-            }
-        }
+        public string[] Repositories { get; private set; }
 
         /// <summary>
         /// Gets the best version based on the version contraint, other
         /// dependencies (if resolve has been run), and the availability of the
         /// artifacts in the repository.  If this value is null or empty, either
-        /// it has not been initialized by calling 
+        /// it has not been initialized by calling
         /// PlayServicesSupport.AddDependency()
         /// or there are no versions that meet all the constraints.
         /// </summary>
@@ -206,7 +194,7 @@ namespace Google.JarResolver
                     string path = Group + Path.DirectorySeparatorChar +
                                   Artifact;
                     path = path.Replace('.', Path.DirectorySeparatorChar);
-                    return repoPath + Path.DirectorySeparatorChar + path +
+                    return RepoPath + Path.DirectorySeparatorChar + path +
                     Path.DirectorySeparatorChar + BestVersion;
                 }
 
@@ -215,22 +203,36 @@ namespace Google.JarResolver
         }
 
         /// <summary>
+        /// Get the path to the artifact without the artifact extension.
+        /// </summary>
+        public string BestVersionArtifactPath {
+            get { return Path.Combine(BestVersionPath, Artifact + "-" + BestVersion); }
+        }
+
+        /// <summary>
+        /// Get the path to the artifact if it exists.
+        /// </summary>
+        public string BestVersionArtifact
+        {
+            get
+            {
+                // TODO(wilkinsonclay): get the extension from the pom file.
+                string filenameWithoutExtension = BestVersionArtifactPath;
+                foreach (string extension in Packaging)
+                {
+                    string filename = filenameWithoutExtension + extension;
+                    if (File.Exists(filename)) return filename;
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Gets or sets the repository path for this dependency.  This is
         /// relative to the SDK.
         /// </summary>
         /// <value>The repo path.</value>
-        public string RepoPath
-        {
-            get
-            {
-                return repoPath;
-            }
-
-            set
-            {
-                repoPath = value;
-            }
-        }
+        public string RepoPath { get; set; }
 
         /// <summary>
         /// Gets the versionless key.  This key is used to manage collections
@@ -241,12 +243,12 @@ namespace Google.JarResolver
         {
             get
             {
-                return group + ":" + artifact;
+                return Group + ":" + Artifact;
             }
         }
 
         /// <summary>
-        /// Gets the key for this dependency.  The key is a tuple of the 
+        /// Gets the key for this dependency.  The key is a tuple of the
         /// group, artifact and version constraint.
         /// </summary>
         /// <value>The key.</value>
@@ -254,7 +256,7 @@ namespace Google.JarResolver
         {
             get
             {
-                return group + ":" + artifact + ":" + version;
+                return Group + ":" + Artifact + ":" + Version;
             }
         }
 
@@ -287,41 +289,53 @@ namespace Google.JarResolver
         }
 
         /// <summary>
-        /// Determines whether this instance is acceptable based
-        ///  on the version constraint.
+        /// Determines whether the specified version matches the Dependency.Version constraint.
         /// </summary>
-        /// <returns><c>true</c> if this instance is acceptable
-        ///  version the specified ver.</returns>
-        /// <param name="ver">Version to check.</param>
-        public bool IsAcceptableVersion(string ver)
-        {
-            bool hasPlus = version.Contains("+");
-            bool latest = version.ToUpper().Equals("LATEST");
-            if (latest)
-            {
-                return string.IsNullOrEmpty(BestVersion) ||
-                IsGreater(ver, BestVersion);
-            }
+        /// <param name="version">Version to check.</param>
+        /// <returns>true if the specified version matches the Dependency.Version constraint,
+        /// false otherwise.</returns>
+        public bool IsAcceptableVersion(string versionToCheck) {
+            return IsAcceptableVersion(Version, versionToCheck, bestVersion: BestVersion);
+        }
 
-            if (!hasPlus)
-            {
-                if (ver.Equals(version))
-                {
-                    return true;
-                }
-                else
-                {
-                    string[] myParts = Version.Split('.');
-                    string[] parts = ver.Split('.');
-                    return AreEquivalent(myParts, parts);
+        /// <summary>
+        /// Determines whether the specified version matches a constraint.
+        /// </summary>
+        /// <param name="versionConstraint">Version constraint to test with.</param>
+        /// <param name="bestVersion">If the constraint specifies the latest revision, determine
+        /// whether the current version is greater than or equal to the specified best
+        /// version.</param>
+        /// <param name="versionToCheck">Version to check.</param>
+        /// <returns>true if the specified version matches the constraint,
+        /// false otherwise.</returns>
+        private static bool IsAcceptableVersion(string versionConstraint, string versionToCheck,
+                                                string bestVersion = null) {
+            if (versionConstraint.ToUpper().Equals("LATEST")) {
+                return string.IsNullOrEmpty(bestVersion) ||
+                    versionToCheck.Equals(bestVersion) ||
+                    IsGreater(versionToCheck, bestVersion);
+            }
+            var versionConstraintComponents = versionConstraint.Split('.');
+            var versionToCheckComponents = versionToCheck.Split('.');
+            if (!versionConstraint.Contains("+")) {
+                if (versionToCheck.Equals(versionConstraint)) return true;
+                return AreEquivalent(versionConstraintComponents, versionToCheckComponents);
+            }
+            return IsAcceptable(versionConstraintComponents, versionToCheckComponents);
+        }
+
+        /// <summary>
+        /// Get the set of versions that match the version constraint.
+        /// </summary>
+        private static List<string> FilterAcceptableVersions(string versionConstraint,
+                                                             IEnumerable<string> versionsToCheck) {
+            var acceptableVersions = new List<string>();
+            foreach (var versionToCheck in versionsToCheck) {
+                if (IsAcceptableVersion(versionConstraint, versionToCheck)) {
+                    acceptableVersions.Add(versionToCheck);
                 }
             }
-            else
-            {
-                string[] myParts = Version.Split('.');
-                string[] parts = ver.Split('.');
-                return IsAcceptable(myParts, parts);
-            }
+            return acceptableVersions;
         }
 
         /// <summary>
@@ -333,24 +347,7 @@ namespace Google.JarResolver
         /// <param name="candidate">Candidate to test versions with.</param>
         public bool RefineVersionRange(Dependency candidate)
         {
-            // remove all possible versions that are not acceptable to the 
-            // candidate
-            List<string> removals = new List<string>();
-
-            // add the possible versions to both, so the sets are the same.
-            foreach (string v in possibleVersions)
-            {
-                if (!candidate.IsAcceptableVersion(v))
-                {
-                    removals.Add(v);
-                }
-            }
-
-            foreach (string v in removals)
-            {
-                possibleVersions.Remove(v);
-            }
-
+            possibleVersions = FilterAcceptableVersions(candidate.Version, possibleVersions);
             return HasPossibleVersions;
         }
 
@@ -368,20 +365,12 @@ namespace Google.JarResolver
         /// Acceptable versions meet the version constraint and are not already in
         /// the list.
         /// </summary>
-        /// <param name="ver">Version to add</param>
-        public void AddVersion(string ver)
-        {
-            if (possibleVersions.Contains(ver))
-            {
-                return;
+        /// <param name="version">Version to add.</param>
+        public void AddVersion(string version) {
+            if (!possibleVersions.Contains(version) && IsAcceptableVersion(version)) {
+                possibleVersions.Add(version);
+                possibleVersions.Sort(versionComparer);
             }
-
-            if (IsAcceptableVersion(ver))
-            {
-                possibleVersions.Add(ver);
-            }
-
-            possibleVersions.Sort(versionComparison);
         }
 
         /// <summary>
@@ -502,7 +491,7 @@ namespace Google.JarResolver
         /// <returns><c>true</c> if ver2 is acceptable to ver1.</returns>
         /// <param name="ver1">Version 1</param>
         /// <param name="ver2">Version 2</param>
-        internal bool IsAcceptable(string[] ver1, string[] ver2)
+        internal static bool IsAcceptable(string[] ver1, string[] ver2)
         {
             int i1 = 0;
             int i2 = 0;
@@ -588,7 +577,7 @@ namespace Google.JarResolver
         /// <returns><c>true</c>, if equivalent <c>false</c> otherwise.</returns>
         /// <param name="ours">our version parsed into an array.</param>
         /// <param name="theirs">Theirs parsed into an array.</param>
-        internal bool AreEquivalent(string[] ours, string[] theirs)
+        internal static bool AreEquivalent(string[] ours, string[] theirs)
         {
             int ourIndex = 0;
             int theirIndex = 0;

@@ -17,6 +17,7 @@
 namespace GooglePlayServices
 {
     using Google.JarResolver;
+    using System;
 
     public interface IResolver
     {
@@ -55,6 +56,7 @@ namespace GooglePlayServices
         /// <param name="deletedAssets">Deleted assets.</param>
         /// <param name="movedAssets">Moved assets.</param>
         /// <param name="movedFromAssetPaths">Moved from asset paths.</param>
+        [Obsolete]
         bool ShouldAutoResolve(string[] importedAssets,
             string[] deletedAssets,
             string[] movedAssets,
@@ -93,7 +95,23 @@ namespace GooglePlayServices
         /// </summary>
         /// <returns>Array of packages that should be re-resolved if resolution should occur,
         /// null otherwise.</returns>
+        [Obsolete]
         string[] OnBundleId(string bundleId);
+
+        /// Called during Update to allow the resolver to check any build settings of managed
+        /// packages to see whether resolution should be triggered again.
+        /// </summary>
+        /// <returns>Array of packages that should be re-resolved if resolution should occur,
+        /// null otherwise.</returns>
+        string[] OnBuildSettings();
+
+        /// <summary>
+        /// Determine whether to replace a dependency with a new version.
+        /// </summary>
+        /// <param name="oldDependency">Previous version of the dependency.</param>
+        /// <param name="newDependency">New version of the dependency.</param>
+        /// <returns>true if the dependency should be replaced, false otherwise.</returns>
+        bool ShouldReplaceDependency(Dependency oldDependency, Dependency newDependency);
     }
 }
 

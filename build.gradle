@@ -101,12 +101,13 @@ project.ext {
     }
 
 // xbuild is used to build the dlls.
-    xbuild_exe = findUnityPath("XBUILD_EXE", false,
-                    os_windows ?
-                        fileTree(dir: unity_root).matching { include '**/Mono/bin/xbuild.bat'}
-                    :
-                        fileTree(dir: unity_root).matching { include '**/Mono/bin/xbuild'}
-                )
+    if (os_windows) {
+        xbuild_exe = findUnityPath("XBUILD_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/Mono/bin/xbuild.bat'})
+    } else if (os_osx || os_linux) {
+        xbuild_exe = findUnityPath("XBUILD_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/xbuild'})
+    }
     if (xbuild_exe == null || !xbuild_exe.exists()) {
         logger.warn("xbuild command not found, compilation may fail.")
         xbuild_exe = null
@@ -115,12 +116,16 @@ project.ext {
     }
 
 // nunit-console is used to run tests.
-    nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
-                    os_windows ?
-                        fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2.bat'}
-                    :
-                        fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2'}
-                )
+    if (os_windows) {
+        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2.bat'})
+    } else if (os_osx) {
+        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/nunit-console2'})
+    } else if (os_linux) {
+        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
+            fileTree(dir: unity_root).matching { include '**/nunit-console'})
+    }
     if (nunit_console_exe == null || !nunit_console_exe.exists()) {
         logger.warn("nunit_console command not found, compilation may fail.")
         nunit_console_exe = null
@@ -130,10 +135,12 @@ project.ext {
 
     pluginSrc = file('plugin').absolutePath
     pluginProj = file('build/PluginSrc').absolutePath
+    scriptsSrc = file('source/PlayServicesResolver/scripts').absolutePath
+    scriptsDst = 'Assets/PlayServicesResolver'
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
     dllDir = 'Assets/PlayServicesResolver/Editor'
-    pluginVersion = '1.2.2.0'
+    pluginVersion = '1.2.15.0'
     currentPluginPath = file('.').absolutePath
     currentPluginBasename = 'play-services-resolver'
     currentPluginName = (currentPluginBasename + '-' + pluginVersion +
@@ -153,6 +160,22 @@ task test_resolverLib(type: Exec, dependsOn: compile_resolverTests) {
   workingDir 'source'
   commandLine "$nunit_console_exe",
               "JarResolverTests/bin/Debug/JarResolverTests.dll"
+  ext.remoteTaskPhase = 'build'
+}
+
+task compile_packageManagerTests(type: Exec) {
+  description 'Compile the tests for the Mono framework component.'
+  workingDir 'source'
+  commandLine "${xbuild_exe}", '/target:PackageManagerTests',
+        "/property:NUnityHintPath=$unity_nunit_dll_path.absolutePath"
+  ext.remoteTaskPhase = 'build'
+}
+
+task test_packageManager(type: Exec, dependsOn: compile_packageManagerTests) {
+  description 'Runs the tests.'
+  workingDir 'source'
+  commandLine "$nunit_console_exe",
+              "PackageManagerTests/bin/Debug/PackageManagerTests.dll"
   ext.remoteTaskPhase = 'build'
 }
 
@@ -236,7 +259,7 @@ def build_pluginDll(projectName, assemblyDllBasename) {
   def copyTask = tasks.create(name: "copy_" + projectName,
                               type: Copy,
                               description: ('Copy ' + projectName +
-                                            ' to unity packaging folder'),
+                                            ' to the Unity packaging folder'),
                               dependsOn: compileTask)
   copyTask.from(files(assemblyDllSource, dllMeta))
   copyTask.into("${pluginProj}/${dllDir}")
@@ -250,12 +273,12 @@ def build_pluginDll(projectName, assemblyDllBasename) {
                       }
                       return fn
                   })
-  copyTask.ext.remoteTaskPhase = "build"
 }
 
 build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll")
 build_pluginDll("VersionHandler", "Google.VersionHandler.dll")
 build_pluginDll("IOSResolver", "Google.IOSResolver.dll")
+build_pluginDll("PackageManager", "Google.PackageManager.dll")
 
 task update_metadataForVersion() {
   description 'Update plugin metadata if the plugin version changed.'
@@ -284,7 +307,17 @@ task copy_pluginTemplate(type: Copy, dependsOn: update_metadataForVersion) {
   ext.remoteTaskPhase = 'build'
 }
 
+task copy_GenGradleScripts(type: Copy, dependsOn: compile_packageManagerTests) {
+  description 'Copy the Gradle prebuild scripts to the Unity packaging dir.'
+  from "${scriptsSrc}"
+  into "${pluginProj}/${scriptsDst}"
+  exclude 'sample', 'readme*', 'README'
+  duplicatesStrategy 'include'
+  ext.remoteTaskPhase = 'build'
+}
+
 task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
+                                             copy_GenGradleScripts,
                                              'copy_PlayServicesResolver',
                                              'copy_VersionHandler',
                                              'copy_IOSResolver']) {
@@ -344,6 +377,8 @@ task generate_manifest(dependsOn: ['copy_manifestMetadata',
   ext.remoteTaskPhase = 'build'
 }
 
+task tests(dependsOn: ['test_resolverLib','test_packageManager'])
+
 task export_package(dependsOn: 'generate_manifest') {
   description 'Creates and exports the Plugin unity package.'
   doLast {
@@ -366,7 +401,7 @@ task export_package(dependsOn: 'generate_manifest') {
   }
   ext.remoteTaskPhase = 'build'
 
-  dependsOn test_resolverLib
+  dependsOn tests
 }
 
 task copy_plugin() {

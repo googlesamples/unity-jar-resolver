@@ -82,6 +82,10 @@ public class VersionHandler : AssetPostprocessor {
         private static string LABEL_PREFIX = "gvh_";
         // Initialized depending on the version of unity we are running against
         private static HashSet<BuildTarget> targetBlackList = null;
+        // Initialized by parsing BuildTarget enumeration values from
+        // BUILD_TARGET_NAME_TO_ENUM_NAME.
+        private static Dictionary<string, BuildTarget>
+            buildTargetNameToEnum = null;
 
         /// <summary>
         /// Label which flags whether an asset is should be managed by this
@@ -89,31 +93,69 @@ public class VersionHandler : AssetPostprocessor {
         /// </summary>
         public static string ASSET_LABEL = "gvh";
 
-        // Map of build target names to BuildTarget enumeration values.
-        static public Dictionary<string, BuildTarget>
-            BUILD_TARGET_NAME_TO_ENUM = new Dictionary<string, BuildTarget> {
-            {"osx", BuildTarget.StandaloneOSXUniversal},
-            {"osxintel", BuildTarget.StandaloneOSXIntel},
-            {"windows", BuildTarget.StandaloneWindows},
-            {"ios", BuildTarget.iOS},
-            {"ps3", BuildTarget.PS3},
-            {"xbox360", BuildTarget.XBOX360},
-            {"android", BuildTarget.Android},
-            {"linux32", BuildTarget.StandaloneLinux},
-            {"windows64", BuildTarget.StandaloneWindows64},
-            {"webgl", BuildTarget.WebGL},
-            {"linux64", BuildTarget.StandaloneLinux64},
-            {"linux", BuildTarget.StandaloneLinuxUniversal},
-            {"osxintel64", BuildTarget.StandaloneOSXIntel64},
-            {"tizen", BuildTarget.Tizen},
-            {"psp2", BuildTarget.PSP2},
-            {"ps4", BuildTarget.PS4},
-            {"xboxone", BuildTarget.XboxOne},
-            {"samsungtv", BuildTarget.SamsungTV},
-            {"nintendo3ds", BuildTarget.Nintendo3DS},
-            {"wiiu", BuildTarget.WiiU},
-            {"tvos", BuildTarget.tvOS},
+        // Map of build target names to BuildTarget enumeration names.
+        // We don't use BuildTarget enumeration values here as Unity has a
+        // habit of removing unsupported ones from the API.
+        static public Dictionary<string, string>
+            BUILD_TARGET_NAME_TO_ENUM_NAME = new Dictionary<string, string> {
+            {"osx", "StandaloneOSXUniversal"},
+            {"osxintel", "StandaloneOSXIntel"},
+            {"windows", "StandaloneWindows"},
+            {"ios", "iOS"},
+            {"ps3", "PS3"},
+            {"xbox360", "XBOX360"},
+            {"android", "Android"},
+            {"linux32", "StandaloneLinux"},
+            {"windows64", "StandaloneWindows64"},
+            {"webgl", "WebGL"},
+            {"linux64", "StandaloneLinux64"},
+            {"linux", "StandaloneLinuxUniversal"},
+            {"osxintel64", "StandaloneOSXIntel64"},
+            {"tizen", "Tizen"},
+            {"psp2", "PSP2"},
+            {"ps4", "PS4"},
+            {"xboxone", "XboxOne"},
+            {"samsungtv", "SamsungTV"},
+            {"nintendo3ds", "Nintendo3DS"},
+            {"wiiu", "WiiU"},
+            {"tvos", "tvOS"},
         };
+
+        /// <summary>
+        /// Get a set of build target names mapped to supported BuildTarget
+        /// enumeration values.
+        /// </summary>
+        internal static Dictionary<string, BuildTarget> GetBuildTargetNameToEnum() {
+            if (buildTargetNameToEnum == null) {
+                var targetBlackList = GetBlackList();
+                buildTargetNameToEnum =
+                    new Dictionary<string, BuildTarget>();
+                foreach (var targetNameEnumName in
+                         BUILD_TARGET_NAME_TO_ENUM_NAME) {
+                    // Attempt to parse the build target name.
+                    // ArgumentException, OverflowException or
+                    // TypeInitializationException
+                    // will be thrown if the build target is no longer
+                    // supported.
+                    BuildTarget target;
+                    try {
+                        target = (BuildTarget)Enum.Parse(
+                            typeof(BuildTarget), targetNameEnumName.Value);
+                    } catch (ArgumentException) {
+                        continue;
+                    } catch (OverflowException) {
+                        continue;
+                    } catch (TypeInitializationException) {
+                        continue;
+                    }
+                    if (!targetBlackList.Contains(target)) {
+                        buildTargetNameToEnum[targetNameEnumName.Key] =
+                            target;
+                    }
+                }
+            }
+            return buildTargetNameToEnum;
+        }
 
         // Returns the major/minor version of the unity environment we are running in
         // as a float so it can be compared numerically.
@@ -133,6 +175,11 @@ public class VersionHandler : AssetPostprocessor {
 
         // Returns a hashset containing blacklisted build targets for the current
         // unity environment.
+        // We need to maintain a seperate blacklist as Unity occasionally
+        // removes BuildTarget display names but does not remove the enumeration
+        // values associated with the names.  This causes a fatal error in
+        // PluginImporter.GetCompatibleWithPlatform() when provided with a
+        // BuildTarget that no longer has a display name.
         static HashSet<BuildTarget> GetBlackList() {
             if (targetBlackList == null) {
                 targetBlackList = new HashSet<BuildTarget>();
@@ -142,11 +189,6 @@ public class VersionHandler : AssetPostprocessor {
                 }
             }
             return targetBlackList;
-        }
-
-        // Returns true if the given target is supported by the current environment.
-        internal static bool IsTargetSupportedByUnity(BuildTarget target) {
-            return !GetBlackList().Contains(target);
         }
 
         /// <summary>
@@ -285,11 +327,11 @@ public class VersionHandler : AssetPostprocessor {
         /// </returns>
         public HashSet<BuildTarget> GetBuildTargets() {
             HashSet<BuildTarget> buildTargetSet = new HashSet<BuildTarget>();
+            var buildTargetToEnum = GetBuildTargetNameToEnum();
             if (targets != null) {
                 foreach (string target in targets) {
                     BuildTarget buildTarget;
-                    if (BUILD_TARGET_NAME_TO_ENUM.TryGetValue(
-                            target, out buildTarget)) {
+                    if (buildTargetToEnum.TryGetValue(target, out buildTarget)) {
                         buildTargetSet.Add(buildTarget);
                     } else if (!target.Equals("editor")) {
                         UnityEngine.Debug.LogError(
@@ -359,15 +401,23 @@ public class VersionHandler : AssetPostprocessor {
                     return false;
                 }
             }
-            string error = AssetDatabase.RenameAsset(
-                filename, filenameComponents.basenameNoExtension);
-            if (!String.IsNullOrEmpty(error)) {
-                UnityEngine.Debug.LogError(
-                    "Failed to rename asset " + filename + " to " +
-                    newFilename + " (" + error + ")");
-                return false;
+            try {
+              // b/35587604 this is *really* slow.
+              string error = AssetDatabase.RenameAsset(
+                  filename, filenameComponents.basenameNoExtension);
+              if (!String.IsNullOrEmpty(error)) {
+                  UnityEngine.Debug.LogError(
+                      "Failed to rename asset " + filename + " to " +
+                      newFilename + " (" + error + ")");
+                  return false;
+              }
+            } catch (Exception) {
+                // Unity 5.3 and below can end up throw all sorts of
+                // exceptions here when attempting to reload renamed
+                // assemblies.  Since these are completely harmless as
+                // everything will be reloaded and exceptions will be
+                // reported upon AssetDatabase.Refresh(), ignore them.
             }
-            AssetDatabase.ImportAsset(newFilename);
             filename = newFilename;
             UpdateAssetLabels();
             return true;
@@ -474,6 +524,20 @@ public class VersionHandler : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Get the most referenced FileMetadata from this object.
+        /// </summary>
+        /// <returns>FileMetadata instance if this object contains at least one version, null
+        /// otherwise.</returns>
+        public FileMetadata MostRecentVersion {
+            get {
+                var numberOfVersions = metadataByVersion.Count;
+                return numberOfVersions > 0 ?
+                    (FileMetadata)(
+                        (new ArrayList(metadataByVersion.Values))[numberOfVersions - 1]) : null;
+            }
+        }
+
+        /// <summary>
         /// Determine whether the PluginImporter class is available in
         /// UnityEditor. Unity 4 does not have the PluginImporter class so
         /// it's not possible to modify asset metadata without hacking the
@@ -519,9 +583,7 @@ public class VersionHandler : AssetPostprocessor {
 
             // If the canonical file is out of date, update it.
             if (numberOfVersions > 0) {
-                FileMetadata mostRecentVersion =
-                    (FileMetadata)((new ArrayList(metadataByVersion.Values))
-                                   [numberOfVersions - 1]);
+                FileMetadata mostRecentVersion = MostRecentVersion;
                 if (mostRecentVersion.filename != filenameCanonical) {
                     FileMetadata canonicalMetadata = null;
                     foreach (var metadata in metadataByVersion.Values) {
@@ -577,26 +639,21 @@ public class VersionHandler : AssetPostprocessor {
                     modifiedThisVersion = true;
                 }
                 foreach (BuildTarget target in
-                         FileMetadata.BUILD_TARGET_NAME_TO_ENUM.Values) {
-                    if (FileMetadata.IsTargetSupportedByUnity(target)) {
-                        bool enabled = selectedTargets != null &&
-                            selectedTargets.Contains(target);
-                        try {
-                            if (pluginImporter.GetCompatibleWithPlatform(target) !=
-                                enabled) {
-                                pluginImporter.SetCompatibleWithPlatform(
-                                    target, enabled);
-                                modifiedThisVersion = true;
-                            }
-                        }
-                        catch(Exception e) {
-                          UnityEngine.Debug.LogWarning(
-                            "Unexpected error enumerating targets: " + e.Message);
+                         FileMetadata.GetBuildTargetNameToEnum().Values) {
+                    bool enabled = selectedTargets != null &&
+                        selectedTargets.Contains(target);
+                    try {
+                        if (pluginImporter.GetCompatibleWithPlatform(target) !=
+                            enabled) {
+                            pluginImporter.SetCompatibleWithPlatform(
+                                target, enabled);
+                            modifiedThisVersion = true;
                         }
                     }
-                }
-                if (modifiedThisVersion) {
-                    pluginImporter.SaveAndReimport();
+                    catch(Exception e) {
+                      UnityEngine.Debug.LogWarning(
+                        "Unexpected error enumerating targets: " + e.Message);
+                    }
                 }
                 // If the version was modified and it's obsolete keep track of
                 // it to log it later.
@@ -785,6 +842,11 @@ public class VersionHandler : AssetPostprocessor {
         public FileMetadata currentMetadata = null;
 
         /// <summary>
+        /// Metadata for each version of this manifest.
+        /// </summary>
+        public FileMetadataByVersion metadataByVersion = null;
+
+        /// <summary>
         /// Set of current files in this package.
         /// </summary>
         public HashSet<string> currentFiles = new HashSet<string>();
@@ -822,6 +884,7 @@ public class VersionHandler : AssetPostprocessor {
             foreach (FileMetadata metadata in metadataByVersion.Values) {
                 versionIndex++;
                 if (!metadata.isManifest) return false;
+                this.metadataByVersion = metadataByVersion;
                 bool manifestNeedsUpdate = false;
                 HashSet<string> filesInManifest =
                     versionIndex < numberOfVersions ?
@@ -902,10 +965,20 @@ public class VersionHandler : AssetPostprocessor {
         public HashSet<string> unreferenced;
 
         /// <summary>
+        /// Same as the "unreferenced" member exluding manifest files.
+        /// </summary>
+        public HashSet<string> unreferencedExcludingManifests;
+
+        /// <summary>
         /// Obsolete files that are referenced by manifests.  Each item in
         /// the dictionary contains a list of manifests referencing the file.
         /// </summary>
         public Dictionary<string, List<string>> referenced;
+
+        /// <summary>
+        /// Same as the "referenced" member exluding manifest files.
+        /// </summary>
+        public Dictionary<string, List<string>> referencedExcludingManifests;
 
         /// <summary>
         /// Build an ObsoleteFiles instance searching a set of
@@ -927,14 +1000,21 @@ public class VersionHandler : AssetPostprocessor {
             // global sets.
             var currentFiles = new HashSet<string>();
             var obsoleteFiles = new HashSet<string>();
+            var manifestFilenames = new HashSet<string>();
             foreach (var manifestReferences in manifestReferencesList) {
                 currentFiles.UnionWith(manifestReferences.currentFiles);
                 obsoleteFiles.UnionWith(manifestReferences.obsoleteFiles);
+                foreach (var manifestMetadata in manifestReferences.metadataByVersion.Values) {
+                    manifestFilenames.Add(manifestMetadata.filename);
+                }
             }
             // Fold in obsolete files that are not referenced by manifests.
             foreach (var metadataByVersion in metadataSet.Values) {
-                obsoleteFiles.UnionWith(
-                    metadataByVersion.FindObsoleteVersions());
+                var obsoleteVersions = metadataByVersion.FindObsoleteVersions();
+                obsoleteFiles.UnionWith(obsoleteVersions);
+                if (metadataByVersion.MostRecentVersion.isManifest) {
+                    manifestFilenames.UnionWith(obsoleteVersions);
+                }
             }
             // Filter the obsoleteFiles set for all obsolete files currently
             // in use and add to a dictionary indexed by filename
@@ -942,7 +1022,9 @@ public class VersionHandler : AssetPostprocessor {
             // each file.
             var referencedObsoleteFiles =
                 new Dictionary<string, List<string>>();
+            var referencedObsoleteFilesExcludingManifests = new Dictionary<string, List<string>>();
             var obsoleteFilesToDelete = new HashSet<string>();
+            var obsoleteFilesToDeleteExcludingManifests = new HashSet<string>();
             foreach (var obsoleteFile in obsoleteFiles) {
                 var manifestsReferencingFile = new List<string>();
                 foreach (var manifestReferences in manifestReferencesList) {
@@ -956,15 +1038,25 @@ public class VersionHandler : AssetPostprocessor {
                 if (!File.Exists(obsoleteFile)) {
                     continue;
                 }
+                bool isManifest = manifestFilenames.Contains(obsoleteFile);
                 if (manifestsReferencingFile.Count > 0) {
                     referencedObsoleteFiles[obsoleteFile] =
                         manifestsReferencingFile;
+                    if (!isManifest) {
+                        referencedObsoleteFilesExcludingManifests[obsoleteFile] =
+                            manifestsReferencingFile;
+                    }
                 } else {
                     obsoleteFilesToDelete.Add(obsoleteFile);
+                    if (!isManifest) {
+                        obsoleteFilesToDeleteExcludingManifests.Add(obsoleteFile);
+                    }
                 }
             }
             unreferenced = obsoleteFilesToDelete;
+            unreferencedExcludingManifests = obsoleteFilesToDeleteExcludingManifests;
             referenced = referencedObsoleteFiles;
+            referencedExcludingManifests = referencedObsoleteFilesExcludingManifests;
         }
     }
 
@@ -1105,7 +1197,6 @@ public class VersionHandler : AssetPostprocessor {
 
         var metadataSet = FileMetadataSet.FindWithPendingUpdates(
             FileMetadataSet.ParseFromFilenames(FindAllAssets()));
-
         if (metadataSet.EnableMostRecentPlugins()) {
             AssetDatabase.Refresh();
         }
@@ -1118,13 +1209,14 @@ public class VersionHandler : AssetPostprocessor {
         // enabled.
         bool deleteFiles = true;
         if (obsoleteFiles.unreferenced.Count > 0) {
-            if (CleanUpPromptEnabled && deleteFiles) {
+            if (CleanUpPromptEnabled && deleteFiles &&
+                obsoleteFiles.unreferencedExcludingManifests.Count > 0) {
                 deleteFiles = EditorUtility.DisplayDialog(
                     PLUGIN_NAME,
                     "Would you like to delete the following obsolete files " +
                     "in your project?\n\n" +
                     String.Join("\n", new List<string>(
-                                        obsoleteFiles.unreferenced).ToArray()),
+                                        obsoleteFiles.unreferencedExcludingManifests).ToArray()),
                     "Yes", cancel: "No");
             }
             foreach (var filename in obsoleteFiles.unreferenced) {
@@ -1141,21 +1233,20 @@ public class VersionHandler : AssetPostprocessor {
         // confirmation of deletion.
         if (obsoleteFiles.referenced.Count > 0) {
             List<string> referencesString = new List<string>();
-            foreach (var item in obsoleteFiles.referenced) {
+            foreach (var item in obsoleteFiles.referencedExcludingManifests) {
                 List<string> lines = new List<string>();
-                lines.Add(item.Key);
                 foreach (var reference in item.Value) {
-                    lines.Add("    " + reference);
+                    lines.Add(String.Format("{0}: {1}", reference, item.Key));
                 }
                 referencesString.Add(String.Join("\n", lines.ToArray()));
             }
-            deleteFiles = EditorUtility.DisplayDialog(
-               PLUGIN_NAME,
-               "The following obsolete files are referenced by packages in " +
-               "your project, would you like to delete them?\n\n" +
-               String.Join("\n", referencesString.ToArray()),
-               "Yes", cancel: "No");
-
+            deleteFiles = obsoleteFiles.referencedExcludingManifests.Values.Count == 0 ||
+                EditorUtility.DisplayDialog(
+                   PLUGIN_NAME,
+                   "The following obsolete files are referenced by packages in " +
+                   "your project, would you like to delete them?\n\n" +
+                   String.Join("\n", referencesString.ToArray()),
+                   "Yes", cancel: "No");
             foreach (var item in obsoleteFiles.referenced) {
                 if (deleteFiles) {
                     MoveAssetToTrash(item.Key);

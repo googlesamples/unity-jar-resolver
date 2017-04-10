@@ -1,0 +1,32 @@
+{
+  "__comment__": [
+    "The search_path is relative to the generated gradle project path.",
+    "The search_re is a regex for paths relative to the search path. Always use / for the path separator regardless of platform.",
+    "The dest_path is the destination relative to output dir -- references match groups in regex."
+  ],
+  "merged_manifest": {
+    "search_path": "build/intermediates/manifests/full/release/AndroidManifest.xml",
+    "search_re": "",
+    "dest_path": "AndroidManifest.xml"
+  },
+  "proj_properties": {
+    "search_path": "project.properties",
+    "search_re": "",
+    "dest_path": "project.properties"
+  },
+  "jni_libs": {
+    "search_path": "build/intermediates/exploded-aar",
+    "search_re": "(?:^|.*/)jni/(.*)",
+    "dest_path": "libs/\\1"
+  },
+  "merged_jars": {
+    "search_path": "build/intermediates/transforms/proguard/release/jars",
+    "search_re": ".*/([^/]+\\.jar)$",
+    "dest_path": "libs/\\1"
+  },
+  "res_files": {
+    "search_path": "build/intermediates/res/merged/release",
+    "search_re": "^(values[^/]*/.*)$",
+    "dest_path": "res/\\1"
+  }
+}

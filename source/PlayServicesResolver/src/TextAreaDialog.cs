@@ -51,7 +51,7 @@ namespace GooglePlayServices
         public string yesText = "";
 
         /// <summary>
-        /// Set the text to display on the "no" (left-most) button.
+        /// Set the text to display on the "no" (right-most) button.
         /// </summary>
         public string noText = "";
 
