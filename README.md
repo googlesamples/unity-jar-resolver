@@ -163,6 +163,9 @@ disabling bitcode generation.
       });
 ```
 
+# Managing which dependencies are automatically resolved
+The resolver creates .xml files under the ProjectSettings/GoogleDependency{SOMEDEPENDENCY}.xml to decide on which dependencies are automatically imported. 
+
 # Disabling automatic resolution
 
 Automatic resolution can be disabled in the Settings dialog,
