@@ -18,6 +18,7 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System;
@@ -165,7 +166,7 @@ public class VersionHandler : AssetPostprocessor {
             if (!string.IsNullOrEmpty(version)) {
                 int dotIndex = version.IndexOf('.');
                 if (dotIndex > 0 && version.Length > dotIndex + 1) {
-                    if (!float.TryParse(version.Substring(0, dotIndex + 2), out result)) {
+                    if (!float.TryParse(version.Substring(0, dotIndex + 2), NumberStyles.Any, CultureInfo.InvariantCulture, out result)) {
                         result = 5.4f;
                     }
                 }
