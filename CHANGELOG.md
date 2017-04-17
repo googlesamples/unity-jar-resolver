@@ -1,3 +1,9 @@
+# Version 1.2.16 - Apr 17, 2017
+## Bug Fixes
+* Fixed Unity version number parsing on machines with a locale that uses
+  "," for decimal points.
+* Fixed null reference exception if JDK path isn't set.
+
 # Version 1.2.15 - Mar 17, 2017
 ## New Features
 * Added warning when the Jar Resolver's background resolution is disabled.
