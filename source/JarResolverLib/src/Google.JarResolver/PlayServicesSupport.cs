@@ -1287,7 +1287,7 @@ namespace Google.JarResolver
 
                 if (inDep && reader.Name == "version")
                 {
-                    version = reader.ReadString();
+                    version = reader.ReadString().Trim(new Char[] { '[', ']' });
                 }
 
                 // if we ended the dependency, add it
