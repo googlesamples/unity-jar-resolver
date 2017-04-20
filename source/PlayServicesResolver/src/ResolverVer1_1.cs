@@ -166,7 +166,15 @@ namespace GooglePlayServices
         /// Load data cached in aarExplodeDataFile into aarExplodeData.
         /// </summary>
         private void LoadAarExplodeCache() {
-            if (!File.Exists(aarExplodeDataFile)) return;
+            if (!File.Exists(aarExplodeDataFile)) {
+                // Build aarExplodeData from the current set of AARs in the project.
+                foreach (string path in PlayServicesResolver.FindLabeledAssets()) {
+                    PlayServicesSupport.Log(String.Format("Caching AAR {0} state",
+                                                          path, verbose: true));
+                    ShouldExplode(path);
+                }
+                return;
+            }
 
             XmlTextReader reader = new XmlTextReader(new StreamReader(aarExplodeDataFile));
             aarExplodeData.Clear();
