@@ -170,7 +170,7 @@ namespace GooglePlayServices
                 // Build aarExplodeData from the current set of AARs in the project.
                 foreach (string path in PlayServicesResolver.FindLabeledAssets()) {
                     PlayServicesSupport.Log(String.Format("Caching AAR {0} state",
-                                                          path, verbose: true));
+                                                          path), verbose: true);
                     ShouldExplode(path);
                 }
                 return;

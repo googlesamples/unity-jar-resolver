@@ -1,3 +1,7 @@
+# Version 1.2.17 - Apr 20, 2017
+## Bug Fixes
+* Fixed auto-resolution when an Android application ID is modified.
+
 # Version 1.2.16 - Apr 17, 2017
 ## Bug Fixes
 * Fixed Unity version number parsing on machines with a locale that uses
