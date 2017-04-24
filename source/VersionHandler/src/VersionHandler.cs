@@ -160,7 +160,7 @@ public class VersionHandler : AssetPostprocessor {
 
         // Returns the major/minor version of the unity environment we are running in
         // as a float so it can be compared numerically.
-        static float GetUnityVersionMajorMinor() {
+        static public float GetUnityVersionMajorMinor() {
             float result = 5.4f;
             string version = Application.unityVersion;
             if (!string.IsNullOrEmpty(version)) {

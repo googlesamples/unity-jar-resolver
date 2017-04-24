@@ -41,11 +41,9 @@ public static class IOSResolver {
         public string name = null;
 
         /// <summary>
-        /// Version specification string.
-        /// If it ends with "+" the specified version up to the next major
-        /// version is selected.
-        /// If "LATEST", null or empty this pulls the latest revision.
-        /// A version number "1.2.3" selects a specific version number.
+        /// This is a preformatted version expression for pod declarations.
+        ///
+        /// See: https://guides.cocoapods.org/syntax/podfile.html#pod
         /// </summary>
         public string version = null;
 
@@ -68,18 +66,11 @@ public static class IOSResolver {
         /// </summary>
         public string PodFilePodLine {
             get {
-                string versionExpression = "";
-                if (!String.IsNullOrEmpty(version) &&
-                    !version.Equals("LATEST")) {
-                    if (version.EndsWith("+")) {
-                        versionExpression = String.Format(
-                            ", '~> {0}'",
-                            version.Substring(0, version.Length - 1));
-                    } else {
-                        versionExpression = String.Format(", '{0}'", version);
-                    }
+                string versionString = "";
+                if (!String.IsNullOrEmpty(version)) {
+                    versionString = String.Format(", '{0}'", version);
                 }
-                return String.Format("pod '{0}'{1}", name, versionExpression);
+                return String.Format("pod '{0}'{1}", name, versionString);
             }
         }
 
@@ -92,6 +83,8 @@ public static class IOSResolver {
         /// bitcode.</param>
         /// <param name="minTargetSdk">Minimum target SDK revision required by
         /// this pod.</param>
+        /// <param name="formattedVersion">Preformatted version string (without quotes).
+        /// Ex. ~> 1.30</param>
         public Pod(string name, string version, bool bitcodeEnabled,
                    string minTargetSdk) {
             this.name = name;
@@ -152,6 +145,10 @@ public static class IOSResolver {
     private const int BUILD_ORDER_INSTALL_PODS = 4;
     private const int BUILD_ORDER_UPDATE_DEPS = 5;
 
+    // This is appended to the Podfile filename to store a backup of the original Podfile.
+    // ie. "Podfile_Unity".
+    private const string UNITY_PODFILE_BACKUP_POSTFIX = "_Unity.backup";
+
     // Installation instructions for the Cocoapods command line tool.
     private const string COCOAPOD_INSTALL_INSTRUCTIONS = (
         "You can install cocoapods with the Ruby gem package manager:\n" +
@@ -192,8 +189,11 @@ public static class IOSResolver {
 
     // Keys in the editor preferences which control the behavior of this module.
     private const string PREFERENCE_NAMESPACE = "Google.IOSResolver.";
-    // Whether Cocoapod installation is enabled.
+    // Whether Legacy Cocoapod installation (project level) is enabled.
     private const string PREFERENCE_COCOAPODS_INSTALL_ENABLED = PREFERENCE_NAMESPACE + "Enabled";
+    // Whether Cocoapod uses project files, workspace files, or none (Unity 5.6+ only)
+    private const string PREFERENCE_COCOAPODS_INTEGRATION_METHOD =
+        PREFERENCE_NAMESPACE + "CocoapodsIntegrationMethod";
     // Whether the Podfile generation is enabled.
     private const string PREFERENCE_PODFILE_GENERATION_ENABLED =
         PREFERENCE_NAMESPACE + "PodfileEnabled";
@@ -206,11 +206,14 @@ public static class IOSResolver {
     // Whether to try to install Cocoapods tools when iOS is selected as the target platform.
     private const string PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR =
         PREFERENCE_NAMESPACE + "AutoPodToolInstallInEditor";
+    // A nag prompt disabler setting for turning on workspace integration.
+    private const string PREFERENCE_WARN_UPGRADE_WORKSPACE =
+        PREFERENCE_NAMESPACE + "UpgradeToWorkspaceWarningDisabled";
 
     // Whether the xcode extension was successfully loaded.
     private static bool iOSXcodeExtensionLoaded = true;
     // Whether a functioning Cocoapods install is present.
-    private static bool cocoapodsInstallPresent = false;
+    private static bool cocoapodsToolsInstallPresent = false;
 
     private static string IOS_PLAYBACK_ENGINES_PATH =
         Path.Combine("PlaybackEngines", "iOSSupport");
@@ -228,6 +231,8 @@ public static class IOSResolver {
     // Version of the Cocoapods installation.
     private static string podsVersion = "";
 
+    private static string PODFILE_GENERATED_COMMENT = "# IOSResolver Generated Podfile";
+
     // Default iOS target SDK if the selected version is invalid.
     private const int DEFAULT_TARGET_SDK = 82;
     // Valid iOS target SDK version.
@@ -237,6 +242,10 @@ public static class IOSResolver {
     private static CommandLineDialog commandLineDialog = null;
     // Mutex for access to commandLineDialog.
     private static System.Object commandLineDialogLock = new System.Object();
+
+    // Regex for parsing comma separated values, as used in the pod dependency specification.
+    private static Regex CSV_SPLIT_REGEX = new Regex(@"(?:^|,\s*)'([^']*)'", RegexOptions.Compiled);
+
 
     // Search for a file up to a maximum search depth stopping the
     // depth first search each time the specified file is found.
@@ -359,9 +368,36 @@ public static class IOSResolver {
         // If Cocoapod tool auto-installation is enabled try installing on the first update of
         // the editor when the editor environment has been initialized.
         if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
-            AutoPodToolInstallInEditorEnabled && CocoapodsInstallEnabled && !InBatchMode) {
+            AutoPodToolInstallInEditorEnabled && CocoapodsIntegrationEnabled && !InBatchMode) {
             EditorApplication.update -= AutoInstallCocoapods;
             EditorApplication.update += AutoInstallCocoapods;
+        }
+
+
+        // Prompt the user to use workspaces if they aren't at least using project level
+        // integration.
+        if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
+            (CocoapodsIntegrationMethod)EditorPrefs.GetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
+                CocoapodsIntegrationUpgradeDefault) == CocoapodsIntegrationMethod.None &&
+            !InBatchMode && !UpgradeToWorkspaceWarningDisabled) {
+
+            switch (EditorUtility.DisplayDialogComplex(
+                "Warning: Cocoapods integration is disabled!",
+                "Would you like to enable Cocoapods integration with workspaces?\n\n" +
+                "Unity 5.6+ now supports loading workspaces generated from Cocoapods.\n" +
+                "If you enable this, and still use Unity less than 5.6, it will fallback " +
+                "to integrating Cocoapods with the .xcodeproj file.\n",
+                "Yes", "Not Now", "Silence Warning")) {
+                case 0:  // Yes
+                    EditorPrefs.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
+                                       (int)CocoapodsIntegrationMethod.Workspace);
+                    break;
+                case 1:  // Not now
+                    break;
+                case 2:  // Ignore
+                    UpgradeToWorkspaceWarningDisabled = true;
+                    break;
+            }
         }
     }
 
@@ -391,9 +427,55 @@ public static class IOSResolver {
     }
 
     /// <summary>
-    /// Enable / disable Cocoapods installation.
+    /// The method used to integrate Cocoapods with the build.
     /// </summary>
+    public enum CocoapodsIntegrationMethod {
+        None = 0,
+        Project,
+        Workspace
+    };
+
+
+    /// <summary>
+    /// When first upgrading, decide on workspace integration based on previous settings.
+    /// </summary>
+    private static int CocoapodsIntegrationUpgradeDefault {
+        get {
+            return LegacyCocoapodsInstallEnabled ?
+                (int)CocoapodsIntegrationMethod.Workspace :
+                (int)CocoapodsIntegrationMethod.Project;
+        }
+    }
+
+    /// <summary>
+    /// IOSResolver Unity Preferences setting indicating which Cocoapods integration method to use.
+    /// </summary>
+    public static CocoapodsIntegrationMethod CocoapodsIntegrationMethodPref {
+        get {
+            return (CocoapodsIntegrationMethod)EditorPrefs.GetInt(
+                PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
+                defaultValue: CocoapodsIntegrationUpgradeDefault);
+        }
+        set { EditorPrefs.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD, (int)value); }
+    }
+
+    /// <summary>
+    /// Deprecated: Enable / disable Cocoapods installation.
+    /// Please use CocoapodsIntegrationEnabled instead.
+    /// </summary>
+    [System.Obsolete("CocoapodsInstallEnabled is deprecated, please use " +
+                     "CocoapodsIntegrationEnabled instead.")]
     public static bool CocoapodsInstallEnabled {
+        get { return LegacyCocoapodsInstallEnabled; }
+        set { LegacyCocoapodsInstallEnabled = value; }
+    }
+
+    /// <summary>
+    /// A formerly used setting for project integration.
+    /// It's kept as a private function to seed the default for the new setting:
+    /// CocoapodsIntegrationEnabled.
+    /// </summary>
+    private static bool LegacyCocoapodsInstallEnabled {
         get { return EditorPrefs.GetBool(PREFERENCE_COCOAPODS_INSTALL_ENABLED,
                                          defaultValue: true); }
         set { EditorPrefs.SetBool(PREFERENCE_COCOAPODS_INSTALL_ENABLED, value); }
@@ -428,9 +510,13 @@ public static class IOSResolver {
     }
 
     /// <summary>
-    /// Determine whether it's possible to perform iOS dependency injection.
+    /// Get / set the nag prompt disabler setting for turning on workspace integration.
     /// </summary>
-    public static bool Enabled { get { return iOSXcodeExtensionLoaded; } }
+    public static bool UpgradeToWorkspaceWarningDisabled {
+        get { return EditorPrefs.GetBool(PREFERENCE_WARN_UPGRADE_WORKSPACE,
+                                         defaultValue: false); }
+        set { EditorPrefs.SetBool(PREFERENCE_WARN_UPGRADE_WORKSPACE, value); }
+    }
 
     /// <summary>
     /// Enable / disable verbose logging.
@@ -441,11 +527,57 @@ public static class IOSResolver {
         set { EditorPrefs.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
     }
 
+
+    /// <summary>
+    /// Determine whether it's possible to perform iOS dependency injection.
+    /// </summary>
+    public static bool Enabled { get { return iOSXcodeExtensionLoaded; } }
+
     /// <summary>
     /// Whether the editor was launched in batch mode.
     /// </summary>
     private static bool InBatchMode {
         get { return System.Environment.CommandLine.Contains("-batchmode"); }
+    }
+
+    /// <summary>
+    /// Whether or not Unity can load a workspace file if it's present.
+    /// </summary>
+    private static bool UnityCanLoadWorkspace {
+        get {
+            return (VersionHandler.FileMetadata.GetUnityVersionMajorMinor() >= 5.6f - 1e-7f);
+        }
+    }
+
+    /// <summary>
+    /// Whether or not we should do Xcode workspace level integration of cocoapods.
+    /// False if the Unity version doesn't support loading workspaces.
+    /// </summary>
+    private static bool CocoapodsWorkspaceIntegrationEnabled {
+        get {
+            return UnityCanLoadWorkspace &&
+            CocoapodsIntegrationMethodPref == CocoapodsIntegrationMethod.Workspace;
+        }
+    }
+
+    /// <summary>
+    /// Whether or not we should do Xcode project level integration of cocoapods.
+    /// True if configured for project integration or workspace integration is enabled but using
+    /// an older version of Unity that doesn't support loading workspaces (as a fallback).
+    /// </summary>
+    private static bool CocoapodsProjectIntegrationEnabled {
+        get {
+            return CocoapodsIntegrationMethodPref == CocoapodsIntegrationMethod.Project ||
+                (!UnityCanLoadWorkspace &&
+                CocoapodsIntegrationMethodPref == CocoapodsIntegrationMethod.Workspace);
+        }
+    }
+
+    /// <summary>
+    /// Whether or not we are integrating the pod dependencies into an Xcode build that Unity loads.
+    /// </summary>
+    public static bool CocoapodsIntegrationEnabled {
+        get { return CocoapodsIntegrationMethodPref != CocoapodsIntegrationMethod.None; }
     }
 
     /// <summary>
@@ -510,13 +642,38 @@ public static class IOSResolver {
     }
 
     /// <summary>
+    /// Convert dependency version specifications to the version expression used by pods.
+    /// </summary>
+    /// <param name="dependencyVersion">
+    /// Version specification string.
+    ///
+    /// If it ends with "+" the specified version up to the next major
+    /// version is selected.
+    /// If "LATEST", null or empty this pulls the latest revision.
+    /// A version number "1.2.3" selects a specific version number.
+    /// </param>
+    /// <returns>The version expression formatted for pod dependencies.
+    /// For example, "1.2.3+" would become "~> 1.2.3".</returns>
+    private static string PodVersionExpressionFromVersionDep(string dependencyVersion) {
+        if (!String.IsNullOrEmpty(dependencyVersion) && !dependencyVersion.Equals("LATEST")) {
+            return null;
+        }
+        if (dependencyVersion.EndsWith("+")) {
+            return String.Format("~> {0}",
+                dependencyVersion.Substring(0, dependencyVersion.Length - 1));
+        }
+        return dependencyVersion;
+    }
+
+    /// <summary>
     /// Tells the app what pod dependencies are needed.
     /// This is called from a deps file in each API to aggregate all of the
     /// dependencies to automate the Podfile generation.
     /// </summary>
     /// <param name="podName">pod path, for example "Google-Mobile-Ads-SDK" to
     /// be included</param>
-    /// <param name="version">Version specification.  See Pod.version.</param>
+    /// <param name="version">Version specification.
+    /// See PodVersionExpressionFromVersionDep for how the version string is processed.</param>
     /// <param name="bitcodeEnabled">Whether the pod was compiled with bitcode
     /// enabled.  If this is set to false on a pod, the entire project will
     /// be configured with bitcode disabled.</param>
@@ -525,12 +682,23 @@ public static class IOSResolver {
     public static void AddPod(string podName, string version = null,
                               bool bitcodeEnabled = true,
                               string minTargetSdk = null) {
+        AddPodInternal(podName, PodVersionExpressionFromVersionDep(version), bitcodeEnabled,
+                        minTargetSdk);
+    }
+
+    /// <summary>
+    /// Same as AddPod except the version string is used in the pod declaration directly.
+    /// See AddPod.
+    /// </summary>
+    private static void AddPodInternal(string podName, string preformattedVersion = null,
+                                       bool bitcodeEnabled = true,
+                                       string minTargetSdk = null) {
         Log("AddPod - name: " + podName +
-            " version: " + (version ?? "null") +
+            " version: " + (preformattedVersion ?? "null") +
             " bitcode: " + bitcodeEnabled.ToString() +
             " sdk: " + (minTargetSdk ?? "null"),
             verbose: true);
-        var pod = new Pod(podName, version, bitcodeEnabled, minTargetSdk);
+        var pod = new Pod(podName, preformattedVersion, bitcodeEnabled, minTargetSdk);
         pods[podName] = pod;
         UpdateTargetSdk(pod);
     }
@@ -837,7 +1005,7 @@ public static class IOSResolver {
     /// installed.</param>
     public static void InstallCocoapods(bool interactive, string workingDirectory,
                                         bool displayAlreadyInstalled = true) {
-        cocoapodsInstallPresent = false;
+        cocoapodsToolsInstallPresent = false;
         // Cocoapod tools are currently only available on OSX, don't attempt to install them
         // otherwise.
         if (UnityEngine.RuntimePlatform.OSXEditor != UnityEngine.Application.platform) {
@@ -854,7 +1022,7 @@ public static class IOSResolver {
         if (!String.IsNullOrEmpty(podToolPath)) {
             var installationFoundMessage = "Cocoapods installation detected " + podToolPath;
             if (displayAlreadyInstalled) logMessage(installationFoundMessage);
-            cocoapodsInstallPresent = true;
+            cocoapodsToolsInstallPresent = true;
             return;
         }
 
@@ -945,7 +1113,7 @@ public static class IOSResolver {
                 } else if (commandIndex == commands.Length) {
                     complete.Set();
                     logMessage("Cocoapods tools successfully installed.");
-                    cocoapodsInstallPresent = true;
+                    cocoapodsToolsInstallPresent = true;
                 }
                 return commandIndex;
             }, displayDialog: interactive, summaryText: "Installing Cocoapods...");
@@ -961,7 +1129,7 @@ public static class IOSResolver {
     [PostProcessBuildAttribute(BUILD_ORDER_CHECK_COCOAPODS_INSTALL)]
     public static void OnPostProcessEnsurePodsInstallation(BuildTarget buildTarget,
                                                            string pathToBuiltProject) {
-        if (!CocoapodsInstallEnabled) return;
+        if (!CocoapodsIntegrationEnabled) return;
         InstallCocoapods(false, pathToBuiltProject);
     }
 
@@ -971,8 +1139,8 @@ public static class IOSResolver {
     [PostProcessBuildAttribute(BUILD_ORDER_PATCH_PROJECT)]
     public static void OnPostProcessPatchProject(BuildTarget buildTarget,
                                                  string pathToBuiltProject) {
-        if (!InjectDependencies() || !PodfileGenerationEnabled || !CocoapodsInstallEnabled ||
-            !cocoapodsInstallPresent) {
+        if (!InjectDependencies() || !PodfileGenerationEnabled ||
+            !CocoapodsProjectIntegrationEnabled || !cocoapodsToolsInstallPresent) {
             return;
         }
         PatchProject(buildTarget, pathToBuiltProject);
@@ -1034,6 +1202,84 @@ public static class IOSResolver {
         return Path.Combine(pathToBuiltProject, "Podfile");
     }
 
+    /// <summary>
+    /// Checks to see if a podfile, not written by the IOSResolver is present.
+    /// </summary>
+    /// <param name="suspectedUnityPodfilePath">The path we suspect is written by Unity. This is
+    /// either the original file or a backup of the path.</param>
+    /// <returns>The path to the Podfile, presumed to be generated by Unity.</returns>
+    private static string FindExistingUnityPodfile(string suspectedUnityPodfilePath) {
+        if (!File.Exists(suspectedUnityPodfilePath)) return null;
+
+        System.IO.StreamReader podfile = new System.IO.StreamReader(suspectedUnityPodfilePath);
+        string firstline = podfile.ReadLine();
+        podfile.Close();
+        // If the podfile written is one that we created, then we need to look for the backup of the
+        // original Unity podfile. This is necessary for cases when the user does an "append build"
+        // in Unity. Since we back up the original podfile, we'll re-parse it when regenerating
+        // the dependencies this time around.
+        if (firstline == null || firstline.StartsWith(PODFILE_GENERATED_COMMENT)) {
+            return FindExistingUnityPodfile(suspectedUnityPodfilePath +
+                                            UNITY_PODFILE_BACKUP_POSTFIX);
+        }
+
+        return suspectedUnityPodfilePath;
+    }
+
+    private static void ParseUnityDeps(string unityPodfilePath) {
+        Log("Parse Unity deps from: " + unityPodfilePath, verbose: true);
+
+        System.IO.StreamReader unityPodfile = new System.IO.StreamReader(unityPodfilePath);
+        const string POD_TAG = "pod ";
+        string line;
+
+        // We are only interested in capturing the dependencies "Pod depName, depVersion", inside
+        // of the specific target. However there can be nested targets such as for testing, so we're
+        // counting the depth to determine when to capture the pods. Also we only ever enter the
+        // first depth if we're in the exact right target.
+        int capturingPodsDepth = 0;
+        while ((line = unityPodfile.ReadLine()) != null) {
+            line = line.Trim();
+            if (line.StartsWith("target 'Unity-iPhone' do")) {
+                capturingPodsDepth++;
+                continue;
+            }
+
+            if (capturingPodsDepth == 0) continue;
+
+            // handle other scopes roughly
+            if (line.EndsWith(" do")) {
+                capturingPodsDepth++;  // Ignore nested targets like tests
+            } else if (line == "end") {
+                capturingPodsDepth--;
+            }
+
+            if (capturingPodsDepth != 1) continue;
+
+            if (line.StartsWith(POD_TAG)) {
+                var matches = CSV_SPLIT_REGEX.Matches(line.Substring(POD_TAG.Length));
+                if (matches.Count > 0) {
+
+                    // Add the version as is, if it was present in the original podfile.
+                    if (matches.Count > 1) {
+                        string matchedName = matches[0].Groups[1].Captures[0].Value;
+                        string matchedVersion = matches[1].Groups[1].Captures[0].Value;
+                        Log(String.Format("Preserving Unity Pod: {0}\nat version: {1}", matchedName,
+                                          matchedVersion), verbose: true);
+
+                        AddPodInternal(matchedName, matchedVersion, true, null);
+                    } else {
+                        string matchedName = matches[0].Groups[1].Captures[0].Value;
+                        Log(String.Format("Preserving Unity Pod: {0}", matchedName), verbose: true);
+
+                        AddPodInternal(matchedName);
+                    }
+                }
+            }
+        }
+        unityPodfile.Close();
+    }
+
     // Implementation of OnPostProcessGenPodfile().
     // NOTE: This is separate from the post-processing method to prevent the
     // Mono runtime from loading the Xcode API before calling the post
@@ -1041,12 +1287,23 @@ public static class IOSResolver {
     public static void GenPodfile(BuildTarget buildTarget,
                                   string pathToBuiltProject) {
         string podfilePath = GetPodfilePath(pathToBuiltProject);
-        Log(String.Format("Generating Podfile {0} with target integration {1}",
-                          podfilePath, CocoapodsInstallEnabled ? "disabled" : "enabled"),
+
+        string unityPodfile = FindExistingUnityPodfile(podfilePath);
+        Log(String.Format("Detected Unity Podfile: {0}", unityPodfile), verbose: true);
+        if (unityPodfile != null) {
+            ParseUnityDeps(unityPodfile);
+            if (podfilePath == unityPodfile) {
+                File.Move(podfilePath, podfilePath + UNITY_PODFILE_BACKUP_POSTFIX);
+            }
+        }
+
+        Log(String.Format("Generating Podfile {0} with {1} integration.", podfilePath,
+                          (CocoapodsWorkspaceIntegrationEnabled ? "Xcode workspace" :
+                          (CocoapodsProjectIntegrationEnabled ? "Xcode project" : "no target"))),
             verbose: true);
         using (StreamWriter file = new StreamWriter(podfilePath)) {
             file.Write("source 'https://github.com/CocoaPods/Specs.git'\n" +
-                       (CocoapodsInstallEnabled ?
+                       (CocoapodsProjectIntegrationEnabled ?
                         "install! 'cocoapods', :integrate_targets => false\n" : "") +
                        String.Format("platform :ios, '{0}'\n\n", TargetSdk) +
                        "target '" + TARGET_NAME + "' do\n");
@@ -1387,7 +1644,7 @@ public static class IOSResolver {
                                                 string pathToBuiltProject) {
         if (!InjectDependencies() || !PodfileGenerationEnabled) return;
         if (UpdateTargetSdk()) return;
-        if (!CocoapodsInstallEnabled || !cocoapodsInstallPresent) {
+        if (!CocoapodsIntegrationEnabled || !cocoapodsToolsInstallPresent) {
             Log(String.Format(
                 "Cocoapod installation is disabled.\n" +
                 "If Cocoapods are not installed in your project it will not link.\n\n" +
@@ -1477,13 +1734,16 @@ public static class IOSResolver {
     [PostProcessBuildAttribute(BUILD_ORDER_UPDATE_DEPS)]
     public static void OnPostProcessUpdateProjectDeps(
             BuildTarget buildTarget, string pathToBuiltProject) {
-        if (!InjectDependencies() || !PodfileGenerationEnabled || !CocoapodsInstallEnabled ||
-            !cocoapodsInstallPresent) {
+        if (!InjectDependencies() || !PodfileGenerationEnabled ||
+            !CocoapodsProjectIntegrationEnabled ||  // Early out for Workspace level integration.
+            !cocoapodsToolsInstallPresent) {
             return;
         }
+
         UpdateProjectDeps(buildTarget, pathToBuiltProject);
     }
 
+    // Handles the Xcode project level integration injection of scanned dependencies.
     // Implementation of OnPostProcessUpdateProjectDeps().
     // NOTE: This is separate from the post-processing method to prevent the
     // Mono runtime from loading the Xcode API before calling the post
@@ -1494,6 +1754,25 @@ public static class IOSResolver {
         // failed.
         var podsDir = Path.Combine(pathToBuiltProject, PODS_DIR);
         if (!Directory.Exists(podsDir)) return;
+
+        // If Unity can load workspaces, and one has been generated, yet we're still
+        // trying to patch the project file, then we have to actually get rid of the workspace
+        // and warn the user about it.
+        // We'll be taking the dependencies we scraped from the podfile and inserting them in the
+        // project with this method anyway, so nothing should be lost.
+        string workspacePath = Path.Combine(pathToBuiltProject, "Unity-iPhone.xcworkspace");
+        if (UnityCanLoadWorkspace && CocoapodsProjectIntegrationEnabled &&
+            Directory.Exists(workspacePath)) {
+            Log("Removing the generated workspace to force Unity to directly load the " +
+                "xcodeproj.\nSince Unity 5.6, Unity can now load workspace files generated " +
+                "from Cocoapods integration, however the IOSResolver Settings are configured " +
+                "to use project level integration. It's recommended that you use workspace " +
+                "integration instead.\n" +
+                "You can manage this setting from: Assets > Play Services Resolver > " +
+                "iOS Resolver > Settings, using the Cocoapods Integration drop down menu.",
+                level: LogLevel.Warning);
+            Directory.Delete(workspacePath, true);
+        }
 
         var pathToBuiltProjectFullPath = Path.GetFullPath(pathToBuiltProject);
         Directory.CreateDirectory(Path.Combine(pathToBuiltProject,
