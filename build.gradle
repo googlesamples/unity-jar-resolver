@@ -73,13 +73,10 @@ project.ext {
     // ios runtime dll.  This is with the playback engine, so the
     // structure is different for MacOS and the others.
     unity_ios_dll_path = findUnityPath("UNITY_IOS_PLAYBACK_PATH", true,
-            os_osx ?
-                fileTree(dir: unity_root.parentFile).matching {
-                    include '**/PlaybackEngines/iOSSupport/UnityEditor.iOS.Extensions.dll'
-                } :
-                fileTree(dir: unity_root).matching {
-                    include '**/PlaybackEngines/iOSSupport/UnityEditor.iOS.Extensions.dll'
-                })
+        fileTree(dir: os_osx ? unity_root.parentFile : unity_root, includes: [
+            '**/PlaybackEngines/iOSSupport/UnityEditor.iOS.Extensions.dll',
+            '**/PlaybackEngines/iossupport/UnityEditor.iOS.Extensions.dll'
+        ]))
 
     if (unity_ios_dll_path == null || !unity_ios_dll_path.exists()) {
         logger.warn('Unity iOS Playback engine not found, compilation may fail!')

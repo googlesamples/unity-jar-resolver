@@ -45,19 +45,19 @@ namespace Google.JarResolvers.Test
 
             // No metadata loaded - so best version should be empty.
             string ver = dep.BestVersion;
-            Assert.IsNullOrEmpty(ver);
-            Assert.IsNullOrEmpty(dep.BestVersionPath);
-            Assert.IsNullOrEmpty(dep.RepoPath);
+            Assert.That(ver, Is.Null.Or.Empty);
+            Assert.That(dep.BestVersionPath, Is.Null.Or.Empty);
+            Assert.That(dep.RepoPath, Is.Null.Or.Empty);
 
             // the key is based on the spec, so it should be set.
             string key = dep.Key;
-            Assert.IsNotNullOrEmpty(key);
+            Assert.That(key, Is.Not.Null.Or.Empty);
 
             // package need to be the prefix
             Assert.True(key.StartsWith("test"));
- 
+
             // Versionless key should be set. and be the prefix of the key
-            Assert.IsNotNullOrEmpty(dep.VersionlessKey);
+            Assert.That(dep.VersionlessKey, Is.Not.Null.Or.Empty);
             Assert.True(key.StartsWith(dep.VersionlessKey));
 
             Assert.False(dep.HasPossibleVersions);
@@ -194,7 +194,7 @@ namespace Google.JarResolvers.Test
             dep.RemovePossibleVersion(dep.BestVersion);
             Assert.True(dep.BestVersion == "2.0.0");
             dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.IsNullOrEmpty(dep.BestVersion);
+            Assert.That(dep.BestVersion,Is.Null.Or.Empty);
             Assert.False(dep.HasPossibleVersions);
 
             dep = new Dependency("test", "artifact1", "2.0+");
@@ -213,7 +213,7 @@ namespace Google.JarResolvers.Test
             dep.RemovePossibleVersion(dep.BestVersion);
             Assert.True(dep.BestVersion == "2.0.1");
             dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.IsNullOrEmpty(dep.BestVersion);
+            Assert.That(dep.BestVersion, Is.Null.Or.Empty);
             Assert.False(dep.HasPossibleVersions);
         }
 
@@ -240,12 +240,12 @@ namespace Google.JarResolvers.Test
             dep.RemovePossibleVersion(dep.BestVersion);
             Assert.True(dep.BestVersion == "2.0.1");
             dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.IsNullOrEmpty(dep.BestVersion);
+            Assert.That(dep.BestVersion, Is.Null.Or.Empty);
             Assert.False(dep.HasPossibleVersions);
 
             // refinement with a concrete version not compatible should fail.
             dep = new Dependency("test", "artifact1", "2.0+");
-           
+
             dep.AddVersion("3.0");
             dep.AddVersion("2.2.0");
             dep.AddVersion("2.0.1");
