@@ -1,3 +1,7 @@
+# Version 1.2.18 - May 4, 2017
+## New Features
+* Added support for preserving Unity pods such as when GVR is enabled.
+
 # Version 1.2.17 - Apr 20, 2017
 ## Bug Fixes
 * Fixed auto-resolution when an Android application ID is modified.
