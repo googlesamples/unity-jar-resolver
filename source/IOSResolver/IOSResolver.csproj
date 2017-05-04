@@ -52,6 +52,9 @@
     <Reference Include="Google.JarResolver">
       <HintPath>..\PlayServicesResolver\bin\Release\Google.JarResolver.dll</HintPath>
     </Reference>
+    <Reference Include="Google.VersionHandler.dll">
+      <HintPath>..\VersionHandler\bin\Release\Google.VersionHandler.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
