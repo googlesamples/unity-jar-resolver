@@ -1,3 +1,7 @@
+# Version 1.2.19 - May 4, 2017
+## Bug Fixes
+* Fixed Jar Resolver exploding and deleting AAR files it isn't managing.
+
 # Version 1.2.18 - May 4, 2017
 ## New Features
 * Added support for preserving Unity pods such as when GVR is enabled.
