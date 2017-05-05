@@ -872,11 +872,8 @@ namespace GooglePlayServices
         /// <param name="updatedFiles">Set of files that were recently updated and should be
         /// processed.</param>
         private void ProcessAars(string dir, HashSet<string> updatedFiles) {
-            var aars = new HashSet<string>();
-            // Build set of AAR files and directories.
-            foreach (var aarFilename in Directory.GetFiles(dir, "*.aar")) {
-                aars.Add(Path.Combine(dir, Path.GetFileName(aarFilename)));
-            }
+            // Get set of AAR files and directories we're managing.
+            var aars = new HashSet<string>(PlayServicesResolver.FindLabeledAssets());
             foreach (var aarData in aarExplodeData.Values) aars.Add(aarData.path);
             foreach (string aarPath in aars) {
                 bool explode = ShouldExplode(aarPath);
