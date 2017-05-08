@@ -1,3 +1,9 @@
+# Version 1.2.21 - May 8, 2017
+## Bug Fixes
+* Fix for https://github.com/googlesamples/unity-jar-resolver/issues/48
+  Android dependency version number parsing when "-alpha" (etc.) are
+  included in dependency (AAR / JAR) versions.
+
 # Version 1.2.20 - May 8, 2017
 ## Bug Fixes
 * Attempted to fix
