@@ -721,6 +721,10 @@ namespace GooglePlayServices
         public override bool ShouldReplaceDependency(Dependency oldDependency,
                                                      Dependency newDependency) {
             var artifactPath = FindAarInTargetPath(oldDependency.BestVersionArtifactPath);
+            // If we're unable to find the specified artifact then it's possible the oldDependency
+            // doesn't have a valid version string.
+            if (String.IsNullOrEmpty(artifactPath)) return true;
+
             // ShouldExplode() creates an AarExplodeData entry if it isn't present.
             ShouldExplode(artifactPath);
             // NOTE: explodeData will only be null here if the artifact was deleted prior to

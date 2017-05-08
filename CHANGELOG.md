@@ -1,3 +1,10 @@
+# Version 1.2.20 - May 8, 2017
+## Bug Fixes
+* Attempted to fix
+  https://github.com/googlesamples/unity-jar-resolver/issues/48
+  where a NullReferenceException could occur if a target file does not
+  have a valid version string.
+
 # Version 1.2.19 - May 4, 2017
 ## Bug Fixes
 * Fixed Jar Resolver exploding and deleting AAR files it isn't managing.
