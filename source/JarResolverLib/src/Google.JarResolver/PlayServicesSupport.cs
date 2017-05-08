@@ -502,12 +502,11 @@ namespace Google.JarResolver
 
                         // Extract the version from the filename.
                         // dep.Artifact is the name of the package (prefix)
-                        // The regular expression extracts the version number from the filename
-                        // handling filenames like foo-1.2.3-alpha.
-                        match = System.Text.RegularExpressions.Regex.Match(
-                            filenameWithoutExtension.Substring(
-                                dep.Artifact.Length + 1), "^([0-9.]+)");
-                        if (match.Success)
+                        string artifactVersion = ExtractVersionFromFileName(
+                            filenameWithoutExtension.Substring(dep.Artifact.Length + 1)
+                        );
+                        
+                        if (artifactVersion != null)
                         {
                             bool reportDependency = true;
                             // If the AAR is exploded and it should not be, delete it and do not
@@ -527,7 +526,6 @@ namespace Google.JarResolver
                             }
                             if (reportDependency)
                             {
-                                string artifactVersion = match.Groups[1].Value;
                                 Dependency currentDep = new Dependency(
                                     dep.Group, dep.Artifact, artifactVersion,
                                     packageIds: dep.PackageIds, repositories: dep.Repositories);
@@ -1038,7 +1036,10 @@ namespace Google.JarResolver
                 KeyValuePair<Dependency, string> oldDepFilenamePair;
                 if (currentDepsByVersionlessKey.TryGetValue(dep.VersionlessKey,
                                                             out oldDepFilenamePair)) {
-                    if (oldDepFilenamePair.Key.BestVersion != dep.BestVersion &&
+                    string oldVersion = ExtractVersionFromFileName(
+                        oldDepFilenamePair.Key.BestVersion);
+                    string newVersion = ExtractVersionFromFileName(dep.BestVersion);
+                    if ((oldVersion == null || (newVersion != null && oldVersion != newVersion)) &&
                         (confirmer == null || confirmer(oldDepFilenamePair.Key, dep))) {
                         DeleteExistingFileOrDirectory(oldDepFilenamePair.Value,
                                                       includeMetaFiles: true);
@@ -1381,6 +1382,18 @@ namespace Google.JarResolver
                 instance.clientDependenciesMap = newMap;
             }
             return dependencyMap;
+        }
+
+        /// <summary>
+        /// Extracts the version number from the filename handling filenames like foo-1.2.3-alpha.
+        /// </summary>
+        /// <param name="filename">File name without extension to extract from.</param>
+        /// <returns>The version string if extracted successfully and null otherwise.</returns>
+        private static string ExtractVersionFromFileName(string filename)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                filename, "^([0-9.]+)");
+            return match.Success ? match.Groups[1].Value : null;
         }
     }
 }
