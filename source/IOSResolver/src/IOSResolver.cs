@@ -56,6 +56,20 @@ public static class IOSResolver {
         public bool bitcodeEnabled = true;
 
         /// <summary>
+        /// Additional sources (repositories) to search for this pod.
+        ///
+        /// Since order is important sources specified in this list
+        /// are interleaved across each Pod added to the resolver.
+        /// e.g Pod1.source[0], Pod2.source[0] ...
+        ////    Pod1.source[1], Pod2.source[1] etc.
+        ///
+        /// See: https://guides.cocoapods.org/syntax/podfile.html#source
+        /// </summary>
+        public List<string> sources = new List<string>() {
+            "https://github.com/CocoaPods/Specs.git"
+        };
+
+        /// <summary>
         /// Minimum target SDK revision required by this pod.
         /// In the form major.minor
         /// </summary>
@@ -83,14 +97,21 @@ public static class IOSResolver {
         /// bitcode.</param>
         /// <param name="minTargetSdk">Minimum target SDK revision required by
         /// this pod.</param>
-        /// <param name="formattedVersion">Preformatted version string (without quotes).
-        /// Ex. ~> 1.30</param>
+        /// <param name="sources">List of sources to search for all pods.
+        /// Each source is a URL that is injected in the source section of a Podfile
+        /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
+        /// a source.</param>
         public Pod(string name, string version, bool bitcodeEnabled,
-                   string minTargetSdk) {
+                   string minTargetSdk, IEnumerable<string> sources) {
             this.name = name;
             this.version = version;
             this.bitcodeEnabled = bitcodeEnabled;
             this.minTargetSdk = minTargetSdk;
+            if (sources != null) {
+                var allSources = new List<string>(sources);
+                allSources.AddRange(this.sources);
+                this.sources = allSources;
+            }
         }
 
         /// <summary>
@@ -679,26 +700,48 @@ public static class IOSResolver {
     /// be configured with bitcode disabled.</param>
     /// <param name="minTargetSdk">Minimum SDK revision required by this
     /// pod.</param>
+    /// <param name="sources">List of sources to search for all pods.
+    /// Each source is a URL that is injected in the source section of a Podfile
+    /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
+    /// a source.</param>
     public static void AddPod(string podName, string version = null,
                               bool bitcodeEnabled = true,
-                              string minTargetSdk = null) {
-        AddPodInternal(podName, PodVersionExpressionFromVersionDep(version), bitcodeEnabled,
-                        minTargetSdk);
+                              string minTargetSdk = null,
+                              IEnumerable<string> sources = null) {
+        AddPodInternal(podName, preformattedVersion: PodVersionExpressionFromVersionDep(version),
+                       bitcodeEnabled: bitcodeEnabled, minTargetSdk: minTargetSdk,
+                       sources: sources);
     }
 
     /// <summary>
     /// Same as AddPod except the version string is used in the pod declaration directly.
     /// See AddPod.
     /// </summary>
+    /// <param name="podName">pod path, for example "Google-Mobile-Ads-SDK" to
+    /// be included</param>
+    /// <param name="preformattedVersion">Podfile version specification similar to what is
+    /// returned by PodVersionExpressionFromVersionDep().</param>
+    /// <param name="bitcodeEnabled">Whether the pod was compiled with bitcode
+    /// enabled.  If this is set to false on a pod, the entire project will
+    /// be configured with bitcode disabled.</param>
+    /// <param name="minTargetSdk">Minimum SDK revision required by this
+    /// pod.</param>
+    /// <param name="sources">List of sources to search for all pods.
+    /// Each source is a URL that is injected in the source section of a Podfile
+    /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
+    /// a source.</param>
     private static void AddPodInternal(string podName, string preformattedVersion = null,
                                        bool bitcodeEnabled = true,
-                                       string minTargetSdk = null) {
+                                       string minTargetSdk = null,
+                                       IEnumerable<string> sources = null) {
         Log("AddPod - name: " + podName +
             " version: " + (preformattedVersion ?? "null") +
             " bitcode: " + bitcodeEnabled.ToString() +
-            " sdk: " + (minTargetSdk ?? "null"),
+            " sdk: " + (minTargetSdk ?? "null") +
+            " sources: " + (sources != null ?
+                            String.Join(", ", (new List<string>(sources)).ToArray()) : "(null)"),
             verbose: true);
-        var pod = new Pod(podName, preformattedVersion, bitcodeEnabled, minTargetSdk);
+        var pod = new Pod(podName, preformattedVersion, bitcodeEnabled, minTargetSdk, sources);
         pods[podName] = pod;
         UpdateTargetSdk(pod);
     }
@@ -1280,6 +1323,44 @@ public static class IOSResolver {
         unityPodfile.Close();
     }
 
+    /// <summary>
+    /// Generate the sources section from the set of "pods" in this class.
+    ///
+    /// Each source is interleaved across each pod - removing duplicates - as Cocoapods searches
+    /// each source in order for each pod.
+    ///
+    /// See Pod.sources for more information.
+    /// </summary>
+    /// <returns>String which contains the sources section of a Podfile.  For example, if the
+    /// Pod instances referenced by this class contain sources...
+    ///
+    /// ["http://myrepo.com/Specs.git", "http://anotherrepo.com/Specs.git"]
+    ///
+    /// this returns the string...
+    ///
+    /// source 'http://myrepo.com/Specs.git'
+    /// source 'http://anotherrepo.com/Specs.git'
+    private static string GeneratePodfileSourcesSection() {
+        var interleavedSourcesLines = new List<string>();
+        var processedSources = new HashSet<string>();
+        int sourceIndex = 0;
+        bool sourcesAvailable;
+        do {
+            sourcesAvailable = false;
+            foreach (var pod in pods.Values) {
+                if (sourceIndex < pod.sources.Count) {
+                    sourcesAvailable = true;
+                    var source = pod.sources[sourceIndex];
+                    if (processedSources.Add(source)) {
+                        interleavedSourcesLines.Add(String.Format("source '{0}'", source));
+                    }
+                }
+            }
+            sourceIndex ++;
+        } while (sourcesAvailable);
+        return String.Join("\n", interleavedSourcesLines.ToArray()) + "\n";
+    }
+
     // Implementation of OnPostProcessGenPodfile().
     // NOTE: This is separate from the post-processing method to prevent the
     // Mono runtime from loading the Xcode API before calling the post
@@ -1302,7 +1383,7 @@ public static class IOSResolver {
                           (CocoapodsProjectIntegrationEnabled ? "Xcode project" : "no target"))),
             verbose: true);
         using (StreamWriter file = new StreamWriter(podfilePath)) {
-            file.Write("source 'https://github.com/CocoaPods/Specs.git'\n" +
+            file.Write(GeneratePodfileSourcesSection() +
                        (CocoapodsProjectIntegrationEnabled ?
                         "install! 'cocoapods', :integrate_targets => false\n" : "") +
                        String.Format("platform :ios, '{0}'\n\n", TargetSdk) +
