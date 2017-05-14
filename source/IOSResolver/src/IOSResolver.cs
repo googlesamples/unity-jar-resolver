@@ -676,7 +676,7 @@ public static class IOSResolver {
     /// <returns>The version expression formatted for pod dependencies.
     /// For example, "1.2.3+" would become "~> 1.2.3".</returns>
     private static string PodVersionExpressionFromVersionDep(string dependencyVersion) {
-        if (!String.IsNullOrEmpty(dependencyVersion) && !dependencyVersion.Equals("LATEST")) {
+        if (String.IsNullOrEmpty(dependencyVersion) || dependencyVersion.Equals("LATEST")) {
             return null;
         }
         if (dependencyVersion.EndsWith("+")) {
