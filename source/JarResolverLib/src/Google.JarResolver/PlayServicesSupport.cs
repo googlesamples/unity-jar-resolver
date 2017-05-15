@@ -787,7 +787,10 @@ namespace Google.JarResolver
                 // Since the resolution process may need to be restarted with a different
                 // set of baseline packages during resolution, we copy each dependency so the
                 // starting state can be restored.
-                unresolved.Add(new Dependency(FindCandidate(dependency)));
+                var candidateDependency = FindCandidate(dependency);
+                if (candidateDependency != null) {
+                    unresolved.Add(new Dependency(candidateDependency));
+                }
             }
 
             // To speed up the process of dependency resolution - and workaround the deficiencies
