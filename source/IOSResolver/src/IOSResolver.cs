@@ -561,12 +561,26 @@ public static class IOSResolver {
         get { return System.Environment.CommandLine.Contains("-batchmode"); }
     }
 
+    private const float epsilon = 1e-7f;
+
     /// <summary>
     /// Whether or not Unity can load a workspace file if it's present.
     /// </summary>
     private static bool UnityCanLoadWorkspace {
         get {
-            return (VersionHandler.FileMetadata.GetUnityVersionMajorMinor() >= 5.6f - 1e-7f);
+            // Unity started supporting workspace loading in the released version of Unity 5.6
+            // but not in the beta. So check if this is exactly 5.6, but also beta.
+            if (Math.Abs(
+                    VersionHandler.FileMetadata.GetUnityVersionMajorMinor() - 5.6f) < epsilon) {
+                // Unity non-beta versions look like 5.6.0f1 while beta versions look like:
+                // 5.6.0b11, so looking for the b in the string (especially confined to 5.6),
+                // should be sufficient for determining that it's the beta.
+                if (UnityEngine.Application.unityVersion.Contains(".0b")) {
+                    return false;
+                }
+            }
+
+            return (VersionHandler.FileMetadata.GetUnityVersionMajorMinor() >= 5.6f - epsilon);
         }
     }
 
@@ -1061,6 +1075,7 @@ public static class IOSResolver {
         } else {
             logMessage = Log;
         }
+
         var podToolPath = FindPodTool();
         if (!String.IsNullOrEmpty(podToolPath)) {
             var installationFoundMessage = "Cocoapods installation detected " + podToolPath;
