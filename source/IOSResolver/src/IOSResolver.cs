@@ -1374,7 +1374,11 @@ public static class IOSResolver {
         if (unityPodfile != null) {
             ParseUnityDeps(unityPodfile);
             if (podfilePath == unityPodfile) {
-                File.Move(podfilePath, podfilePath + UNITY_PODFILE_BACKUP_POSTFIX);
+                string unityBackupPath = podfilePath + UNITY_PODFILE_BACKUP_POSTFIX;
+                if (File.Exists(unityBackupPath)) {
+                    File.Delete(unityBackupPath);
+                }
+                File.Move(podfilePath, unityBackupPath);
             }
         }
 
