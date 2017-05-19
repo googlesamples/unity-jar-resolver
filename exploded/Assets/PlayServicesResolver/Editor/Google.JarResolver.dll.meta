@@ -1,0 +1,35 @@
+fileFormatVersion: 2
+guid: cdc80607c15e4c5cae1823a9b23bee52
+labels:
+- gvh_v1.2.22.0
+- gvh_v1.2.22.0
+- gvh_v1.2.22.0
+- gvh_v1.2.22.0
+- gvh_v1.2.22.0
+- gvh_v1.2.22.0
+- gvh
+- gvh_teditor
+- gvh_v1.2.22.0
+timeCreated: 1495229608
+licenseType: Pro
+PluginImporter:
+  serializedVersion: 1
+  iconMap: {}
+  executionOrder: {}
+  isPreloaded: 0
+  isOverridable: 0
+  platformData:
+    Editor:
+      enabled: 1
+      settings:
+        DefaultValueInitialized: true
+    WindowsStoreApps:
+      enabled: 0
+      settings:
+        CPU: AnyCPU
+    data:
+      enabled: 0
+      settings: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

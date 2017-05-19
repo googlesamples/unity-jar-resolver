@@ -1,3 +1,8 @@
+# Version 1.2.22 - May 19, 2017
+## Bug Fixes
+* Fixed a bug in the iOS resolver with incremental builds.
+* Fixed misdetection of Cocoapods support with Unity beta 5.6.
+
 # Version 1.2.21 - May 8, 2017
 ## Bug Fixes
 * Fix for https://github.com/googlesamples/unity-jar-resolver/issues/48
