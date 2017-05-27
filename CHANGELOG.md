@@ -1,3 +1,7 @@
+# Version 1.2.23 - May 26, 2017
+## Bug Fixes
+* Fixed a bug with gradle prebuild resolver on windows.
+
 # Version 1.2.22 - May 19, 2017
 ## Bug Fixes
 * Fixed a bug in the iOS resolver with incremental builds.
