@@ -216,10 +216,16 @@ class GradlePreBuildResolver : DefaultResolver {
 {3}
 ]
 }}";
+
         json_config = String.Format(json_config, ToJSONDictionary(config),
                                     ToJSONList(depLines, ",\n", 4, true),
                                     ToJSONList(repoLines, ",\n", 4),
                                     ToJSONList(proguard_config_paths, ",\n", 4));
+
+        // Escape any literal backslashes (such as those from paths on windows), since we want to
+        // preserve them when reading the config as backslashes and not interpret them
+        // as escape characters.
+        json_config = json_config.Replace(@"\", @"\\");
 
         System.IO.File.WriteAllText(GENERATE_CONFIG_PATH, json_config);
 
