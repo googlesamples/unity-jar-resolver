@@ -101,10 +101,9 @@ namespace Google.JarResolver
 		/// class should be loaded from.</param>
 		public static ResolverImpl CreateSupportInstance(string clientName, string assemblyName = "Google.JarResolver")
 		{
-#if !UNITY_ANDROID
 			// if we arent on Android default to an empty shim
-			return new ResolverImpl(null);
-#endif
+			if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
+				return new ResolverImpl(null);
 
 			// bail out with an empty instance if the PlayServicesSupport class isnt available
 			var playServicesSupport = Google.VersionHandler.FindClass(assemblyName, "Google.JarResolver.PlayServicesSupport");
