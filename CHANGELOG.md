@@ -1,3 +1,16 @@
+# Version 1.2.24 - Jun 6, 2017
+## New Features
+* Added option to control file renaming in Version Handler settings.
+  Disabling file renaming (default option) significantly increases
+  the speed of file version management operations with the downside
+  that any files that are referenced directly by canonical filename
+  rather than asset ID will no longer be valid.
+* Improved logging in the Version Handler.
+## Bug Fixes
+* Fixed an issue in the Version Handler which caused it to not
+  re-enable plugins when re-importing a custom package with disabled
+  version managed files.
+
 # Version 1.2.23 - May 26, 2017
 ## Bug Fixes
 * Fixed a bug with gradle prebuild resolver on windows.

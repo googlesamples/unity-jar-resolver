@@ -166,7 +166,8 @@ public class VersionHandler : AssetPostprocessor {
             if (!string.IsNullOrEmpty(version)) {
                 int dotIndex = version.IndexOf('.');
                 if (dotIndex > 0 && version.Length > dotIndex + 1) {
-                    if (!float.TryParse(version.Substring(0, dotIndex + 2), NumberStyles.Any, CultureInfo.InvariantCulture, out result)) {
+                    if (!float.TryParse(version.Substring(0, dotIndex + 2), NumberStyles.Any,
+                                        CultureInfo.InvariantCulture, out result)) {
                         result = 5.4f;
                     }
                 }
@@ -335,9 +336,9 @@ public class VersionHandler : AssetPostprocessor {
                     if (buildTargetToEnum.TryGetValue(target, out buildTarget)) {
                         buildTargetSet.Add(buildTarget);
                     } else if (!target.Equals("editor")) {
-                        UnityEngine.Debug.LogError(
-                            filename + " reference to unknown target " +
-                            target + " the version handler may out of date.");
+                        Log(filename + " reference to unknown target " +
+                            target + " the version handler may out of date.",
+                            level: LogLevel.Error);
                     }
                 }
 
@@ -397,19 +398,19 @@ public class VersionHandler : AssetPostprocessor {
             // If the target file exists, delete it.
             if (AssetImporter.GetAtPath(newFilename) != null) {
                 if (!AssetDatabase.MoveAssetToTrash(newFilename)) {
-                    UnityEngine.Debug.LogError(
-                        "Failed to move asset to trash: " + filename);
+                    Log("Failed to move asset to trash: " + filename,
+                        level: LogLevel.Error);
                     return false;
                 }
             }
             try {
-              // b/35587604 this is *really* slow.
+              // This is *really* slow.
               string error = AssetDatabase.RenameAsset(
                   filename, filenameComponents.basenameNoExtension);
               if (!String.IsNullOrEmpty(error)) {
-                  UnityEngine.Debug.LogError(
-                      "Failed to rename asset " + filename + " to " +
-                      newFilename + " (" + error + ")");
+                  Log("Failed to rename asset " + filename + " to " +
+                      newFilename + " (" + error + ")",
+                      level: LogLevel.Error);
                   return false;
               }
             } catch (Exception) {
@@ -585,7 +586,8 @@ public class VersionHandler : AssetPostprocessor {
             // If the canonical file is out of date, update it.
             if (numberOfVersions > 0) {
                 FileMetadata mostRecentVersion = MostRecentVersion;
-                if (mostRecentVersion.filename != filenameCanonical) {
+                if (mostRecentVersion.filename != filenameCanonical &&
+                    RenameToCanonicalFilenames) {
                     FileMetadata canonicalMetadata = null;
                     foreach (var metadata in metadataByVersion.Values) {
                         if (metadata.filename == filenameCanonical) {
@@ -636,6 +638,11 @@ public class VersionHandler : AssetPostprocessor {
                 // Enable / disable editor and platform settings.
                 if (pluginImporter.GetCompatibleWithEditor() !=
                     editorEnabled) {
+                    Log(String.Format("{0}: editor enabled {1} (current: {2})",
+                                      metadata.filename,
+                                      editorEnabled,
+                                      pluginImporter.GetCompatibleWithEditor()),
+                        verbose: true);
                     pluginImporter.SetCompatibleWithEditor(editorEnabled);
                     modifiedThisVersion = true;
                 }
@@ -644,17 +651,30 @@ public class VersionHandler : AssetPostprocessor {
                     bool enabled = selectedTargets != null &&
                         selectedTargets.Contains(target);
                     try {
-                        if (pluginImporter.GetCompatibleWithPlatform(target) !=
-                            enabled) {
+                        bool compatibleWithTarget =
+                            pluginImporter.GetCompatibleWithPlatform(target);
+                        if (compatibleWithTarget != enabled) {
+                            Log(String.Format("{0}: {1} enabled {2} (current: {3})",
+                                              metadata.filename, target, enabled,
+                                              compatibleWithTarget),
+                                verbose: true);
                             pluginImporter.SetCompatibleWithPlatform(
                                 target, enabled);
                             modifiedThisVersion = true;
                         }
                     }
                     catch(Exception e) {
-                      UnityEngine.Debug.LogWarning(
-                        "Unexpected error enumerating targets: " + e.Message);
+                        Log("Unexpected error enumerating targets: " + e.Message,
+                            level: LogLevel.Warning);
                     }
+                }
+                // Some versions of Unity (e.g 5.6) do not mark the asset
+                // database as dirty when plugin importer settings change.
+                // Therefore, force a reimport of each file touched by the
+                // plugin importer.
+                if (modifiedThisVersion) {
+                    AssetDatabase.ImportAsset(metadata.filename,
+                                              ImportAssetOptions.ForceUpdate);
                 }
                 // If the version was modified and it's obsolete keep track of
                 // it to log it later.
@@ -665,8 +685,7 @@ public class VersionHandler : AssetPostprocessor {
             }
             // Log the versions that have been disabled and the version that
             // has been enabled.
-            if (modified && enabledVersion != null &&
-                VersionHandler.VerboseLoggingEnabled) {
+            if (modified && enabledVersion != null) {
                 string message = (filenameCanonical + ": enabled version " +
                                   enabledVersion);
                 if (disabledVersions.Count > 0) {
@@ -674,7 +693,7 @@ public class VersionHandler : AssetPostprocessor {
                                 String.Join(", ", disabledVersions.ToArray()) +
                                 ")");
                 }
-                UnityEngine.Debug.Log(message);
+                Log(message, verbose: true);
             }
             return modified;
         }
@@ -745,14 +764,86 @@ public class VersionHandler : AssetPostprocessor {
         /// for all versions and re-enable platform targeting for the most
         /// recent version.
         /// </summary>
+        /// <param name="forceUpdate">Whether the update was forced by the
+        /// user.</param>
         /// <returns>true if any plugin metadata was modified and requires an
         /// AssetDatabase.Refresh(), false otherwise.</return>
-        public bool EnableMostRecentPlugins() {
+        public bool EnableMostRecentPlugins(bool forceUpdate) {
             bool modified = false;
 
             // If PluginImporter isn't available it's not possible
             // to enable / disable targeting.
-            if (!FileMetadataByVersion.PluginImporterAvailable) return false;
+            if (!FileMetadataByVersion.PluginImporterAvailable) {
+                // File that stores the state of the warning flag for this editor session.
+                // We need to store this in a file as this DLL can be reloaded while the
+                // editor is open resetting any state in memory.
+                string warningFile = Path.Combine(
+                    "Temp", "VersionHandlerEnableMostRecentPlugins.txt");
+                string warning =
+                    "UnityEditor.PluginImporter is not supported in this version of Unity.\n\n" +
+                    "Plugins managed by VersionHandler will not be enabled.\n" +
+                    "You need to manually enable / disable the most recent version of each \n" +
+                    "file you wish to use.\n\n" +
+                    "Found the following VersionHandler managed files:\n" +
+                    "{0}\n" +
+                    "\n" +
+                    "To resolve this:\n" +
+                    "* Remove the oldest version of each file.\n" +
+                    "  Each file either has the version as part of the filename or the version\n" +
+                    "  is asset tag in the form gvh_vVERSION that is visible via the inspector\n" +
+                    "  when selecting the file.\n" +
+                    "* Enable the remaining files for the specified build targets.\n" +
+                    "  For example, if the file has \"Targets: [editor]\":\n" +
+                    "  - Select the file.\n" +
+                    "  - In Unity 5.x:\n" +
+                    "    - Open the inspector.\n" +
+                    "    - Check the \"editor\" box.\n" +
+                    "  - In Unity 4.x:\n" +
+                    "    - Select 'Assets > Reimport' from the menu.\n";
+                var warningLines = new List<string>();
+                foreach (var metadataByVersion in
+                         metadataByCanonicalFilename.Values) {
+                    bool hasRelevantVersions = false;
+                    var fileInfoLines = new List<string>();
+                    fileInfoLines.Add(String.Format("Target Filename: {0}",
+                                                    metadataByVersion.filenameCanonical));
+                    foreach (var metadata in metadataByVersion.Values) {
+                        // Ignore manifests and files that don't target any build targets.
+                        if (metadata.isManifest ||
+                            metadata.targets == null || metadata.targets.Length == 0) {
+                            continue;
+                        }
+                        // Ignore missing files.
+                        string currentFilename = File.Exists(metadata.filename) ?
+                            metadata.filename :
+                            File.Exists(metadataByVersion.filenameCanonical) ?
+                            metadataByVersion.filenameCanonical : null;
+                        if (String.IsNullOrEmpty(currentFilename)) continue;
+
+                        hasRelevantVersions = true;
+                        fileInfoLines.Add(String.Format(
+                                "    Version: {0}\n" +
+                                "      Current Filename: {1}\n" +
+                                "      Targets: [{2}]",
+                                metadata.versionString,
+                                currentFilename,
+                                metadata.targets != null ?
+                                    String.Join(", ", metadata.targets) : ""));
+                    }
+                    fileInfoLines.Add("");
+                    if (hasRelevantVersions) warningLines.AddRange(fileInfoLines);
+                }
+                if (warningLines.Count > 0 && (forceUpdate || !File.Exists(warningFile))) {
+                    // Touch the warning file to prevent this showing up when this method
+                    // isn't run interactively.
+                    using (var filestream = File.Open(warningFile, FileMode.OpenOrCreate)) {
+                        filestream.Close();
+                    }
+                    Log(String.Format(warning, String.Join("\n", warningLines.ToArray())),
+                        level: LogLevel.Warning);
+                }
+                return false;
+            }
 
             foreach (var metadataByVersion in
                      metadataByCanonicalFilename.Values) {
@@ -778,7 +869,7 @@ public class VersionHandler : AssetPostprocessor {
         }
 
         /// <summary>
-        /// Filter the a set for files which have multiple versions and those
+        /// Filter the a set for files which have multiple versions or those
         /// with metadata that selects the set of target platforms.
         /// </summary>
         /// <param name="metadataSet">Set to filter.</param>
@@ -790,17 +881,17 @@ public class VersionHandler : AssetPostprocessor {
                      metadataSet.metadataByCanonicalFilename) {
                 var metadataByVersion = filenameAndMetadata.Value.Values;
                 bool needsUpdate = metadataByVersion.Count > 1;
-                if (!needsUpdate) {
-                    foreach (var metadata in metadataByVersion) {
-                        if ((metadata.targets != null &&
-                             metadata.targets.Length > 0) ||
-                            metadata.isManifest) {
-                            needsUpdate = true;
-                            break;
-                        }
+                foreach (var metadata in metadataByVersion) {
+                    if ((metadata.targets != null &&
+                         metadata.targets.Length > 0) ||
+                        metadata.isManifest) {
+                        needsUpdate = true;
+                        break;
                     }
                 }
                 if (needsUpdate) {
+                    Log(filenameAndMetadata.Key + " metadata will be checked",
+                        verbose: true);
                     outMetadataSet.metadataByCanonicalFilename[
                         filenameAndMetadata.Key] = filenameAndMetadata.Value;
                 }
@@ -1067,6 +1158,8 @@ public class VersionHandler : AssetPostprocessor {
         "Google.VersionHandler.VersionHandlingEnabled";
     private const string PREFERENCE_CLEANUP_PROMPT_ENABLED =
         "Google.VersionHandler.CleanUpPromptEnabled";
+    private const string PREFERENCE_RENAME_TO_CANONICAL_FILENAMES =
+        "Google.VersionHandler.RenameToCanonicalFilenames";
     private const string PREFERENCE_VERBOSE_LOGGING_ENABLED =
         "Google.VersionHandler.VerboseLoggingEnabled";
 
@@ -1103,6 +1196,15 @@ public class VersionHandler : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Enable / disable renaming to canonical filenames.
+    /// </summary>
+    public static bool RenameToCanonicalFilenames {
+        get { return EditorPrefs.GetBool(PREFERENCE_RENAME_TO_CANONICAL_FILENAMES,
+                                         defaultValue: false); }
+        set { EditorPrefs.SetBool(PREFERENCE_RENAME_TO_CANONICAL_FILENAMES, value); }
+    }
+
+    /// <summary>
     /// Enable / disable verbose logging.
     /// </summary>
     public static bool VerboseLoggingEnabled {
@@ -1110,6 +1212,39 @@ public class VersionHandler : AssetPostprocessor {
                 EditorPrefs.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
                                     defaultValue: false); }
         set { EditorPrefs.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
+    }
+
+    /// <summary>
+    /// Log severity.
+    /// </summary>
+    internal enum LogLevel {
+        Info,
+        Warning,
+        Error,
+    };
+
+    /// <summary>
+    /// Log a message.
+    /// </summary>
+    /// <param name="message">Message to log.</param>
+    /// <param name="verbose">Whether the message should only be displayed if verbose logging is
+    /// enabled.</param>
+    /// <param name="level">Severity of the message.</param>
+    internal static void Log(string message, bool verbose = false,
+                             LogLevel level = LogLevel.Info) {
+        if (!verbose || VerboseLoggingEnabled) {
+            switch (level) {
+                case LogLevel.Info:
+                    Debug.Log(message);
+                    break;
+                case LogLevel.Warning:
+                    Debug.LogWarning(message);
+                    break;
+                case LogLevel.Error:
+                    Debug.LogError(message);
+                    break;
+            }
+        }
     }
 
     /// <summary>
@@ -1177,12 +1312,10 @@ public class VersionHandler : AssetPostprocessor {
     /// Move an asset to trash, writing to the log if logging is enabled.
     /// </summary>
     private static void MoveAssetToTrash(string filename) {
-        if (VerboseLoggingEnabled) {
-            UnityEngine.Debug.Log("Moved obsolete file to trash: " + filename);
-        }
+        Log("Moved obsolete file to trash: " + filename, verbose: true);
         if (!AssetDatabase.MoveAssetToTrash(filename)) {
-            UnityEngine.Debug.LogError(
-                "Failed to move obsolete file to trash: " + filename);
+            Log("Failed to move obsolete file to trash: " + filename,
+                level: LogLevel.Error);
         }
     }
 
@@ -1198,7 +1331,7 @@ public class VersionHandler : AssetPostprocessor {
 
         var metadataSet = FileMetadataSet.FindWithPendingUpdates(
             FileMetadataSet.ParseFromFilenames(FindAllAssets()));
-        if (metadataSet.EnableMostRecentPlugins()) {
+        if (metadataSet.EnableMostRecentPlugins(forceUpdate)) {
             AssetDatabase.Refresh();
         }
 
@@ -1223,9 +1356,8 @@ public class VersionHandler : AssetPostprocessor {
             foreach (var filename in obsoleteFiles.unreferenced) {
                 if (deleteFiles) {
                     MoveAssetToTrash(filename);
-                } else if (VerboseLoggingEnabled) {
-                    UnityEngine.Debug.Log("Leaving obsolete file: " +
-                                          filename);
+                } else {
+                    Log("Leaving obsolete file: " + filename, verbose: true);
                 }
             }
         }
@@ -1251,11 +1383,9 @@ public class VersionHandler : AssetPostprocessor {
             foreach (var item in obsoleteFiles.referenced) {
                 if (deleteFiles) {
                     MoveAssetToTrash(item.Key);
-                } else if (VerboseLoggingEnabled) {
-                    UnityEngine.Debug.Log(
-                        "Leaving obsolete file: " + item.Key + " | " +
-                        "Referenced by (" +
-                        String.Join(", ", item.Value.ToArray())  + ")");
+                } else {
+                    Log("Leaving obsolete file: " + item.Key + " | " + "Referenced by (" +
+                        String.Join(", ", item.Value.ToArray())  + ")", verbose: true);
                 }
             }
         }

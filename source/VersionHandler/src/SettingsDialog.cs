@@ -35,6 +35,11 @@ public class SettingsDialog : EditorWindow
     internal bool cleanUpPromptEnabled;
 
     /// <summary>
+    /// Whether to rename files to canonical filenames.
+    /// </summary>
+    internal bool renameToCanonicalFilenames;
+
+    /// <summary>
     /// Whether to enable / disable verbose logging.
     /// </summary>
     internal bool verboseLoggingEnabled;
@@ -57,6 +62,7 @@ public class SettingsDialog : EditorWindow
     {
         enabled = VersionHandler.Enabled;
         cleanUpPromptEnabled = VersionHandler.CleanUpPromptEnabled;
+        renameToCanonicalFilenames = VersionHandler.RenameToCanonicalFilenames;
         verboseLoggingEnabled = VersionHandler.VerboseLoggingEnabled;
     }
 
@@ -67,17 +73,38 @@ public class SettingsDialog : EditorWindow
     {
         GUI.skin.label.wordWrap = true;
         GUILayout.BeginVertical();
+
+        GUILayout.BeginHorizontal();
         GUILayout.Label("Enable version management", EditorStyles.boldLabel);
         enabled = EditorGUILayout.Toggle(enabled);
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Rename to canonical filenames",
+                        EditorStyles.boldLabel);
+        renameToCanonicalFilenames = EditorGUILayout.Toggle(renameToCanonicalFilenames);
+        GUILayout.EndHorizontal();
+        GUILayout.Label("When this option is enabled the Version Handler strips " +
+                        "metadata from filenames.  This can be a *very* slow operation " +
+                        "as each renamed DLL causes the Unity editor to reload all DLLs.");
+
+        GUILayout.BeginHorizontal();
         GUILayout.Label("Prompt for obsolete file deletion",
                         EditorStyles.boldLabel);
         cleanUpPromptEnabled = EditorGUILayout.Toggle(cleanUpPromptEnabled);
+        GUILayout.EndHorizontal();
+
+
+        GUILayout.BeginHorizontal();
         GUILayout.Label("Verbose logging", EditorStyles.boldLabel);
         verboseLoggingEnabled = EditorGUILayout.Toggle(verboseLoggingEnabled);
+        GUILayout.EndHorizontal();
+
         GUILayout.Space(10);
         if (GUILayout.Button("OK")) {
             VersionHandler.Enabled = enabled;
             VersionHandler.CleanUpPromptEnabled = cleanUpPromptEnabled;
+            VersionHandler.RenameToCanonicalFilenames = renameToCanonicalFilenames;
             VersionHandler.VerboseLoggingEnabled = verboseLoggingEnabled;
             Close();
             // If the handler has been enabled, refresh the asset database
