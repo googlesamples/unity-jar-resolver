@@ -76,6 +76,13 @@ public class UnityCompat {
         return validVersionString ? versionVal : MinSDKVersionFallback;
     }
 
+    /// <summary>
+    /// Returns whether the editor is running in batch mode.
+    /// </summary>
+    public static bool InBatchMode {
+        get { return System.Environment.CommandLine.Contains("-batchmode"); }
+    }
+
     private static Type AndroidSDKToolsClass {
         get {
             Type sdkTools = Type.GetType(
@@ -198,17 +205,86 @@ public class UnityCompat {
     }
 
     /// <summary>
-    /// Get the application / bundle ID property.
+    /// Convert a BuildTarget to a BuildTargetGroup.
     /// </summary>
-    /// <returns>Application / bundle ID property or null if it can't be found.</returns>
-    private static PropertyInfo GetApplicationIdProperty() {
-        var playerSettingsType = typeof(UnityEditor.PlayerSettings);
-        var property = playerSettingsType.GetProperty("applicationIdentifier");
-        property = property ?? playerSettingsType.GetProperty("bundleIdentifier");
-        if (property == null) {
-            Debug.LogWarning("Unable to retrieve PlayerSettings.applicationIdentifier property");
+    /// Unfortunately the Unity API does not provide a way to get the current BuildTargetGroup from
+    /// the currently active BuildTarget.
+    /// <param name="target">BuildTarget to convert.</param>
+    /// <returns>BuildTargetGroup enum value.</returns>
+    private static BuildTargetGroup ConvertBuildTargetToBuildTargetGroup(BuildTarget buildTarget) {
+        var buildTargetToGroup = new Dictionary<string, string>() {
+            { "StandaloneOSXUniversal", "Standalone" },
+            { "StandaloneOSXIntel", "Standalone" },
+            { "StandaloneLinux", "Standalone" },
+            { "StandaloneWindows64", "Standalone" },
+            { "WSAPlayer", "WSA" },
+            { "StandaloneLinux64", "Standalone" },
+            { "StandaloneLinuxUniversal", "Standalone" },
+            { "StandaloneOSXIntel64", "Standalone" },
+        };
+        string buildTargetString = buildTarget.ToString();
+        string buildTargetGroupString;
+        if (!buildTargetToGroup.TryGetValue(buildTargetString, out buildTargetGroupString)) {
+            // If the conversion fails try performing a 1:1 mapping between the platform and group
+            // as most build targets only map to one group.
+            buildTargetGroupString = buildTargetString;
         }
-        return property;
+        try {
+            return (BuildTargetGroup)Enum.Parse(typeof(BuildTargetGroup), buildTargetGroupString);
+        } catch (ArgumentException) {
+            return BuildTargetGroup.Unknown;
+        }
+    }
+
+    /// <summary>
+    /// Get the bundle identifier for the active build target group *not* the selected build
+    /// target group using Unity 5.6 and above's API.
+    ///
+    /// Unity 5.6 and above have the concept of an active build target and the selected build
+    /// target.  The active build target is the target that is built when the user presses the
+    /// build button.  The selected build target is the target that is currently selected in
+    /// the build settings dialog but not active to build (i.e no Unity icon is visible next to
+    /// the build target).
+    /// </summary>
+    private static string Unity56AndAboveApplicationIdentifier {
+        get {
+            var getApplicationIdentifierMethod =
+                typeof(UnityEditor.PlayerSettings).GetMethod("GetApplicationIdentifier");
+            if (getApplicationIdentifierMethod == null) return null;
+            var activeBuildTargetGroup = ConvertBuildTargetToBuildTargetGroup(
+                EditorUserBuildSettings.activeBuildTarget);
+            if (activeBuildTargetGroup == BuildTargetGroup.Unknown) return null;
+            return getApplicationIdentifierMethod.Invoke(
+                null, new object [] { activeBuildTargetGroup } ) as string;
+        }
+        set {
+            var setApplicationIdentifierMethod =
+                typeof(UnityEditor.PlayerSettings).GetMethod("SetApplicationIdentifier");
+            if (setApplicationIdentifierMethod == null) return;
+            var activeBuildTargetGroup = ConvertBuildTargetToBuildTargetGroup(
+                EditorUserBuildSettings.activeBuildTarget);
+            if (activeBuildTargetGroup == BuildTargetGroup.Unknown) return;
+            setApplicationIdentifierMethod.Invoke(
+                null, new object [] { activeBuildTargetGroup, value } );
+        }
+    }
+
+    /// <summary>
+    /// Get the bundle identifier for the currently active build target using the Unity 5.5 and
+    /// below API.
+    /// </summary>
+    private static string Unity55AndBelowBundleIdentifier {
+        get {
+            var property = typeof(UnityEditor.PlayerSettings).GetProperty("bundleIdentifier");
+            if (property == null) return null;
+            return (string)property.GetValue(null, null);
+        }
+
+        set {
+            var property = typeof(UnityEditor.PlayerSettings).GetProperty("bundleIdentifier");
+            if (property == null) return;
+            property.SetValue(null, value, null);
+        }
     }
 
     /// <summary>
@@ -217,13 +293,18 @@ public class UnityCompat {
     /// This uses reflection to retrieve the property as it was renamed in Unity 5.6.
     public static string ApplicationId {
         get {
-            var property = GetApplicationIdProperty();
-            return property != null ? (string)property.GetValue(null, null) : null;
+            var identifier = Unity56AndAboveApplicationIdentifier;
+            if (identifier != null) return identifier;
+            return Unity55AndBelowBundleIdentifier;
         }
 
         set {
-            var property = GetApplicationIdProperty();
-            if (property != null) property.SetValue(null, value, null);
+            var identifier = Unity56AndAboveApplicationIdentifier;
+            if (identifier != null) {
+                Unity56AndAboveApplicationIdentifier = value;
+                return;
+            }
+            Unity55AndBelowBundleIdentifier  = value;
         }
     }
 }

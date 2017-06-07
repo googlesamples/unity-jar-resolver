@@ -1,3 +1,9 @@
+# Version 1.2.25 - Jun 7, 2017
+## Bug Fixes
+* Fixed an issue in the Jar Resolver which incorrectly notified
+  event handlers of bundle ID changes when the currently selected
+  (not active) build target changed in Unity 5.6 and above.
+
 # Version 1.2.24 - Jun 6, 2017
 ## New Features
 * Added option to control file renaming in Version Handler settings.
