@@ -1172,6 +1172,12 @@ public class VersionHandler : AssetPostprocessor {
     /// and remove files from older manifest files.
     /// </summary>
     static VersionHandler() {
+        EditorApplication.update -= UpdateVersionedAssetsOnUpdate;
+        EditorApplication.update += UpdateVersionedAssetsOnUpdate;
+    }
+
+    static void UpdateVersionedAssetsOnUpdate() {
+        EditorApplication.update -= UpdateVersionedAssetsOnUpdate;
         UpdateVersionedAssets();
     }
 

@@ -1,3 +1,7 @@
+# Version 1.2.26 - Jun 7, 2017
+## Bug Fixes
+* Fixed a crash when importing Version Handler into Unity 4.7.x.
+
 # Version 1.2.25 - Jun 7, 2017
 ## Bug Fixes
 * Fixed an issue in the Jar Resolver which incorrectly notified
