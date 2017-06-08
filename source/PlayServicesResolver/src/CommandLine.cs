@@ -523,7 +523,7 @@ namespace GooglePlayServices
 
             string stdoutFileName = null;
             string stderrFileName = null;
-            if (stdoutRedirectionInShellMode) {
+            if (useShellExecution && stdoutRedirectionInShellMode) {
                 stdoutFileName = Path.GetTempFileName();
                 stderrFileName = Path.GetTempFileName();
                 string shellCmd ;

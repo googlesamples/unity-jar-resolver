@@ -1,3 +1,8 @@
+# Version 1.2.28 - Jun 8, 2017
+## Bug Fixes
+* Fixed non-shell command line execution (regression from
+  Cocoapod installation patch).
+
 # Version 1.2.27 - Jun 7, 2017
 ## Bug Fixes
 * Added support for stdout / stderr redirection when executing
