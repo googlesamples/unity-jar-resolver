@@ -507,17 +507,43 @@ namespace GooglePlayServices
         /// both output and error streams from a single delegate.</param>
         /// <param name="useShellExecution">Execute the command via the shell.  This disables
         /// I/O redirection and causes a window to be popped up when the command is executed.
+        /// This uses file redirection to retrieve the standard output stream.
         /// </param>
         /// <returns>CommandLineTool result if successful, raises an exception if it's not
         /// possible to execute the tool.</returns>
         public static Result RunViaShell(
                 string toolPath, string arguments, string workingDirectory = null,
                 Dictionary<string, string> envVars = null,
-                IOHandler ioHandler = null, bool useShellExecution = false) {
+                IOHandler ioHandler = null, bool useShellExecution = false,
+                bool stdoutRedirectionInShellMode = true) {
             System.Text.Encoding inputEncoding = Console.InputEncoding;
             System.Text.Encoding outputEncoding = Console.OutputEncoding;
             Console.InputEncoding = System.Text.Encoding.UTF8;
             Console.OutputEncoding = System.Text.Encoding.UTF8;
+
+            string stdoutFileName = null;
+            string stderrFileName = null;
+            if (stdoutRedirectionInShellMode) {
+                stdoutFileName = Path.GetTempFileName();
+                stderrFileName = Path.GetTempFileName();
+                string shellCmd ;
+                string shellArgPrefix;
+                string shellArgPostfix;
+                if (UnityEngine.RuntimePlatform.WindowsEditor ==
+                    UnityEngine.Application.platform) {
+                    shellCmd = "cmd.exe";
+                    shellArgPrefix = "/c";
+                    shellArgPostfix = "";
+                } else {
+                    shellCmd = "bash";
+                    shellArgPrefix = "-l -c '";
+                    shellArgPostfix = "'";
+                }
+                arguments = String.Format("{0}{1} {2} 1> {3} 2> {4}{5}", shellArgPrefix,
+                                          toolPath, arguments, stdoutFileName, stderrFileName,
+                                          shellArgPostfix);
+                toolPath = shellCmd;
+            }
 
             Process process = new Process();
             process.StartInfo.UseShellExecute = useShellExecution;
@@ -551,6 +577,12 @@ namespace GooglePlayServices
 
             if (useShellExecution) {
                 process.WaitForExit();
+                if (stdoutRedirectionInShellMode) {
+                    stdouterr[0].Add(File.ReadAllText(stdoutFileName));
+                    stdouterr[1].Add(File.ReadAllText(stderrFileName));
+                    File.Delete(stdoutFileName);
+                    File.Delete(stderrFileName);
+                }
             } else {
                 AutoResetEvent complete = new AutoResetEvent(false);
                 // Read raw output from the process.

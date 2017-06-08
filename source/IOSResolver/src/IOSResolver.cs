@@ -267,6 +267,8 @@ public static class IOSResolver {
     // Regex for parsing comma separated values, as used in the pod dependency specification.
     private static Regex CSV_SPLIT_REGEX = new Regex(@"(?:^|,\s*)'([^']*)'", RegexOptions.Compiled);
 
+    // Parses a source URL from a Podfile.
+    private static Regex PODFILE_SOURCE_REGEX = new Regex(@"^\s*source\s+'([^']*)'");
 
     // Search for a file up to a maximum search depth stopping the
     // depth first search each time the specified file is found.
@@ -744,10 +746,16 @@ public static class IOSResolver {
     /// Each source is a URL that is injected in the source section of a Podfile
     /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
     /// a source.</param>
+    /// <param name="overwriteExistingPod">Overwrite an existing pod.</param>
     private static void AddPodInternal(string podName, string preformattedVersion = null,
                                        bool bitcodeEnabled = true,
                                        string minTargetSdk = null,
-                                       IEnumerable<string> sources = null) {
+                                       IEnumerable<string> sources = null,
+                                       bool overwriteExistingPod = true) {
+        if (!overwriteExistingPod && pods.ContainsKey(podName)) {
+            Log(String.Format("Pod {0}: already present", podName), verbose: true);
+            return;
+        }
         Log("AddPod - name: " + podName +
             " version: " + (preformattedVersion ?? "null") +
             " bitcode: " + bitcodeEnabled.ToString() +
@@ -1296,8 +1304,14 @@ public static class IOSResolver {
         // counting the depth to determine when to capture the pods. Also we only ever enter the
         // first depth if we're in the exact right target.
         int capturingPodsDepth = 0;
+        var sources = new List<string>();
         while ((line = unityPodfile.ReadLine()) != null) {
             line = line.Trim();
+            var sourceLineMatch = PODFILE_SOURCE_REGEX.Match(line);
+            if (sourceLineMatch.Groups.Count > 1) {
+                sources.Add(sourceLineMatch.Groups[1].Value);
+                continue;
+            }
             if (line.StartsWith("target 'Unity-iPhone' do")) {
                 capturingPodsDepth++;
                 continue;
@@ -1325,12 +1339,15 @@ public static class IOSResolver {
                         Log(String.Format("Preserving Unity Pod: {0}\nat version: {1}", matchedName,
                                           matchedVersion), verbose: true);
 
-                        AddPodInternal(matchedName, matchedVersion, true, null);
+                        AddPodInternal(matchedName, preformattedVersion: matchedVersion,
+                                       bitcodeEnabled: true, sources: sources,
+                                       overwriteExistingPod: false);
                     } else {
                         string matchedName = matches[0].Groups[1].Captures[0].Value;
                         Log(String.Format("Preserving Unity Pod: {0}", matchedName), verbose: true);
 
-                        AddPodInternal(matchedName);
+                        AddPodInternal(matchedName, sources: sources,
+                                       overwriteExistingPod: false);
                     }
                 }
             }

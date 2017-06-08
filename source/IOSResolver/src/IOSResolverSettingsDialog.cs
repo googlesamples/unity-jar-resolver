@@ -106,8 +106,8 @@ public class IOSResolverSettingsDialog : EditorWindow
         podToolExecutionViaShellEnabled = EditorGUILayout.Toggle(podToolExecutionViaShellEnabled);
         GUILayout.EndHorizontal();
         if (podToolExecutionViaShellEnabled) {
-            GUILayout.Label("When shell execution is enabled it is not possible to redirect " +
-                            "error messages to Unity's console window.");
+            GUILayout.Label("Shell execution is useful when configuration in the shell " +
+                            "environment (e.g ~/.profile) is required to execute Cocoapods tools.");
         }
 
         GUILayout.BeginHorizontal();

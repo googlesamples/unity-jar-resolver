@@ -1,3 +1,12 @@
+# Version 1.2.27 - Jun 7, 2017
+## Bug Fixes
+* Added support for stdout / stderr redirection when executing
+  commands in shell mode.
+  This fixes CocoaPod tool installation when shell mode is
+  enabled.
+* Fixed incremental builds when additional sources are specified
+  in the Podfile.
+
 # Version 1.2.26 - Jun 7, 2017
 ## Bug Fixes
 * Fixed a crash when importing Version Handler into Unity 4.7.x.
