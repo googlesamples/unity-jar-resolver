@@ -1245,11 +1245,13 @@ namespace Google.JarResolver
                                                                 List<string> repoPaths)
         {
             List<Dependency> dependencyList = new List<Dependency>();
+            var notFoundErrorMessage = String.Format(
+                "No compatible versions of {0} found given the set of " +
+                "required dependencies.\n\n{0} was referenced by:\n{1}\n\n",
+                dep.Key, dep.CreatedBy);
             if (String.IsNullOrEmpty(dep.BestVersion))
             {
-                Log(String.Format("No compatible versions of {0} found given the set of " +
-                                  "required dependencies.\n\n{0} was referenced by:\n{1}\n\n",
-                                  dep.Key, dep.CreatedBy), level: LogLevel.Error);
+                Log(notFoundErrorMessage, level: LogLevel.Error);
                 return dependencyList;
             }
 
@@ -1261,7 +1263,13 @@ namespace Google.JarResolver
                    String.Join(", ", (new List<string>(dep.PossibleVersions)).ToArray())),
                 verbose: true);
 
-            XmlTextReader reader = new XmlTextReader(new StreamReader(pomFile));
+            XmlTextReader reader = null;
+            try {
+                reader = new XmlTextReader(new StreamReader(pomFile));
+            } catch (DirectoryNotFoundException) {
+                Log(notFoundErrorMessage, level: LogLevel.Error);
+                return dependencyList;
+            }
             bool inDependencies = false;
             bool inDep = false;
             string groupId = null;
