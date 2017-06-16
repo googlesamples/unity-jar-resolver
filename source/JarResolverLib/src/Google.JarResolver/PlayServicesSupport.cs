@@ -41,7 +41,7 @@ namespace Google.JarResolver
         /// <summary>
         /// The path to the Android SDK.
         /// </summary>
-        private static string sdk;
+        private static string userSdkPath;
 
         /// <summary>
         /// Log severity.
@@ -75,6 +75,11 @@ namespace Google.JarResolver
         /// The repository paths.
         /// </summary>
         private List<string> repositoryPaths = new List<string>();
+
+        /// <summary>
+        /// Get the set of repository paths.
+        /// </summary>
+        internal List<string> RepositoryPaths { get { return new List<string>(repositoryPaths); } }
 
         /// <summary>
         /// The client dependencies map.  This is a proper subset of dependencyMap.
@@ -131,20 +136,34 @@ namespace Google.JarResolver
             }
         }
 
+        // Map of common dependencies to Android SDK packages.
+        private static List<KeyValuePair<Regex, string>> CommonPackages =
+            new List<KeyValuePair<Regex, string>> {
+                new KeyValuePair<Regex, string>(
+                    new Regex("^com\\.android\\.support:support-.*"),
+                    "extra-android-m2repository"),
+                new KeyValuePair<Regex, string>(
+                    new Regex("^com\\.google\\.android\\.gms:.*"),
+                    "extra-google-m2repository"),
+                new KeyValuePair<Regex, string>(
+                    new Regex("^com\\.google\\.firebase:firebase-.*"),
+                    "extra-google-m2repository")
+        };
 
         private static string SDKInternal
         {
             get
             {
+                var sdkPath = userSdkPath;
 #if UNITY_EDITOR
-                if (String.IsNullOrEmpty(sdk)) {
-                    sdk = UnityEditor.EditorPrefs.GetString("AndroidSdkRoot");
+                if (String.IsNullOrEmpty(sdkPath)) {
+                    sdkPath = UnityEditor.EditorPrefs.GetString("AndroidSdkRoot");
                 }
 #endif  // UNITY_EDITOR
-                if (string.IsNullOrEmpty(sdk)) {
-                    sdk = System.Environment.GetEnvironmentVariable("ANDROID_HOME");
+                if (string.IsNullOrEmpty(sdkPath)) {
+                    sdkPath = System.Environment.GetEnvironmentVariable("ANDROID_HOME");
                 }
-                return sdk;
+                return sdkPath;
             }
         }
 
@@ -235,8 +254,12 @@ namespace Google.JarResolver
             };
             PlayServicesSupport.logger =
                 PlayServicesSupport.logger ?? (logMessageWithLevel ?? legacyLogger);
-            PlayServicesSupport.sdk =
-                String.IsNullOrEmpty(sdkPath) ? PlayServicesSupport.sdk : sdkPath;
+            // Only set the SDK path if it differs to what is configured in the editor or
+            // via an environment variable.  The SDK path can be changed by the user before
+            // this module is reloaded.
+            if (!String.IsNullOrEmpty(sdkPath) && sdkPath != PlayServicesSupport.SDKInternal) {
+                PlayServicesSupport.userSdkPath = sdkPath;
+            }
             string badchars = new string(Path.GetInvalidFileNameChars());
 
             foreach (char ch in clientName)
@@ -334,6 +357,26 @@ namespace Google.JarResolver
         }
 
         /// <summary>
+        /// Lookup common package IDs for a dependency.
+        /// </summary>
+        private static Dependency AddCommonPackageIds(Dependency dep) {
+            if (dep.PackageIds != null) return dep;
+
+            var packageNames = new List<string>();
+            string[] packageIds = null;
+            foreach (var kv in CommonPackages) {
+                var match = kv.Key.Match(dep.Key);
+                if (match.Success) {
+                    packageNames.Add(kv.Value);
+                    break;
+                }
+            }
+            if (packageNames.Count > 0) packageIds = packageNames.ToArray();
+            return new Dependency(dep.Group, dep.Artifact, dep.Version, packageIds: packageIds,
+                                  repositories: dep.Repositories);
+        }
+
+        /// <summary>
         /// Adds a dependency to the project.
         /// </summary>
         /// <remarks>This method should be called for
@@ -362,8 +405,7 @@ namespace Google.JarResolver
         /// <param name="repositories">List of additional repository directories to search for
         /// this artifact.</param>
         public void DependOn(string group, string artifact, string version,
-                             string[] packageIds = null, string[] repositories = null)
-        {
+                             string[] packageIds = null, string[] repositories = null) {
             Log("DependOn - group: " + group +
                 " artifact: " + artifact +
                 " version: " + version +
@@ -376,9 +418,9 @@ namespace Google.JarResolver
             repositories = repositories ?? new string[] {};
             var depRepoList = new List<string>(repositories);
             depRepoList.AddRange(repositoryPaths);
-            var dep = new Dependency(group, artifact, version,
-                                     packageIds: packageIds,
-                                     repositories: UniqueList(depRepoList).ToArray());
+            var dep = AddCommonPackageIds(new Dependency(
+                group, artifact, version, packageIds: packageIds,
+                repositories: UniqueList(depRepoList).ToArray()));
             clientDependenciesMap[dep.Key] = dep;
         }
 
@@ -432,16 +474,36 @@ namespace Google.JarResolver
 
                     var combinedRepos =
                         new List<string>(dependencyItem.Value.Repositories ?? new string[] {});
-                    combinedRepos.AddRange(repoPaths);
+                    if (repoPaths != null) combinedRepos.AddRange(repoPaths);
                     combinedRepos = UniqueList<string>(combinedRepos);
 
-                    foreach (var transitiveDependency in GetDependencies(dependencyItem.Value,
-                                                                         combinedRepos)) {
-                        if (!processedDependencies.Contains(transitiveDependency.Key)) {
-                            transitiveDependencies[transitiveDependency.Key] =
-                                transitiveDependency;
-                            pendingTransitiveDependencies[transitiveDependency.Key] =
-                                transitiveDependency;
+                    try {
+                        foreach (var transitiveDependency in GetDependencies(dependencyItem.Value,
+                                                                             combinedRepos)) {
+                            if (!processedDependencies.Contains(transitiveDependency.Key)) {
+                                transitiveDependencies[transitiveDependency.Key] =
+                                    transitiveDependency;
+                                pendingTransitiveDependencies[transitiveDependency.Key] =
+                                    transitiveDependency;
+                            }
+                        }
+                    } catch (ResolutionException exception) {
+                        foreach (var dep in exception.MissingDependencies) {
+                            // This dependency is missing so stop traversal at this item.
+                            transitiveDependencies[dep.Key] = AddCommonPackageIds(dep);
+                            // Search the set of registered dependencies to see whether the user
+                            // specified this explicitly.  This may allow the user to determine
+                            // which packages to download in the Android SDK manager.
+                            foreach (var instance in instances.Values) {
+                                Dependency dependOnDependency;
+                                if (instance.clientDependenciesMap.TryGetValue(
+                                         dep.Key, out dependOnDependency)) {
+                                    if (dependOnDependency.PackageIds != null) {
+                                        transitiveDependencies[dep.Key] = dependOnDependency;
+                                        break;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -505,7 +567,7 @@ namespace Google.JarResolver
                         string artifactVersion = ExtractVersionFromFileName(
                             filenameWithoutExtension.Substring(dep.Artifact.Length + 1)
                         );
-                        
+
                         if (artifactVersion != null)
                         {
                             bool reportDependency = true;
@@ -925,8 +987,11 @@ namespace Google.JarResolver
                             }
                             else if (!possible)
                             {
-                                throw new ResolutionException("Cannot resolve " +
-                                    currentDep + " and " + candidate);
+                                throw new ResolutionException(
+                                    String.Format("Cannot resolve {0} and {1}", currentDep.Key,
+                                                  candidate.Key),
+                                    missingDependencies: new List<Dependency> {
+                                                                  currentDep, candidate });
                             }
                         }
                     }
@@ -940,8 +1005,9 @@ namespace Google.JarResolver
                         }
                         else
                         {
-                            throw new ResolutionException("Cannot resolve " +
-                                currentDep);
+                            throw new ResolutionException(
+                                String.Format("Cannot resolve {0}", currentDep.Key),
+                                missingDependencies: new List<Dependency> { currentDep });
                         }
                     }
 
@@ -1079,7 +1145,9 @@ namespace Google.JarResolver
                         copiedFiles[aarFile] = destName;
                     }
                 } else {
-                    throw new ResolutionException("Cannot find artifact for " + dep);
+                    throw new ResolutionException(
+                        String.Format("Cannot find artifact for {0}", dep.Key),
+                        missingDependencies: new List<Dependency> { dep });
                 }
             }
             return copiedFiles;
@@ -1135,12 +1203,13 @@ namespace Google.JarResolver
 
         }
 
-        internal Dependency FindCandidate(Dependency dep)
+        internal Dependency FindCandidate(Dependency dep, bool logMissing = true)
         {
-            return FindCandidate(dep, repositoryPaths);
+            return FindCandidate(dep, repositoryPaths, logMissing: logMissing);
         }
 
-        internal static Dependency FindCandidate(Dependency dep, List<string> repoPaths)
+        internal static Dependency FindCandidate(Dependency dep, List<string> repoPaths,
+                                                 bool logMissing = true)
         {
             // If artifacts associated with dependencies have been found, return this dependency..
             if (!String.IsNullOrEmpty(dep.RepoPath) && dep.HasPossibleVersions) return dep;
@@ -1177,13 +1246,15 @@ namespace Google.JarResolver
                 }
                 else
                 {
-                    Log("Repo not found: " + Path.GetFullPath(repoPath));
+                    Log("Repo not found: " + Path.GetFullPath(repoPath), verbose: true);
                 }
             }
-            Log(String.Format("Unable to find dependency {0} in paths ({1}).\n\n" +
-                              "{0} was referenced by:\n{2}\n\n",
-                              dep.Key, String.Join(", ", new List<string>(repoPaths).ToArray()),
-                              dep.CreatedBy), level: LogLevel.Error);
+            if (logMissing) {
+                Log(String.Format("Unable to find dependency {0} in paths ({1}).\n\n" +
+                                  "{0} was referenced by:\n{2}\n\n",
+                                  dep.Key, String.Join(", ", new List<string>(repoPaths).ToArray()),
+                                  dep.CreatedBy), level: LogLevel.Warning);
+            }
             return null;
         }
 
@@ -1275,6 +1346,7 @@ namespace Google.JarResolver
             string groupId = null;
             string artifactId = null;
             string version = null;
+            var missingDependencies = new List<Dependency>();
             while (reader.Read())
             {
                 if (reader.Name == "dependencies")
@@ -1308,22 +1380,28 @@ namespace Google.JarResolver
                     // Unfortunately, the Maven POM doesn't contain metadata to map the package
                     // to each Android SDK package ID so the list "packageIds" is left as null in
                     // this case.
-                    Dependency d = FindCandidate(new Dependency(groupId, artifactId, version,
-                                                                repositories: repoPaths.ToArray()),
-                                                 repoPaths);
-                    if (d == null)
-                    {
-                        throw new ResolutionException("Cannot find candidate artifact for " +
-                            groupId + ":" + artifactId + ":" + version);
+                    Dependency searchDep = new Dependency(groupId, artifactId, version,
+                                                          repositories: repoPaths.ToArray());
+                    Dependency d = FindCandidate(searchDep, repoPaths);
+                    if (d != null) {
+                        dependencyList.Add(d);
+                    } else {
+                        missingDependencies.Add(searchDep);
                     }
-
                     groupId = null;
                     artifactId = null;
                     version = null;
-                    dependencyList.Add(d);
                 }
             }
-
+            if (missingDependencies.Count > 0) {
+                var depKeys = new List<string>();
+                foreach (var missingDep in missingDependencies) depKeys.Add(missingDep.Key);
+                foreach (var foundDep in dependencyList) depKeys.Add(foundDep.Key);
+                throw new ResolutionException(
+                    String.Format("Cannot find candidate artifacts for '{0}'",
+                                  String.Join(", ", depKeys.ToArray())),
+                    missingDependencies: missingDependencies);
+            }
             return dependencyList;
         }
 
@@ -1353,11 +1431,14 @@ namespace Google.JarResolver
             Dictionary<string, Dependency> dependencyMap = new Dictionary<string, Dependency>();
             foreach (var dependencyItem in dependencies) {
                 Dependency foundDependency =
-                    findCandidates ? FindCandidate(dependencyItem.Value, repoPaths) : null;
+                    findCandidates ? FindCandidate(dependencyItem.Value, repoPaths,
+                                                   logMissing: !keepMissing) : null;
                 if (foundDependency == null) {
                     if (!keepMissing) {
-                        throw new ResolutionException("Cannot find candidate artifacts for " +
-                                                      dependencyItem.Value.Key);
+                        throw new ResolutionException(
+                            String.Format("Cannot find candidate artifacts for {0}",
+                                          dependencyItem.Value.Key),
+                            missingDependencies: new List<Dependency> { dependencyItem.Value });
                     }
                     foundDependency = dependencyItem.Value;
                 }

@@ -39,6 +39,13 @@ namespace GooglePlayServices
             public string stderr;
             /// Exit code returned by the tool when execution is complete.
             public int exitCode;
+            /// String that can be used in an error message.
+            /// This contains:
+            /// * The command executed.
+            /// * Standard output string.
+            /// * Standard error string.
+            /// * Exit code.
+            public string message;
         };
 
         /// <summary>
@@ -607,6 +614,8 @@ namespace GooglePlayServices
             result.stdout = String.Join("", stdouterr[0].ToArray());
             result.stderr = String.Join("", stdouterr[1].ToArray());
             result.exitCode = process.ExitCode;
+            result.message = FormatResultMessage(toolPath, arguments, result.stdout,
+                                                 result.stderr, result.exitCode);
             Console.InputEncoding = inputEncoding;
             Console.OutputEncoding = outputEncoding;
             return result;
@@ -619,6 +628,28 @@ namespace GooglePlayServices
         public static string[] SplitLines(string multilineString)
         {
             return Regex.Split(multilineString, "\r\n|\r|\n");
+        }
+
+        /// <summary>
+        /// Format a command excecution error message.
+        /// </summary>
+        /// <param name="toolPath">Tool executed.</param>
+        /// <param name="arguments">Arguments used to execute the tool.</param>
+        /// <param name="stdout">Standard output stream from tool execution.</param>
+        /// <param name="stderr">Standard error stream from tool execution.</param>
+        /// <param name="exitCode">Result of the tool.</param>
+        private static string FormatResultMessage(string toolPath, string arguments,
+                                                  string stdout, string stderr,
+                                                  int exitCode) {
+            return String.Format(
+                "{0} '{1} {2}'\n" +
+                "stdout:\n" +
+                "{3}\n" +
+                "stderr:\n" +
+                "{4}\n" +
+                "exit code: {5}\n",
+                exitCode == 0 ? "Successfully executed" : "Failed to run",
+                toolPath, arguments, stdout, stderr, exitCode);
         }
 
 #if UNITY_EDITOR

@@ -17,6 +17,7 @@
 namespace Google.JarResolver
 {
     using System;
+    using System.Collections.Generic;
 
     /// <summary>
     /// Resolution exception. This is a checked exception for resolution problems.
@@ -25,12 +26,19 @@ namespace Google.JarResolver
     public class ResolutionException : Exception
     {
         /// <summary>
-        /// Initializes a new instance of the <see cref="Google.JarResolver.ResolutionException"/> class.
+        /// List of missing dependencies if applicable.
+        /// </summary>
+        public List<Dependency> MissingDependencies = new List<Dependency>();
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Google.JarResolver.ResolutionException"/>
+        /// class.
         /// </summary>
         /// <param name="msg">Message of the exception.</param>
-        public ResolutionException(string msg)
-            : base(msg)
-        {
+        /// <param name="missingDependencies">List of missing dependencies.</param>
+        public ResolutionException(string msg, IEnumerable<Dependency> missingDependencies = null)
+            : base(msg) {
+            MissingDependencies = new List<Dependency>(missingDependencies);
         }
     }
 }

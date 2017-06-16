@@ -67,6 +67,11 @@ namespace GooglePlayServices
         public bool result = false;
 
         /// <summary>
+        /// Whether either button was clicked.
+        /// </summary>
+        private bool yesNoClicked = false;
+
+        /// <summary>
         /// Current position of the scrollbar.
         /// </summary>
         public Vector2 scrollPosition;
@@ -91,6 +96,7 @@ namespace GooglePlayServices
             summaryText = "";
             bodyText = "";
             result = false;
+            yesNoClicked = false;
             scrollPosition = new Vector2(0, 0);
             minSize = new Vector2(300, 200);
             position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
@@ -138,6 +144,7 @@ namespace GooglePlayServices
             // If yes or no buttons were pressed, call the buttonClicked delegate.
             if (yesPressed || noPressed)
             {
+                yesNoClicked = true;
                 if (yesPressed)
                 {
                     result = true;
@@ -154,6 +161,14 @@ namespace GooglePlayServices
         protected virtual void OnLostFocus()
         {
             if (modal) Focus();
+        }
+
+        // If the window is destroyed click the no button if a listener is attached.
+        protected virtual void OnDestroy() {
+            if (!yesNoClicked) {
+                result = false;
+                if (buttonClicked != null) buttonClicked(this);
+            }
         }
     }
 

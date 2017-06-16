@@ -1,3 +1,7 @@
+# Version 1.2.29 - Jun 16, 2017
+## New Features
+* Added support for the Android sdkmanager tool.
+
 # Version 1.2.28 - Jun 8, 2017
 ## Bug Fixes
 * Fixed non-shell command line execution (regression from

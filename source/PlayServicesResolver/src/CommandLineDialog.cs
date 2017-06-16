@@ -239,5 +239,11 @@ namespace GooglePlayServices
                 EditorUtility.ClearProgressBar();
             }
         }
+
+        // Hide the progress bar if the window is closed.
+        protected override void OnDestroy() {
+            if (progressBarVisible) EditorUtility.ClearProgressBar();
+            base.OnDestroy();
+        }
     }
 }
