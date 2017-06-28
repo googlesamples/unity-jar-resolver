@@ -614,7 +614,10 @@ public static class IOSResolver {
     /// Whether or not we are integrating the pod dependencies into an Xcode build that Unity loads.
     /// </summary>
     public static bool CocoapodsIntegrationEnabled {
-        get { return CocoapodsIntegrationMethodPref != CocoapodsIntegrationMethod.None; }
+        get {
+            return EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
+                CocoapodsIntegrationMethodPref != CocoapodsIntegrationMethod.None;
+        }
     }
 
     /// <summary>
