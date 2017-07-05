@@ -1,3 +1,8 @@
+# Version 1.2.30 - Jul 5, 2017
+## Bug Fixes
+* Fixed Cocoapods being installed when the build target isn't iOS.
+* Added support for malformed AARs with missing classes.jar.
+
 # Version 1.2.29 - Jun 16, 2017
 ## New Features
 * Added support for the Android sdkmanager tool.

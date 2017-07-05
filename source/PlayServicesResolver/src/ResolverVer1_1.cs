@@ -773,9 +773,12 @@ namespace GooglePlayServices
 
                     string temporaryDirectory = CreateTemporaryDirectory();
                     if (temporaryDirectory == null) return false;
-                    string manifestFilename = "AndroidManifest.xml";
                     try {
-                        if (ExtractAar(aarPath, new string[] {manifestFilename, "jni"},
+                        string manifestFilename = "AndroidManifest.xml";
+                        string classesFilename = "classes.jar";
+                        if (aarPath.EndsWith(".aar") &&
+                            ExtractAar(aarPath, new string[] {manifestFilename, "jni",
+                                                              classesFilename},
                                        temporaryDirectory)) {
                             string manifestPath = Path.Combine(temporaryDirectory,
                                                                manifestFilename);
@@ -783,6 +786,10 @@ namespace GooglePlayServices
                                 string manifest = File.ReadAllText(manifestPath);
                                 explode = manifest.IndexOf("${applicationId}") >= 0;
                             }
+                            // If the AAR is badly formatted (e.g does not contain classes.jar)
+                            // explode it so that we can create classes.jar.
+                            explode |= !File.Exists(Path.Combine(temporaryDirectory,
+                                                                 classesFilename));
                             // If the AAR contains more than one ABI and Unity's build is
                             // targeting a single ABI, explode it so that unused ABIs can be
                             // removed.

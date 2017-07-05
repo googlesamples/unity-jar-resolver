@@ -391,10 +391,15 @@ namespace GooglePlayServices
 
                 // Move the classes.jar file to libs.
                 string classesFile = Path.Combine(workingDir, "classes.jar");
+                string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
+                if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
                 if (File.Exists(classesFile)) {
-                    string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
-                    if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
                     File.Move(classesFile, targetClassesFile);
+                } else {
+                    // Generate an empty classes.jar file.
+                    string temporaryDirectory = CreateTemporaryDirectory();
+                    if (temporaryDirectory == null) return false;
+                    ArchiveAar(targetClassesFile, temporaryDirectory);
                 }
             }
 
