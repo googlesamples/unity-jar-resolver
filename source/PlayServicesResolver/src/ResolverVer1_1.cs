@@ -687,10 +687,11 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Determine whether a Unity library project (extract AAR) contains native libraries.
+        /// Get the set of native library ABIs in an exploded AAR.
         /// </summary>
-        /// <return>ABI associated with the directory.</return>
-        private string AarDirectoryDetermineAbi(string aarDirectory) {
+        /// <param name="aarDirectory">Directory to search for ABIs.</param>
+        /// <returns>Set of ABI directory names in the exploded AAR.</returns>
+        private HashSet<string> AarDirectoryFindAbis(string aarDirectory) {
             var foundAbis = new HashSet<string>();
             foreach (var libDirectory in NATIVE_LIBRARY_DIRECTORIES) {
                 foreach (var kv in UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY) {
@@ -700,6 +701,15 @@ namespace GooglePlayServices
                     }
                 }
             }
+            return foundAbis;
+        }
+
+        /// <summary>
+        /// Determine whether a Unity library project (extract AAR) contains native libraries.
+        /// </summary>
+        /// <param name="foundAbis">Set of ABI directories in the AAR.</param>
+        /// <return>ABI associated with the directory.</return>
+        private string DetermineAbiFromAarAbiDirectories(HashSet<string> foundAbis) {
             var numberOfAbis = foundAbis.Count;
             if (numberOfAbis > 0) {
                 if (numberOfAbis == 1) foreach (var abi in foundAbis) return abi;
@@ -761,7 +771,8 @@ namespace GooglePlayServices
                         // If the directory contains native libraries update the target ABI.
                         if (!useCachedExplodeData) {
                             newAarData = true;
-                            targetAbi = AarDirectoryDetermineAbi(aarDirectory);
+                            targetAbi = DetermineAbiFromAarAbiDirectories(
+                                AarDirectoryFindAbis(aarDirectory));
                         }
                         explode = true;
                     }
@@ -794,7 +805,14 @@ namespace GooglePlayServices
                             // targeting a single ABI, explode it so that unused ABIs can be
                             // removed.
                             newAarData = true;
-                            targetAbi = AarDirectoryDetermineAbi(temporaryDirectory);
+                            var abiDirs = AarDirectoryFindAbis(temporaryDirectory);
+                            // Unity 2017's native build system does not support AARs that contain
+                            // native libraries so force explosion to pick up native libraries using
+                            // Eclipse / Ant style projects.
+                            explode |=
+                                Google.VersionHandler.FileMetadata.GetUnityVersionMajorMinor() >=
+                                2017.0f && abiDirs.Count > 0;
+                            targetAbi = DetermineAbiFromAarAbiDirectories(abiDirs);
                             // NOTE: Unfortunately as of Unity 5.5 the internal Gradle build
                             // also blindly includes all ABIs from AARs included in the project
                             // so we need to explode the AARs and remove unused ABIs.

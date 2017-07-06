@@ -1,3 +1,12 @@
+# Version 1.2.31 - Jul 5, 2017
+## Bug Fixes
+* Force expansion of AARs with native components when using Unity 2017
+  with the internal build system.  In contrast to Unity 5.x, Unity 2017's
+  internal build system does not include native libraries included in AARs.
+  Forcing expansion of AARs with native components generates an
+  Ant / Eclipse project for each AAR which is correctly included by Unity
+  2017's internal build system.
+
 # Version 1.2.30 - Jul 5, 2017
 ## Bug Fixes
 * Fixed Cocoapods being installed when the build target isn't iOS.

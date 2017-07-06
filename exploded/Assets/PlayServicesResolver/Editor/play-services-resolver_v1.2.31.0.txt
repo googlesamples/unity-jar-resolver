@@ -1,0 +1,7 @@
+Assets/PlayServicesResolver/Editor/Google.IOSResolver_v1.2.31.0.dll
+Assets/PlayServicesResolver/Editor/Google.JarResolver_v1.2.31.0.dll
+Assets/PlayServicesResolver/Editor/Google.VersionHandler_v1.2.31.0.dll
+Assets/PlayServicesResolver/generate_gradle_prebuild.exe
+Assets/PlayServicesResolver/generate_gradle_prebuild.py
+Assets/PlayServicesResolver/gradle-template.zip
+Assets/PlayServicesResolver/volatile_paths.json
