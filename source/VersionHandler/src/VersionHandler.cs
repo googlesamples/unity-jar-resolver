@@ -65,12 +65,15 @@ public class VersionHandler : AssetPostprocessor {
 
         // Prefix which identifies the targets metadata in the filename or
         // asset label.
-        private static string TOKEN_TARGETS = "t";
+        private static string[] TOKEN_TARGETS = new [] { "targets-", "t" };
         // Prefix which identifies the version metadata in the filename or
         // asset label.
-        private static string TOKEN_VERSION = "v";
+        private static string[] TOKEN_VERSION = new [] { "version-", "v" };
+        // Prefix which identifies the .NET version metadata in the filename
+        // or asset label.
+        private static string[] TOKEN_DOTNET_TARGETS = new [] { "dotnet-" };
         // Prefix which indicates this file is a package manifest.
-        private static string FILENAME_TOKEN_MANIFEST = "manifest";
+        private static string[] TOKEN_MANIFEST = new [] { "manifest" };
 
         // Delimiter for version numbers.
         private static char[] VERSION_DELIMITER = new char[] { '.' };
@@ -93,6 +96,9 @@ public class VersionHandler : AssetPostprocessor {
         /// module.
         /// </summary>
         public static string ASSET_LABEL = "gvh";
+
+        // Special build target name which enables all platforms / build targets.
+        public static string BUILD_TARGET_NAME_ANY = "any";
 
         // Map of build target names to BuildTarget enumeration names.
         // We don't use BuildTarget enumeration values here as Unity has a
@@ -117,10 +123,19 @@ public class VersionHandler : AssetPostprocessor {
             {"ps4", "PS4"},
             {"xboxone", "XboxOne"},
             {"samsungtv", "SamsungTV"},
+            {"n3rds", "N3DS"},
             {"nintendo3ds", "Nintendo3DS"},
             {"wiiu", "WiiU"},
             {"tvos", "tvOS"},
+            {"switch", "Switch"},
         };
+
+        // Available .NET framework versions.
+        public const string DOTNET_RUNTIME_VERSION_LEGACY = "3.5";
+        public const string DOTNET_RUNTIME_VERSION_LATEST = "4.5";
+        // Matches the .NET framework 3.5 enum value
+        // UnityEditor.PlayerSettings.scriptingRuntimeVersion in Unity 2017 and beyond.
+        private const string SCRIPTING_RUNTIME_LEGACY = "Legacy";
 
         /// <summary>
         /// Get a set of build target names mapped to supported BuildTarget
@@ -194,6 +209,39 @@ public class VersionHandler : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Property that retrieves UnityEditor.PlayerSettings.scriptingRuntimeVersion.
+        /// </summary>
+        /// This retrieves UnityEditor.PlayerSettings.scriptingRuntimeVersion using reflection
+        /// so that this module is compatible with versions of Unity earlier than 2017.
+        /// <returns>String representation of
+        /// UnityEditor.PlayerSettings.scriptingRuntimeVersion.  If the property isn't
+        /// available this returns SCRIPTING_RUNTIME_LEGACY.</returns>
+        private static string ScriptingRuntimeVersion {
+            get {
+                var scriptingVersionProperty =
+                    typeof(UnityEditor.PlayerSettings).GetProperty("scriptingRuntimeVersion");
+                var scriptingVersionValue = scriptingVersionProperty != null ?
+                    scriptingVersionProperty.GetValue(null, null) : null;
+                var scriptingVersionString = scriptingVersionValue != null ?
+                    scriptingVersionValue.ToString() : SCRIPTING_RUNTIME_LEGACY;
+                return scriptingVersionString;
+            }
+        }
+
+        /// <summary>
+        /// Retrieve the UnityEditor.PlayerSettings.scriptingRuntimeVersion as a version string.
+        /// </summary>
+        /// <returns>.NET version string.</returns>
+        public static string ScriptingRuntimeDotNetVersion {
+            get {
+                if (ScriptingRuntimeVersion == SCRIPTING_RUNTIME_LEGACY) {
+                    return FileMetadata.DOTNET_RUNTIME_VERSION_LEGACY;
+                }
+                return FileMetadata.DOTNET_RUNTIME_VERSION_LATEST;
+            }
+        }
+
+        /// <summary>
         /// Name of the file use to construct this object.
         /// </summary>
         public string filename = "";
@@ -220,6 +268,11 @@ public class VersionHandler : AssetPostprocessor {
         public bool isManifest = false;
 
         /// <summary>
+        /// List of compatible .NET versions parsed from this asset.
+        /// </summary>
+        public string[] dotNetTargets = null;
+
+        /// <summary>
         /// Parse metadata from filename and store in this class.
         /// </summary>
         /// <param name="filename">Name of the file to parse.</param>
@@ -235,14 +288,7 @@ public class VersionHandler : AssetPostprocessor {
             if (tokens.Length > 1) {
                 filenameComponents.basenameNoExtension = tokens[0];
                 for (int i = 1; i < tokens.Length; ++i) {
-                    string token = tokens[i];
-                    if (token == FILENAME_TOKEN_MANIFEST) {
-                        isManifest = true;
-                    } else if (token.StartsWith(TOKEN_TARGETS)) {
-                        targets = ParseTargets(token);
-                    } else if (token.StartsWith(TOKEN_VERSION)) {
-                        versionString = ParseVersion(token);
-                    }
+                    ParseToken(tokens[i]);
                 }
             }
             // Parse metadata from asset labels if it hasn't been specified in
@@ -250,24 +296,7 @@ public class VersionHandler : AssetPostprocessor {
             AssetImporter importer = GetAssetImporter();
             if (importer != null) {
                 foreach (string label in AssetDatabase.GetLabels(importer)) {
-                    // Labels are converted to title case in the asset database
-                    // so convert to lower case before parsing.
-                    string lowerLabel = label.ToLower();
-                    if (lowerLabel.StartsWith(LABEL_PREFIX)) {
-                        string token =
-                            lowerLabel.Substring(LABEL_PREFIX.Length);
-                        if (token.StartsWith(TOKEN_TARGETS)) {
-                            if (targets == null) {
-                                targets = ParseTargets(token);
-                            }
-                        } else if (token.StartsWith(TOKEN_VERSION)) {
-                            if (String.IsNullOrEmpty(versionString)) {
-                                versionString = ParseVersion(token);
-                            }
-                        } else if (token.Equals(FILENAME_TOKEN_MANIFEST)) {
-                            isManifest = true;
-                        }
-                    }
+                    ParseLabel(label);
                 }
             }
 
@@ -285,30 +314,94 @@ public class VersionHandler : AssetPostprocessor {
         }
 
         /// <summary>
-        /// Parse version from a filename or label field.
+        /// Determine whether a token matches a set of prefixes extracting the value(s) if it
+        /// does.
         /// </summary>
-        /// <param name="token">String to parse.  Should start with
-        /// TOKEN_VERSION</param>
-        /// <returns>Version string parsed from the token.</returns>
-        private static string ParseVersion(string token) {
-            return token.Substring(TOKEN_VERSION.Length);
+        /// <param name="token">Token to parse.</param>
+        /// <param name="prefixes">Set of prefixes to compare with the token.</param>
+        /// <param name="prefix">Added to each item in prefixes before comparing with the token.
+        /// </param>
+        /// <returns>Array of values if the token matches the prefxies, null otherwise.</returns>
+        private string[] MatchPrefixesGetValues(string token, string[] prefixes, string prefix) {
+            var tokenLower = token.ToLower();
+            foreach (var item in prefixes) {
+                var itemWithPrefix = prefix + item;
+                if (tokenLower.StartsWith(itemWithPrefix)) {
+                    return token.Substring(itemWithPrefix.Length).Split(FIELD_SEPARATOR);
+                }
+            }
+            return null;
         }
 
         /// <summary>
-        /// Parse target names from a filename or label field.
+        /// Parse a metadata token and store the value this class.
         /// </summary>
-        /// <param name="token">String to parse.  Should start with
-        /// TOKEN_TARGETS</param>
-        /// <returns>List of target names parsed from the token.</returns>
-        private static string[] ParseTargets(string token) {
-            string[] parsedTargets =
-                token.Substring(TOKEN_TARGETS.Length).Split(FIELD_SEPARATOR);
-            // Convert all target names to lower case.
-            string[] targets = new string[parsedTargets.Length];
-            for (int i = 0; i < parsedTargets.Length; ++i) {
-                targets[i] = parsedTargets[i].ToLower();
+        /// <param name="token">Token to parse.</param>
+        /// <param name="prefix">Added as a prefix applied to each prefix compared with the
+        /// token.</param>
+        /// <returns>true if the token is parsed, false otherwise.</returns>
+        private bool ParseToken(string token, string prefix = null) {
+            prefix = prefix ?? "";
+            var values = MatchPrefixesGetValues(token, TOKEN_MANIFEST, prefix);
+            if (values != null) {
+                isManifest = true;
+                return true;
             }
-            return targets;
+            values = MatchPrefixesGetValues(token, TOKEN_DOTNET_TARGETS, prefix);
+            if (values != null) {
+                dotNetTargets = values;
+                return true;
+            }
+            values = MatchPrefixesGetValues(token, TOKEN_TARGETS, prefix);
+            if (values != null) {
+                if (targets == null) {
+                    // Convert all target names to lower case.
+                    targets = new string[values.Length];
+                    for (int i = 0; i < targets.Length; ++i) {
+                        targets[i] = values[i].ToLower();
+                    }
+                    return true;
+                }
+            }
+            values = MatchPrefixesGetValues(token, TOKEN_VERSION, prefix);
+            if (values != null) {
+                if (String.IsNullOrEmpty(versionString) && values.Length > 0) {
+                    versionString = values[0];
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Parse a metadata token (from an asset label) and store the value this class.
+        /// </summary>
+        /// <param name="label">Asset label to parse.</param>
+        /// <returns>true if the token is parsed, false otherwise.</returns>
+        private bool ParseLabel(string label) {
+            return ParseToken(label, prefix: LABEL_PREFIX);
+        }
+
+        /// <summary>
+        /// Create a field from a prefix and set of values.
+        /// </summary>
+        /// <param name="fieldPrefixes">The first item of this list is used as the prefix.
+        /// </param>
+        /// <param name="values">Set of values to store with the field.</param>
+        private string CreateToken(string[] fieldPrefixes, string[] values) {
+            return String.Format("{0}{1}", fieldPrefixes[0],
+                                 values == null ? "" :
+                                     String.Join(Char.ToString(FIELD_SEPARATOR[0]), values));
+        }
+
+        /// <summary>
+        /// Create an asset label from a prefix and set of values.
+        /// </summary>
+        /// <param name="fieldPrefixes">The first item of this list is used as the prefix.
+        /// </param>
+        /// <param name="values">Set of values to store with the field.</param>
+        private string CreateLabel(string[] fieldPrefixes, string[] values) {
+            return LABEL_PREFIX + CreateToken(fieldPrefixes, values);
         }
 
         /// <summary>
@@ -323,6 +416,14 @@ public class VersionHandler : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Determine whether any build targets have been specified.
+        /// </summary>
+        /// <returns>true if targets are specified, false otherwise.</returns>
+        public bool GetBuildTargetsSpecified() {
+            return targets != null && targets.Length > 0;
+        }
+
+        /// <summary>
         /// Get the list of build targets this file is compatible with.
         /// </summary>
         /// <returns>Set of BuildTarget (platforms) this is compatible with.
@@ -331,29 +432,48 @@ public class VersionHandler : AssetPostprocessor {
             HashSet<BuildTarget> buildTargetSet = new HashSet<BuildTarget>();
             var buildTargetToEnum = GetBuildTargetNameToEnum();
             if (targets != null) {
-                foreach (string target in targets) {
-                    BuildTarget buildTarget;
-                    if (buildTargetToEnum.TryGetValue(target, out buildTarget)) {
-                        buildTargetSet.Add(buildTarget);
-                    } else if (!target.Equals("editor")) {
-                        Log(filename + " reference to unknown target " +
-                            target + " the version handler may out of date.",
-                            level: LogLevel.Error);
+                var targetsSet = new HashSet<string>(targets);
+                if (targetsSet.Contains(BUILD_TARGET_NAME_ANY)) {
+                    buildTargetSet.UnionWith(buildTargetToEnum.Values);
+                } else {
+                    foreach (string target in targets) {
+                        BuildTarget buildTarget;
+                        if (buildTargetToEnum.TryGetValue(target, out buildTarget)) {
+                            buildTargetSet.Add(buildTarget);
+                        } else if (!target.Equals("editor")) {
+                            Log(filename + " reference to unknown target " +
+                                target + " the version handler may out of date.",
+                                level: LogLevel.Error);
+                        }
                     }
                 }
-
             }
             return buildTargetSet;
+        }
+
+        /// <summary>
+        /// Get the list of .NET versions this file is compatible with.
+        /// </summary>
+        /// <returns>Set of .NET versions this is compatible with.  This returns an empty
+        /// set if the state of the file should not be modified when the .NET framework
+        /// version changes.</returns>
+        public HashSet<string> GetDotNetTargets() {
+            var dotNetTargetSet = new HashSet<string>();
+            if (dotNetTargets != null) dotNetTargetSet.UnionWith(dotNetTargets);
+            return dotNetTargetSet;
         }
 
         /// <summary>
         /// Save metadata from this class into the asset's labels.
         /// </summary>
         public void UpdateAssetLabels() {
+            if (String.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(filename))) return;
             AssetImporter importer = AssetImporter.GetAtPath(filename);
-            List<string> labels = new List<String>();
+            var labels = new List<string>();
+            var currentLabels = new List<string>();
             // Strip labels we're currently managing.
             foreach (string label in AssetDatabase.GetLabels(importer)) {
+                currentLabels.Add(label);
                 if (!(label.ToLower().StartsWith(LABEL_PREFIX) ||
                       label.ToLower().Equals(ASSET_LABEL))) {
                     labels.Add(label);
@@ -364,15 +484,25 @@ public class VersionHandler : AssetPostprocessor {
             labels.Add(ASSET_LABEL);
             // Add labels for the metadata in this class.
             if (!String.IsNullOrEmpty(versionString)) {
-                labels.Add(LABEL_PREFIX + TOKEN_VERSION + versionString);
+                labels.Add(CreateLabel(TOKEN_VERSION, new [] { versionString }));
             }
             if (targets != null && targets.Length > 0) {
-                labels.Add(LABEL_PREFIX + TOKEN_TARGETS +
-                           String.Join(Char.ToString(FIELD_SEPARATOR[0]),
-                                       targets));
+                labels.Add(CreateLabel(TOKEN_TARGETS, targets));
+            }
+            if (dotNetTargets != null && dotNetTargets.Length > 0) {
+                labels.Add(CreateLabel(TOKEN_DOTNET_TARGETS, dotNetTargets));
             }
             if (isManifest) {
-                labels.Add(LABEL_PREFIX + FILENAME_TOKEN_MANIFEST);
+                labels.Add(CreateLabel(TOKEN_MANIFEST, null));
+            }
+            if (!(new HashSet<string>(labels)).SetEquals(new HashSet<string>(currentLabels))) {
+                Log(String.Format("Changing labels of {0}\n" +
+                                  "from: {1}\n" +
+                                  "to: {2}\n",
+                                  filename,
+                                  String.Join(", ", currentLabels.ToArray()),
+                                  String.Join(", ", labels.ToArray())),
+                    verbose: true);
             }
             AssetDatabase.SetLabels(importer, labels.ToArray());
         }
@@ -610,6 +740,7 @@ public class VersionHandler : AssetPostprocessor {
             }
 
             // Configure targeting for each revision of the plugin.
+            var dotNetVersion = FileMetadata.ScriptingRuntimeDotNetVersion;
             foreach (FileMetadata metadata in metadataByVersion.Values) {
                 versionIndex++;
                 PluginImporter pluginImporter = null;
@@ -621,6 +752,9 @@ public class VersionHandler : AssetPostprocessor {
                 }
                 bool editorEnabled = metadata.GetEditorEnabled();
                 var selectedTargets = metadata.GetBuildTargets();
+                var hasBuildTargets = metadata.GetBuildTargetsSpecified();
+                var dotNetTargets = metadata.GetDotNetTargets();
+                bool hasDotNetTargets = dotNetTargets.Count > 0;
                 bool modifiedThisVersion = false;
                 // Only enable the most recent plugin - SortedDictionary
                 // orders keys in ascending order.
@@ -632,16 +766,40 @@ public class VersionHandler : AssetPostprocessor {
                     editorEnabled = false;
                     selectedTargets = new HashSet<BuildTarget>();
                 } else {
+                    if (hasDotNetTargets) {
+                        // Determine whether this is supported by the selected .NET version.
+                        bool dotNetSupported = dotNetTargets.Contains(dotNetVersion);
+                        editorEnabled = dotNetSupported;
+                        if (dotNetSupported) {
+                            if (!hasBuildTargets) {
+                                // If no build targets are specified, target everything except the
+                                // editor.
+                                selectedTargets = new HashSet<BuildTarget>(
+                                    FileMetadata.GetBuildTargetNameToEnum().Values);
+                                hasBuildTargets = true;
+                            }
+                        } else {
+                            selectedTargets = new HashSet<BuildTarget>();
+                        }
+                    }
                     // Track the current version.
                     enabledVersion = metadata.versionString;
                 }
+                // If the metadata for this file specifies no build setting changes, ignore the
+                // file.
+                if (!(obsoleteVersion || hasDotNetTargets || hasBuildTargets)) {
+                    continue;
+                }
+                var dotNetVersionMessage = hasDotNetTargets ? String.Format(
+                        "\n.NET selected {0}, supported ({1})", dotNetVersion,
+                        String.Join(", ", (new List<string>(dotNetTargets)).ToArray())) : "";
                 // Enable / disable editor and platform settings.
-                if (pluginImporter.GetCompatibleWithEditor() !=
-                    editorEnabled) {
-                    Log(String.Format("{0}: editor enabled {1} (current: {2})",
+                if (pluginImporter.GetCompatibleWithEditor() != editorEnabled) {
+                    Log(String.Format("{0}: editor enabled {1} (current: {2}){3}",
                                       metadata.filename,
                                       editorEnabled,
-                                      pluginImporter.GetCompatibleWithEditor()),
+                                      pluginImporter.GetCompatibleWithEditor(),
+                                      dotNetVersionMessage),
                         verbose: true);
                     pluginImporter.SetCompatibleWithEditor(editorEnabled);
                     modifiedThisVersion = true;
@@ -654,9 +812,9 @@ public class VersionHandler : AssetPostprocessor {
                         bool compatibleWithTarget =
                             pluginImporter.GetCompatibleWithPlatform(target);
                         if (compatibleWithTarget != enabled) {
-                            Log(String.Format("{0}: {1} enabled {2} (current: {3})",
+                            Log(String.Format("{0}: {1} enabled {2} (current: {3}){4}",
                                               metadata.filename, target, enabled,
-                                              compatibleWithTarget),
+                                              compatibleWithTarget, dotNetVersionMessage),
                                 verbose: true);
                             pluginImporter.SetCompatibleWithPlatform(
                                 target, enabled);
@@ -667,6 +825,11 @@ public class VersionHandler : AssetPostprocessor {
                         Log("Unexpected error enumerating targets: " + e.Message,
                             level: LogLevel.Warning);
                     }
+                }
+                // When explicitly setting platform compatibility we need to disable Unity's
+                // "any" platform match for it to take effect.
+                if (modifiedThisVersion && hasBuildTargets) {
+                    pluginImporter.SetCompatibleWithAnyPlatform(false);
                 }
                 // Some versions of Unity (e.g 5.6) do not mark the asset
                 // database as dirty when plugin importer settings change.
@@ -685,7 +848,7 @@ public class VersionHandler : AssetPostprocessor {
             }
             // Log the versions that have been disabled and the version that
             // has been enabled.
-            if (modified && enabledVersion != null) {
+            if (modified && !String.IsNullOrEmpty(enabledVersion)) {
                 string message = (filenameCanonical + ": enabled version " +
                                   enabledVersion);
                 if (disabledVersions.Count > 0) {
@@ -1230,6 +1393,23 @@ public class VersionHandler : AssetPostprocessor {
     };
 
     /// <summary>
+    /// Whether to also log to a file in the project.
+    /// </summary>
+    internal static bool LogToFile { get; set; }
+
+    /// <summary>
+    /// Write a message to the log file.
+    /// </summary>
+    /// <param name="message">Message to log.</param>
+    internal static void WriteToLogFile(string message) {
+        if (LogToFile) {
+            using (var file = new StreamWriter("VersionHandlerSave.log", true)) {
+                file.WriteLine(message);
+            }
+        }
+    }
+
+    /// <summary>
     /// Log a message.
     /// </summary>
     /// <param name="message">Message to log.</param>
@@ -1242,12 +1422,15 @@ public class VersionHandler : AssetPostprocessor {
             switch (level) {
                 case LogLevel.Info:
                     Debug.Log(message);
+                    WriteToLogFile(message);
                     break;
                 case LogLevel.Warning:
                     Debug.LogWarning(message);
+                    WriteToLogFile("WARNING: " + message);
                     break;
                 case LogLevel.Error:
                     Debug.LogError(message);
+                    WriteToLogFile("ERROR: " + message);
                     break;
             }
         }
@@ -1335,8 +1518,10 @@ public class VersionHandler : AssetPostprocessor {
         // If this module is disabled do nothing.
         if (!forceUpdate && !Enabled) return;
 
-        var metadataSet = FileMetadataSet.FindWithPendingUpdates(
-            FileMetadataSet.ParseFromFilenames(FindAllAssets()));
+        var metadataSet = FileMetadataSet.ParseFromFilenames(FindAllAssets());
+        if (!forceUpdate) {
+            metadataSet = FileMetadataSet.FindWithPendingUpdates(metadataSet);
+        }
         if (metadataSet.EnableMostRecentPlugins(forceUpdate)) {
             AssetDatabase.Refresh();
         }
@@ -1406,6 +1591,44 @@ public class VersionHandler : AssetPostprocessor {
         UpdateVersionedAssets();
     }
 
+    /// <summary>
+    /// Update versioned assets when assets are saved.
+    /// </summary>
+    [InitializeOnLoad]
+    internal class DotNetVersionUpdater : UnityEditor.AssetModificationProcessor {
+        // Currently selected .NET framework version.
+        private static string currentDotNetVersion = FileMetadata.DOTNET_RUNTIME_VERSION_LEGACY;
+
+        // Save the currently selected .NET framework version so that we can apply targeting
+        // only when the .NET version is changed.
+        static DotNetVersionUpdater() {
+            currentDotNetVersion = FileMetadata.ScriptingRuntimeDotNetVersion;
+            Log(String.Format("Detected .NET version {0}", currentDotNetVersion), verbose: true);
+        }
+
+        /// <summary>
+        /// Update versioned assets when assets are saved.
+        /// </summary>
+        /// When the user changes the .NET framework version in Unity 2017 or beyond, the player
+        /// settings are saved and the editor is restarted.  This method hooks the option change
+        /// so that it's possible to select the correct set of assemblies (C# DLLs) that target
+        /// the selected .NET version.
+        internal static string[] OnWillSaveAssets(string[] paths) {
+            var newDotNetVersion = FileMetadata.ScriptingRuntimeDotNetVersion;
+            if (currentDotNetVersion != newDotNetVersion) {
+                bool logToFilePrevious = LogToFile;
+                // Enable logging to a file as all logs on shutdown do not end up in Unity's log
+                // file.
+                LogToFile = VerboseLoggingEnabled;
+                Log(String.Format(".NET framework version changed from {0} to {1}\n",
+                                  currentDotNetVersion, newDotNetVersion));
+                currentDotNetVersion = FileMetadata.ScriptingRuntimeDotNetVersion;
+                UpdateVersionedAssets(forceUpdate: true);
+                LogToFile = logToFilePrevious;
+            }
+            return paths;
+        }
+    }
 
     /// <summary>
     /// Find a class from an assembly by name.

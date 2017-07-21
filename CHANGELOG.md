@@ -1,3 +1,13 @@
+# Version 1.2.32 - Jul 20, 2017
+## New Features
+* Added support for build target selection based upon .NET framework
+  version in the VersionHandler.
+  When appling either gvh\_dotnet-3.5 or gvh\_dotnet-4.5 labels to
+  assets, the VersionHandler will only enable the asset for the
+  specified set of build targets when the matching .NET framework version
+  is selected in Unity 2017's project settings.  This allows assets
+  to be provided in a plugin that need to differ based upon .NET version.
+
 # Version 1.2.31 - Jul 5, 2017
 ## Bug Fixes
 * Force expansion of AARs with native components when using Unity 2017
