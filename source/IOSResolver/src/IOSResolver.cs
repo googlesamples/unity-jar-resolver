@@ -573,7 +573,7 @@ public static class IOSResolver {
             // Unity started supporting workspace loading in the released version of Unity 5.6
             // but not in the beta. So check if this is exactly 5.6, but also beta.
             if (Math.Abs(
-                    VersionHandler.FileMetadata.GetUnityVersionMajorMinor() - 5.6f) < epsilon) {
+                    VersionHandler.GetUnityVersionMajorMinor() - 5.6f) < epsilon) {
                 // Unity non-beta versions look like 5.6.0f1 while beta versions look like:
                 // 5.6.0b11, so looking for the b in the string (especially confined to 5.6),
                 // should be sufficient for determining that it's the beta.
@@ -582,7 +582,7 @@ public static class IOSResolver {
                 }
             }
 
-            return (VersionHandler.FileMetadata.GetUnityVersionMajorMinor() >= 5.6f - epsilon);
+            return (VersionHandler.GetUnityVersionMajorMinor() >= 5.6f - epsilon);
         }
     }
 

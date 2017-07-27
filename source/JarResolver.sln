@@ -7,7 +7,9 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JarResolverTests", "JarReso
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PlayServicesResolver", "PlayServicesResolver\PlayServicesResolver.csproj", "{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VersionHandler", "VersionHandler\VersionHandler.csproj", "{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VersionHandler", "VersionHandler\VersionHandler.csproj", "{5378B37A-887E-49ED-A8AE-42FA843AA9DC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VersionHandlerImpl", "VersionHandlerImpl\VersionHandlerImpl.csproj", "{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IOSResolver", "IOSResolver\IOSResolver.csproj", "{5B581BAE-D432-41AB-AEED-FD269AEA081D}"
 EndProject
@@ -33,6 +35,10 @@ Global
 		{CC4F239D-3C7F-4164-830F-9215AE15B32A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CC4F239D-3C7F-4164-830F-9215AE15B32A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CC4F239D-3C7F-4164-830F-9215AE15B32A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5378B37A-887E-49ED-A8AE-42FA843AA9DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5378B37A-887E-49ED-A8AE-42FA843AA9DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5378B37A-887E-49ED-A8AE-42FA843AA9DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5378B37A-887E-49ED-A8AE-42FA843AA9DC}.Release|Any CPU.Build.0 = Release|Any CPU
 		{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}.Release|Any CPU.ActiveCfg = Release|Any CPU

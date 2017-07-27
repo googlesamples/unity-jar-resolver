@@ -137,7 +137,7 @@ project.ext {
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
     dllDir = 'Assets/PlayServicesResolver/Editor'
-    pluginVersion = '1.2.32.0'
+    pluginVersion = '1.2.33.0'
     currentPluginPath = file('.').absolutePath
     currentPluginBasename = 'play-services-resolver'
     currentPluginName = (currentPluginBasename + '-' + pluginVersion +
@@ -231,7 +231,7 @@ def versionedAssetName(filename, version) {
 
 // Generate the tasks to compile a plugin DLL and copy it to the Unity
 // plugin packaging folder.
-def build_pluginDll(projectName, assemblyDllBasename) {
+def build_pluginDll(projectName, assemblyDllBasename, shouldVersionFilename) {
   def version = "${pluginVersion}"
   def projectPath = 'source/' + projectName + '/' + projectName + '.csproj'
   def assemblyDll = versionedAssetName(assemblyDllBasename, version)
@@ -257,25 +257,32 @@ def build_pluginDll(projectName, assemblyDllBasename) {
                               type: Copy,
                               description: ('Copy ' + projectName +
                                             ' to the Unity packaging folder'),
-                              dependsOn: compileTask)
+                              dependsOn: [compileTask, clean_pluginProjDir])
   copyTask.from(files(assemblyDllSource, dllMeta))
   copyTask.into("${pluginProj}/${dllDir}")
   copyTask.duplicatesStrategy('include')
-  copyTask.rename({
-                    String fn ->
-                      if (fn.endsWith(dllMetaBasename)) {
-                        return fn.replace(dllMetaBasename, dllMetaVersioned)
-                      } else if (fn.endsWith(assemblyDllBasename)) {
-                        return fn.replace(assemblyDllBasename, assemblyDll)
-                      }
-                      return fn
-                  })
+  if (shouldVersionFilename) {
+    copyTask.rename({
+                      String fn ->
+                        if (fn.endsWith(dllMetaBasename)) {
+                          return fn.replace(dllMetaBasename, dllMetaVersioned)
+                        } else if (fn.endsWith(assemblyDllBasename)) {
+                          return fn.replace(assemblyDllBasename, assemblyDll)
+                        }
+                        return fn
+                    })
+  }
 }
 
-build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll")
-build_pluginDll("VersionHandler", "Google.VersionHandler.dll")
-build_pluginDll("IOSResolver", "Google.IOSResolver.dll")
-build_pluginDll("PackageManager", "Google.PackageManager.dll")
+task clean_pluginProjDir(type: Delete) {
+  delete pluginProj
+}
+
+build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll", true)
+build_pluginDll("VersionHandler", "Google.VersionHandler.dll", false)
+build_pluginDll("VersionHandlerImpl", "Google.VersionHandlerImpl.dll", true)
+build_pluginDll("IOSResolver", "Google.IOSResolver.dll", true)
+build_pluginDll("PackageManager", "Google.PackageManager.dll", true)
 
 task update_metadataForVersion() {
   description 'Update plugin metadata if the plugin version changed.'
@@ -295,7 +302,8 @@ task update_metadataForVersion() {
   }
 }
 
-task copy_pluginTemplate(type: Copy, dependsOn: update_metadataForVersion) {
+task copy_pluginTemplate(type: Copy, dependsOn: [update_metadataForVersion,
+                                                 clean_pluginProjDir]) {
   description 'Copy the template project into the Unity plugin packaging dir.'
   from "${pluginSrc}"
   into "${pluginProj}"
@@ -304,7 +312,8 @@ task copy_pluginTemplate(type: Copy, dependsOn: update_metadataForVersion) {
   ext.remoteTaskPhase = 'build'
 }
 
-task copy_GenGradleScripts(type: Copy, dependsOn: compile_packageManagerTests) {
+task copy_GenGradleScripts(type: Copy, dependsOn: [compile_packageManagerTests,
+                                                   clean_pluginProjDir]) {
   description 'Copy the Gradle prebuild scripts to the Unity packaging dir.'
   from "${scriptsSrc}"
   into "${pluginProj}/${scriptsDst}"
@@ -317,7 +326,9 @@ task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
                                              copy_GenGradleScripts,
                                              'copy_PlayServicesResolver',
                                              'copy_VersionHandler',
-                                             'copy_IOSResolver']) {
+                                             'copy_VersionHandlerImpl',
+                                             'copy_IOSResolver',
+                                             clean_pluginProjDir]) {
   description 'Inject the version number into the plugin\'s meta files.'
   ext.remoteTaskPhase = 'build'
   doLast {
@@ -337,7 +348,7 @@ task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
   }
 }
 
-task copy_manifestMetadata(type: Copy) {
+task copy_manifestMetadata(type: Copy, dependsOn: clean_pluginProjDir) {
   def manifestBasename = versionedAssetName(
     currentPluginBasename + '.txt', null) + '.meta'
   description 'Copy .meta file for the plugin manifest.'
@@ -350,11 +361,11 @@ task copy_manifestMetadata(type: Copy) {
                                            "${pluginVersion}") +
                         '.meta')
   }
-  ext.remoteTaskPhase = 'prebuild'
 }
 
 task generate_manifest(dependsOn: ['copy_manifestMetadata',
-                                   'inject_versionIntoMetaFiles']) {
+                                   'inject_versionIntoMetaFiles',
+                                   clean_pluginProjDir]) {
   description 'Generate a manifest for the files in the plug-in.'
   doLast {
     def dir = file("${pluginProj}/Assets")
@@ -390,6 +401,7 @@ task export_package(dependsOn: 'generate_manifest') {
                 "-exportPackage",
                 "Assets/PlayServicesResolver",
                 "${exportPath}",
+                "-gvh_disable",
                 "-quit"]
     exec {
       executable "${unity_exe}"
@@ -404,10 +416,9 @@ task export_package(dependsOn: 'generate_manifest') {
 task copy_plugin() {
   description 'Copy plugin to the current-build directory'
   doFirst {
-    // If the version number has been bumped delete the exploded directory.
-    if (!file(currentPluginName).exists()) {
-      delete file(currentPluginPath +"/exploded")
-    }
+    delete fileTree(dir: currentPluginPath +"/exploded")
+    delete fileTree(dir: currentPluginPath,
+                    includes: [currentPluginBasename + "-*.unitypackage"])
 
     copy {
       from file(exportPath)

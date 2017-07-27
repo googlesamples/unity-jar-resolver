@@ -1,3 +1,10 @@
+# Version 1.2.33 - Jul 27, 2017
+## New Features
+* Added a bootstrap module for VersionHandler so the implementation
+  of the VersionHandler module can be versioned without resulting in
+  a compile error when imported at different versions across multiple
+  plugins.
+
 # Version 1.2.32 - Jul 20, 2017
 ## New Features
 * Added support for build target selection based upon .NET framework

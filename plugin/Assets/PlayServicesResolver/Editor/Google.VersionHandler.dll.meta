@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: a86a24ecba7c4455ba2e79de0dac73bc
+guid: 9d4e0732fa47402bb6c99cc0c8ae647e
 labels:
 - gvh
 - gvh_teditor
@@ -15,7 +15,7 @@ PluginImporter:
       enabled: 0
       settings: {}
     Editor:
-      enabled: 1
+      enabled: 0
       settings:
         DefaultValueInitialized: true
   userData: 

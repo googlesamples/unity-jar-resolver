@@ -5,7 +5,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}</ProjectGuid>
+    <ProjectGuid>{5378B37A-887E-49ED-A8AE-42FA843AA9DC}</ProjectGuid>
     <OutputType>Library</OutputType>
     <RootNamespace>Google</RootNamespace>
     <AssemblyName>Google.VersionHandler</AssemblyName>
@@ -52,7 +52,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\VersionHandler.cs" />
-    <Compile Include="src\SettingsDialog.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
 </Project>

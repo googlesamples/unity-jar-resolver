@@ -809,8 +809,7 @@ namespace GooglePlayServices
                             // Unity 2017's native build system does not support AARs that contain
                             // native libraries so force explosion to pick up native libraries using
                             // Eclipse / Ant style projects.
-                            explode |=
-                                Google.VersionHandler.FileMetadata.GetUnityVersionMajorMinor() >=
+                            explode |= Google.VersionHandler.GetUnityVersionMajorMinor() >=
                                 2017.0f && abiDirs.Count > 0;
                             targetAbi = DetermineAbiFromAarAbiDirectories(abiDirs);
                             // NOTE: Unfortunately as of Unity 5.5 the internal Gradle build
