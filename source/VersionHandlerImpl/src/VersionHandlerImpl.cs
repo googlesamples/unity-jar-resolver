@@ -74,6 +74,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
         private static string[] TOKEN_DOTNET_TARGETS = new [] { "dotnet-" };
         // Prefix which indicates this file is a package manifest.
         private static string[] TOKEN_MANIFEST = new [] { "manifest" };
+        // Prefix which identifies the canonical name of this Linux library.
+        private static string[] TOKEN_LINUX_LIBRARY_BASENAME = new [] { "linuxlibname-" };
 
         // Delimiter for version numbers.
         private static char[] VERSION_DELIMITER = new char[] { '.' };
@@ -256,6 +258,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public string[] dotNetTargets = null;
 
         /// <summary>
+        /// Basename of a Linux library plugin.
+        /// </summary>
+        public string linuxLibraryBasename = null;
+
+        /// <summary>
         /// Parse metadata from filename and store in this class.
         /// </summary>
         /// <param name="filename">Name of the file to parse.</param>
@@ -352,6 +359,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     versionString = values[0];
                     return true;
                 }
+            }
+            values = MatchPrefixesGetValues(token, TOKEN_LINUX_LIBRARY_BASENAME, prefix);
+            if (values != null) {
+                linuxLibraryBasename = values[0];
+                return true;
             }
             return false;
         }
@@ -475,6 +487,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
             if (dotNetTargets != null && dotNetTargets.Length > 0) {
                 labels.Add(CreateLabel(TOKEN_DOTNET_TARGETS, dotNetTargets));
             }
+            if (!String.IsNullOrEmpty(linuxLibraryBasename)) {
+                labels.Add(CreateLabel(TOKEN_LINUX_LIBRARY_BASENAME,
+                                       new [] { linuxLibraryBasename }));
+            }
             if (isManifest) {
                 labels.Add(CreateLabel(TOKEN_MANIFEST, null));
             }
@@ -508,6 +524,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             var filenameComponents = new FilenameComponents(newFilename);
             Debug.Assert(filenameComponents.directory ==
                          Path.GetDirectoryName(filename));
+            Log(String.Format("Renaming {0} -> {1}", filename, newFilename), verbose: true);
             // If the target file exists, delete it.
             if (AssetImporter.GetAtPath(newFilename) != null) {
                 if (!AssetDatabase.MoveAssetToTrash(newFilename)) {
@@ -1299,6 +1316,66 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
     }
 
+    /// <summary>
+    /// Finds and renames Linux libraries.
+    /// </summary>
+    public class LinuxLibraryRenamer {
+
+        /// <summary>
+        /// Retrieves the list of library files managed by this module.
+        /// </summary>
+        public List<FileMetadata> Libraries { get; private set; }
+
+        // Directories relative to the Assets folder that contain native plugins.
+        private string PLUGIN_DIR_X86 = Path.Combine("Assets", Path.Combine("Plugins", "x86"));
+        private string PLUGIN_DIR_X86_64 =
+            Path.Combine("Assets", Path.Combine("Plugins", "x86_64"));
+        private string LIBRARY_EXTENSION = ".so";
+
+        /// <summary>
+        /// Construct this object searching the specified set of metadata for Linux libraries.
+        /// </summary>
+        public LinuxLibraryRenamer(FileMetadataSet metadataSet) {
+            var foundLibraries = new List<FileMetadata>();
+            foreach (var metadataByVersion in metadataSet.Values) {
+                var mostRecent = metadataByVersion.MostRecentVersion;
+                var dir = Path.GetDirectoryName(mostRecent.filename);
+                if (!String.IsNullOrEmpty(mostRecent.linuxLibraryBasename) &&
+                    mostRecent.filename.EndsWith(mostRecent.linuxLibraryBasename +
+                                                 LIBRARY_EXTENSION) &&
+                    (dir.StartsWith(PLUGIN_DIR_X86) ||
+                     dir.StartsWith(PLUGIN_DIR_X86_64))) {
+                    foundLibraries.Add(mostRecent);
+                }
+            }
+            Libraries = foundLibraries;
+        }
+
+        /// <summary>
+        /// Rename libraries for the loaded Unity version.
+        /// </summary>
+        public void RenameLibraries() {
+            foreach (var library in Libraries) {
+                var filename = library.filename;
+                var newFilename = Path.Combine(Path.GetDirectoryName(filename),
+                                               LibraryPrefix + library.linuxLibraryBasename +
+                                               LIBRARY_EXTENSION);
+                if (filename != newFilename) {
+                    library.RenameAsset(newFilename);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Library prefix for the current version of Unity.
+        /// </summary>
+        private string LibraryPrefix {
+            get {
+                return GetUnityVersionMajorMinor() < 5.6f ? "" : "lib";
+            }
+        }
+    }
+
     // Keys in the editor preferences which control the behavior of this
     // module.
     private const string PREFERENCE_ENABLED =
@@ -1333,7 +1410,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     public static bool Enabled {
         get {
-            return !System.Environment.CommandLine.Contains("-batchmode") &&
+            return !System.Environment.CommandLine.Contains("-gvh_disable") &&
                 EditorPrefs.GetBool(PREFERENCE_ENABLED, defaultValue: true);
         }
         set { EditorPrefs.SetBool(PREFERENCE_ENABLED, value); }
@@ -1503,6 +1580,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
         if (!forceUpdate && !Enabled) return;
 
         var metadataSet = FileMetadataSet.ParseFromFilenames(FindAllAssets());
+        // Rename linux libraries, if any are being tracked.
+        var linuxLibraries = new LinuxLibraryRenamer(metadataSet);
+        linuxLibraries.RenameLibraries();
+
         if (!forceUpdate) {
             metadataSet = FileMetadataSet.FindWithPendingUpdates(metadataSet);
         }

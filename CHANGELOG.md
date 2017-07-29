@@ -1,3 +1,11 @@
+# Version 1.2.35 - Jul 28, 2017
+## New Features
+* VersionHandler will now rename Linux libraries so they can target Unity
+  versions that require different file naming.  Libraries need to be labelled
+  gvh_linuxlibname-${basename} in order to be considered for renaming.
+  e.g gvh_linuxlibname-MyLib will be named MyLib.so in Unity 5.5 and below and
+  libMyLib.so in Unity 5.6 and above.
+
 # Version 1.2.34 - Jul 28, 2017
 ## Bug Fixes
 * Made VersionHandler bootstrap module more robust when calling static
