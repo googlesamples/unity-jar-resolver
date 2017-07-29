@@ -1,3 +1,8 @@
+# Version 1.2.34 - Jul 28, 2017
+## Bug Fixes
+* Made VersionHandler bootstrap module more robust when calling static
+  methods before the implementation DLL is loaded.
+
 # Version 1.2.33 - Jul 27, 2017
 ## New Features
 * Added a bootstrap module for VersionHandler so the implementation

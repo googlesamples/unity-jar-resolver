@@ -32,17 +32,68 @@ namespace Google {
 [InitializeOnLoad]
 public class VersionHandler {
     const string VERSION_HANDLER_ASSEMBLY_NAME = "Google.VersionHandlerImpl";
-    const string VERSION_HANDLER_IMPL_CLASS = "VersionHandlerImpl";
+    const string VERSION_HANDLER_IMPL_CLASS = "Google.VersionHandlerImpl";
     static Regex VERSION_HANDLER_FILENAME_RE = new Regex(
         String.Format(".*[\\/]({0})(.*)(\\.dll)$",
                       VERSION_HANDLER_ASSEMBLY_NAME.Replace(".", "\\.")),
         RegexOptions.IgnoreCase);
 
-    const string EXECUTED_PATH = "Temp/VersionHandlerBootstrapped";
+    // File which indicates boot strapping is in progress.
+    const string BOOT_STRAPPING_PATH = "Temp/VersionHandlerBootStrapping";
+    // Value written to the boot strapping file to indicate the process is executing.
+    const string BOOT_STRAPPING_COMMAND = "BootStrapping";
 
     // Get the VersionHandler implementation class.
     private static Type Impl {
         get { return FindClass(VERSION_HANDLER_ASSEMBLY_NAME, VERSION_HANDLER_IMPL_CLASS); }
+    }
+
+    // Called from UpdateHandler.  Set to null to stop handling updates.
+    private static Action updateHandlerAction = null;
+
+    // Get the VersionHandler implmentation class, attempting to bootstrap the module first.
+    private static Type BootStrappedImpl {
+        get {
+            if (Impl == null) BootStrap();
+            return Impl;
+        }
+    }
+
+    // Whether the VersionHandler implementation is being boot strapped.
+    private static bool BootStrapping {
+        get {
+            return File.Exists(BOOT_STRAPPING_PATH);
+        }
+
+        set {
+            var currentlyBootStrapping = BootStrapping;
+            if (value != currentlyBootStrapping) {
+                if (value) {
+                    AddToBootStrappingFile(new List<string> { BOOT_STRAPPING_COMMAND });
+                } else if (currentlyBootStrapping) {
+                    // Execute any scheduled method calls.
+                    var duplicates = new HashSet<string>();
+                    var executionList = new List<string>();
+                    foreach (var command in ReadBootStrappingFile()) {
+                        if (command == BOOT_STRAPPING_COMMAND) continue;
+                        if (duplicates.Contains(command)) continue;
+                        duplicates.Add(command);
+                        executionList.Add(command);
+                    }
+                    while (executionList.Count > 0) {
+                        var command = executionList[0];
+                        executionList.RemoveAt(0);
+                        // Rewrite the list just to handle the case where this assembly gets
+                        // reloaded.
+                        File.WriteAllText(BOOT_STRAPPING_PATH,
+                                          String.Join("\n", executionList.ToArray()));
+                        InvokeImplMethod(command);
+                    }
+                    // Clean up the boot strapping file.
+                    File.Delete(BOOT_STRAPPING_PATH);
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -51,29 +102,44 @@ public class VersionHandler {
     /// crashes the editor.
     /// </summary>
     static VersionHandler() {
-        // Schedule the process if the version handler isn't disabled on the command line or
-        // executed previously in this session.
-        bool executed = File.Exists(EXECUTED_PATH);
-        if (System.Environment.CommandLine.Contains("-gvh_disable") || executed) {
-            if (!executed) {
-                UnityEngine.Debug.Log(String.Format("{0} bootstrap disabled",
-                                                    VERSION_HANDLER_ASSEMBLY_NAME));
-            }
+        // Schedule the process if the version handler isn't disabled on the command line.
+        if (System.Environment.CommandLine.Contains("-gvh_disable")) {
+            UnityEngine.Debug.Log(String.Format("{0} bootstrap disabled",
+                                                VERSION_HANDLER_ASSEMBLY_NAME));
         } else {
             EditorApplication.update -= BootStrap;
             EditorApplication.update += BootStrap;
         }
     }
 
+    // Add a line to the boot strapping file.
+    private static void AddToBootStrappingFile(List<string> lines) {
+        File.AppendAllText(BOOT_STRAPPING_PATH, String.Join("\n", lines.ToArray()) + "\n");
+    }
+
+    // Read lines from the boot strapping file.
+    private static IEnumerable<string> ReadBootStrappingFile() {
+        return File.ReadAllLines(BOOT_STRAPPING_PATH);
+    }
+
     /// <summary>
     /// Enable the latest VersionHandler DLL if it's not already loaded.
     /// </summary>
-    static void BootStrap() {
+    private static void BootStrap() {
+        var bootStrapping = BootStrapping;
+        var implAvailable = Impl != null;
+        // If the VersionHandler assembly is already loaded or we're still bootstrapping we have
+        // nothing to do.
+        if (bootStrapping) {
+            BootStrapping = !implAvailable;
+            return;
+        }
         EditorApplication.update -= BootStrap;
-        // If the VersionHandler assembly is already loaded we have nothing to do.
-        if (Impl != null) {
-            UnityEngine.Debug.Log(String.Format("{0} DLL is already loaded",
-                                                VERSION_HANDLER_ASSEMBLY_NAME));
+        if (implAvailable) {
+            if (!bootStrapping) {
+                UnityEngine.Debug.Log(String.Format("{0} DLL is already loaded",
+                                                    VERSION_HANDLER_ASSEMBLY_NAME));
+            }
             return;
         }
         UnityEngine.Debug.Log(String.Format("Bootstrapping {0}", VERSION_HANDLER_ASSEMBLY_NAME));
@@ -119,9 +185,7 @@ public class VersionHandler {
                                                        VERSION_HANDLER_ASSEMBLY_NAME));
             return;
         }
-        using (var file = new StreamWriter(EXECUTED_PATH, true)) {
-            file.WriteLine("OK");
-        }
+        BootStrapping = true;
         if (VersionHandler.FindClass("UnityEditor", "UnityEditor.PluginImporter") != null) {
             EnableEditorPlugin(mostRecentAssembly);
         } else {
@@ -154,7 +218,7 @@ public class VersionHandler {
     /// Get a property by name.
     /// </summary>
     private static PropertyInfo GetPropertyByName(string propertyName) {
-        var cls = Impl;
+        var cls = BootStrappedImpl;
         if (cls == null) return null;
         return cls.GetProperty(propertyName);
     }
@@ -213,14 +277,14 @@ public class VersionHandler {
     /// Show the settings menu.
     /// </summary>
     public static void ShowSettings() {
-        InvokeStaticMethod(Impl, "ShowSettings", null);
+        InvokeImplMethod("ShowSettings");
     }
 
     /// <summary>
     /// Force version handler execution.
     /// </summary>
     public static void UpdateNow() {
-        InvokeStaticMethod(Impl, "UpdateNow", null);
+        InvokeImplMethod("UpdateNow", schedule: true);
     }
 
     /// <summary>
@@ -230,6 +294,11 @@ public class VersionHandler {
     /// false otherwise.</returns>
     /// <param name="filename">Name of the file / directory to filter.</param>
     public delegate bool FilenameFilter(string filename);
+
+    // Cast an object to a string array if it's not null, or return an empty string array.
+    private static string[] StringArrayFromObject(object obj) {
+        return obj != null ? (string[])obj : new string[] {};
+    }
 
     /// <summary>
     /// Search the asset database for all files matching the specified filter.
@@ -242,18 +311,18 @@ public class VersionHandler {
     /// list.</param>
     public static string[] SearchAssetDatabase(string assetsFilter = null,
                                                FilenameFilter filter = null) {
-        return (string[])InvokeStaticMethod(Impl, "SearchAssetDatabase", null,
-                                            new Dictionary<string, object> {
-                                                { "assetsFilter", assetsFilter },
-                                                { "filter", filter }
-                                            });
+        return StringArrayFromObject(InvokeImplMethod("SearchAssetDatabase", null,
+                                                      namedArgs: new Dictionary<string, object> {
+                                                          { "assetsFilter", assetsFilter },
+                                                          { "filter", filter }
+                                                      }));
     }
 
     /// <summary>
     /// Get all assets managed by this module.
     /// </summary>
     public static string[] FindAllAssets() {
-        return (string[])InvokeStaticMethod(Impl, "FindAllAssets", null);
+        return StringArrayFromObject(InvokeImplMethod("FindAllAssets"));
     }
 
     /// <summary>
@@ -263,19 +332,37 @@ public class VersionHandler {
     /// are not present in the most recent manifests.
     /// </summary>
     public static void UpdateVersionedAssets(bool forceUpdate = false) {
-        InvokeStaticMethod(Impl, "UpdateVersionedAssets", null,
-                           new Dictionary<string, object> { { "forceUpdate", forceUpdate } });
+        InvokeImplMethod("UpdateVersionedAssets",
+                         namedArgs: new Dictionary<string, object> {
+                             { "forceUpdate", forceUpdate }
+                         },
+                         schedule: true);
     }
 
     // Returns the major/minor version of the unity environment we are running in
     // as a float so it can be compared numerically.
     public static float GetUnityVersionMajorMinor() {
         try {
-            var version = InvokeStaticMethod(Impl, "GetUnityVersionMajorMinor", null);
+            var version = InvokeImplMethod("GetUnityVersionMajorMinor");
             return (float)version;
         } catch (Exception) {
             return 0.0f;
         }
+    }
+
+    /// Call a static method on a type returning null if type is null.
+    private static object InvokeImplMethod(string methodName, object[] args = null,
+                                           Dictionary<string, object> namedArgs = null,
+                                           bool schedule = false) {
+        var type = BootStrappedImpl;
+        if (type == null) {
+            if (BootStrapping && schedule) {
+                // Try scheduling excecution until the implementation is loaded.
+                AddToBootStrappingFile(new List<string> { methodName });
+            }
+            return null;
+        }
+        return InvokeStaticMethod(type, methodName, args, namedArgs: namedArgs);
     }
 
     /// <summary>
