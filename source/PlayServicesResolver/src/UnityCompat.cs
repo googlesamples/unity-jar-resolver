@@ -57,23 +57,84 @@ public class UnityCompat {
         }
     }
 
-    // Parses the MinSDKVersion from Unity's Enum of the value, and reports if this gets out of
-    // sync from expectations.
-    public static int GetAndroidMinSDKVersion() {
-        string minSdkVersion = PlayerSettings.Android.minSdkVersion.ToString();
-        if (minSdkVersion.StartsWith(UNITY_ANDROID_VERSION_ENUM_PREFIX)) {
-            minSdkVersion = minSdkVersion.Substring(UNITY_ANDROID_VERSION_ENUM_PREFIX.Length);
+    private const float EPSILON = 1e-7f;
+
+    /// <summary>
+    /// Checks the unity version to see if it has built in support to return the target sdk version.
+    /// </summary>
+    private static bool UnityAPIHasTargetSDK {
+        get {
+            // Unity started supporting the target SDK API in the released version of Unity 5.6
+            // but not in the beta. So check if this is exactly 5.6, but also not beta.
+            if (Math.Abs(
+                    Google.VersionHandler.GetUnityVersionMajorMinor() - 5.6f) < EPSILON) {
+                // Unity non-beta versions look like 5.6.0f1 while beta versions look like:
+                // 5.6.0b11, so looking for the b in the string (especially confined to 5.6),
+                // should be sufficient for determining that it's the beta.
+                if (UnityEngine.Application.unityVersion.Contains(".0b")) {
+                    return false;
+                }
+            }
+
+            return (Google.VersionHandler.GetUnityVersionMajorMinor() >= 5.6f - EPSILON);
         }
+    }
+
+    // Parses a UnityEditor.AndroidSDKVersion enum for a value.
+    private static int VersionFromAndroidSDKVersionsEnum(string enumName, string fallbackPrefKey,
+                                                         int fallbackValue) {
+        if (enumName.StartsWith(UNITY_ANDROID_VERSION_ENUM_PREFIX)) {
+            enumName = enumName.Substring(UNITY_ANDROID_VERSION_ENUM_PREFIX.Length);
+        }
+
+        if (enumName == "Auto") {
+            return -1;
+        }
+
         int versionVal;
-        bool validVersionString = Int32.TryParse(minSdkVersion, out versionVal);
+        bool validVersionString = Int32.TryParse(enumName, out versionVal);
         if (!validVersionString) {
-            Debug.LogError("Could not determine the Android Min SDK Version from the Unity " +
+            Debug.LogError("Could not determine the Android SDK Version from the Unity " +
                            "version enum. Resorting to reading a fallback value from the editor " +
-                           "preferences " + ANDROID_MIN_SDK_FALLBACK_KEY + ": " +
-                           MinSDKVersionFallback.ToString() + ". " +
+                           "preferences " + fallbackPrefKey + ": " +
+                           fallbackValue.ToString() + ". " +
                            WRITE_A_BUG);
         }
-        return validVersionString ? versionVal : MinSDKVersionFallback;
+        return validVersionString ? versionVal : fallbackValue;
+    }
+
+    /// <summary>
+    /// Parses the MinSDKVersion as an int from the Android Unity Player Settings.
+    /// </summary>
+    /// <remarks>
+    /// The Unity API is supported all the way back to Unity 4.0, but results returned may need a
+    /// different interpretation in future versions to give consistent versions.
+    /// </remarks>
+    /// <returns>the sdk value (ie. 24 for Android 7.0 Nouget)</returns>
+    public static int GetAndroidMinSDKVersion() {
+        int minSdkVersion = VersionFromAndroidSDKVersionsEnum(
+            PlayerSettings.Android.minSdkVersion.ToString(),
+            ANDROID_MIN_SDK_FALLBACK_KEY, MinSDKVersionFallback);
+        if (minSdkVersion == -1)
+            return MinSDKVersionFallback;
+        return minSdkVersion;
+    }
+
+    /// <summary>
+    /// Parses the TargetSDK as an int from the Android Unity Player Settings.
+    /// </summary>
+    /// <remarks>
+    /// This was added in Unity 5.6, so previous versions actually use reflection to get the value
+    /// from internal Unity APIs. This enum isn't guaranteed to return a value; it may return auto
+    /// which means the implementation will have to decide what version to use.
+    /// </remarks>
+    /// <returns>The sdk value (ie. 24 for Android 7.0 Nouget). -1 means auto select.</returns>
+    public static int GetAndroidTargetSDKVersion() {
+        if (!UnityAPIHasTargetSDK)
+            return GetAndroidPlatform();
+
+        return VersionFromAndroidSDKVersionsEnum(PlayerSettings.Android.targetSdkVersion.ToString(),
+            ANDROID_PLATFORM_FALLBACK_KEY, AndroidPlatformVersionFallback);
     }
 
     /// <summary>
