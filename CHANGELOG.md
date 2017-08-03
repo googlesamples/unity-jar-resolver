@@ -1,3 +1,9 @@
+# Version 1.2.37 - Aug 3, 2017
+## New Features
+* Exposed GooglePlayServices.PlayServicesResolver.Resolve() so that it's
+  possible for a script to be notified when AAR / Jar resolution is complete.
+  This makes it easier to setup a project to build from the command line.
+
 # Version 1.2.36 - Aug 3, 2017
 ## New Features
 * VersionHandler.UpdateCompleteMethods allows a user to provide a list of

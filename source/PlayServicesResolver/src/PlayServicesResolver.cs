@@ -622,7 +622,7 @@ namespace GooglePlayServices
         /// Resolve dependencies.
         /// </summary>
         /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
-        private static void Resolve(System.Action resolutionComplete = null)
+        public static void Resolve(System.Action resolutionComplete = null)
         {
             if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
             System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
