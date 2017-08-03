@@ -42,14 +42,13 @@ public class VersionHandler {
     const string BOOT_STRAPPING_PATH = "Temp/VersionHandlerBootStrapping";
     // Value written to the boot strapping file to indicate the process is executing.
     const string BOOT_STRAPPING_COMMAND = "BootStrapping";
+    // File which contains the set of methods to call when an update operation is complete.
+    const string CALLBACKS_PATH = "Temp/VersionHandlerCallbacks";
 
     // Get the VersionHandler implementation class.
     private static Type Impl {
         get { return FindClass(VERSION_HANDLER_ASSEMBLY_NAME, VERSION_HANDLER_IMPL_CLASS); }
     }
-
-    // Called from UpdateHandler.  Set to null to stop handling updates.
-    private static Action updateHandlerAction = null;
 
     // Get the VersionHandler implmentation class, attempting to bootstrap the module first.
     private static Type BootStrappedImpl {
@@ -71,6 +70,8 @@ public class VersionHandler {
                 if (value) {
                     AddToBootStrappingFile(new List<string> { BOOT_STRAPPING_COMMAND });
                 } else if (currentlyBootStrapping) {
+                    // Forward any deferred properties.
+                    UpdateCompleteMethods = UpdateCompleteMethodsInternal;
                     // Execute any scheduled method calls.
                     var duplicates = new HashSet<string>();
                     var executionList = new List<string>();
@@ -135,13 +136,8 @@ public class VersionHandler {
             return;
         }
         EditorApplication.update -= BootStrap;
-        if (implAvailable) {
-            if (!bootStrapping) {
-                UnityEngine.Debug.Log(String.Format("{0} DLL is already loaded",
-                                                    VERSION_HANDLER_ASSEMBLY_NAME));
-            }
-            return;
-        }
+        if (implAvailable) return;
+
         UnityEngine.Debug.Log(String.Format("Bootstrapping {0}", VERSION_HANDLER_ASSEMBLY_NAME));
         var assemblies = new List<Match>();
         foreach (string assetGuid in AssetDatabase.FindAssets("l:gvh")) {
@@ -156,7 +152,7 @@ public class VersionHandler {
         }
         // Sort assembly paths by version number.
         string mostRecentAssembly = null;
-        var mostRecentVersionNumber = 0;
+        var mostRecentVersionNumber = -1;
         foreach (var match in assemblies) {
             var filename = match.Groups[0].Value;
             var version = match.Groups[2].Value;
@@ -226,16 +222,16 @@ public class VersionHandler {
     /// <summary>
     /// Get a boolean property's value by name.
     /// </summary>
-    private static bool GetBoolPropertyByName(string propertyName, bool defaultValue) {
+    private static T GetPropertyByName<T>(string propertyName, T defaultValue) {
         var prop = GetPropertyByName(propertyName);
         if (prop == null) return defaultValue;
-        return (bool)prop.GetValue(null, null);
+        return (T)prop.GetValue(null, null);
     }
 
     /// <summary>
     /// Set a boolean property's value by name,
     /// </summary>
-    private static void SetBoolPropertyByName(string propertyName, bool value) {
+    private static void SetPropertyByName<T>(string propertyName, T value) {
         var prop = GetPropertyByName(propertyName);
         if (prop == null) return;
         prop.SetValue(null, value, null);
@@ -245,32 +241,73 @@ public class VersionHandler {
     /// Enable / disable automated version handling.
     /// </summary>
     public static bool Enabled {
-        get { return GetBoolPropertyByName("Enabled", false); }
-        set { SetBoolPropertyByName("Enabled", value); }
+        get { return GetPropertyByName("Enabled", false); }
+        set { SetPropertyByName("Enabled", value); }
     }
 
     /// <summary>
     /// Enable / disable prompting the user on clean up.
     /// </summary>
     public static bool CleanUpPromptEnabled {
-        get { return GetBoolPropertyByName("CleanUpPromptEnabled", false); }
-        set { SetBoolPropertyByName("CleanUpPromptEnabled", value); }
+        get { return GetPropertyByName("CleanUpPromptEnabled", false); }
+        set { SetPropertyByName("CleanUpPromptEnabled", value); }
     }
 
     /// <summary>
     /// Enable / disable renaming to canonical filenames.
     /// </summary>
     public static bool RenameToCanonicalFilenames {
-        get { return GetBoolPropertyByName("RenameToCanonicalFilenames", false); }
-        set { SetBoolPropertyByName("RenameToCanonicalFilenames", value); }
+        get { return GetPropertyByName("RenameToCanonicalFilenames", false); }
+        set { SetPropertyByName("RenameToCanonicalFilenames", value); }
     }
 
     /// <summary>
     /// Enable / disable verbose logging.
     /// </summary>
     public static bool VerboseLoggingEnabled {
-        get { return GetBoolPropertyByName("VerboseLoggingEnabled", false); }
-        set { SetBoolPropertyByName("VerboseLoggingEnabled", value); }
+        get { return GetPropertyByName("VerboseLoggingEnabled", false); }
+        set { SetPropertyByName("VerboseLoggingEnabled", value); }
+    }
+
+    /// <summary>
+    /// Set the methods to call when the VersionHandler has finished updating.
+    /// Each string in the specified list should have the format
+    /// "assemblyname:classname:methodname".
+    /// assemblyname can be empty to search all assemblies for classname.
+    /// For example:
+    /// ":MyClass:MyMethod"
+    /// Would call MyClass.MyMethod() when the update process is complete.
+    /// </summary>
+    public static IEnumerable<string> UpdateCompleteMethods {
+        get {
+            return GetPropertyByName<IEnumerable<string>>("UpdateCompleteMethods",
+                                                          UpdateCompleteMethodsInternal);
+        }
+
+        set {
+            if (Impl != null) {
+                SetPropertyByName("UpdateCompleteMethods", value);
+            } else {
+                UpdateCompleteMethodsInternal = value;
+            }
+        }
+    }
+
+    // Backing store for update methods until the VersionHandler is boot strapped.
+    private static IEnumerable<string> UpdateCompleteMethodsInternal {
+        get {
+            if (File.Exists(CALLBACKS_PATH)) {
+                return File.ReadAllText(CALLBACKS_PATH).Split(new [] { '\n' });
+            } else {
+                return new List<string>();
+            }
+        }
+
+        set {
+            File.WriteAllText(
+                CALLBACKS_PATH,
+                value == null ? "" : String.Join("\n", new List<string>(value).ToArray()));
+        }
     }
 
     /// <summary>
@@ -368,13 +405,23 @@ public class VersionHandler {
     /// <summary>
     /// Find a class from an assembly by name.
     /// </summary>
-    /// <param name="assemblyName">Name of the assembly to search for.</param>
+    /// <param name="assemblyName">Name of the assembly to search for.  If this is null or empty,
+    /// the first class matching the specified name in all assemblies is returned.</param>
     /// <param name="className">Name of the class to find.</param>
     /// <returns>The Type of the class if found, null otherwise.</returns>
     public static Type FindClass(string assemblyName, string className) {
         foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
-            if (assembly.GetName().Name == assemblyName) {
-                return Type.GetType(className + ", " + assembly.FullName);
+            if (!String.IsNullOrEmpty(assemblyName)) {
+                if (assembly.GetName().Name == assemblyName) {
+                    return Type.GetType(className + ", " + assembly.FullName);
+                }
+            } else {
+                // Search for the first instance of a class matching this name in all assemblies.
+                foreach (var type in assembly.GetTypes()) {
+                    if (type.FullName == className) {
+                        return type;
+                    }
+                }
             }
         }
         return null;

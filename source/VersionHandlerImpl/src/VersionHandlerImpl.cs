@@ -1390,6 +1390,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
     // Name of this plugin.
     private const string PLUGIN_NAME = "Google Version Handler";
 
+    // Path of the file that contains methods to call when the version handler update process
+    // is complete.
+    private const string CALLBACKS_PATH = "Temp/VersionHandlerImplCallbacks";
+    // Path of the file that indicates whether the asset database is currently being refreshed
+    // due to this module.
+    private const string REFRESH_PATH = "Temp/VersionHandlerImplRefresh";
+
+    // Whether compilation is currently occuring.
+    private static bool compiling = false;
+
     /// <summary>
     /// Enables / disables assets imported at multiple revisions / versions.
     /// In addition, this module will read text files matching _manifest_
@@ -1398,11 +1408,93 @@ public class VersionHandlerImpl : AssetPostprocessor {
     static VersionHandlerImpl() {
         EditorApplication.update -= UpdateVersionedAssetsOnUpdate;
         EditorApplication.update += UpdateVersionedAssetsOnUpdate;
+        Log("Loaded VersionHandlerImpl", verbose: true);
     }
 
     static void UpdateVersionedAssetsOnUpdate() {
         EditorApplication.update -= UpdateVersionedAssetsOnUpdate;
         UpdateVersionedAssets();
+        EditorApplication.update += NotifyWhenCompliationComplete;
+    }
+
+    /// <summary>
+    /// Indicates whether the asset database is being refreshed.
+    /// </summary>
+    private static bool Refreshing {
+        get {
+            return File.Exists(REFRESH_PATH);
+        }
+
+        set {
+            bool refreshing = Refreshing;
+            if (refreshing != value) {
+                if (value) {
+                    File.WriteAllText(REFRESH_PATH, "AssetDatabase Refreshing");
+                } else {
+                    File.Delete(REFRESH_PATH);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Method polled from EditorApplication.update that waits until compilation is finished
+    /// prior to calling NotifyUpdateCompleteMethods() if an asset database refresh was in
+    /// progress.
+    /// </summary>
+    /// <remarks>
+    /// The typical update flow when the asset database is refreshed looks like this:
+    /// - Load VersionHandler DLL
+    /// - UpdateVersionedAssets()
+    /// - Asset database refreshed (Refreshing = true)
+    ///   - If the database isn't refreshed NotifyUpdateCompleteMethods() is called immediately.
+    /// - Compilation flag set on next editor update.
+    /// - DLL is reloaded, compilation flag still set.
+    /// - UpdateVersionedAssets(), no metadata changes or asset database refresh.
+    /// - This method polls until compilation flag is false, if Refreshing is true
+    ///   NotifyUpdateCompleteMethods() is called.
+    /// </remarks>
+    private static void NotifyWhenCompliationComplete() {
+        if (EditorApplication.isCompiling) {
+            if (!compiling) {
+                Log("Compiling...", verbose: true);
+            }
+            compiling = true;
+            return;
+        }
+        if (compiling) {
+            Log("Compilation complete.", verbose: true);
+            compiling = false;
+        }
+        EditorApplication.update -= NotifyWhenCompliationComplete;
+        // If a refresh was initiated by this module, clear the refresh flag.
+        var wasRefreshing = Refreshing;
+        Refreshing = false;
+        if (wasRefreshing) NotifyUpdateCompleteMethods();
+    }
+
+    /// <summary>
+    /// Call all methods referenced by the UpdateCompleteMethods property.
+    /// </summary>
+    private static void NotifyUpdateCompleteMethods() {
+        foreach (var method in UpdateCompleteMethods) {
+            var tokens = method.Split(new [] {':'});
+            if (tokens.Length == 3) {
+                try {
+                    VersionHandler.InvokeStaticMethod(
+                        VersionHandler.FindClass(tokens[0], tokens[1]), tokens[2], null);
+                } catch (Exception e) {
+                    Log(String.Format(
+                        "Failed to call VersionHandler complete method '{0}'.\n" +
+                        "{1}\n", method, e.ToString()), level: LogLevel.Error);
+                }
+            } else {
+                Log(String.Format("Unable to call VersionHandler complete method '{0}'.\n" +
+                                  "This string should use the format\n" +
+                                  "'assemblyname:classname:methodname'",
+                                  method), level: LogLevel.Error);
+            }
+        }
     }
 
     /// <summary>
@@ -1442,6 +1534,36 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 EditorPrefs.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
                                     defaultValue: false); }
         set { EditorPrefs.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
+    }
+
+    /// <summary>
+    /// Set the methods to call when VersionHandler completes an update.
+    /// Each string in the specified list should have the format
+    /// "assemblyname:classname:methodname".
+    /// assemblyname can be empty to search all assemblies for classname.
+    /// For example:
+    /// ":MyClass:MyMethod"
+    /// Would call MyClass.MyMethod() when the update process is complete.
+    /// </summary>
+    public static IEnumerable<string> UpdateCompleteMethods {
+        get {
+            var methods = new HashSet<string>();
+            var callbacks_data =
+                File.Exists(CALLBACKS_PATH) ? File.ReadAllText(CALLBACKS_PATH) : "";
+            foreach (var callback in callbacks_data.Split(new [] { '\n' })) {
+                var trimmedCallback = callback.Trim();
+                if (!String.IsNullOrEmpty(trimmedCallback)) {
+                    methods.Add(trimmedCallback);
+                }
+            }
+            return methods;
+        }
+
+        set {
+            File.WriteAllText(
+                CALLBACKS_PATH,
+                value == null ? "" : String.Join("\n", new List<string>(value).ToArray()));
+        }
     }
 
     /// <summary>
@@ -1589,6 +1711,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
         if (metadataSet.EnableMostRecentPlugins(forceUpdate)) {
             AssetDatabase.Refresh();
+            Refreshing = true;
         }
 
         var obsoleteFiles = new ObsoleteFiles(
@@ -1643,6 +1766,17 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     Log("Leaving obsolete file: " + item.Key + " | " + "Referenced by (" +
                         String.Join(", ", item.Value.ToArray())  + ")", verbose: true);
                 }
+            }
+        }
+
+        if (!Refreshing) {
+            // If for some reason, another module caused compilation to occur then we'll postpone
+            // notification until it's complete.
+            if (EditorApplication.isCompiling) {
+                EditorApplication.update += NotifyWhenCompliationComplete;
+            } else {
+                // If we're in a quiescent state, notify the update complete methods.
+                NotifyUpdateCompleteMethods();
             }
         }
     }
