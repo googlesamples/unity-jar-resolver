@@ -363,6 +363,21 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Gets the directory names of currently targeted ABIs.
+        /// </summary>
+        /// <returns>returns the hashset of directory names, ie. "x86".</returns>
+        internal HashSet<string> GetSelectedABIDirs(string currentAbi) {
+            var activeAbis = new HashSet<string>();
+            string abiDir;
+            if (UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY.TryGetValue(currentAbi, out abiDir)) {
+                activeAbis.Add(abiDir);
+            } else {
+                activeAbis.UnionWith(UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY.Values);
+            }
+            return activeAbis;
+        }
+
+        /// <summary>
         /// Explodes a single aar file.  This is done by calling the
         /// JDK "jar" command, then moving the classes.jar file.
         /// </summary>
@@ -416,14 +431,8 @@ namespace GooglePlayServices
                 }
                 // Remove shared libraries for all ABIs that are not required for the selected
                 // target ABI.
-                var activeAbis = new HashSet<string>();
-                var currentAbi = PlayServicesResolver.AndroidTargetDeviceAbi.ToLower();
-                foreach (var kv in UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY) {
-                    if (currentAbi == kv.Key) activeAbis.Add(kv.Value);
-                }
-                if (activeAbis.Count == 0) {
-                    activeAbis.UnionWith(UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY.Values);
-                }
+                var currentAbi = PlayServicesResolver.AndroidTargetDeviceAbi;
+                var activeAbis = GetSelectedABIDirs(currentAbi);
                 foreach (var directory in Directory.GetDirectories(nativeLibsDir)) {
                     var abiDir = Path.GetFileName(directory);
                     if (!activeAbis.Contains(abiDir)) {

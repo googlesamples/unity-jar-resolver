@@ -114,7 +114,7 @@ class GradlePreBuildResolver : DefaultResolver {
     // creating the dialog responsible for showing the progress of the execution.
     // Any errors are reported to the console as well.
     /// <param name="args">Arguments to be passed to the generate gradle script tool.</param>
-    private static void RunGenGradleScript(string args) {
+    private static void RunGenGradleScript(string args, CommandLine.CompletionHandler completedHandler) {
         // b/35663224 Combine execute-python-exe which handles the windows logic.
         bool onWindows =
             UnityEngine.Application.platform == UnityEngine.RuntimePlatform.WindowsEditor;
@@ -131,8 +131,7 @@ class GradlePreBuildResolver : DefaultResolver {
         window.summaryText = "Generating and running Gradle prebuild.";
         window.progressTitle = window.summaryText;
         window.autoScrollToBottom = true;
-        window.RunAsync(
-            command, args,
+        window.RunAsync(command, args,
             (result) => {
                 if (result.exitCode != 0) {
                     Debug.LogError("Error somewhere in the process of creating the gradle build, " +
@@ -161,8 +160,8 @@ class GradlePreBuildResolver : DefaultResolver {
                         window.Close();
                     }
                 };
-            },
-            maxProgressLines: 50);
+                completedHandler(result);
+            }, maxProgressLines: 50);
         window.Show();
     }
 
@@ -353,7 +352,24 @@ class GradlePreBuildResolver : DefaultResolver {
         RunGenGradleScript(
             " -c \"" + GENERATE_CONFIG_PATH + "\"" +
             " -b \"" + GENERATE_GRADLE_BUILD_PATH + "\"" +
-            " -o \"" + Path.Combine(destinationDirectory, GENERATE_GRADLE_OUTPUT_DIR) + "\"");
+            " -o \"" + Path.Combine(destinationDirectory, GENERATE_GRADLE_OUTPUT_DIR) + "\"",
+            (result) => {
+                if (result.exitCode == 0) {
+                    var currentAbi = PlayServicesResolver.AndroidTargetDeviceAbi;
+                    var activeAbis = GetSelectedABIDirs(currentAbi);
+                    var libsDir = Path.Combine(Path.Combine(destinationDirectory,
+                                                        GENERATE_GRADLE_OUTPUT_DIR), "libs");
+                    if (Directory.Exists(libsDir)) {
+                        foreach (var directory in Directory.GetDirectories(libsDir)) {
+                            var abiDir = Path.GetFileName(directory).ToLower();
+                            if (!activeAbis.Contains(abiDir)) {
+                                PlayServicesSupport.DeleteExistingFileOrDirectory(
+                                    directory, includeMetaFiles: true);
+                            }
+                        }
+                    }
+                }
+            });
     }
 
     /// <summary>
