@@ -1,3 +1,8 @@
+# Version 1.2.38 - Aug 7, 2017
+## Bug Fixes
+* Fixed an issue in VersionHandler where disabled targets are ignored if
+  the "Any Platform" flag is set on a plugin DLL.
+
 # Version 1.2.37 - Aug 3, 2017
 ## New Features
 * Exposed GooglePlayServices.PlayServicesResolver.Resolve() so that it's

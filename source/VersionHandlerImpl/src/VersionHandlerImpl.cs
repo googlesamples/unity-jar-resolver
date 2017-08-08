@@ -805,10 +805,17 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     pluginImporter.SetCompatibleWithEditor(editorEnabled);
                     modifiedThisVersion = true;
                 }
+                bool compatibleWithAnyPlatform = pluginImporter.GetCompatibleWithAnyPlatform();
                 foreach (BuildTarget target in
                          FileMetadata.GetBuildTargetNameToEnum().Values) {
                     bool enabled = selectedTargets != null &&
                         selectedTargets.Contains(target);
+                    // If we need to explicitly target a platform disable the compatible with any
+                    // platform flag.
+                    if (!enabled && compatibleWithAnyPlatform) {
+                        pluginImporter.SetCompatibleWithAnyPlatform(false);
+                        compatibleWithAnyPlatform = false;
+                    }
                     try {
                         bool compatibleWithTarget =
                             pluginImporter.GetCompatibleWithPlatform(target);
