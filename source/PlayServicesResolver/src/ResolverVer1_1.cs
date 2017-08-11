@@ -23,8 +23,6 @@ namespace GooglePlayServices
     using System;
     using System.Collections;
     using System.IO;
-    using System.Security.AccessControl;
-    using System.Security.Principal;
     using System.Text.RegularExpressions;
     using System.Xml;
 
@@ -413,25 +411,19 @@ namespace GooglePlayServices
                 }
                 // Files extracted from the zip file don't have the executable bit set on some
                 // platforms, so set it here.
-                // Unfortunately, File.GetAccessControl() isn't implemented on OSX so we'll use
-                // chmod (OSX / Linux) and File.*AccessControl() on Windows.
-                if (UnityEngine.RuntimePlatform.WindowsEditor ==
+                // Unfortunately, File.GetAccessControl() isn't implemented, so we'll use
+                // chmod (OSX / Linux) and on Windows extracted files are executable by default
+                // so we do nothing.
+                CommandLine.Result chmodResult;
+                if (UnityEngine.RuntimePlatform.WindowsEditor !=
                     UnityEngine.Application.platform) {
-                    var security = File.GetAccessControl(gradleWrapper);
-                    security.AddAccessRule(
-                        new FileSystemAccessRule(
-                            new SecurityIdentifier(WellKnownSidType.CreatorGroupSid, null),
-                            FileSystemRights.FullControl,
-                            InheritanceFlags.ObjectInherit | InheritanceFlags.ContainerInherit,
-                            PropagationFlags.NoPropagateInherit, AccessControlType.Allow));
-                    File.SetAccessControl(gradleWrapper, security);
-                } else {
                     var result = CommandLine.Run("chmod",
                                                  String.Format("ug+x \"{0}\"", gradleWrapper));
                     if (result.exitCode != 0) {
                         PlayServicesSupport.Log(
                             String.Format("Failed to make \"{0}\" executable.\n\n" +
-                                          "Resolution failed.", gradleWrapper),
+                                          "Resolution failed.\n\n{1}", gradleWrapper,
+                                          result.message),
                             level: PlayServicesSupport.LogLevel.Error);
                         resolutionComplete(allDependenciesList);
                         return;
