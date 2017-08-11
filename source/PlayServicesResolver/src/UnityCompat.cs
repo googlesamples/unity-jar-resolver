@@ -59,27 +59,6 @@ public class UnityCompat {
 
     private const float EPSILON = 1e-7f;
 
-    /// <summary>
-    /// Checks the unity version to see if it has built in support to return the target sdk version.
-    /// </summary>
-    private static bool UnityAPIHasTargetSDK {
-        get {
-            // Unity started supporting the target SDK API in the released version of Unity 5.6
-            // but not in the beta. So check if this is exactly 5.6, but also not beta.
-            if (Math.Abs(
-                    Google.VersionHandler.GetUnityVersionMajorMinor() - 5.6f) < EPSILON) {
-                // Unity non-beta versions look like 5.6.0f1 while beta versions look like:
-                // 5.6.0b11, so looking for the b in the string (especially confined to 5.6),
-                // should be sufficient for determining that it's the beta.
-                if (UnityEngine.Application.unityVersion.Contains(".0b")) {
-                    return false;
-                }
-            }
-
-            return (Google.VersionHandler.GetUnityVersionMajorMinor() >= 5.6f - EPSILON);
-        }
-    }
-
     // Parses a UnityEditor.AndroidSDKVersion enum for a value.
     private static int VersionFromAndroidSDKVersionsEnum(string enumName, string fallbackPrefKey,
                                                          int fallbackValue) {
@@ -130,11 +109,11 @@ public class UnityCompat {
     /// </remarks>
     /// <returns>The sdk value (ie. 24 for Android 7.0 Nouget). -1 means auto select.</returns>
     public static int GetAndroidTargetSDKVersion() {
-        if (!UnityAPIHasTargetSDK)
-            return GetAndroidPlatform();
-
-        return VersionFromAndroidSDKVersionsEnum(PlayerSettings.Android.targetSdkVersion.ToString(),
-            ANDROID_PLATFORM_FALLBACK_KEY, AndroidPlatformVersionFallback);
+        var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetSdkVersion");
+        return property == null ? GetAndroidPlatform() :
+            VersionFromAndroidSDKVersionsEnum(
+                 Enum.GetName(property.PropertyType, property.GetValue(null, null)),
+                 ANDROID_PLATFORM_FALLBACK_KEY, AndroidPlatformVersionFallback);
     }
 
     /// <summary>
