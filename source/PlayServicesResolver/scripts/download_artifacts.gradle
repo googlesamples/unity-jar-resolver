@@ -1,0 +1,258 @@
+/*
+ * Copyright 2017 Google Inc. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+def helpText = """
+This Gradle script performs the following:
+- Adds Android maven repositories to search locations for artifacts.
+- Adds user specified maven repositories to search locations for artifacts.
+- Copies specified set of maven artifacts to the specified output directory.
+- Displays the set of files copied into the output directory.
+- Displays any packages that were not found.
+
+./gradlew -b """ + project.buildscript.sourceFile + """ \\
+  \"-PMAVEN_REPOS=[semicolon separated list of repo URIs]\" \\
+  \"-PPACKAGES_TO_COPY=[semicolon separated list of maven artifacts]\" \\
+  -PTARGET_DIR=[target directory]
+
+ANDROID_HOME (required env var, system property or project property):
+  Required environment variable, system property or project project that
+  specifies the install location of the Android SDK.
+MAVEN_REPOS (optional project property):
+  Optional property which adds to the list of Maven repositories to search.
+  This is a semicolon separated list of URIs e.g
+  \"-PMAVEN_REPOS=http://some.repos.com;file:///some/other/path\"
+  Since this property semicolon separated it needs to be quoted correctly
+  when specified via some command line shells.
+PACKAGES_TO_COPY (required project property):
+  Semicolon separated list of Maven artifact specifications.  This will
+  result in the script attempting to download the set of artifacts to
+  TARGET_DIR.  Specified artifacts that are not copied to the target directory
+  are logged to the standard output stream.
+  e.g
+  \"-PPACKAGES_TO_COPY=com.android.support:support-compat:26.0.1;\
+com.android.support:support-core-utils:26.0.1\"
+  Since this property semicolon separated it needs to be quoted correctly
+  when specified via some command line shells.
+TARGET_DIR (required project property):
+  Directory to copy artifacts to.
+  e.g -PTARGET_DIR=some/directory/to/copy/to
+"""
+
+buildscript {
+  repositories {
+    jcenter()
+    mavenLocal()
+    mavenCentral()
+  }
+}
+
+configurations {
+  // Configuration used to search the initial set of packages before applying
+  // a fallback search strategy.
+  userPackages
+  // Configuration used to aggregate the final set of packages we'll copy.
+  copyPackages
+}
+
+// From a set of package specifiers generate a dictionary of versionless
+// artifact filenames (e.g com.example:my-package:1.2.3 would become
+// `ret[com.example:my-package:1.2.3] = "my-package"`).
+// Incomplete package specifications e.g "com.example" are ignored.
+//
+// Returns a set of versionless artifacts by package specifier.
+def getVersionlessArtifactByPackage(packages) {
+  def versionlessArtifactByPackage = [:]
+  packages.each {
+    def groupArtifact = it.split(":")
+    if (groupArtifact.size() >= 2) {
+      versionlessArtifactByPackage[it] = groupArtifact[1]
+    }
+  }
+  return versionlessArtifactByPackage
+}
+
+// Given a set of versioned artifact File objects, generate a set of
+// versionless artifact filenames.  All files without a version
+// specifier are ignored.
+//
+// Returns a set of versioned artifact filenames.
+def getVersionlessArtifactFilenames(versionedFiles) {
+  Set versionlessFilenames = []
+  versionedFiles.each {
+    def path = it.name.toString()
+    def versionIndex = path.lastIndexOf("-")
+    if (versionIndex >= 0) {
+      versionlessFilenames.add(path.substring(0, versionIndex))
+    }
+  }
+  return versionlessFilenames
+}
+
+// Configure project properties.
+project.ext {
+  // Get the install location of the Android SDK.
+  def sdkRoot = null
+  for (prop in [System.getProperty("ANDROID_HOME"),
+                project.hasProperty("ANDROID_HOME") ?
+                  getProperty("ANDROID_HOME") : null,
+                System.getenv("ANDROID_HOME")]) {
+    if (prop) {
+      sdkRoot = prop
+      break
+    }
+  }
+  if (!sdkRoot) {
+    print helpText
+    logger.error("Android SDK install location must be specified via " +
+                 "ANDROID_HOME variable.")
+    System.exit(1)
+  }
+  androidSdkRoot = sdkRoot
+
+  def mavenUris = []
+  // Retrieve a list of command line specified maven repo URIs.
+  if (project.hasProperty("MAVEN_REPOS")) {
+    project.getProperty("MAVEN_REPOS").tokenize(";").each {
+      mavenUris.push(new URI(it))
+    }
+  }
+
+  // Construct a list of local Maven URIs in the Android SDK.
+  if (androidSdkRoot) {
+    ["extras/android/m2repository", "extras/google/m2repository"].each {
+      def path = new File(androidSdkRoot, it)
+      if (path.exists()) mavenUris.push(path.toURI())
+    }
+  }
+  // Add Google maven repositories.
+  mavenUris.push(new URI("https://maven.google.com"))
+
+  // List of URIs to add to the set of maven sources.
+  mavenRepoUris = mavenUris
+
+  // Add the repositories here so that we can resolve during configuration
+  // below.
+  project.repositories {
+    for (uri in mavenRepoUris) {
+      maven {
+        url uri
+      }
+    }
+    mavenLocal()
+    jcenter()
+    mavenCentral()
+  }
+
+  // Set of packages to copy to the target directory.
+  if (!project.hasProperty("PACKAGES_TO_COPY")) {
+    print helpText
+    logger.error("Project property PACKAGES_TO_COPY must be specified.")
+    System.exit(1)
+  }
+  Set packages = project.getProperty("PACKAGES_TO_COPY").tokenize(";")
+  // Add user specified packages to the userPackages configuration.
+  // This allows us to resolve during the configuration phase.
+  packages.each { project.dependencies.userPackages it }
+
+  // JarResolverLib will implicitly search for .srcaar artifacts in a maven
+  // package in addition to aar and jar artifacts.  Since Gradle doesn't know
+  // what a srcaar is and it's likely each POM doesn't reference the srcaar
+  // either, we resolve dependencies during the configuration phase to
+  // determine which packages are missing, add the srcaar artifact specifier
+  // to search for srcarr files then search again in an attempt to resolve
+  // the missing packages.
+  def versionlessArtifactByPackage = getVersionlessArtifactByPackage(packages)
+  def packagesToCopyByUserPackages = [:]
+  def resolvedVersionlessArtifacts = getVersionlessArtifactFilenames(
+    project.configurations.userPackages.resolvedConfiguration.
+        lenientConfiguration.getFiles(Specs.satisfyAll()))
+  versionlessArtifactByPackage.each {
+    def pkg = it.key
+    // If the package wasn't found and the artifact type isn't specified, try
+    // searching for a srcaar artifact instead.
+    if (!resolvedVersionlessArtifacts.contains(it.value) &&
+        !pkg.contains("@")) {
+      pkg += "@srcaar"
+    }
+    packagesToCopyByUserPackages[pkg] = it.key
+  }
+
+  // Expose set of packages to copyPackages.
+  packagesToCopy = packagesToCopyByUserPackages
+
+  // Location to copy referenced packages.
+  if (!project.hasProperty("TARGET_DIR")) {
+    print helpText
+    logger.error("Project property TARGET_DIR must be specified.")
+    System.exit(1)
+  }
+  targetDir = project.getProperty("TARGET_DIR")
+}
+
+// Generate tasks to copy Maven artifacts.
+dependencies {
+  project.ext.packagesToCopy.each { copyPackages it.key }
+}
+
+// Copy *available* Maven artifacts to the target directory.
+task copyPackages(type: Copy) {
+  from configurations.copyPackages.resolvedConfiguration.
+      lenientConfiguration.getFiles(Specs.satisfyAll())
+  into project.ext.targetDir
+  // Rename .srcaar files to .aar in the target directory and track each
+  // copied file.
+  def copiedFiles = []
+  rename {
+    String filename ->
+      def extensionIndex = filename.lastIndexOf(".")
+      if (extensionIndex > 0) {
+        def extension = filename.substring(extensionIndex)
+        if (extension == ".srcaar") {
+          filename = filename.substring(0, extensionIndex) + ".aar";
+        }
+      }
+      copiedFiles.push(new File(filename));
+      return filename
+  }
+
+  // Display:
+  // * The set of files copied into the target directory.
+  // * The dependency expression for each artifact that was not found.
+  doLast {
+    if (copiedFiles) {
+      println "Copied artifacts:"
+      copiedFiles.each { println it.name }
+      println ""
+    }
+    def resolvedVersionlessArtifacts = getVersionlessArtifactFilenames(
+      copiedFiles)
+    def versionlessArtifactByPackage = getVersionlessArtifactByPackage(
+      project.ext.packagesToCopy.keySet())
+    def missingPackages = []
+    versionlessArtifactByPackage.each {
+      if (!resolvedVersionlessArtifacts.contains(it.value)) {
+        missingPackages.push(project.ext.packagesToCopy[it.key])
+      }
+    }
+    if (missingPackages) {
+      println "Missing artifacts:"
+      missingPackages.each { println it }
+      println ""
+    }
+  }
+}
+
+project.defaultTasks = ["copyPackages"]

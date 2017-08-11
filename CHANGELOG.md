@@ -1,3 +1,14 @@
+# Version 1.2.39 - Aug 10, 2017
+## New Features
+* Android Resolver now supports resolution with Gradle.  This enables support
+  for non-local artifacts.
+## Bug Fixes
+* Android Resolver's Gradle Prebuild now uses Android build tools to determine
+  the Android platform tools version rather than relying upon internal Unity
+  APIs.
+* Android Resolver's Gradle Prebuild now correctly strips binaries that are
+  not required for the target ABI.
+
 # Version 1.2.38 - Aug 7, 2017
 ## Bug Fixes
 * Fixed an issue in VersionHandler where disabled targets are ignored if

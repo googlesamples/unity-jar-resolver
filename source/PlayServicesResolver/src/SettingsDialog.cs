@@ -34,6 +34,8 @@ namespace GooglePlayServices
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
         private const string AutoResolutionDisabledWarningKey =
             Namespace + "AutoResolutionDisabledWarning";
+        private const string FetchDependenciesWithGradleKey =
+            Namespace + "FetchDependenciesWithGradle";
 
         private const string AndroidPluginsDir = "Assets/Plugins/Android";
 
@@ -51,6 +53,11 @@ namespace GooglePlayServices
         internal static bool PrebuildWithGradle {
             private set { EditorPrefs.SetBool(PrebuildWithGradleKey, value); }
             get { return EditorPrefs.GetBool(PrebuildWithGradleKey, false); }
+        }
+
+        internal static bool FetchDependenciesWithGradle {
+            private set { EditorPrefs.SetBool(FetchDependenciesWithGradleKey, value); }
+            get { return EditorPrefs.GetBool(FetchDependenciesWithGradleKey, true); }
         }
 
         internal static bool InstallAndroidPackages {
@@ -93,6 +100,7 @@ namespace GooglePlayServices
 
         bool enableAutoResolution;
         bool prebuildWithGradle;
+        bool fetchDependenciesWithGradle;
         bool installAndroidPackages;
         string packageDir;
         bool explodeAars;
@@ -101,7 +109,7 @@ namespace GooglePlayServices
 
         public void Initialize()
         {
-            minSize = new Vector2(300, 200);
+            minSize = new Vector2(300, 300);
             position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                                 minSize.x, minSize.y);
         }
@@ -110,6 +118,7 @@ namespace GooglePlayServices
         {
             enableAutoResolution = EnableAutoResolution;
             prebuildWithGradle = PrebuildWithGradle;
+            fetchDependenciesWithGradle = FetchDependenciesWithGradle;
             installAndroidPackages = InstallAndroidPackages;
             packageDir = PackageDir;
             explodeAars = ExplodeAars;
@@ -130,6 +139,20 @@ namespace GooglePlayServices
             prebuildWithGradle = EditorGUILayout.Toggle(prebuildWithGradle);
             GUILayout.EndHorizontal();
 
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Fetch Dependencies with Gradle", EditorStyles.boldLabel);
+            fetchDependenciesWithGradle = EditorGUILayout.Toggle(fetchDependenciesWithGradle);
+            GUILayout.EndHorizontal();
+            if (fetchDependenciesWithGradle) {
+                GUILayout.Label("AARs are fetched using Gradle which enables assets to be " +
+                                "fetched from remote Maven repositories and Gradle version " +
+                                "expressions.");
+            } else {
+                GUILayout.Label("Legacy AAR fetching method that only queries the Android SDK " +
+                                "manager's local maven repository and user specified local " +
+                                "maven repositories for dependencies.");
+            }
+
             EditorGUI.BeginDisabledGroup(prebuildWithGradle == true);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Enable Auto-Resolution", EditorStyles.boldLabel);
@@ -140,7 +163,6 @@ namespace GooglePlayServices
             GUILayout.Label("Install Android Packages", EditorStyles.boldLabel);
             installAndroidPackages = EditorGUILayout.Toggle(installAndroidPackages);
             GUILayout.EndHorizontal();
-
 
             if (ConfigurablePackageDir) {
                 GUILayout.BeginHorizontal();
@@ -200,6 +222,7 @@ namespace GooglePlayServices
             if (ok)
             {
                 PrebuildWithGradle = prebuildWithGradle;
+                FetchDependenciesWithGradle = fetchDependenciesWithGradle;
                 EnableAutoResolution = enableAutoResolution;
                 InstallAndroidPackages = installAndroidPackages;
                 if (ConfigurablePackageDir) PackageDir = packageDir;

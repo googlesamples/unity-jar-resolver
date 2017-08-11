@@ -453,9 +453,11 @@ namespace Google.JarResolver
         /// dependencies.</param>
         /// <param name="repoPaths">Set of additional repo paths to search for the
         /// dependencies.</param>
+        /// <param name="logErrors">Whether to report errors for missing dependencies.</param>
         /// <returns>Dictionary of Dependency instances indexed by Dependency.Key.</returns>
         public static Dictionary<string, Dependency> GetTransitiveDependencies(
-                Dictionary<string, Dependency> dependencies, List<string> repoPaths = null) {
+                Dictionary<string, Dependency> dependencies, List<string> repoPaths = null,
+                bool logErrors = true) {
             // Copy the set of dependencies.
             var transitiveDependencies = new Dictionary<string, Dependency>(dependencies);
             // Transitive dependencies that have not been queried for packages they're dependent
@@ -478,8 +480,9 @@ namespace Google.JarResolver
                     combinedRepos = UniqueList<string>(combinedRepos);
 
                     try {
-                        foreach (var transitiveDependency in GetDependencies(dependencyItem.Value,
-                                                                             combinedRepos)) {
+                        foreach (var transitiveDependency in
+                                 GetDependencies(dependencyItem.Value, combinedRepos,
+                                                 logError: logErrors)) {
                             if (!processedDependencies.Contains(transitiveDependency.Key)) {
                                 transitiveDependencies[transitiveDependency.Key] =
                                     transitiveDependency;
@@ -533,7 +536,8 @@ namespace Google.JarResolver
 
             // Get the transitive set of dependencies.
             var transitiveDependencies = GetTransitiveDependencies(dependencies,
-                                                                   repoPaths: repoPaths);
+                                                                   repoPaths: repoPaths,
+                                                                   logErrors: false);
             // TODO(smiles): Need a callback that queries Unity's asset DB rather than touching
             // the filesystem here.
             string[] filesInDestDir = Directory.GetFileSystemEntries(destDirectory);
@@ -605,22 +609,27 @@ namespace Google.JarResolver
         }
 
         /// <summary>
-        /// Determine whether two lists of strings match.
+        /// Determine whether two lists of dependencies match.
         /// </summary>
-        /// <param name="deps1">Enumerable of strings to compare..</param>
-        /// <param name="deps2">Enumerable of strings to compare..</param>
+        /// <param name="deps1">List of dependencies to compare, these should have concrete
+        /// versions.</param>
+        /// <param name="deps2">List of dependencies to compare.</param>
         /// <returns>true if both enumerables match, false otherwise.</returns>
-        public static bool DependenciesEqual(IEnumerable<string> deps1,
-                                             IEnumerable<string> deps2)
+        private static bool DependenciesEqual(List<Dependency> deps1,
+                                              List<Dependency> deps2)
         {
-            var list1 = new List<string>(deps1);
-            var list2 = new List<string>(deps2);
-            list1.Sort();
-            list2.Sort();
-            if (list1.Count != list2.Count) return false;
-            for (int i = 0; i < list1.Count; ++i)
-            {
-                if (list1[i] != list2[i]) return false;
+            if (deps1.Count != deps2.Count) return false;
+            // Dictionaries of dependencies indexed by versionless key.
+            var set1 = new Dictionary<string, Dependency>();
+            var set2 = new Dictionary<string, Dependency>();
+            foreach (var dep in deps1) set1[dep.VersionlessKey] = dep;
+            foreach (var dep in deps2) set2[dep.VersionlessKey] = dep;
+
+            // Determine whether dependencies in each set are compatible.
+            foreach (var kv in set1) {
+                Dependency dep2;
+                if (!set2.TryGetValue(kv.Key, out dep2)) return false;
+                if (!dep2.IsAcceptableVersion(kv.Value.Version)) return false;
             }
             return true;
         }
@@ -669,7 +678,7 @@ namespace Google.JarResolver
             Dictionary<string, Dependency> dependencyMap =
                 GetTransitiveDependencies(LoadDependencies(true, keepMissing: true,
                                                            findCandidates: true),
-                                          repoPaths: repositoryPaths);
+                                          repoPaths: repositoryPaths, logErrors: false);
             dependencyPaths = null;
             // If a destination directory was specified, determine whether the dependencies
             // referenced by dependencyMap differ to what is present in the project.  If they
@@ -683,7 +692,10 @@ namespace Google.JarResolver
                 foreach (var currentDependency in currentDependencies) {
                     dependencyPaths[currentDependency.Key] = currentDependency.Value.Value;
                 }
-                if (DependenciesEqual(currentDependencies.Keys, dependencyMap.Keys)) {
+                var currentDependenciesList = new List<Dependency>();
+                foreach (var kv in currentDependencies.Values) currentDependenciesList.Add(kv.Key);
+                if (DependenciesEqual(currentDependenciesList,
+                                      new List<Dependency>(dependencyMap.Values))) {
                     Log("All dependencies up to date.", verbose: true);
                     return null;
                 }
@@ -1312,8 +1324,10 @@ namespace Google.JarResolver
         /// <param name="dep">Dependency to process</param>
         /// <param name="repoPaths">Set of additional repo paths to search for the
         /// dependencies.</param>
+        /// <param name="logError">Log an error if the dependency is missing.</param>
         internal static IEnumerable<Dependency> GetDependencies(Dependency dep,
-                                                                List<string> repoPaths)
+                                                                List<string> repoPaths,
+                                                                bool logError = true)
         {
             List<Dependency> dependencyList = new List<Dependency>();
             var notFoundErrorMessage = String.Format(
@@ -1322,7 +1336,7 @@ namespace Google.JarResolver
                 dep.Key, dep.CreatedBy);
             if (String.IsNullOrEmpty(dep.BestVersion))
             {
-                Log(notFoundErrorMessage, level: LogLevel.Error);
+                if (logError) Log(notFoundErrorMessage, level: LogLevel.Error);
                 return dependencyList;
             }
 
@@ -1338,7 +1352,7 @@ namespace Google.JarResolver
             try {
                 reader = new XmlTextReader(new StreamReader(pomFile));
             } catch (DirectoryNotFoundException) {
-                Log(notFoundErrorMessage, level: LogLevel.Error);
+                if (logError) Log(notFoundErrorMessage, level: LogLevel.Error);
                 return dependencyList;
             }
             bool inDependencies = false;

@@ -23,6 +23,8 @@ namespace GooglePlayServices
     using System;
     using System.Collections;
     using System.IO;
+    using System.Security.AccessControl;
+    using System.Security.Principal;
     using System.Text.RegularExpressions;
     using System.Xml;
 
@@ -129,6 +131,9 @@ namespace GooglePlayServices
         // File used to to serialize aarExplodeData.  This is required as Unity will reload classes
         // in the editor when C# files are modified.
         private string aarExplodeDataFile = Path.Combine("Temp", "GoogleAarExplodeCache.xml");
+
+        // Directory used to execute Gradle.
+        private string gradleBuildDirectory = Path.Combine("Temp", "PlayServicesResolverGradle");
 
         private const int MajorVersion = 1;
         private const int MinorVersion = 1;
@@ -290,6 +295,288 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Extract an embedded resource to the specified path creating intermediate directories
+        /// if they're required.
+        /// </summary>
+        /// <param name="resourceName">Name of the resource to extract.</param>
+        /// <param name="targetPath">Target path.</param>
+        private void ExtractResource(string resourceName, string targetPath) {
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
+            var stream = typeof(GooglePlayServices.ResolverVer1_1).Assembly.
+                GetManifestResourceStream(resourceName);
+            var data = new byte[stream.Length];
+            stream.Read(data, 0, (int)stream.Length);
+            File.WriteAllBytes(targetPath, data);
+        }
+
+        /// <summary>
+        /// Parse output of download_artifacts.gradle into lists of copied and missing artifacts.
+        /// </summary>
+        /// <param name="output">Standard output of the download_artifacts.gradle.</param>
+        /// <param name="destinationDirectory">Directory to artifacts were copied into.</param>
+        /// <param name="copiedArtifacts">Returns a list of copied artifact files.</param>
+        /// <param name="missingArtifacts">Returns a list of missing artifact
+        /// specifications.</param>
+        private void ParseDownloadGradleArtifactsGradleOutput(
+                string output, string destinationDirectory,
+                out List<string> copiedArtifacts, out List<string> missingArtifacts) {
+            // Parse stdout for copied and missing artifacts.
+            copiedArtifacts = new List<string>();
+            missingArtifacts = new List<string>();
+            string currentHeader = null;
+            const string COPIED_ARTIFACTS_HEADER = "Copied artifacts:";
+            const string MISSING_ARTIFACTS_HEADER = "Missing artifacts:";
+            foreach (var line in output.Split(new string[] { "\r\n", "\n" },
+                                              StringSplitOptions.None)) {
+                if (line.StartsWith(COPIED_ARTIFACTS_HEADER)) {
+                    currentHeader = line;
+                    continue;
+                } else if (line.StartsWith(MISSING_ARTIFACTS_HEADER)) {
+                    currentHeader = line;
+                    continue;
+                } else if (String.IsNullOrEmpty(line.Trim())) {
+                    currentHeader = null;
+                    continue;
+                }
+                if (!String.IsNullOrEmpty(currentHeader)) {
+                    if (currentHeader == COPIED_ARTIFACTS_HEADER) {
+                        // Store the POSIX path of the copied package to handle Windows
+                        // path variants.
+                        copiedArtifacts.Add(Path.Combine(destinationDirectory,
+                                                         line.Trim()).Replace("\\", "/"));
+                    } else if (currentHeader == MISSING_ARTIFACTS_HEADER) {
+                        missingArtifacts.Add(line.Trim());
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Log an error with the set of dependencies that were not fetched.
+        /// </summary>
+        /// <param name="missingArtifacts">List of missing dependencies.</param>
+        private void LogMissingDependenciesError(List<string> missingArtifacts) {
+            // Log error for missing packages.
+            if (missingArtifacts.Count > 0) {
+                PlayServicesSupport.Log(
+                   String.Format("Resolution failed\n\n" +
+                                 "Failed to fetch the following dependencies:\n{0}\n\n",
+                                 String.Join("\n", missingArtifacts.ToArray())),
+                   level: PlayServicesSupport.LogLevel.Error);
+            }
+        }
+
+        /// <summary>
+        /// Perform resolution using Gradle.
+        /// </summary>
+        /// <param name="svcSupport">PlayServicesSupport instance.</param>
+        /// <param name="destinationDirectory">Directory to copy packages into.</param>
+        /// <param name="androidSdkPath">Path to the Android SDK.  This is required as
+        /// PlayServicesSupport.SDK can only be called from the main thread.</param>
+        /// <param name="logErrorOnMissingArtifacts">Log errors when artifacts are missing.</param>
+        /// <param name="resolutionComplete">Called when resolution is complete with a list of
+        /// packages that were not found.</param>
+        private void GradleResolution(
+                PlayServicesSupport svcSupport, string destinationDirectory,
+                string androidSdkPath, bool logErrorOnMissingArtifacts,
+                System.Action<List<Dependency>> resolutionComplete) {
+            var gradleWrapper = Path.Combine(
+                gradleBuildDirectory,
+                UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform ?
+                    "gradlew.bat" : "gradlew");
+            var buildScript = Path.Combine(
+                gradleBuildDirectory, "PlayServicesResolver.scripts.download_artifacts.gradle");
+            // Get all dependencies.
+            var allDependencies = svcSupport.LoadDependencies(true, keepMissing: true,
+                                                              findCandidates: true);
+            var allDependenciesList = new List<Dependency>(allDependencies.Values);
+
+            // Extract Gradle wrapper and the build script to the build directory.
+            if (!(Directory.Exists(gradleBuildDirectory) && File.Exists(gradleWrapper) &&
+                  File.Exists(buildScript))) {
+                var gradleTemplateZip = Path.Combine(
+                    gradleBuildDirectory, "PlayServicesResolver.scripts.gradle-template.zip");
+                foreach (var resource in new [] { gradleTemplateZip, buildScript }) {
+                    ExtractResource(Path.GetFileName(resource), resource);
+                }
+                if (!ExtractAar(gradleTemplateZip, new [] {
+                            "gradle/wrapper/gradle-wrapper.jar",
+                            "gradle/wrapper/gradle-wrapper.properties",
+                            "gradlew",
+                            "gradlew.bat"}, gradleBuildDirectory)) {
+                    PlayServicesSupport.Log(
+                       String.Format("Unable to extract Gradle build component {0}\n\n" +
+                                     "Resolution failed.", gradleTemplateZip),
+                       level: PlayServicesSupport.LogLevel.Error);
+                    resolutionComplete(allDependenciesList);
+                    return;
+                }
+                // Files extracted from the zip file don't have the executable bit set on some
+                // platforms, so set it here.
+                // Unfortunately, File.GetAccessControl() isn't implemented on OSX so we'll use
+                // chmod (OSX / Linux) and File.*AccessControl() on Windows.
+                if (UnityEngine.RuntimePlatform.WindowsEditor ==
+                    UnityEngine.Application.platform) {
+                    var security = File.GetAccessControl(gradleWrapper);
+                    security.AddAccessRule(
+                        new FileSystemAccessRule(
+                            new SecurityIdentifier(WellKnownSidType.CreatorGroupSid, null),
+                            FileSystemRights.FullControl,
+                            InheritanceFlags.ObjectInherit | InheritanceFlags.ContainerInherit,
+                            PropagationFlags.NoPropagateInherit, AccessControlType.Allow));
+                    File.SetAccessControl(gradleWrapper, security);
+                } else {
+                    var result = CommandLine.Run("chmod",
+                                                 String.Format("ug+x \"{0}\"", gradleWrapper));
+                    if (result.exitCode != 0) {
+                        PlayServicesSupport.Log(
+                            String.Format("Failed to make \"{0}\" executable.\n\n" +
+                                          "Resolution failed.", gradleWrapper),
+                            level: PlayServicesSupport.LogLevel.Error);
+                        resolutionComplete(allDependenciesList);
+                        return;
+                    }
+                }
+            }
+
+            // Build array of repos to search, they're interleaved across all dependencies as the
+            // order matters.
+            int maxNumberOfRepos = 0;
+            foreach (var dependency in allDependencies.Values) {
+                maxNumberOfRepos = Math.Max(maxNumberOfRepos, dependency.Repositories.Length);
+            }
+            var repoSet = new HashSet<string>();
+            var repoList = new List<string>();
+            for (int i = 0; i < maxNumberOfRepos; i++) {
+                foreach (var dependency in allDependencies.Values) {
+                    var repos = dependency.Repositories;
+                    if (i >= repos.Length) continue;
+                    var repo = repos[i];
+                    // Filter Android SDK repos as they're supplied in the build script.
+                    if (repo.StartsWith(PlayServicesSupport.SdkVariable)) continue;
+                    // Since we need a URL, determine whether the repo has a scheme.  If not,
+                    // assume it's a local file.
+                    bool validScheme = false;
+                    foreach (var scheme in new [] { "file:", "http:", "https:" }) {
+                        validScheme |= repo.StartsWith(scheme);
+                    }
+                    if (!validScheme) repo = "file://" + Path.GetFullPath(repo);
+                    if (repoSet.Contains(repo)) continue;
+                    repoList.Add(repo);
+                }
+            }
+
+            // Executed when Gradle finishes execution.
+            CommandLine.CompletionHandler gradleComplete = (result) => {
+                if (result.exitCode != 0) {
+                    PlayServicesSupport.Log(
+                        String.Format("Gradle failed to fetch dependencies.\n\n" +
+                                      "{0}", result.message),
+                        level: PlayServicesSupport.LogLevel.Error);
+                    resolutionComplete(allDependenciesList);
+                    return;
+                }
+                // Parse stdout for copied and missing artifacts.
+                List<string> copiedArtifacts;
+                List<string> missingArtifacts;
+                ParseDownloadGradleArtifactsGradleOutput(result.stdout, destinationDirectory,
+                                                         out copiedArtifacts,
+                                                         out missingArtifacts);
+                // Label all copied files.
+                PlayServicesResolver.LabelAssets(copiedArtifacts);
+                // Poke the explode cache for each copied file and add the exploded paths to the
+                // output list set.
+                var copiedArtifactsSet = new HashSet<string>(copiedArtifacts);
+                foreach (var artifact in copiedArtifacts) {
+                    if (ShouldExplode(artifact)) {
+                        copiedArtifactsSet.Add(DetermineExplodedAarPath(artifact));
+                    }
+                }
+
+                // Find all labelled files that were not copied and delete them.
+                var staleArtifacts = new HashSet<string>();
+                foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
+                    if (!copiedArtifactsSet.Contains(assetPath.Replace("\\", "/"))) {
+                        staleArtifacts.Add(assetPath);
+                    }
+                }
+                if (staleArtifacts.Count > 0) {
+                    PlayServicesSupport.Log(
+                        String.Format("Deleting stale dependencies:\n{0}",
+                                      String.Join("\n",
+                                                  (new List<string>(staleArtifacts)).ToArray())),
+                        verbose: true);
+                    foreach (var assetPath in staleArtifacts) {
+                        PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
+                                                                          includeMetaFiles: true);
+                    }
+
+                }
+                // Process / explode copied AARs.
+                ProcessAars(destinationDirectory, new HashSet<string>(copiedArtifacts));
+
+                // Look up the original Dependency structure for each missing artifact.
+                var missingArtifactsAsDependencies = new List<Dependency>();
+                foreach (var artifact in missingArtifacts) {
+                    Dependency dep;
+                    if (!allDependencies.TryGetValue(artifact, out dep)) {
+                        // If this fails, something may have gone wrong with the Gradle script.
+                        // Rather than failing hard, fallback to recreating the Dependency
+                        // class with the partial data we have now.
+                        var components = artifact.Split(new char[] { ':' });
+                        if (components.Length != 3) continue;
+                        dep = new Dependency(components[0], components[1], components[2]);
+                    }
+                    missingArtifactsAsDependencies.Add(dep);
+                }
+                if (logErrorOnMissingArtifacts) LogMissingDependenciesError(missingArtifacts);
+                resolutionComplete(missingArtifactsAsDependencies);
+            };
+
+            // Executes gradleComplete on the main thread.
+            CommandLine.CompletionHandler scheduleOnMainThread = (result) => {
+                System.Action processResult = () => { gradleComplete(result); };
+                PlayServicesResolver.updateQueue.Enqueue(processResult);
+            };
+
+            var gradleArguments =
+                String.Join(
+                    " ",
+                    new [] {
+                        "-b", buildScript,
+                        String.Format("\"-PANDROID_HOME={0}\"", androidSdkPath),
+                        String.Format("\"-PTARGET_DIR={0}\"",
+                                      Path.GetFullPath(destinationDirectory)),
+                        String.Format("\"-PMAVEN_REPOS={0}\"",
+                                      String.Join(";", repoList.ToArray())),
+                        String.Format("\"-PPACKAGES_TO_COPY={0}\"",
+                                      String.Join(
+                                          ";", new List<string>(allDependencies.Keys).ToArray()))
+                    });
+
+            PlayServicesSupport.Log(String.Format("Running dependency fetching script\n" +
+                                                  "\n" +
+                                                  "{0} {1}\n",
+                                                  gradleWrapper, gradleArguments),
+                                    verbose: true);
+
+            // Run the build script to perform the resolution popping up a window in the editor.
+            var window = CommandLineDialog.CreateCommandLineDialog(
+                "Resolving Android Dependencies");
+            window.summaryText = "Resolving Android Dependencies....";
+            window.modal = false;
+            window.progressTitle = window.summaryText;
+            window.autoScrollToBottom = true;
+            window.RunAsync(gradleWrapper, gradleArguments,
+                            (result) => {
+                                window.Close();
+                                scheduleOnMainThread(result);
+                            },
+                            maxProgressLines: 50);
+            window.Show();
+        }
+
+        /// <summary>
         /// Perform the resolution and the exploding/cleanup as needed.
         /// </summary>
         public override void DoResolution(
@@ -297,43 +584,59 @@ namespace GooglePlayServices
             PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
             System.Action resolutionComplete)
         {
+            // Cache the setting as it can only be queried from the main thread.
+            bool fetchDependenciesWithGradle =
+                GooglePlayServices.SettingsDialog.FetchDependenciesWithGradle;
+            var sdkPath = svcSupport.SDK;
             System.Action resolve = () => {
                 PlayServicesSupport.Log("Performing Android Dependency Resolution", verbose: true);
-                DoResolutionNoAndroidPackageChecks(svcSupport, destinationDirectory,
-                                                   handleOverwriteConfirmation);
-                resolutionComplete();
+                if (fetchDependenciesWithGradle) {
+                    GradleResolution(svcSupport, destinationDirectory, sdkPath, true,
+                                     (missingArtifacts) => { resolutionComplete(); });
+                } else {
+                    DoResolutionNoAndroidPackageChecks(svcSupport, destinationDirectory,
+                                                       handleOverwriteConfirmation);
+                    resolutionComplete();
+                }
             };
 
             Dictionary<string, string> pathsByDependencyKey;
             var dependencies = svcSupport.FindMissingDependencyPaths(destinationDirectory,
                                                                      out pathsByDependencyKey);
-
-            // If any dependencies are no longer present we'll assume dependencies have been
-            // added or removed so clean all stale tracked dependencies.
-            var currentDependencyPaths = new HashSet<string>();
-            // Normalize paths Windows paths to compare with POSIX file systems (used by Maven).
-            foreach (var assetPath in pathsByDependencyKey.Values) {
-                currentDependencyPaths.Add(assetPath.Replace("\\", "/"));
-            }
-            foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
-                var assetBasename = Directory.Exists(assetPath) ?
-                    assetPath : Path.Combine(Path.GetDirectoryName(assetPath),
-                                             Path.GetFileNameWithoutExtension(assetPath));
-                assetBasename = assetBasename.Replace("\\", "/");
-                var assetTargetPaths = new List<string> { assetBasename };
-                foreach (var extension in Dependency.Packaging) {
-                    assetTargetPaths.Add(assetBasename + extension);
+            // When fetching assets with Gradle we don't know the transitive set of artifacts
+            // unless we run Gradle.  Therefore, it's not possible to quickly determine which
+            // set of assets is stale.  In this case, we simply don't clean stale assets unless
+            // resolution is required.
+            if (!fetchDependenciesWithGradle) {
+                // If any dependencies are no longer present we'll assume dependencies have been
+                // added or removed so clean all stale tracked dependencies.
+                var currentDependencyPaths = new HashSet<string>();
+                // Normalize paths Windows paths to compare with POSIX file systems
+                // (used by Maven).
+                foreach (var assetPath in pathsByDependencyKey.Values) {
+                    currentDependencyPaths.Add(assetPath.Replace("\\", "/"));
                 }
-                if (!assetTargetPaths.Exists(
-                         targetPath => currentDependencyPaths.Contains(targetPath))) {
-                    PlayServicesSupport.Log(
-                        String.Format(
-                            "Deleting stale dependency {0} not in required paths:\n{1}", assetPath,
-                            String.Join("\n",
-                                        (new List<string>(currentDependencyPaths)).ToArray())),
-                        verbose: true);
-                    PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
-                                                                      includeMetaFiles: true);
+                foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
+                    var assetBasename = Directory.Exists(assetPath) ?
+                        assetPath : Path.Combine(Path.GetDirectoryName(assetPath),
+                                                 Path.GetFileNameWithoutExtension(assetPath));
+                    assetBasename = assetBasename.Replace("\\", "/");
+                    var assetTargetPaths = new List<string> { assetBasename };
+                    foreach (var extension in Dependency.Packaging) {
+                        assetTargetPaths.Add(assetBasename + extension);
+                    }
+                    if (!assetTargetPaths.Exists(
+                             targetPath => currentDependencyPaths.Contains(targetPath))) {
+                        PlayServicesSupport.Log(
+                            String.Format(
+                                "Deleting stale dependency {0} not in required paths:\n{1}",
+                                assetPath,
+                                String.Join("\n",
+                                            (new List<string>(currentDependencyPaths)).ToArray())),
+                            verbose: true);
+                        PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
+                                                                          includeMetaFiles: true);
+                    }
                 }
             }
 
@@ -347,60 +650,109 @@ namespace GooglePlayServices
             PlayServicesSupport.Log("Found missing Android dependencies, resolving.",
                                     verbose: true);
 
-            // Set of packages that need to be installed.
-            var installPackages = new HashSet<AndroidSdkPackageNameVersion>();
-            // Retrieve the set of required packages and whether they're installed.
-            var requiredPackages = new Dictionary<string, HashSet<string>>();
-            foreach (Dependency dependency in
-                     PlayServicesSupport.GetTransitiveDependencies(
-                         svcSupport.LoadDependencies(true, keepMissing: true),
-                         repoPaths: svcSupport.RepositoryPaths).Values) {
-                PlayServicesSupport.Log(
-                    String.Format("Missing Android component {0} (Android SDK Packages: {1})",
-                                  dependency.Key, dependency.PackageIds != null ?
-                                  String.Join(",", dependency.PackageIds) : "(none)"),
-                    verbose: true);
-                if (dependency.PackageIds != null) {
-                    foreach (string packageId in dependency.PackageIds) {
-                        HashSet<string> dependencySet;
-                        if (!requiredPackages.TryGetValue(packageId, out dependencySet)) {
-                            dependencySet = new HashSet<string>();
-                        }
-                        dependencySet.Add(dependency.Key);
-                        requiredPackages[packageId] = dependencySet;
-                        // If the dependency is missing, add it to the set that needs to be
-                        // installed.
-                        if (System.String.IsNullOrEmpty(dependency.BestVersionPath)) {
-                            installPackages.Add(new AndroidSdkPackageNameVersion {
-                                    LegacyName = packageId
-                                });
+            System.Action<List<Dependency>> reportOrInstallMissingArtifacts =
+                    (List<Dependency> requiredDependencies) => {
+                // Set of packages that need to be installed.
+                var installPackages = new HashSet<AndroidSdkPackageNameVersion>();
+                // Retrieve the set of required packages and whether they're installed.
+                var requiredPackages = new Dictionary<string, HashSet<string>>();
+
+                if (fetchDependenciesWithGradle) {
+                    if (requiredDependencies.Count == 0) {
+                        resolutionComplete();
+                        return;
+                    }
+                } else {
+                    requiredDependencies = new List<Dependency>(
+                        PlayServicesSupport.GetTransitiveDependencies(
+                            svcSupport.LoadDependencies(true, keepMissing: true),
+                            repoPaths: svcSupport.RepositoryPaths).Values);
+                }
+                foreach (Dependency dependency in requiredDependencies) {
+                    PlayServicesSupport.Log(
+                        String.Format("Missing Android component {0} (Android SDK Packages: {1})",
+                                      dependency.Key, dependency.PackageIds != null ?
+                                      String.Join(",", dependency.PackageIds) : "(none)"),
+                        verbose: true);
+                    if (dependency.PackageIds != null) {
+                        foreach (string packageId in dependency.PackageIds) {
+                            HashSet<string> dependencySet;
+                            if (!requiredPackages.TryGetValue(packageId, out dependencySet)) {
+                                dependencySet = new HashSet<string>();
+                            }
+                            dependencySet.Add(dependency.Key);
+                            requiredPackages[packageId] = dependencySet;
+                            // If the dependency is missing, add it to the set that needs to be
+                            // installed.
+                            if (System.String.IsNullOrEmpty(dependency.BestVersionPath)) {
+                                installPackages.Add(new AndroidSdkPackageNameVersion {
+                                        LegacyName = packageId
+                                    });
+                            }
                         }
                     }
                 }
-            }
 
-            // If no packages need to be installed or Android SDK package installation is disabled.
-            if (installPackages.Count == 0 || !AndroidPackageInstallationEnabled()) {
-                // Report missing packages as warnings and try to resolve anyway.
-                foreach (var pkg in requiredPackages.Keys) {
-                    var packageNameVersion = new AndroidSdkPackageNameVersion { LegacyName = pkg };
-                    var depString = System.String.Join(
-                        "\n", (new List<string>(requiredPackages[pkg])).ToArray());
-                    if (installPackages.Contains(packageNameVersion)) {
-                        PlayServicesSupport.Log(
-                            String.Format("Android SDK package {0} is not installed or out of " +
-                                          "date.\n\n" +
-                                          "This is required by the following dependencies:\n" +
-                                          "{1}", pkg, depString),
-                            level: PlayServicesSupport.LogLevel.Warning);
+                // If no packages need to be installed or Android SDK package installation is
+                // disabled.
+                if (installPackages.Count == 0 || !AndroidPackageInstallationEnabled()) {
+                    // Report missing packages as warnings and try to resolve anyway.
+                    foreach (var pkg in requiredPackages.Keys) {
+                        var packageNameVersion = new AndroidSdkPackageNameVersion {
+                            LegacyName = pkg };
+                        var depString = System.String.Join(
+                            "\n", (new List<string>(requiredPackages[pkg])).ToArray());
+                        if (installPackages.Contains(packageNameVersion)) {
+                            PlayServicesSupport.Log(
+                                String.Format(
+                                    "Android SDK package {0} is not installed or out of " +
+                                    "date.\n\n" +
+                                    "This is required by the following dependencies:\n" +
+                                    "{1}", pkg, depString),
+                                level: PlayServicesSupport.LogLevel.Warning);
+                        }
                     }
+                    if (fetchDependenciesWithGradle) {
+                        // At this point we've already tried resolving with Gradle.  Therefore,
+                        // Android SDK package installation is disabled or not required trying
+                        // to resolve again only repeats the same operation we've already
+                        // performed.  So we just report report the missing artifacts as an error
+                        // and abort.
+                        var missingArtifacts = new List<string>();
+                        foreach (var dep in requiredDependencies) missingArtifacts.Add(dep.Key);
+                        LogMissingDependenciesError(missingArtifacts);
+                        return;
+                    }
+                    // Attempt resolution.
+                    resolve();
+                    return;
                 }
-                // Attempt resolution.
-                resolve();
-                return;
-            }
+                InstallAndroidSdkPackagesAndResolve(sdkPath, installPackages,
+                                                    requiredPackages, resolve);
+            };
 
-            var sdkPath = svcSupport.SDK;
+            if (fetchDependenciesWithGradle) {
+                GradleResolution(svcSupport, destinationDirectory, sdkPath,
+                                 !AndroidPackageInstallationEnabled(),
+                                 reportOrInstallMissingArtifacts);
+            } else {
+                reportOrInstallMissingArtifacts(null);
+            }
+        }
+
+        /// <summary>
+        /// Run the SDK manager to install the specified set of packages then attempt resolution
+        /// again.
+        /// </summary>
+        /// <param name="sdkPath">Path to the Android SDK.</param>
+        /// <param name="installPackages">Set of Android SDK packages to install.</param>
+        /// <param name="requiredPackages">The set dependencies for each Android SDK package.
+        /// This is used to report which dependencies can't be installed if Android SDK package
+        /// installation fails.</param>
+        /// <param name="resolve">Action that performs resolution.</param>
+        private void InstallAndroidSdkPackagesAndResolve(
+                string sdkPath, HashSet<AndroidSdkPackageNameVersion> installPackages,
+                Dictionary<string, HashSet<string>> requiredPackages, System.Action resolve) {
             // Find / upgrade the Android SDK manager.
             AndroidSdkManager.Create(
                 sdkPath,

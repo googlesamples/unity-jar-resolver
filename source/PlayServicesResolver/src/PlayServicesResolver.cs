@@ -271,6 +271,7 @@ namespace GooglePlayServices
         /// </summary>
         static PlayServicesResolver()
         {
+            updateQueue = System.Collections.Queue.Synchronized(new System.Collections.Queue());
             if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android)
             {
                 RegisterResolver(new ResolverVer1_1());
@@ -313,6 +314,8 @@ namespace GooglePlayServices
             EditorApplication.update += PollTargetDeviceAbi;
             EditorApplication.update -= InitializationComplete;
             EditorApplication.update += InitializationComplete;
+            EditorApplication.update -= PumpUpdateQueue;
+            EditorApplication.update += PumpUpdateQueue;
             OnSettingsChanged();
         }
 
@@ -387,6 +390,11 @@ namespace GooglePlayServices
         private static HashSet<string> importedAssetsSinceLastResolve = new HashSet<string>();
 
         /// <summary>
+        /// Queue of System.Action objects to execute on the main thread.
+        /// </summary>
+        internal static System.Collections.Queue updateQueue = null;
+
+        /// <summary>
         /// Add file patterns to monitor to trigger auto resolution.
         /// </summary>
         /// <param name="patterns">Set of file patterns to monitor to trigger auto
@@ -458,8 +466,7 @@ namespace GooglePlayServices
                 if (Resolver.AutomaticResolutionEnabled()) {
                     // Prevent resolution on the call to OnPostprocessAllAssets().
                     autoResolving = true;
-                    Resolve();
-                    autoResolving = false;
+                    Resolve(resolutionComplete: () => { autoResolving = false; });
                 } else if (!PlayServicesSupport.InBatchMode &&
                            GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning &&
                            PlayServicesSupport.GetAllDependencies().Count > 0) {
@@ -632,9 +639,23 @@ namespace GooglePlayServices
                                                                               newDependency);
                                   },
                                   () => {
-                                      AssetDatabase.Refresh();
-                                      if (resolutionComplete != null) resolutionComplete();
+                                      System.Action complete = () => {
+                                          AssetDatabase.Refresh();
+                                          if (resolutionComplete != null) resolutionComplete();
+                                      };
+                                      updateQueue.Enqueue(complete);
                                   });
+        }
+
+        /// <summary>
+        /// Refreshes the asset database on the main thread when refreshAssetDatabaseComplete
+        /// is set.
+        /// </summary>
+        private static void PumpUpdateQueue() {
+            while (updateQueue.Count > 0) {
+                var action = (System.Action)updateQueue.Dequeue();
+                action();
+            }
         }
 
         /// <summary>

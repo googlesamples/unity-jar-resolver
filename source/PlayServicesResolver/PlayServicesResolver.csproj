@@ -76,6 +76,10 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="scripts\gradle-template.zip" />
+    <EmbeddedResource Include="scripts\download_artifacts.gradle" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\VersionHandler\VersionHandler.csproj">
       <Project>{5378B37A-887E-49ED-A8AE-42FA843AA9DC}</Project>
       <Name>VersionHandler</Name>

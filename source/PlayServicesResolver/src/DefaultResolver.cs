@@ -273,9 +273,8 @@ namespace GooglePlayServices
             return null;
         }
 
-        // store the AndroidManifest.xml in a temporary directory before processing it.
         /// <summary>
-        /// Extract an AAR to the specified directory.
+        /// Extract an AAR (or zip file) to the specified directory.
         /// </summary>
         /// <param name="aarFile">Name of the AAR file to extract.</param>
         /// <param name="extract_filenames">List of files to extract from the AAR.  If this array

@@ -315,6 +315,11 @@ namespace Google.JarResolver
                     versionToCheck.Equals(bestVersion) ||
                     IsGreater(versionToCheck, bestVersion);
             }
+            // Strip the artifact type specifier from the constraint.
+            var artifactTypeIndex = versionConstraint.LastIndexOf("@");
+            if (artifactTypeIndex >= 0) {
+                versionConstraint = versionConstraint.Substring(0, artifactTypeIndex);
+            }
             var versionConstraintComponents = versionConstraint.Split('.');
             var versionToCheckComponents = versionToCheck.Split('.');
             if (!versionConstraint.Contains("+")) {
