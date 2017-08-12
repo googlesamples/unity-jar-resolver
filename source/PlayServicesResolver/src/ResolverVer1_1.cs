@@ -452,8 +452,11 @@ namespace GooglePlayServices
                     foreach (var scheme in new [] { "file:", "http:", "https:" }) {
                         validScheme |= repo.StartsWith(scheme);
                     }
-                    if (!validScheme) repo = "file://" + Path.GetFullPath(repo);
+                    if (!validScheme) {
+                        repo = "file:///" + Path.GetFullPath(repo).Replace("\\", "/");
+                    }
                     if (repoSet.Contains(repo)) continue;
+                    repoSet.Add(repo);
                     repoList.Add(repo);
                 }
             }
