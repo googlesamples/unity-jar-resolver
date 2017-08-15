@@ -1,3 +1,10 @@
+# Version 1.2.41 - Aug 15, 2017
+## Bug Fixes
+* IOS Resolver's Xcode workspace pod integration is now disabled when Unity
+  Cloud Build is detected.  Unity Cloud Build does not follow the same build
+  process as the Unity editor and fails to open the generated xcworkspace at
+  this time.
+
 # Version 1.2.40 - Aug 15, 2017
 ## Bug Fixes
 * Moved Android Resolver Gradle Prebuild scripts into Google.JarResolver.dll.

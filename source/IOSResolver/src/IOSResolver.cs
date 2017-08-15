@@ -581,7 +581,11 @@ public static class IOSResolver {
                     return false;
                 }
             }
-
+            // If Unity was launched from Unity Cloud Build the build pipeline does not
+            // open the xcworkspace so we need to force project level integration of frameworks.
+            if (System.Environment.CommandLine.Contains("-bvrbuildtarget")) {
+                return false;
+            }
             return (VersionHandler.GetUnityVersionMajorMinor() >= 5.6f - epsilon);
         }
     }

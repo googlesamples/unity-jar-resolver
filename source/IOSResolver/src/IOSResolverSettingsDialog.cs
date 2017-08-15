@@ -55,7 +55,7 @@ public class IOSResolverSettingsDialog : EditorWindow
     }
 
     public void Initialize() {
-        minSize = new Vector2(400, 250);
+        minSize = new Vector2(400, 280);
         position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
     }
@@ -98,6 +98,10 @@ public class IOSResolverSettingsDialog : EditorWindow
         if (integrationMapping[cocoapodsIntegrationMenuIndex] !=
                 IOSResolver.CocoapodsIntegrationMethod.None && !podfileGenerationEnabled) {
             GUILayout.Label("Cocoapod installation requires Podfile generation to be enabled.");
+        } else if (integrationMapping[cocoapodsIntegrationMenuIndex] ==
+                   IOSResolver.CocoapodsIntegrationMethod.Workspace) {
+            GUILayout.Label("Unity Cloud Build does not open generated Xcode workspaces so this " +
+                            "will fall back to Xcode Project integration in that environment.");
         }
         GUILayout.EndHorizontal();
 
