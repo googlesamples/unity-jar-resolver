@@ -110,7 +110,7 @@ public class UnityCompat {
     /// <returns>The sdk value (ie. 24 for Android 7.0 Nouget). -1 means auto select.</returns>
     public static int GetAndroidTargetSDKVersion() {
         var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetSdkVersion");
-        return property == null ? GetAndroidPlatform() :
+        return property == null ? -1 :
             VersionFromAndroidSDKVersionsEnum(
                  Enum.GetName(property.PropertyType, property.GetValue(null, null)),
                  ANDROID_PLATFORM_FALLBACK_KEY, AndroidPlatformVersionFallback);
@@ -188,6 +188,7 @@ public class UnityCompat {
 
     // Gets the latest SDK version that's currently installed.
     // This is required for generating gradle builds.
+    [Obsolete]
     public static int GetAndroidPlatform() {
         MethodInfo platformVersionMethod = null;
         Type sdkClass = AndroidSDKToolsClass;
@@ -224,6 +225,7 @@ public class UnityCompat {
 
     // Finds the latest build tools version that's currently installed.
     // This is required for generating gradle builds.
+    [Obsolete]
     public static string GetAndroidBuildToolsVersion() {
         // TODO: We're using reflection to access Unity's SDK helpers to get at this info
         // but since this is likely fragile, and may not even be consistent accross versions

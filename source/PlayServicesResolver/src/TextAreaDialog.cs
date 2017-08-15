@@ -128,7 +128,11 @@ namespace GooglePlayServices
             }
             foreach (string bodyTextChunk in bodyTextList)
             {
-                GUILayout.Label(bodyTextChunk, EditorStyles.wordWrappedLabel);
+                float pixelHeight = EditorStyles.wordWrappedLabel.CalcHeight(
+                        new GUIContent(bodyTextChunk), position.width);
+                EditorGUILayout.SelectableLabel(bodyTextChunk,
+                                                EditorStyles.wordWrappedLabel,
+                                                GUILayout.Height(pixelHeight));
             }
             GUILayout.EndScrollView();
 

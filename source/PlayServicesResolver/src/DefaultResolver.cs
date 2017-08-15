@@ -62,7 +62,7 @@ namespace GooglePlayServices
         /// <returns><c>true</c>, if resolution enabled was automaticed, <c>false</c> otherwise.</returns>
         public virtual bool AutomaticResolutionEnabled()
         {
-            return !SettingsDialog.PrebuildWithGradle && SettingsDialog.EnableAutoResolution;
+            return SettingsDialog.EnableAutoResolution;
         }
 
         /// <summary>

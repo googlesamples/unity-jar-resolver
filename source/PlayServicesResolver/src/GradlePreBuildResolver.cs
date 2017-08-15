@@ -70,27 +70,6 @@ class GradlePreBuildResolver : DefaultResolver {
         if (removedOldScripts) AssetDatabase.Refresh();
     }
 
-    /// <summary>
-    /// Checks based on the asset changes, if resolution should occur.
-    /// </summary>
-    /// <remarks>
-    /// The resolution only happens if a script file (.cs, or .js) was imported
-    /// or if an Android plugin was deleted.  This allows for changes to
-    /// assets that do not affect the dependencies to happen without processing.
-    /// This also avoids an infinite loop when a version of a dependency is
-    /// deleted during resolution.
-    /// </remarks>
-    /// <returns><c>true</c>, if auto resolution should happen, <c>false</c> otherwise.</returns>
-    /// <param name="importedAssets">Imported assets.</param>
-    /// <param name="deletedAssets">Deleted assets.</param>
-    /// <param name="movedAssets">Moved assets.</param>
-    /// <param name="movedFromAssetPaths">Moved from asset paths.</param>
-    [Obsolete]
-    public override bool ShouldAutoResolve(string[] importedAssets, string[] deletedAssets,
-                                           string[] movedAssets, string[] movedFromAssetPaths) {
-        return false;
-    }
-
     // This is a basic JSON dictionary formater. It takes in a dictionary and returns a string
     // suitable for inside a JSON {} dictionary.
     // Given a C# dictionary of strings, it quotes and formats the key and value pairs for JSON:

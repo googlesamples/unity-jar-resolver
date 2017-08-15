@@ -139,6 +139,7 @@ namespace GooglePlayServices
             prebuildWithGradle = EditorGUILayout.Toggle(prebuildWithGradle);
             GUILayout.EndHorizontal();
 
+            EditorGUI.BeginDisabledGroup(prebuildWithGradle == true);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Fetch Dependencies with Gradle", EditorStyles.boldLabel);
             fetchDependenciesWithGradle = EditorGUILayout.Toggle(fetchDependenciesWithGradle);
@@ -152,13 +153,14 @@ namespace GooglePlayServices
                                 "manager's local maven repository and user specified local " +
                                 "maven repositories for dependencies.");
             }
+            EditorGUI.EndDisabledGroup();
 
-            EditorGUI.BeginDisabledGroup(prebuildWithGradle == true);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Enable Auto-Resolution", EditorStyles.boldLabel);
             enableAutoResolution = EditorGUILayout.Toggle(enableAutoResolution);
             GUILayout.EndHorizontal();
 
+            EditorGUI.BeginDisabledGroup(prebuildWithGradle == true);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Install Android Packages", EditorStyles.boldLabel);
             installAndroidPackages = EditorGUILayout.Toggle(installAndroidPackages);

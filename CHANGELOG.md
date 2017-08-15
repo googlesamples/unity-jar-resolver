@@ -1,3 +1,14 @@
+# Version 1.2.44 - Aug 21, 2017
+## Bug Fixes
+* Enabled autoresolution for Gradle Prebuild.
+* Made the command line dialog windows have selectable text.
+* Fixed incorrect "Android Settings" dialog disabled groups.
+* Updated PlayServicesResolver android platform detection to use the package
+  manager instead of the 'android' tool.
+* UnityCompat reflection methods 'GetAndroidPlatform' and
+  'GetAndroidBuildToolsVersion' are now Obsolete due to dependence on the
+  obsolete 'android' build tool.
+
 # Version 1.2.43 - Aug 18, 2017
 ## Bug Fixes
 * Fixed Gradle resolution in the Android Resolver when running
