@@ -348,17 +348,17 @@ class GradlePreBuildResolver : DefaultResolver {
         json_config = json_config.Replace(@"\", @"\\");
 
         System.IO.File.WriteAllText(GENERATE_CONFIG_PATH, json_config);
+        var outDir = Path.Combine(destinationDirectory, GENERATE_GRADLE_OUTPUT_DIR);
 
         RunGenGradleScript(
             " -c \"" + GENERATE_CONFIG_PATH + "\"" +
             " -b \"" + GENERATE_GRADLE_BUILD_PATH + "\"" +
-            " -o \"" + Path.Combine(destinationDirectory, GENERATE_GRADLE_OUTPUT_DIR) + "\"",
+            " -o \"" + outDir + "\"",
             (result) => {
                 if (result.exitCode == 0) {
                     var currentAbi = PlayServicesResolver.AndroidTargetDeviceAbi;
                     var activeAbis = GetSelectedABIDirs(currentAbi);
-                    var libsDir = Path.Combine(Path.Combine(destinationDirectory,
-                                                        GENERATE_GRADLE_OUTPUT_DIR), "libs");
+                    var libsDir = Path.Combine(outDir, "libs");
                     if (Directory.Exists(libsDir)) {
                         foreach (var directory in Directory.GetDirectories(libsDir)) {
                             var abiDir = Path.GetFileName(directory).ToLower();
@@ -367,6 +367,9 @@ class GradlePreBuildResolver : DefaultResolver {
                                     directory, includeMetaFiles: true);
                             }
                         }
+                    }
+                    if (Directory.Exists(outDir)) {
+                        PlayServicesResolver.LabelAssets( new [] { outDir }, true, true );
                     }
                 }
             });

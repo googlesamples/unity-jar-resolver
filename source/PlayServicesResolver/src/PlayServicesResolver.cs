@@ -55,7 +55,6 @@ namespace GooglePlayServices
         private static Dictionary<ResolverType, IResolver> _resolvers =
             new Dictionary<ResolverType, IResolver>();
 
-
         /// <summary>
         /// Flag used to prevent re-entrant auto-resolution.
         /// </summary>
@@ -105,6 +104,11 @@ namespace GooglePlayServices
         /// Event which is fired when the bundle ID is updated.
         /// </summary>
         public static event EventHandler<BundleIdChangedEventArgs> BundleIdChanged;
+
+        /// <summary>
+        /// The value of GradlePrebuildEnabled before settings was changed.
+        /// </summary>
+        private static bool previousGradlePrebuildEnabled = false;
 
         /// <summary>
         /// The value of GradleBuildEnabled when PollBuildSystem() was called.
@@ -316,6 +320,9 @@ namespace GooglePlayServices
             EditorApplication.update += InitializationComplete;
             EditorApplication.update -= PumpUpdateQueue;
             EditorApplication.update += PumpUpdateQueue;
+
+            previousGradlePrebuildEnabled = GooglePlayServices.SettingsDialog.PrebuildWithGradle;
+
             OnSettingsChanged();
         }
 
@@ -703,6 +710,11 @@ namespace GooglePlayServices
         /// Called when settings change.
         /// </summary>
         internal static void OnSettingsChanged() {
+            if (previousGradlePrebuildEnabled !=
+                GooglePlayServices.SettingsDialog.PrebuildWithGradle) {
+                DeleteLabeledAssets();
+            }
+            previousGradlePrebuildEnabled = GooglePlayServices.SettingsDialog.PrebuildWithGradle;
             PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;
             if (Initialized) {
                 if (Resolver != null) AutoResolve();
@@ -712,7 +724,8 @@ namespace GooglePlayServices
         /// <summary>
         /// Handles the overwrite confirmation.
         /// </summary>
-        /// <returns><c>true</c>, if overwrite confirmation was handled, <c>false</c> otherwise.</returns>
+        /// <returns><c>true</c>, if overwrite confirmation was handled,
+        /// <c>false</c> otherwise.</returns>
         /// <param name="oldDep">Old dependency.</param>
         /// <param name="newDep">New dependency replacing old.</param>
         public static bool HandleOverwriteConfirmation(Dependency oldDep, Dependency newDep)
@@ -794,6 +807,18 @@ namespace GooglePlayServices
         internal static IEnumerable<string> FindLabeledAssets() {
             foreach (string assetGuid in AssetDatabase.FindAssets("l:" + ManagedAssetLabel)) {
                 yield return AssetDatabase.GUIDToAssetPath(assetGuid);
+            }
+        }
+
+        /// <summary>
+        /// Delete the full set of assets managed from this plugin.
+        /// This is used for uninstalling or switching between resolvers which maintain a different
+        /// set of assets.
+        /// </summary>
+        internal static void DeleteLabeledAssets() {
+            foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
+                PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
+                                                                  includeMetaFiles: true);
             }
         }
     }
