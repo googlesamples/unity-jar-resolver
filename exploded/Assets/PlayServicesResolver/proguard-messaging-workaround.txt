@@ -1,2 +1,0 @@
-# The dependency on Analytics is a soft dependency.
--dontwarn com.google.android.gms.measurement.AppMeasurement*

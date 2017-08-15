@@ -1,3 +1,10 @@
+# Version 1.2.40 - Aug 15, 2017
+## Bug Fixes
+* Moved Android Resolver Gradle Prebuild scripts into Google.JarResolver.dll.
+  They are now extracted from the DLL when required.
+* AARs / JARs are now cleaned up when switching the Android resolution
+  strategy.
+
 # Version 1.2.39 - Aug 10, 2017
 ## New Features
 * Android Resolver now supports resolution with Gradle.  This enables support

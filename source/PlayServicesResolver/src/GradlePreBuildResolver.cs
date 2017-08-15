@@ -27,9 +27,14 @@ namespace GooglePlayServices {
 /// <summary>
 /// </summary>
 class GradlePreBuildResolver : DefaultResolver {
-    private static string GRADLE_SCRIPT_LOCATION = Path.Combine("Assets","PlayServicesResolver");
+    private static string OLD_GRADLE_SCRIPT_LOCATION = Path.Combine("Assets",
+                                                                    "PlayServicesResolver");
+    private static string GRADLE_SCRIPT_LOCATION = Path.Combine(
+        "Temp", "PlayServicesResolverGradlePrebuild");
     private const string GENERATE_GRADLE_EXE_GENERIC = "generate_gradle_prebuild.py";
     private const string GENERATE_GRADLE_EXE_WINDOWS = "generate_gradle_prebuild.exe";
+    private const string GRADLE_TEMPLATE_TEMPLATE_ZIP = "gradle-template.zip";
+    private const string VOLATILE_PATHS_JSON = "volatile_paths.json";
     private static string GENERATE_GRADLE_BUILD_PATH = Path.Combine("Temp", "GenGradle");
     private static string GENERATE_CONFIG_PATH = Path.Combine("Temp", "config.json");
     private static string PROGUARD_UNITY_CONFIG = "proguard-unity.txt";
@@ -38,6 +43,32 @@ class GradlePreBuildResolver : DefaultResolver {
     private const int TESTED_BUILD_TOOLS_VERSION_MAJOR = 26;
     private const int TESTED_BUILD_TOOLS_VERSION_MINOR = 0;
     private const int TESTED_BUILD_TOOLS_VERSION_REV = 0;
+
+    /// <summary>
+    /// Unpack the prebuild scripts from embedded resources.
+    /// </summary>
+    public static void ExtractPrebuildScripts() {
+        var resourceNameAndTargetPaths = new List<KeyValuePair<string, string>>();
+        var extractRequired = !Directory.Exists(GRADLE_SCRIPT_LOCATION);
+        bool removedOldScripts = false;
+        foreach (var script in new [] { GENERATE_GRADLE_EXE_GENERIC, GENERATE_GRADLE_EXE_WINDOWS,
+                                        GRADLE_TEMPLATE_TEMPLATE_ZIP, PROGUARD_UNITY_CONFIG,
+                                        PROGUARD_MSG_FIX_CONFIG, VOLATILE_PATHS_JSON }) {
+            var resourceNameAndTargetPath = new KeyValuePair<string, string>(
+                EMBEDDED_RESOURCES_NAMESPACE + script,
+                Path.Combine(GRADLE_SCRIPT_LOCATION, script));
+            resourceNameAndTargetPaths.Add(resourceNameAndTargetPath);
+            extractRequired |= !File.Exists(resourceNameAndTargetPath.Value);
+            // Clean up old prebuild scripts if they exist.
+            var oldGradleScript = Path.Combine(OLD_GRADLE_SCRIPT_LOCATION, script);
+            if (File.Exists(oldGradleScript)) {
+                File.Delete(oldGradleScript);
+                removedOldScripts = true;
+            }
+        }
+        if (extractRequired) ExtractResources(resourceNameAndTargetPaths);
+        if (removedOldScripts) AssetDatabase.Refresh();
+    }
 
     /// <summary>
     /// Checks based on the asset changes, if resolution should occur.
@@ -115,6 +146,7 @@ class GradlePreBuildResolver : DefaultResolver {
     // Any errors are reported to the console as well.
     /// <param name="args">Arguments to be passed to the generate gradle script tool.</param>
     private static void RunGenGradleScript(string args, CommandLine.CompletionHandler completedHandler) {
+        ExtractPrebuildScripts();
         // b/35663224 Combine execute-python-exe which handles the windows logic.
         bool onWindows =
             UnityEngine.Application.platform == UnityEngine.RuntimePlatform.WindowsEditor;
@@ -371,6 +403,7 @@ class GradlePreBuildResolver : DefaultResolver {
                     if (Directory.Exists(outDir)) {
                         PlayServicesResolver.LabelAssets( new [] { outDir }, true, true );
                     }
+                    AssetDatabase.Refresh();
                 }
             });
     }

@@ -293,21 +293,6 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Extract an embedded resource to the specified path creating intermediate directories
-        /// if they're required.
-        /// </summary>
-        /// <param name="resourceName">Name of the resource to extract.</param>
-        /// <param name="targetPath">Target path.</param>
-        private void ExtractResource(string resourceName, string targetPath) {
-            Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
-            var stream = typeof(GooglePlayServices.ResolverVer1_1).Assembly.
-                GetManifestResourceStream(resourceName);
-            var data = new byte[stream.Length];
-            stream.Read(data, 0, (int)stream.Length);
-            File.WriteAllBytes(targetPath, data);
-        }
-
-        /// <summary>
         /// Parse output of download_artifacts.gradle into lists of copied and missing artifacts.
         /// </summary>
         /// <param name="output">Standard output of the download_artifacts.gradle.</param>
@@ -383,7 +368,7 @@ namespace GooglePlayServices
                 UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform ?
                     "gradlew.bat" : "gradlew");
             var buildScript = Path.Combine(
-                gradleBuildDirectory, "PlayServicesResolver.scripts.download_artifacts.gradle");
+                gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "download_artifacts.gradle");
             // Get all dependencies.
             var allDependencies = svcSupport.LoadDependencies(true, keepMissing: true,
                                                               findCandidates: true);
@@ -393,7 +378,7 @@ namespace GooglePlayServices
             if (!(Directory.Exists(gradleBuildDirectory) && File.Exists(gradleWrapper) &&
                   File.Exists(buildScript))) {
                 var gradleTemplateZip = Path.Combine(
-                    gradleBuildDirectory, "PlayServicesResolver.scripts.gradle-template.zip");
+                    gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "gradle-template.zip");
                 foreach (var resource in new [] { gradleTemplateZip, buildScript }) {
                     ExtractResource(Path.GetFileName(resource), resource);
                 }

@@ -820,6 +820,7 @@ namespace GooglePlayServices
                 PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
                                                                   includeMetaFiles: true);
             }
+            AssetDatabase.Refresh();
         }
     }
 }

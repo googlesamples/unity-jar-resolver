@@ -34,6 +34,9 @@ namespace GooglePlayServices
     /// </remarks>
     public abstract class DefaultResolver : IResolver
     {
+        // Namespace for resources under the src/scripts directory embedded within this assembly.
+        protected const string EMBEDDED_RESOURCES_NAMESPACE = "PlayServicesResolver.scripts.";
+
         #region IResolver implementation
 
         /// <summary>
@@ -470,6 +473,37 @@ namespace GooglePlayServices
                                                                   includeMetaFiles: true);
             }
             return true;
+        }
+
+        /// <summary>
+        /// Extract a list of embedded resources to the specified path creating intermediate
+        /// directories if they're required.
+        /// </summary>
+        /// <param name="resourceNameToTargetPath">Each Key is the resource to extract and each
+        /// Value is the path to extract to.</param>
+        protected static void ExtractResources(List<KeyValuePair<string, string>>
+                                                   resourceNameToTargetPaths) {
+            foreach (var kv in resourceNameToTargetPaths) ExtractResource(kv.Key, kv.Value);
+        }
+
+        /// <summary>
+        /// Extract an embedded resource to the specified path creating intermediate directories
+        /// if they're required.
+        /// </summary>
+        /// <param name="resourceName">Name of the resource to extract.</param>
+        /// <param name="targetPath">Target path.</param>
+        protected static void ExtractResource(string resourceName, string targetPath) {
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
+            var stream = typeof(GooglePlayServices.ResolverVer1_1).Assembly.
+                GetManifestResourceStream(resourceName);
+            if (stream == null) {
+                UnityEngine.Debug.LogError(String.Format("Failed to find resource {0} in assembly",
+                                                         resourceName));
+                return;
+            }
+            var data = new byte[stream.Length];
+            stream.Read(data, 0, (int)stream.Length);
+            File.WriteAllBytes(targetPath, data);
         }
     }
 }

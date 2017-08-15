@@ -132,12 +132,10 @@ project.ext {
 
     pluginSrc = file('plugin').absolutePath
     pluginProj = file('build/PluginSrc').absolutePath
-    scriptsSrc = file('source/PlayServicesResolver/scripts').absolutePath
-    scriptsDst = 'Assets/PlayServicesResolver'
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
     dllDir = 'Assets/PlayServicesResolver/Editor'
-    pluginVersion = '1.2.39.0'
+    pluginVersion = '1.2.40.0'
     currentPluginPath = file('.').absolutePath
     currentPluginBasename = 'play-services-resolver'
     currentPluginName = (currentPluginBasename + '-' + pluginVersion +
@@ -312,18 +310,7 @@ task copy_pluginTemplate(type: Copy, dependsOn: [update_metadataForVersion,
   ext.remoteTaskPhase = 'build'
 }
 
-task copy_GenGradleScripts(type: Copy, dependsOn: [compile_packageManagerTests,
-                                                   clean_pluginProjDir]) {
-  description 'Copy the Gradle prebuild scripts to the Unity packaging dir.'
-  from "${scriptsSrc}"
-  into "${pluginProj}/${scriptsDst}"
-  exclude 'sample', 'readme*', 'README', 'download_artifacts.gradle'
-  duplicatesStrategy 'include'
-  ext.remoteTaskPhase = 'build'
-}
-
 task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
-                                             copy_GenGradleScripts,
                                              'copy_PlayServicesResolver',
                                              'copy_VersionHandler',
                                              'copy_VersionHandlerImpl',
