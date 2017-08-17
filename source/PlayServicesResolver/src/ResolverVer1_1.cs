@@ -399,7 +399,6 @@ namespace GooglePlayServices
                 // Unfortunately, File.GetAccessControl() isn't implemented, so we'll use
                 // chmod (OSX / Linux) and on Windows extracted files are executable by default
                 // so we do nothing.
-                CommandLine.Result chmodResult;
                 if (UnityEngine.RuntimePlatform.WindowsEditor !=
                     UnityEngine.Application.platform) {
                     var result = CommandLine.Run("chmod",

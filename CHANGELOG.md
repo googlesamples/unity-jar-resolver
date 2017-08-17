@@ -1,3 +1,8 @@
+# Version 1.2.42 - Aug 17, 2017
+## Bug Fixes
+* Fixed Xcode project level settings not being applied by IOS Resolver when
+  Xcode project pod integration is enabled.
+
 # Version 1.2.41 - Aug 15, 2017
 ## Bug Fixes
 * IOS Resolver's Xcode workspace pod integration is now disabled when Unity
