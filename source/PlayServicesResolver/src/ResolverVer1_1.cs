@@ -137,6 +137,13 @@ namespace GooglePlayServices
         private const int MinorVersion = 1;
         private const int PointVersion = 0;
 
+        // Queue of System.Action objects for resolve actions to execute on the main thread.
+        private static System.Collections.Queue resolveUpdateQueue = new System.Collections.Queue();
+        // Currently active resolution operation.
+        private static System.Action resolveActionActive = null;
+        // Lock for resolveUpdateQueue and resolveActionActive.
+        private static object resolveLock = new object();
+
         public ResolverVer1_1() {
             LoadAarExplodeCache();
         }
@@ -559,6 +566,46 @@ namespace GooglePlayServices
         /// Perform the resolution and the exploding/cleanup as needed.
         /// </summary>
         public override void DoResolution(
+            PlayServicesSupport svcSupport, string destinationDirectory,
+            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
+            System.Action resolutionComplete) {
+            // Run resolution on the main thread to serialize the operation as DoResolutionUnsafe
+            // is not thread safe.
+            System.Action resolve = () => {
+                System.Action unlockResolveAndSignalResolutionComplete = () => {
+                    lock (resolveLock) {
+                        resolveActionActive = null;
+                    }
+                    resolutionComplete();
+                };
+                DoResolutionUnsafe(svcSupport, destinationDirectory, handleOverwriteConfirmation,
+                                   unlockResolveAndSignalResolutionComplete);
+            };
+            lock (resolveLock) {
+                resolveUpdateQueue.Enqueue(resolve);
+                EditorApplication.update += UpdateTryResolution;
+            }
+        }
+
+        // Try executing a resolution.
+        private static void UpdateTryResolution() {
+            lock (resolveLock) {
+                if (resolveActionActive == null) {
+                    if (resolveUpdateQueue.Count > 0) {
+                        resolveActionActive = (System.Action)resolveUpdateQueue.Dequeue();
+                        resolveActionActive();
+                    } else {
+                        EditorApplication.update -= UpdateTryResolution;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Perform the resolution and the exploding/cleanup as needed.
+        /// This is *not* thread safe.
+        /// </summary>
+         private void DoResolutionUnsafe(
             PlayServicesSupport svcSupport, string destinationDirectory,
             PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
             System.Action resolutionComplete)

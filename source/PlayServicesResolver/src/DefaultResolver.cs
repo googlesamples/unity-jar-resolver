@@ -391,6 +391,8 @@ namespace GooglePlayServices
         /// <returns>true if successful, false otherwise.</returns>
         internal virtual bool ProcessAar(string dir, string aarFile, bool antProject,
                                          out string abi) {
+            PlayServicesSupport.Log(String.Format("ProcessAar {0} {1} antProject={2}",
+                                                  dir, aarFile, antProject), verbose: true);
             abi = null;
             string workingDir = Path.Combine(dir, Path.GetFileNameWithoutExtension(aarFile));
             PlayServicesSupport.DeleteExistingFileOrDirectory(workingDir, includeMetaFiles: true);

@@ -1,3 +1,9 @@
+# Version 1.2.43 - Aug 18, 2017
+## Bug Fixes
+* Fixed Gradle resolution in the Android Resolver when running
+  PlayServicesResolver.Resolve() in parallel or spawning multiple
+  resolutions before the previous resolve completed.
+
 # Version 1.2.42 - Aug 17, 2017
 ## Bug Fixes
 * Fixed Xcode project level settings not being applied by IOS Resolver when
