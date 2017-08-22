@@ -1,3 +1,8 @@
+# Version 1.2.45 - Aug 22, 2017
+## Bug Fixes
+* Improved Android package auto-resolution and fixed clean up of stale
+  dependencies when using Gradle dependency resolution.
+
 # Version 1.2.44 - Aug 21, 2017
 ## Bug Fixes
 * Enabled autoresolution for Gradle Prebuild.

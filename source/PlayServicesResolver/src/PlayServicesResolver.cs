@@ -20,6 +20,7 @@ namespace GooglePlayServices
     using System.Collections.Generic;
     using System.IO;
     using System.Text.RegularExpressions;
+    using System.Xml;
     using Google.JarResolver;
     using UnityEditor;
     using UnityEngine;
@@ -35,6 +36,123 @@ namespace GooglePlayServices
     [InitializeOnLoad]
     public class PlayServicesResolver : AssetPostprocessor
     {
+        /// <summary>
+        /// Saves the current state of dependencies in the project and allows the caller to
+        /// compare the current state vs. the previous state of dependencies in the project.
+        /// </summary>
+        internal class DependencyState {
+            /// <summary>
+            /// Set of dependencies and the expected files in the project.
+            /// </summary>
+            private static string DEPENDENCY_STATE_FILE = Path.Combine(
+                "ProjectSettings", "AndroidResolverDependencies.xml");
+
+            /// <summary>
+            /// Set of Android packages (AARs / JARs) referenced by this DependencyState.
+            /// These are in the Maven style format "group:artifact:version".
+            /// </summary>
+            public HashSet<string> Packages { get; internal set; }
+
+            /// <summary>
+            /// Set of files referenced by this DependencyState.
+            /// </summary>
+            public HashSet<string> Files { get; internal set; }
+
+            /// <summary>
+            /// Determine the current state of the project.
+            /// </summary>
+            /// <returns>DependencyState instance with data derived from the current
+            /// project.</returns>
+            public static DependencyState GetState() {
+                return new DependencyState {
+                    Packages = new HashSet<string>(PlayServicesSupport.GetAllDependencies().Keys),
+                    Files = new HashSet<string>(PlayServicesResolver.FindLabeledAssets())
+                };
+            }
+
+            /// <summary>
+            /// Write this object to DEPENDENCY_STATE_FILE.
+            /// </summary>
+            public void WriteToFile() {
+                Directory.CreateDirectory(Path.GetDirectoryName(DEPENDENCY_STATE_FILE));
+                using (var writer = new XmlTextWriter(new StreamWriter(DEPENDENCY_STATE_FILE)) {
+                        Formatting = Formatting.Indented,
+                    }) {
+                    writer.WriteStartElement("dependencies");
+                    writer.WriteStartElement("packages");
+                    foreach (var dependencyKey in Packages) {
+                        writer.WriteStartElement("package");
+                        writer.WriteValue(dependencyKey);
+                        writer.WriteEndElement();
+                    }
+                    writer.WriteEndElement();
+                    writer.WriteStartElement("files");
+                    foreach (var assetPath in Files) {
+                        writer.WriteStartElement("file");
+                        writer.WriteValue(assetPath);
+                        writer.WriteEndElement();
+                    }
+                    writer.WriteEndElement();
+                    writer.WriteEndElement();
+                    writer.Flush();
+                    writer.Close();
+                }
+            }
+
+            /// <summary>
+            /// Read the state from DEPENDENCY_STATE_FILE.
+            /// </summary>
+            /// <returns>DependencyState instance read from DEPENDENCY_STATE_FILE.  null is
+            /// returned if the file isn't found.</returns>
+            public static DependencyState ReadFromFile() {
+                if (!File.Exists(DEPENDENCY_STATE_FILE)) return null;
+                var packages = new HashSet<string>();
+                var files = new HashSet<string>();
+                using (var reader =
+                           new XmlTextReader(new StreamReader(DEPENDENCY_STATE_FILE))) {
+                    var scope = new List<string>();
+                    while (reader.Read()) {
+                        string parentElement = scope.Count > 0 ? scope[scope.Count - 1] : null;
+                        if (reader.NodeType == XmlNodeType.Element) {
+                            if (reader.Name == "dependencies" && parentElement == null) {
+                                scope.Add(reader.Name);
+                            } else if ((reader.Name == "packages" || reader.Name == "files") &&
+                                       parentElement != null &&
+                                       parentElement == "dependencies") {
+                                scope.Add(reader.Name);
+                            } else if (reader.Name == "package" && parentElement != null &&
+                                       parentElement == "packages" &&
+                                       reader.Read() && reader.NodeType == XmlNodeType.Text) {
+                                packages.Add(reader.ReadContentAsString());
+                            } else if (reader.Name == "file" && parentElement != null &&
+                                       parentElement == "files" &&
+                                       reader.Read() && reader.NodeType == XmlNodeType.Text) {
+                                files.Add(reader.ReadContentAsString());
+                            }
+                        } else if (reader.NodeType == XmlNodeType.EndElement &&
+                                   parentElement != null) {
+                            scope.RemoveAt(scope.Count - 1);
+                        }
+                    }
+                }
+                return new DependencyState {
+                    Packages = packages,
+                    Files = files
+                };
+            }
+
+            /// <summary>
+            /// Compare with this object.
+            /// </summary>
+            /// <param name="obj">Object to compare with.</param>
+            /// <returns>true if both objects have the same contents, false otherwise.</returns>
+            public override bool Equals(System.Object obj) {
+                var state = obj as DependencyState;
+                return state != null && Packages.SetEquals(state.Packages) &&
+                    Files.SetEquals(state.Files);
+            }
+        }
+
         /// <summary>
         /// The instance to the play services support object.
         /// </summary>
@@ -636,9 +754,32 @@ namespace GooglePlayServices
         /// Resolve dependencies.
         /// </summary>
         /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
-        public static void Resolve(System.Action resolutionComplete = null)
+        /// <param name="forceResolution">Whether resolution should be executed when no dependencies
+        /// have changed.  This is useful if a dependency specifies a wildcard in the version
+        /// expression.</param>
+        public static void Resolve(System.Action resolutionComplete = null,
+                                   bool forceResolution = false)
         {
             if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
+
+            if (forceResolution) {
+                DeleteLabeledAssets();
+            } else {
+                // Only resolve if user specified dependencies changed or the output files
+                // differ to what is present in the project.
+                var currentState = DependencyState.GetState();
+                var previousState = DependencyState.ReadFromFile();
+                if (previousState != null) {
+                    if (currentState.Equals(previousState)) {
+                        if (resolutionComplete != null) resolutionComplete();
+                        return;
+                    }
+                    // Delete all labeled assets to make sure we don't leave any stale transitive
+                    // dependencies in the project.
+                    DeleteLabeledAssets();
+                }
+            }
+
             System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
             Resolver.DoResolution(svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
                                   (oldDependency, newDependency) => {
@@ -648,6 +789,7 @@ namespace GooglePlayServices
                                   () => {
                                       System.Action complete = () => {
                                           AssetDatabase.Refresh();
+                                          DependencyState.GetState().WriteToFile();
                                           if (resolutionComplete != null) resolutionComplete();
                                       };
                                       updateQueue.Enqueue(complete);
@@ -693,17 +835,35 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Add a menu item for resolving the jars manually.
+        /// Interactive resolution of dependencies.
         /// </summary>
-        [MenuItem("Assets/Play Services Resolver/Android Resolver/Resolve Client Jars")]
-        public static void MenuResolve()
-        {
+        private static void ExecuteMenuResolve(bool forceResolution) {
             if (Resolver == null) {
                 NotAvailableDialog();
                 return;
             }
-            Resolve(() => { EditorUtility.DisplayDialog("Android Jar Dependencies",
-                                                        "Resolution Complete", "OK"); });
+            Resolve(
+                resolutionComplete: () => {
+                        EditorUtility.DisplayDialog("Android Jar Dependencies",
+                                                    "Resolution Complete", "OK");
+                },
+                forceResolution: forceResolution);
+        }
+
+        /// <summary>
+        /// Add a menu item for resolving the jars manually.
+        /// </summary>
+        [MenuItem("Assets/Play Services Resolver/Android Resolver/Resolve Client Jars")]
+        public static void MenuResolve() {
+            ExecuteMenuResolve(false);
+        }
+
+        /// <summary>
+        /// Add a menu item to force resolve the jars manually.
+        /// </summary>
+        [MenuItem("Assets/Play Services Resolver/Android Resolver/Force Resolve Client Jars")]
+        public static void MenuForceResolve() {
+            ExecuteMenuResolve(true);
         }
 
         /// <summary>

@@ -166,12 +166,10 @@ class GradlePreBuildResolver : DefaultResolver {
                 // After adding the button we need to scroll down a little more.
                 window.scrollPosition.y = Mathf.Infinity;
                 window.Repaint();
-                window.buttonClicked = (TextAreaDialog dialog) => {
-                    if (!dialog.result) {
-                        window.Close();
-                    }
-                };
                 completedHandler(result);
+                if (result.exitCode == 0) {
+                    window.Close();
+                }
             }, maxProgressLines: 50);
         window.Show();
     }
@@ -236,7 +234,8 @@ class GradlePreBuildResolver : DefaultResolver {
 
     // Private method to avoid too deeply nested code in "DoResolution".
     private void GradleResolve(AndroidSdkPackageCollection packages,
-                               PlayServicesSupport svcSupport, string destinationDirectory) {
+                               PlayServicesSupport svcSupport, string destinationDirectory,
+                               System.Action resolutionComplete) {
         string errorOutro = "make sure you have the latest version of this plugin and if you " +
                 "still get this error, report it in a a bug here:\n" +
                 "https://github.com/googlesamples/unity-jar-resolver/issues\n";
@@ -251,7 +250,7 @@ class GradlePreBuildResolver : DefaultResolver {
             PlayServicesSupport.Log(
                 String.Format("TargetSDK is set to Auto-detect, and the latest Platform has been " +
                     "detected as: android-{0}", targetSdkVersion),
-                level: PlayServicesSupport.LogLevel.Info);
+                level: PlayServicesSupport.LogLevel.Info, verbose: true);
 
             errorIntro = String.Format("The Target SDK is set to automatically pick the highest " +
                 "installed platform in the Android Player Settings, which appears to be " +
@@ -383,6 +382,7 @@ class GradlePreBuildResolver : DefaultResolver {
                         PlayServicesResolver.LabelAssets( new [] { outDir }, true, true );
                     }
                     AssetDatabase.Refresh();
+                    resolutionComplete();
                 }
             });
     }
@@ -420,7 +420,8 @@ class GradlePreBuildResolver : DefaultResolver {
                             return;
                         }
 
-                        GradleResolve(packages, svcSupport, destinationDirectory);
+                        GradleResolve(packages, svcSupport, destinationDirectory,
+                                      resolutionComplete);
                     });
             }
         );
