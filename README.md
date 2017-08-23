@@ -223,7 +223,7 @@ therefore may be removed in the future.
 Finally, the Android Resolver supports a Gradle prebuild mode to provide
 minification without exporting to a Gradle / Android Studio project.
 For more information about this mode see
-[readme_for_generate_gradle_prebuild_exe.md](source/PlayServicesResolver/scripts/readme_for_generate_gradle_prebuild_exe.md)
+[gradle_prebuild.md](gralde_prebuild.md).
 
 It's possible to change the resolution strategy via the
 `Assets > Play Services Resolver > Android Resolver > Settings` menu.
