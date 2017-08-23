@@ -49,6 +49,14 @@ BUILD_TEMPLATE = "build.gradle"
 M2REPO_LOCAL_COPY = "m2repository"
 PROGUARD_USER_FILE = "proguard-user.txt"
 
+# If we're using a bundled bootloader (ie. windows exe wrapper),
+# we need to locate the data folder differently.
+# https://pythonhosted.org/PyInstaller/runtime-information.html
+if getattr(sys, 'frozen', False):
+  SCRIPT_DIR = os.path.dirname(sys.executable)
+else:
+  SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 def merge_dir_tree(src, dst, ignore=None):
   """Merges a copy of the source directory tree with a destination.
@@ -180,7 +188,7 @@ def generate_gradle_build(build_path, json_config):
     os.makedirs(build_path)
 
   # Unzip the template files.
-  template_zip_path = os.path.join(os.path.dirname(__file__), TEMPLATE_ZIP)
+  template_zip_path = os.path.join(SCRIPT_DIR, TEMPLATE_ZIP)
   zip_ref = zipfile.ZipFile(template_zip_path, "r")
   zip_ref.extractall(build_path)
 
@@ -337,7 +345,7 @@ def copy_outputs(build_path, output_path):
     output_path: The output_path is the location to copy the build artifacts to
       in eclipse format.
   """
-  json_path_mapping_cfg_file = os.path.join(os.path.dirname(__file__),
+  json_path_mapping_cfg_file = os.path.join(SCRIPT_DIR,
                                             INTERMEDIATE_PATHS_CONFIG)
   json_path_mapping_cfg = None
   with open(json_path_mapping_cfg_file, "r") as input_file:

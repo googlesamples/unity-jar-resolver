@@ -16,6 +16,12 @@ pyinstaller.exe --onefile generate_gradle_prebuild.py
 
 The executable generate_gradle_prebuild.exe is output to the `dist` directory.
 
+When executed, it extracts it's own bootloader, the script, and all of the
+python dependencies to a temporary folder for execution. As a consequence
+there are some gotchas with finding data files. Read more about that here:
+https://pythonhosted.org/PyInstaller/operating-mode.html
+https://pythonhosted.org/PyInstaller/runtime-information.html
+
 Why PyInstaller?
 ===============
 There are a lot of Python-to-executable bundlers. PyInstaller appears to have

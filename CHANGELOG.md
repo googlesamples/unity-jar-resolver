@@ -1,3 +1,8 @@
+# Version 1.2.46 - Aug 22, 2017
+## Bug Fixes
+* GradlePrebuild Android resolver on Windows now correctly locates dependent
+  data files.
+
 # Version 1.2.45 - Aug 22, 2017
 ## Bug Fixes
 * Improved Android package auto-resolution and fixed clean up of stale
