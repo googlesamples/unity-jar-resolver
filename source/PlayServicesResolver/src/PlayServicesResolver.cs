@@ -184,6 +184,11 @@ namespace GooglePlayServices
             new Dictionary<ResolverType, IResolver>();
 
         /// <summary>
+        /// Queue of resolution jobs to execute.
+        /// </summary>
+        private static Queue<Action> resolutionJobs = new Queue<Action>();
+
+        /// <summary>
         /// Flag used to prevent re-entrant auto-resolution.
         /// </summary>
         private static bool autoResolving = false;
@@ -398,6 +403,9 @@ namespace GooglePlayServices
         /// </summary>
         internal static bool Initialized { get; private set; }
 
+        // Last error logged by LogDelegate().
+        private static string lastError = null;
+
         /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
@@ -413,21 +421,7 @@ namespace GooglePlayServices
                     "PlayServicesResolver",
                     EditorPrefs.GetString("AndroidSdkRoot"),
                     "ProjectSettings",
-                    logMessageWithLevel: (string message, PlayServicesSupport.LogLevel level) => {
-                        switch (level) {
-                            case PlayServicesSupport.LogLevel.Info:
-                                UnityEngine.Debug.Log(message);
-                                break;
-                            case PlayServicesSupport.LogLevel.Warning:
-                                UnityEngine.Debug.LogWarning(message);
-                                break;
-                            case PlayServicesSupport.LogLevel.Error:
-                                UnityEngine.Debug.LogError(message);
-                                break;
-                            default:
-                                break;
-                        }
-                    });
+                    logMessageWithLevel: LogDelegate);
 
                 EditorApplication.update -= AutoResolve;
                 EditorApplication.update += AutoResolve;
@@ -452,6 +446,26 @@ namespace GooglePlayServices
             previousGradlePrebuildEnabled = GooglePlayServices.SettingsDialog.PrebuildWithGradle;
 
             OnSettingsChanged();
+        }
+
+        /// <summary>
+        /// Called from PlayServicesSupport to log a message.
+        /// </summary>
+        internal static void LogDelegate(string message, PlayServicesSupport.LogLevel level) {
+            switch (level) {
+                case PlayServicesSupport.LogLevel.Info:
+                    UnityEngine.Debug.Log(message);
+                    break;
+                case PlayServicesSupport.LogLevel.Warning:
+                    UnityEngine.Debug.LogWarning(message);
+                    break;
+                case PlayServicesSupport.LogLevel.Error:
+                    UnityEngine.Debug.LogError(message);
+                    lastError = message;
+                    break;
+                default:
+                    break;
+            }
         }
 
         /// <summary>
@@ -762,14 +776,59 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Execute the next resolve job on the queue.
+        /// </summary>
+        private static void ExecuteNextResolveJob() {
+            Action nextJob = null;
+            lock (resolutionJobs) {
+                while (resolutionJobs.Count > 0) {
+                    // Remove any terminators from the queue.
+                    var job = resolutionJobs.Dequeue();
+                    if (job != null) {
+                        nextJob = job;
+                        // Keep an item in the queue to indicate resolution is in progress.
+                        resolutionJobs.Enqueue(null);
+                        break;
+                    }
+                }
+            }
+            if (nextJob != null) nextJob();
+        }
+
+        /// <summary>
+        /// Resolve dependencies.  If resolution is currently active this queues up the requested
+        /// resolution action to execute when the current resolution is complete.
+        /// </summary>
+        /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
+        /// <param name="forceResolution">Whether resolution should be executed when no dependencies
+        /// have changed.  This is useful if a dependency specifies a wildcard in the version
+        /// expression.</param>
+        private static void Resolve(Action resolutionComplete = null,
+                                    bool forceResolution = false) {
+            bool firstJob;
+            lock (resolutionJobs) {
+                firstJob = resolutionJobs.Count == 0;
+                resolutionJobs.Enqueue(() => {
+                        ResolveUnsafe(
+                            resolutionComplete: () => {
+                                resolutionComplete();
+                                ExecuteNextResolveJob();
+                            },
+                            forceResolution: forceResolution);
+                    });
+            }
+            if (firstJob) ExecuteNextResolveJob();
+        }
+
+        /// <summary>
         /// Resolve dependencies.
         /// </summary>
         /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
-        public static void Resolve(System.Action resolutionComplete = null,
-                                   bool forceResolution = false)
+        private static void ResolveUnsafe(Action resolutionComplete = null,
+                                          bool forceResolution = false)
         {
             if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
 
@@ -792,6 +851,8 @@ namespace GooglePlayServices
             }
 
             System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
+            PlayServicesSupport.Log("Resolving...", verbose: true);
+            lastError = "";
             Resolver.DoResolution(svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
                                   (oldDependency, newDependency) => {
                                       return Resolver.ShouldReplaceDependency(oldDependency,
@@ -799,8 +860,13 @@ namespace GooglePlayServices
                                   },
                                   () => {
                                       System.Action complete = () => {
+                                          bool succeeded = String.IsNullOrEmpty(lastError);
                                           AssetDatabase.Refresh();
                                           DependencyState.GetState().WriteToFile();
+                                          PlayServicesSupport.Log(String.Format(
+                                              "Resolution {0}.\n\n{1}",
+                                              succeeded ? "Complete" : "Failed",
+                                              lastError), verbose: true);
                                           if (resolutionComplete != null) resolutionComplete();
                                       };
                                       updateQueue.Enqueue(complete);
