@@ -406,8 +406,11 @@ namespace Google.JarResolver
         /// <param name="packageIds">Optional list of Android SDK package identifiers.</param>
         /// <param name="repositories">List of additional repository directories to search for
         /// this artifact.</param>
+        /// <param name="createdBy">Human readable string that describes where this dependency
+        /// originated.</param>
         public void DependOn(string group, string artifact, string version,
-                             string[] packageIds = null, string[] repositories = null) {
+                             string[] packageIds = null, string[] repositories = null,
+                             string createdBy = null) {
             Log("DependOn - group: " + group +
                 " artifact: " + artifact +
                 " version: " + version +
@@ -422,7 +425,8 @@ namespace Google.JarResolver
             depRepoList.AddRange(repositoryPaths);
             var dep = AddCommonPackageIds(new Dependency(
                 group, artifact, version, packageIds: packageIds,
-                repositories: UniqueList(depRepoList).ToArray()));
+                repositories: UniqueList(depRepoList).ToArray(),
+                createdBy: createdBy));
             clientDependenciesMap[dep.Key] = dep;
         }
 

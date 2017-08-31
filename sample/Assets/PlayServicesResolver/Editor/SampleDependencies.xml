@@ -1,0 +1,36 @@
+<dependencies>
+  <!-- Android dependencies are specified under the "androidPackages" element.
+       Each "androidPackage" element contains the attributes of an Android
+       dependency (e.g AAR, JAR reference). -->
+  <androidPackages>
+    <!-- The "spec" attribute is *required* and provides the Maven package
+         specification.
+
+         Currently this only supports group:artifact:version_specification where
+         group:artifact:version_specification references a Maven package that
+         can be located in:
+         * Maven central.
+         * Google's Maven repo.
+         * Local Android SDK Maven repo.
+
+         Additional repositories can be added using the "repositories" element.
+    -->
+    <androidPackage spec="com.google.android.gms:play-services-games:9.8.0">
+      <!-- androidSdkPackageIds is optional and contains the set of Android
+           SDK package manager components (packages) this package requires.
+
+           If the package can't be found in any of the specified repositories,
+           the dependency resolver will attempt to install the set of Android
+           SDK packages specified here and then attempt resolution again.
+      -->
+      <androidSdkPackageIds>
+        <androidSdkPackageId>extra-google-m2repository</androidSdkPackageId>
+      </androidSdkPackageIds>
+      <!-- "repositories" are optional and contain the set of additional
+           repository URIs to search for this package. -->
+      <repositories>
+        <repository>https://maven.google.com</repository>
+      </repositories>
+    </androidPackage>
+  </androidPackages>
+</dependencies>

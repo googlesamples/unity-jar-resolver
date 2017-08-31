@@ -54,6 +54,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\AndroidSdkManager.cs" />
+    <Compile Include="src\AndroidXmlDependencies.cs" />
     <Compile Include="src\CommandLine.cs" />
     <Compile Include="src\CommandLineDialog.cs" />
     <Compile Include="src\DefaultResolver.cs" />
@@ -64,6 +65,7 @@
     <Compile Include="src\SettingsDialog.cs" />
     <Compile Include="src\TextAreaDialog.cs" />
     <Compile Include="src\UnityCompat.cs" />
+    <Compile Include="src\XmlDependencies.cs" />
     <Compile Include="src\XmlUtilities.cs" />
     <Compile Include="..\JarResolverLib\src\Google.JarResolver\Dependency.cs">
       <Link>Google.JarResolver\Dependency.cs</Link>

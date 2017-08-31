@@ -415,6 +415,9 @@ namespace GooglePlayServices
         /// </summary>
         internal static bool Initialized { get; private set; }
 
+        // Parses dependencies from XML dependency files.
+        private static AndroidXmlDependencies xmlDependencies = new AndroidXmlDependencies();
+
         // Last error logged by LogDelegate().
         private static string lastError = null;
 
@@ -428,6 +431,8 @@ namespace GooglePlayServices
             {
                 RegisterResolver(new ResolverVer1_1());
                 RegisterResolver(new GradlePreBuildResolver(), ResolverType.GradlePrebuild);
+                // Monitor Android dependency XML files to perform auto-resolution.
+                AddAutoResolutionFilePatterns(xmlDependencies.fileRegularExpressions);
 
                 svcSupport = PlayServicesSupport.CreateInstance(
                     "PlayServicesResolver",
@@ -844,6 +849,8 @@ namespace GooglePlayServices
         {
             if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
 
+            xmlDependencies.ReadAll(PlayServicesSupport.Log);
+
             if (forceResolution) {
                 DeleteLabeledAssets();
             } else {
@@ -864,6 +871,7 @@ namespace GooglePlayServices
 
             System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
             PlayServicesSupport.Log("Resolving...", verbose: true);
+
             lastError = "";
             Resolver.DoResolution(svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
                                   (oldDependency, newDependency) => {
