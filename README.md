@@ -1,212 +1,372 @@
-# JarResolver-Readme
-Google Play Services Jar Resolver Library for Unity
+Play Services Resolver for Unity
+========
 
 # Overview
 
-This library is intended to be used by any Unity plugin that requires access to
-Google play-services or Android support libraries on Android.  The goal is to
-minimize the risk of having multiple or conflicting versions of client
-libraries included in the Unity project.
+This library is intended to be used by any Unity plugin that requires:
 
-
-With this library, a plugin declares the dependencies needed and these are
-resolved by using the play-services and support repositories that are part of
-the Android SDK.  These repositories are used to store .aar files in a Maven
-(Gradle) compatible repository.
-
-This library implements a subset of the resolution logic used by these build
-tools so the same functionality is available in Unity.
+   * Android specific libraries (e.g
+     [AARs](https://developer.android.com/studio/projects/android-library.html)).
+   * iOS [CocoaPods](https://cocoapods.org/).
+   * Version management of transitive dependencies.
 
 # Background
-Many Unity plugins have dependencies on Google Play Services.
-Dependencies on Google Play Services can cause version conflicts and
-duplicate resource definitions.  In some cases, including the entire
-Google Play Services client library makes it difficult to keep the number
-of methods in your app (including framework APIs, library methods,
-and your own code) under the 65,536 limit.
 
-Android Studio addressed this starting with version 6.5 of Play Services.
-Starting then, you can include the individual components of Play Services in
-your project instead of the entire library.  This makes the project overhead
-smaller.  The result is more resources for your application,
-and maybe even a smaller application.
+Many Unity plugins have dependencies upon Android specific libraries, iOS
+CocoaPods, and sometimes have transitive dependencies upon other Unity plugins.
+This causes the following problems:
 
-The unity-jar-resolver project brings this capability to Unity projects.
-Each plugin or application declare the dependency needed e.g. play-services-games,
-and the version 8.4+. Then the resolver library copies over the best
-version of the play services libraries needed by all the plugins in the project.
+   * Integrating platform specific (e.g Android and iOS) libraries within a
+     Unity project can be complex and a burden on a Unity plugin maintainer.
+   * The process of resolving conflicting dependencies on platform specific
+     libraries is pushed to the developer attempting to use a Unity plugin.
+     The developer trying to use you plugin is very likely to give up when
+     faced with Android or iOS specific build errors.
+   * The process of resolving conflicting Unity plugins (due to shared Unity
+     plugin components) is pushed to the developer attempting to use your Unity
+     plugin. In an effort to resolve conflicts, the developer will very likely
+     attempt to resolve problems by deleting random files in your plugin,
+     report bugs when that doesn't work and finally give up.
 
-To use this plugin, developers need to install the "Support Repository"
-and the "Google Repository" in the Android SDK Manager.
+The Play Services Resolver plugin (the name comes from its origin of just
+handling
+[Google Play Services](https://developers.google.com/android/guides/overview)
+dependencies on Android) provides solutions for each of these problems.
 
-Developers can clone this project from GitHub and include it in their project.
-Plugin creators are encouraged to adopt this library as well, easing integration for their customers.
+## Android Dependency Management
 
-The list of the Play Services components on https://developers.google.com/android/guides/setup.
+The *Android Resolver* component of this plugin will download and integrate
+Android libraries and handle any conflicts between plugins using shared
+libraries.  For example, if a Unity plugin `SomePlugin` requires the Google
+Play Games Android library and redistributes this library and its transitive
+dependencies in the folder `SomePlugin/Android/` when a user imports
+`SomeOtherPlugin` that includes the same libraries (potentially at a different
+version) in `SomeOtherPlugin/Android/` the developer using `SomePlugin` and
+`SomeOtherPlugin` will see a hard to interpret build error when building for
+Android.
 
+Using the Android Resolver to manage Android library dependencies:
+
+   * Solves Android library conflicts between plugins.
+   * Handles all of the various processing steps required to use Android
+     libraries (AARs, JARs) in Unity 4.x and above projects.  Almost all
+     versions of Unity have - at best - partial support for AARs.
+   * (Experimental) Supports minification of included Java components without
+     exporting a project.
+
+## iOS Dependency Management
+
+The *iOS Resolver* component of this plugin integrates with
+[CocoaPods](https://cocoapods.org/) to download and integrate iOS libraries
+and frameworks into the Xcode project Unity generates when building for iOS.
+Using CocoaPods allows multiple plugins to utilize shared components without
+forcing developers to fix either duplicate or incompatible versions of
+libraries included through multiple Unity plugins in their project.
+
+## Unity Plugin Version Management
+
+Finally, the *Version Handler* component of this plugin simplifies the process
+of managing transitive dependencies of Unity plugins and each plugin's upgrade
+process.
+
+For example, without the Version Handler plugin, if:
+
+   * Unity plugin `SomePlugin` includes the `Play Services Resolver` plugin at
+     version 1.1.
+   * Unity plugin `SomeOtherPlugin` includes the `Play Services Resolver`
+     plugin  at version 1.2.
+
+The version of `Play Services Resolver` included in the developer's project
+depends upon the order the developer imports `SomePlugin` or `SomeOtherPlugin`.
+
+This results in:
+
+   * `Play Services Resolver` at version 1.2, if `SomePlugin` is imported then
+     `SomeOtherPlugin` is imported.
+   * `Play Services Resolver` at version 1.1, if `SomeOtherPlugin` is imported
+     then `SomePlugin` is imported.
+
+The Version Handler solves the problem of managing transitive dependencies by:
+
+   * Specifying a set of packaging requirements that enable a plugin at
+     different versions to be imported into a Unity project.
+   * Providing activation logic that selects the latest version of a plugin
+     within a project.
+
+When using the Version Handler to manage `Play Services Resolver` included in
+`SomePlugin` and `SomeOtherPlugin`, from the prior example, version 1.2 will
+always be actived in a developers Unity project.
+
+Plugin creators are encouraged to adopt this library to ease integration for
+their customers.  For more information about integrating in other plugins
+see the [Plugin Redistribution](#plugin-redistribution) section of this
+document.
 
 # Requirements
 
-This library only works with Unity version 4.6.8 or higher.
+The Android Resolver and iOS Resolver components of the plugin only work with
+Unity version 4.6.8 or higher.
 
-The library relies on the installation of the Android Support Repository and
-the Google Repository SDK components.  These are found in the "extras" section.
+The *Version Handler* component only works with Unity 5.x or higher as it
+depends upon the `PluginImporter` UnityEditor API.
 
-Building using Ubuntu
+# Android Resolver
 
-sudo apt-get install monodevelop nunit-console
+The Android Resolver copies specified dependencies from local or remote Maven
+repositories into the Unity project when a user selects Android as the build
+target in the Unity editor.
 
-# Packaging
+## Usage
 
-The plugin consists of several C# DLLs that contain
- the logic to resolve the dependencies for both Android and iOS (using CocoaPods),
-the logic to resolve dependencies and copy them into Unity projects, and logic
-to remove older versions of the client libraries as well as older versions of the
-JarResolver DLLs.
+   1. Add the unitypackage to your plugin project (assuming you are developing a
+      plugin).  Please read the [Plugin Redistribution](#plugin-redistribution)
+      section when you're considering how to export your package to share with
+      your users.
 
-(Assets/Google Play Services/Resolve Client Jars).  In order to support
-Unity version 4.x, this class also converts the aar file
-to a java plugin project.  The second C# file is SampleDependencies.cs
-which is the model for plugin developers to copy and add the specific
-dependencies needed.
+   2. Copy and rename the SampleDependencies.xml file into your
+      plugin and add the dependencies your plugin requires.
 
-During resolution, all the dependencies from all the plugins are merged and resolved.
-
-# Usage
-  1. Add the unitypackage to your plugin project (assuming you are developing a
-plugin).
-
-  2. Copy the SampleDependencies.cs file to another name specific to your plugin
-and add the dependencies your plugin needs.
-
-Reflection is used to access the resolver in order to behave correctly when the
-project is being loaded into Unity and there is no specific order of class
-initialization.
-
-For Android dependencies first create and instance of the resolver object:
-```
-// Setup the resolver using reflection as the module may not be
-    // available at compile time.
-    Type playServicesSupport = Google.VersionHandler.FindClass(
-      "Google.JarResolver", "Google.JarResolver.PlayServicesSupport");
-    if (playServicesSupport == null) {
-      return;
-    }
-    svcSupport = svcSupport ?? Google.VersionHandler.InvokeStaticMethod(
-      playServicesSupport, "CreateInstance",
-      new object[] {
-          "GooglePlayGames",
-          EditorPrefs.GetString("AndroidSdkRoot"),
-          "ProjectSettings"
-      });
-```
-
-Then add dependencies. For example to depend on
-play-services-games version 9.6.0, you need to specify the package, artifact,
-and version as well as the packageId from the SDK manager in case a updated
-version needs to be downloaded from the SDK Manager in order to build.
-```
-    Google.VersionHandler.InvokeInstanceMethod(
-      svcSupport, "DependOn",
-      new object[] {
-      "com.google.android.gms",
-      "play-services-games",
-      "9.6.0" },
-      namedArgs: new Dictionary<string, object>() {
-          {"packageIds", new string[] { "extra-google-m2repository" } }
-      });
-```
-The version value supports both specific versions such as 8.1.0,
-and also the trailing '+' indicating "or greater" for
-the portion of the number preceding the period.  For example 8.1.+ would match
-8.1.2, but not 8.2.  The string "8+" would resolve to any version greater or
-equal to 8.0. The meta version  'LATEST' is also supported meaning the greatest
-version available, and "0+" indicates any version.
-
-# Android manifest variable processing
-
-Some aar files (notably play-services-measurement) contain variables that
-are processed by the Android Gradle plugin.  Unfortunately, Unity does not perform
-the same processing, so this plugin handles known cases of this variable substition
-by exploding the aar and replacing ${applicationId} with the bundleID.
-
-
-# iOS Dependency Management
-iOS dependencies are identified using Cocoapods.  Cocoapods is run as a post build
-process step.  The libraries are downloaded and injected into the XCode project
-file directly, rather than creating a separate xcworkspace.
-
-To add a dependency you first need an instance of the resolver.  Reflection is
-used to safely handle race conditions when Unity is loading the project and the
-order of class initialization is not known.
-```
-    Type iosResolver = Google.VersionHandler.FindClass(
-  "Google.IOSResolver", "Google.IOSResolver");
-    if (iosResolver == null) {
-      return;
-    }
-```
-
-Dependencies for iOS are added by referring to CocoaPods.  The libraries and
-frameworks are added to the Unity project, so they will automatically be included.
-
-This example add the GooglePlayGames pod, version 5.0 or greater,
-disabling bitcode generation.
+For example, to add the Google Play Games library
+(`com.google.android.gms:play-services-games` package) at version `9.8.0` to
+the set of a plugin's Android dependencies:
 
 ```
-    Google.VersionHandler.InvokeStaticMethod(
-      iosResolver, "AddPod",
-      new object[] { "GooglePlayGames" },
-      namedArgs: new Dictionary<string, object>() {
-          { "version", "5.0+" },
-          { "bitcodeEnabled", false },
-      });
+<dependencies>
+  <androidPackages>
+    <androidPackage spec="com.google.android.gms:play-services-games:9.8.0">
+      <androidSdkPackageIds>
+        <androidSdkPackageId>extra-google-m2repository</androidSdkPackageId>
+      </androidSdkPackageIds>
+    </androidPackage>
+  </androidPackages>
+</dependencies>
 ```
 
-# Managing which dependencies are automatically resolved
-The resolver creates .xml files under the ProjectSettings/GoogleDependency{SOMEDEPENDENCY}.xml to decide on which dependencies are automatically imported. 
+The version specification (last component) supports:
 
-# Disabling automatic resolution
+   * Specific versions e.g `9.8.0`
+   * Partial matches e.g `9.8.+` would match 9.8.0, 9.8.1 etc. choosing the most
+     recent version.
+   * Latest version using `LATEST` or `+`.  We do *not* recommend using this
+     unless you're 100% sure the library you depend upon will not break your
+     Unity plugin in future.
 
-Automatic resolution can be disabled in the Settings dialog,
-Assets > Google Play Services > Settings.
+The above example specifies the dependency as a component of the Android SDK
+manager such that the Android SDK manager will be executed to install the
+package if it's not found.  If your Android dependency is located on Maven
+central it's possible to specify the package simply using the `androidPackage`
+element:
 
-# How it works
+```
+<dependencies>
+  <androidPackages>
+    <androidPackage spec="com.google.api-client:google-api-client-android:1.22.0" />
+  </androidPackages>
+</dependencies>
+```
 
-When the dependency is added, the maven-metadata.xml file is read for this
-dependency.  If there are no versions available (or the dependency is not
-found), there is an exception thrown.  When the metadata is read, the list of
-known versions is filtered based on the version constraint.  The remaining list
-of version is known as <em>possible versions</em>.
+## Auto-resolution
 
-The greatest value of the possible versions is known as the <em>best version</em>.
-The best version is what is used to perform resolution.
+By default the Android Resolver automatically monitors the dependencies you have
+specified and the `Plugins/Android` folder of your Unity project running the
+resolution process when specified dependencies are not present in your project.
 
-Resolution is done by following the steps:
+The *auto-resolution* process can be disabled via the
+`Assets > Play Services Resolver > Android Resolver > Settings` menu.
 
-  1. All dependencies are added to the "unresolved" list.  Then for each dependency
-in unresolved:
-  2. check if there is already a candidate artifact
-     1. if there is not, use the greatest version available (within the constraint) as
-the candidate and remove from the unresolved list.
-     2. If there is an existing candidate, check if the unresolved version is satisfied
-by the candidate version.
-        1. If it is, remove it from the unresolved list.
-        2. If it is not, remove possible versions from the dependencies that have
-non-concrete version constraints (i.e. have a + in the version).
-        3. If there
-        4. If there are still possible versions to check, add  the dependency to the end
-of the unresolved list for re-processing with a new version candidate.
-        5. If there are no possible versions, then the SDK Manager is used to download
-and updated versions of the libraries based on the packageId.
-        6. If there still are no possible versions to resolve both the candidate and the
-unresolved dependencies, then either fail resolution with an exception, or use
-the greatest version value.
-     3. When a candidate version is selected, the pom file is read for that version and
-the
+Manual resolution can be performed using the following menu options:
 
-     4. If there is a candidate version, add it to the candidate list and remove from
-the unresolved.
-  3. Process transitive dependencies
-     5. for each candidate artifact, read the pom file for dependencies and add them to
-the unresolved list.
+   * `Assets > Play Services Resolver > Android Resolver > Resolve`
+   * `Assets > Play Services Resolver > Android Resolver > Force Resolve`
+
+## Android Manifest Variable Processing
+
+Some AAR files (for example play-services-measurement) contain variables that
+are processed by the Android Gradle plugin.  Unfortunately, Unity does not
+perform the same processing when using Unity's Internal Build System, so the
+Android Resolver plugin handles known cases of this variable substition
+by exploding the AAR into a folder and replacing ${applicationId} with the
+bundleID.
+
+Disabling AAR explosion and therefore Android manifest processing can be done
+via the `Assets > Play Services Resolver > Android Resolver > Settings` menu.
+You may want to disable explosion of AARs if you're exporting a project to be
+built with Gradle / Android Studio.
+
+## ABI Stripping
+
+Some AAR files contain native libraries (.so files) for each ABI supported
+by Android.  Unfortunately, when targeting a single ABI (e.g x86), Unity does
+not strip native libraries for unused ABIs.  To strip unused ABIs, the Android
+Resolver plugin explodes an AAR into a folder and removes unused ABIs to
+reduce the built APK size.  Furthermore, if native libraries are not stripped
+from an APK (e.g you have a mix of Unity's x86 library and some armeabi-v7a
+libraries) Android may attempt to load the wrong library for the current
+runtime ABI completely breaking your plugin when targeting some architectures.
+
+AAR explosion and therefore ABI stripping can be disabled via the
+`Assets > Play Services Resolver > Android Resolver > Settings` menu.  You may
+want to disable explosion of AARs if you're exporting a project to be built
+with Gradle / Android Studio.
+
+## Resolution Strategies
+
+By default the Android Resolver will use Gradle to download dependencies prior
+to integrating them into a Unity project.  This works with Unity's internal
+build system and Gradle / Android Studio project export.
+
+In addition, the Android Resolver supports a legacy mode that only fetches
+dependencies from a user's local Android SDK.  This mode has limited support
+for conflict resolution and doesn't support online maven repositories,
+therefore may be removed in the future.
+
+Finally, the Android Resolver supports a Gradle prebuild mode to provide
+minification without exporting to a Gradle / Android Studio project.
+For more information about this mode see
+[readme_for_generate_gradle_prebuild_exe.md](source/PlayServicesResolver/scripts/readme_for_generate_gradle_prebuild_exe.md)
+
+It's possible to change the resolution strategy via the
+`Assets > Play Services Resolver > Android Resolver > Settings` menu.
+
+## Dependency Tracking
+
+The Android Resolver creates the
+`ProjectSettings/AndroidResolverDependencies.xml` to quickly determine the set
+of resolved dependencies in a project.  This is used by the auto-resolution
+process to only run the expensive resolution process when necessary.
+
+# iOS Resolver
+
+The iOS resolver component of this plugin manages
+[CocoaPods](https://cocoapods.org/).  A CocoaPods `Podfile` is generated and
+the `pod` tool is executed as a post build process step to add dependencies
+to the Xcode project exported by Unity.
+
+## Usage
+
+Dependencies for iOS are added by referring to CocoaPods.
+
+For example, to add the AdMob pod, version 7.0 or greater with bitcode enabled:
+
+```
+<dependencies>
+  <iosPods>
+    <iosPod name="Google-Mobile-Ads-SDK" version="~> 7.0" bitcodeEnabled="true"
+            minTargetSdk="6.0" />
+  </iosPods>
+</dependencies>
+```
+
+## Integration Strategies
+
+The `CocoaPods` are either:
+   * Downloaded and injected into the Xcode project file directly, rather than
+     creating a separate xcworkspace.  We call this `Xcode project` integration.
+   * If the Unity version supports opening a xcworkspace file, the `pod` tool
+     is used as intended to generate a xcworkspace which references the
+     CocoaPods.  We call this `Xcode workspace` integration.
+
+The resolution strategy can be changed via the
+`Assets > Play Services Resolver > Android Resolver > Settings` menu.
+
+# Version Handler
+
+The Version Handler component of this plugin manages:
+* Shared Unity plugin dependencies.
+* Upgrading Unity plugins by cleaning up old files from previous versions.
+
+## Usage
+
+Unity plugins can be managed by the `Version Handler` using the following steps:
+
+   1. Add the `gvh` asset label to each asset (file) you want Version Handler
+      to manage.
+   1. Add the `gvh_version-VERSION` label to each asset where `VERSION` is the
+      version of the plugin you're releasing (e.g 1.2.3).
+   1. Optional: Add `gvh_targets-editor` label to each editor DLL in your
+      plugin and disable `editor` as a target platform for the DLL.
+      The Version Handler will enable the most recent version of this DLL when
+      the plugin is imported.
+   1. Optional: If your plugin is included in other Unity plugins you should
+      add the version number to each filename and change the GUID of each asset.
+      This allows multiple versions of your plugin to be imported into a Unity
+      project and the Version Handler component to activate the most recent
+      version.
+   1. Create a manifest text file named `MY_UNIQUE_PLUGIN_NAME_VERSION.txt`
+      that lists all files in your plugin relative to the project root.
+      Then add the `gvh_manifest` label to the asset to indicate this file is
+      a plugin manifest.
+   1. Redistribute the `Play Services Resolver` Unity plugin with your plugin.
+      See the [Plugin Redistribution](#plugin-redistribution) for the details.
+
+If you follow these steps:
+
+   * When users import a newer version of your plugin, files referenced by the
+     older version's manifest are cleaned up.
+   * The latest version of the plugin will be selected when users import
+     multiple packages that include your plugin, assuming the steps in
+     [Plugin Redistribution](#plugin-redistribution) are followed.
+
+# Plugin Redistribution
+
+The *Version Handler* component relies upon deferring the load of editor DLLs
+so that it can run and determine the latest version of a plugin component to
+activate.  The build of the `Play Services Resolver` plugin has Unity asset
+metadata that is configured to so that the all editor components are not
+initially enabled when it's imported into a Unity project.  To maintain this
+configuration when importing the `Play Services Resolver` .unitypackage file
+into a Unity plugin you *must* specify the command line option `-gvh_disable`
+which will prevent the Version Handler component from running and changing the
+Unity asset metadata.
+
+For example, the following will import the
+`play-services-resolver-1.2.46.0.unitypackage` into the project `pathToPlugin`
+and export the whole project to `MyPlugin.unitypackage`.
+
+```
+Unity -gvh_disable \
+      -batchmode \
+      -importPackage \
+      -projectPath pathToPlugin \
+      -exportPackage Assets MyPlugin.unitypackage \
+      -quit
+```
+
+## Building from Source
+
+To build this plugin from source you need the following tools installed:
+   * monodevelop
+   * nunit-console
+   * Unity
+
+You can build the plugin by running the following from your shell
+(Linux / OSX):
+
+```
+./gradlew build && ./gradlew postbuild
+```
+
+or Windows:
+
+```
+./gradlew.bat build & ./gradlew.bat postbuild
+```
+
+The `postbuild` target packages the plugin for redistribution:
+
+   * Updates `play-services-resolver-*.unitypackage`
+   * Copies the unpacked plugin to the `exploded` directory.
+
+### Releasing
+
+Each time a new build of this plugin is checked into the source tree you
+need to do the following:
+
+   * Bump the plugin version variable `pluginVersion` in `build.gradle`
+   * Update `CHANGELOG.md` with the new version number and changes included in
+     the release.
+   * `git commit --amend -a` to pick up all modified files in the tree.
+     The GUID of all asset metadata is modified due to the version number change.
+     Each file within the plugin is versioned to allow multiple versions of the
+     plugin to be imported into a Unity project which allows the most recent
+     version to be activated by the Version Handler component.
