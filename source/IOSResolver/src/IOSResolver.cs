@@ -2216,10 +2216,10 @@ public class IOSResolver : AssetPostprocessor {
                                 UnityEditor.iOS.Xcode.PBXSourceTree.Source));
             // Some source pods (e.g Protobuf) can include files relative to the Pod root,
             // add include paths relative to the Pod's source files for this use case.
-            project.UpdateBuildProperty(target, "HEADER_SEARCH_PATHS",
-                                        new [] { "$(SRCROOT)/" +
-                                                 Path.GetDirectoryName(podPathProjectPath.Value) },
-                                        new string[] {});
+            project.UpdateBuildProperty(
+                    new [] { target }, "HEADER_SEARCH_PATHS",
+                    new [] { "$(SRCROOT)/" + Path.GetDirectoryName(podPathProjectPath.Value) },
+                    new string[] {});
         }
 
         // Each source pod library target name shares the name of the directory containing
