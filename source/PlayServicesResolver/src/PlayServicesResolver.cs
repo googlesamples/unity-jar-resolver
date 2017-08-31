@@ -533,6 +533,7 @@ namespace GooglePlayServices
         /// triggered.
         /// </summary>
         private static void CheckImportedAssets() {
+            EditorApplication.update -= CheckImportedAssets;
             var filesToCheck = new HashSet<string>(importedAssetsSinceLastResolve);
             importedAssetsSinceLastResolve.Clear();
             bool resolve = false;
