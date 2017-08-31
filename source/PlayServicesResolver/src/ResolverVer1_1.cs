@@ -509,8 +509,19 @@ namespace GooglePlayServices
                         // If this fails, something may have gone wrong with the Gradle script.
                         // Rather than failing hard, fallback to recreating the Dependency
                         // class with the partial data we have now.
-                        var components = artifact.Split(new char[] { ':' });
-                        if (components.Length != 3) continue;
+                        var components = new List<string>(artifact.Split(new char[] { ':' }));
+                        if (components.Count < 2) {
+                            PlayServicesSupport.Log(
+                                String.Format(
+                                    "Found invalid missing artifact {0}\n" +
+                                    "Something went wrong with the gradle artifact download " +
+                                    "script\n." +
+                                    "Please report a bug", artifact),
+                                level: PlayServicesSupport.LogLevel.Warning);
+                            continue;
+                        } else if (components.Count < 3 || components[2] == "+") {
+                            components.Add("LATEST");
+                        }
                         dep = new Dependency(components[0], components[1], components[2]);
                     }
                     missingArtifactsAsDependencies.Add(dep);
@@ -525,6 +536,13 @@ namespace GooglePlayServices
                 PlayServicesResolver.updateQueue.Enqueue(processResult);
             };
 
+            var filteredDependencies = new List<string>();
+            foreach (var dependency in allDependencies.Values) {
+                // Convert the legacy "LATEST" version spec to a Gradle version spec.
+                filteredDependencies.Add(dependency.Version.ToUpper() == "LATEST" ?
+                                         dependency.VersionlessKey + ":+" : dependency.Key);
+            }
+
             var gradleArguments =
                 String.Join(
                     " ",
@@ -536,8 +554,7 @@ namespace GooglePlayServices
                         String.Format("\"-PMAVEN_REPOS={0}\"",
                                       String.Join(";", repoList.ToArray())),
                         String.Format("\"-PPACKAGES_TO_COPY={0}\"",
-                                      String.Join(
-                                          ";", new List<string>(allDependencies.Keys).ToArray()))
+                                      String.Join(";", filteredDependencies.ToArray()))
                     });
 
             PlayServicesSupport.Log(String.Format("Running dependency fetching script\n" +
