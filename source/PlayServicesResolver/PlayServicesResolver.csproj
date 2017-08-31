@@ -64,6 +64,7 @@
     <Compile Include="src\SettingsDialog.cs" />
     <Compile Include="src\TextAreaDialog.cs" />
     <Compile Include="src\UnityCompat.cs" />
+    <Compile Include="src\XmlUtilities.cs" />
     <Compile Include="..\JarResolverLib\src\Google.JarResolver\Dependency.cs">
       <Link>Google.JarResolver\Dependency.cs</Link>
     </Compile>

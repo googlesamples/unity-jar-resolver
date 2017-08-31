@@ -114,36 +114,48 @@ namespace GooglePlayServices
             /// </summary>
             /// <returns>DependencyState instance read from DEPENDENCY_STATE_FILE.  null is
             /// returned if the file isn't found.</returns>
+            ///
+            /// This parses files in the following format:
+            /// <dependencies>
+            ///   <packages>
+            ///     <package>group:artifact:version</package>
+            ///     ...
+            ///   </packages>
+            ///   <files>
+            ///     <file>package_filename</file>
+            ///     ...
+            ///   </files>
+            /// </dependencies>
             public static DependencyState ReadFromFile() {
-                if (!File.Exists(DEPENDENCY_STATE_FILE)) return null;
                 var packages = new HashSet<string>();
                 var files = new HashSet<string>();
-                using (var reader =
-                           new XmlTextReader(new StreamReader(DEPENDENCY_STATE_FILE))) {
-                    var scope = new List<string>();
-                    while (reader.Read()) {
-                        string parentElement = scope.Count > 0 ? scope[scope.Count - 1] : null;
-                        if (reader.NodeType == XmlNodeType.Element) {
-                            if (reader.Name == "dependencies" && parentElement == null) {
-                                scope.Add(reader.Name);
-                            } else if ((reader.Name == "packages" || reader.Name == "files") &&
-                                       parentElement != null &&
-                                       parentElement == "dependencies") {
-                                scope.Add(reader.Name);
-                            } else if (reader.Name == "package" && parentElement != null &&
-                                       parentElement == "packages" &&
-                                       reader.Read() && reader.NodeType == XmlNodeType.Text) {
-                                packages.Add(reader.ReadContentAsString());
-                            } else if (reader.Name == "file" && parentElement != null &&
-                                       parentElement == "files" &&
-                                       reader.Read() && reader.NodeType == XmlNodeType.Text) {
-                                files.Add(reader.ReadContentAsString());
+                if (!XmlUtilities.ParseXmlTextFileElements(
+                    DEPENDENCY_STATE_FILE, PlayServicesSupport.Log,
+                    (reader, elementName, isStart, parentElementName, elementNameStack) => {
+                        if (isStart) {
+                            if (elementName == "dependencies" && parentElementName == "") {
+                                return true;
+                            } else if ((elementName == "packages" || elementName == "files") &&
+                                       parentElementName == "dependencies") {
+                                return true;
+                            } else if (elementName == "package" &&
+                                       parentElementName == "packages") {
+                                if (isStart && reader.Read() &&
+                                    reader.NodeType == XmlNodeType.Text) {
+                                    packages.Add(reader.ReadContentAsString());
+                                }
+                                return true;
+                            } else if (elementName == "file" && parentElementName == "files") {
+                                if (isStart && reader.Read() &&
+                                    reader.NodeType == XmlNodeType.Text) {
+                                    files.Add(reader.ReadContentAsString());
+                                }
+                                return true;
                             }
-                        } else if (reader.NodeType == XmlNodeType.EndElement &&
-                                   parentElement != null) {
-                            scope.RemoveAt(scope.Count - 1);
                         }
-                    }
+                        return false;
+                    })) {
+                    return null;
                 }
                 return new DependencyState {
                     Packages = packages,
