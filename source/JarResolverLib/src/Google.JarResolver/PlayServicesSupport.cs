@@ -253,7 +253,8 @@ namespace Google.JarResolver
                 if (logger != null) logger(message);
             };
             PlayServicesSupport.logger =
-                PlayServicesSupport.logger ?? (logMessageWithLevel ?? legacyLogger);
+                PlayServicesSupport.logger ?? (logMessageWithLevel ??
+                                               (logger != null ? legacyLogger : null));
             // Only set the SDK path if it differs to what is configured in the editor or
             // via an environment variable.  The SDK path can be changed by the user before
             // this module is reloaded.
@@ -269,6 +270,7 @@ namespace Google.JarResolver
                     throw new Exception("Invalid clientName: " + clientName);
                 }
             }
+
             instance.clientName = clientName;
 
             var repoPaths = new List<string>();
@@ -696,7 +698,12 @@ namespace Google.JarResolver
                 foreach (var kv in currentDependencies.Values) currentDependenciesList.Add(kv.Key);
                 if (DependenciesEqual(currentDependenciesList,
                                       new List<Dependency>(dependencyMap.Values))) {
-                    Log("All dependencies up to date.", verbose: true);
+                    Log(String.Format(
+                        "All dependencies up to date.\n\n" +
+                        "Required:\n" +
+                        "{0}", String.Join("\n",
+                                           (new List<string>(dependencyMap.Keys)).ToArray())),
+                        verbose: true);
                     return null;
                 }
                 var currentDependenciesSortedByKey = new List<string>(currentDependencies.Keys);
