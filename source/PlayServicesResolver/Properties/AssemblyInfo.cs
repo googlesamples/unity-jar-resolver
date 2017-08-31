@@ -15,6 +15,7 @@
 // </copyright>
 
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 // Information about this assembly is defined by the following attributes.
 // Change them to the values specific to your project.
@@ -51,3 +52,7 @@ using System.Reflection;
 //  See the License for the specific language governing permissions and
 //    limitations under the License.
 // </copyright>[assembly: AssemblyKeyFile("")]
+
+// Uses XmlDependencies class.
+[assembly: InternalsVisibleTo("Google.IOSResolver")]
+

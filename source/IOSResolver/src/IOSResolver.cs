@@ -24,13 +24,15 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Xml;
 using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEngine;
 
 namespace Google {
 
-public static class IOSResolver {
+[InitializeOnLoad]
+public class IOSResolver : AssetPostprocessor {
     /// <summary>
     /// Reference to a Cocoapod.
     /// </summary>
@@ -74,6 +76,16 @@ public static class IOSResolver {
         /// In the form major.minor
         /// </summary>
         public string minTargetSdk = null;
+
+        /// <summary>
+        /// Tag that indicates where this was created.
+        /// </summary>
+        public string createdBy = System.Environment.StackTrace;
+
+        /// <summary>
+        /// Whether this pod was read from an XML dependencies file.
+        /// </summary>
+        public bool fromXmlFile = false;
 
         /// <summary>
         /// Format a "pod" line for a Podfile.
@@ -152,6 +164,116 @@ public static class IOSResolver {
                 buckets[minVersion] = nameList;
             }
             return buckets;
+        }
+    }
+
+    private class IOSXmlDependencies : XmlDependencies {
+
+        // Adapter method for PlayServicesSupport.LogMessageWithLevel.
+        internal static void LogMessage(string message, PlayServicesSupport.LogLevel level) {
+            LogLevel iosLevel = LogLevel.Info;
+            switch (level) {
+                case PlayServicesSupport.LogLevel.Info:
+                    iosLevel = LogLevel.Info;
+                    break;
+                case PlayServicesSupport.LogLevel.Warning:
+                    iosLevel = LogLevel.Warning;
+                    break;
+                case PlayServicesSupport.LogLevel.Error:
+                    iosLevel = LogLevel.Error;
+                    break;
+            }
+            IOSResolver.Log(message, level: iosLevel);
+        }
+
+        public IOSXmlDependencies() {
+            dependencyType = "iOS dependencies";
+        }
+
+        /// <summary>
+        /// Read XML declared dependencies.
+        /// </summary>
+        /// <param name="filename">File to read.</param>
+        /// <param name="logger">Logging delegate.</param>
+        ///
+        /// Parses dependencies in the form:
+        ///
+        /// <dependencies>
+        ///   <iosPods>
+        ///     <iosPod name="name"
+        ///             version="versionSpec"
+        ///             bitcodeEnabled="enabled"
+        ///             minTargetSdk="sdk">
+        ///       <sources>
+        ///         <source>uriToPodSource</source>
+        ///       </sources>
+        ///     </iosPod>
+        ///   </iosPods>
+        /// </dependencies>
+        protected override bool Read(string filename,
+                                     PlayServicesSupport.LogMessageWithLevel logger) {
+            IOSResolver.Log(String.Format("Reading iOS dependency XML file {0}", filename),
+                            verbose: true);
+            var sources = new List<string>();
+            var trueStrings = new HashSet<string> { "true", "1" };
+            var falseStrings = new HashSet<string> { "false", "0" };
+            string podName = null;
+            string versionSpec = null;
+            bool bitcodeEnabled = true;
+            string minTargetSdk = null;
+            if (!XmlUtilities.ParseXmlTextFileElements(
+                filename, logger,
+                (reader, elementName, isStart, parentElementName, elementNameStack) => {
+                    if (elementName == "dependencies" && parentElementName == "") {
+                        return true;
+                    } else if (elementName == "iosPods" &&
+                               (parentElementName == "dependencies" ||
+                                parentElementName == "")) {
+                        return true;
+                    } else if (elementName == "iosPod" &&
+                               parentElementName == "iosPods") {
+                        if (isStart) {
+                            podName = reader.GetAttribute("name");
+                            versionSpec = reader.GetAttribute("version");
+                            var bitcodeEnabledString =
+                                (reader.GetAttribute("bitcode") ?? "").ToLower();
+                            bitcodeEnabled = trueStrings.Contains(bitcodeEnabledString) ||
+                                falseStrings.Contains(bitcodeEnabledString) || true;
+                            minTargetSdk = reader.GetAttribute("minTargetSdk");
+                            sources = new List<string>();
+                            if (podName == null) {
+                                logger(
+                                    String.Format("Pod name not specified while reading {0}:{1}\n",
+                                                  filename, reader.LineNumber),
+                                    level: PlayServicesSupport.LogLevel.Warning);
+                                return false;
+                            }
+                        } else {
+                            AddPodInternal(podName, preformattedVersion: versionSpec,
+                                           bitcodeEnabled: bitcodeEnabled,
+                                           minTargetSdk: minTargetSdk,
+                                           sources: sources,
+                                           overwriteExistingPod: false,
+                                           createdBy: String.Format("{0}:{1}",
+                                                                    filename, reader.LineNumber),
+                                           fromXmlFile: true);
+                        }
+                        return true;
+                    } else if (elementName == "sources" &&
+                               parentElementName == "iosPod") {
+                        return true;
+                    } else if (elementName == "source" &&
+                               parentElementName == "sources") {
+                        if (isStart && reader.Read() && reader.NodeType == XmlNodeType.Text) {
+                            sources.Add(reader.ReadContentAsString());
+                        }
+                        return true;
+                    }
+                    return false;
+                })) {
+                return false;
+            }
+            return true;
         }
     }
 
@@ -279,6 +401,9 @@ public static class IOSResolver {
 
     // Parses a source URL from a Podfile.
     private static Regex PODFILE_SOURCE_REGEX = new Regex(@"^\s*source\s+'([^']*)'");
+
+    // Parses dependencies from XML dependency files.
+    private static IOSXmlDependencies xmlDependencies = new IOSXmlDependencies();
 
     // Search for a file up to a maximum search depth stopping the
     // depth first search each time the specified file is found.
@@ -431,6 +556,10 @@ public static class IOSResolver {
                     UpgradeToWorkspaceWarningDisabled = true;
                     break;
             }
+        }
+
+        if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
+            RefreshXmlDependencies();
         }
     }
 
@@ -764,24 +893,36 @@ public static class IOSResolver {
     /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
     /// a source.</param>
     /// <param name="overwriteExistingPod">Overwrite an existing pod.</param>
+    /// <param name="createdBy">Tag of the object that added this pod.</param>
+    /// <param name="fromXmlFile">Whether this was added via an XML dependency.</param>
     private static void AddPodInternal(string podName, string preformattedVersion = null,
                                        bool bitcodeEnabled = true,
                                        string minTargetSdk = null,
                                        IEnumerable<string> sources = null,
-                                       bool overwriteExistingPod = true) {
+                                       bool overwriteExistingPod = true,
+                                       string createdBy = null,
+                                       bool fromXmlFile = false) {
         if (!overwriteExistingPod && pods.ContainsKey(podName)) {
-            Log(String.Format("Pod {0}: already present", podName), verbose: true);
+            Log(String.Format("Pod {0} already present, ignoring.\n" +
+                              "Original declaration {1}\n" +
+                              "Ignored declarion {2}\n", podName,
+                              pods[podName].createdBy, createdBy ?? "(unknown)"),
+                level: LogLevel.Warning);
             return;
         }
-        Log("AddPod - name: " + podName +
-            " version: " + (preformattedVersion ?? "null") +
-            " bitcode: " + bitcodeEnabled.ToString() +
-            " sdk: " + (minTargetSdk ?? "null") +
-            " sources: " + (sources != null ?
-                            String.Join(", ", (new List<string>(sources)).ToArray()) : "(null)"),
-            verbose: true);
         var pod = new Pod(podName, preformattedVersion, bitcodeEnabled, minTargetSdk, sources);
+        pod.createdBy = createdBy ?? pod.createdBy;
+        pod.fromXmlFile = fromXmlFile;
         pods[podName] = pod;
+        Log(String.Format(
+            "AddPod - name: {0} version: {1} bitcode: {2} sdk: {3} sources: {4}\n" +
+            "createdBy: {5}\n\n",
+            podName, preformattedVersion ?? "null", bitcodeEnabled.ToString(),
+            minTargetSdk ?? "null",
+            sources != null ? String.Join(", ", (new List<string>(sources)).ToArray()) : "(null)",
+            createdBy ?? pod.createdBy),
+            verbose: true);
+
         UpdateTargetSdk(pod);
     }
 
@@ -2258,6 +2399,53 @@ public static class IOSResolver {
         }
 
         File.WriteAllText(pbxprojPath, project.WriteToString());
+    }
+
+    /// <summary>
+    /// Read XML dependencies.
+    /// </summary>
+    private static void RefreshXmlDependencies() {
+        // Remove all pods that were added via XML dependencies.
+        var podsToRemove = new List<string>();
+        foreach (var podNameAndPod in pods) {
+            if (podNameAndPod.Value.fromXmlFile) {
+                podsToRemove.Add(podNameAndPod.Key);
+            }
+        }
+        foreach (var podName in podsToRemove) {
+            pods.Remove(podName);
+        }
+        // Read pod specifications from XML dependencies.
+        xmlDependencies.ReadAll(IOSXmlDependencies.LogMessage);
+    }
+
+    /// <summary>
+    /// Called by Unity when all assets have been updated. This
+    /// is used to kick off resolving the dependendencies declared.
+    /// </summary>
+    /// <param name="importedAssets">Imported assets. (unused)</param>
+    /// <param name="deletedAssets">Deleted assets. (unused)</param>
+    /// <param name="movedAssets">Moved assets. (unused)</param>
+    /// <param name="movedFromAssetPaths">Moved from asset paths. (unused)</param>
+    private static void OnPostprocessAllAssets(string[] importedAssets,
+                                               string[] deletedAssets,
+                                               string[] movedAssets,
+                                               string[] movedFromAssetPaths) {
+        bool reloadXmlDependencies = false;
+        var changedAssets = new HashSet<string>();
+        foreach (var assetGroup in new [] { importedAssets,  deletedAssets, movedAssets}) {
+            changedAssets.UnionWith(assetGroup);
+        }
+        foreach (var asset in changedAssets) {
+            foreach (var regexp in xmlDependencies.fileRegularExpressions) {
+                if (regexp.Match(asset).Success) {
+                    reloadXmlDependencies = true;
+                }
+            }
+        }
+        if (reloadXmlDependencies) {
+            RefreshXmlDependencies();
+        }
     }
 }
 
