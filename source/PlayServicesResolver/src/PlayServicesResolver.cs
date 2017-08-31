@@ -71,6 +71,16 @@ namespace GooglePlayServices
             }
 
             /// <summary>
+            /// Sort a string hashset.
+            /// </summary>
+            /// <param name="setToSort">Set to sort and return via an enumerable.</param>
+            private IEnumerable<string> SortSet(HashSet<string> setToSort) {
+                var sorted = new SortedDictionary<string, bool>();
+                foreach (var value in setToSort) sorted[value] = true;
+                return sorted.Keys;
+            }
+
+            /// <summary>
             /// Write this object to DEPENDENCY_STATE_FILE.
             /// </summary>
             public void WriteToFile() {
@@ -80,14 +90,14 @@ namespace GooglePlayServices
                     }) {
                     writer.WriteStartElement("dependencies");
                     writer.WriteStartElement("packages");
-                    foreach (var dependencyKey in Packages) {
+                    foreach (var dependencyKey in SortSet(Packages)) {
                         writer.WriteStartElement("package");
                         writer.WriteValue(dependencyKey);
                         writer.WriteEndElement();
                     }
                     writer.WriteEndElement();
                     writer.WriteStartElement("files");
-                    foreach (var assetPath in Files) {
+                    foreach (var assetPath in SortSet(Files)) {
                         writer.WriteStartElement("file");
                         writer.WriteValue(assetPath);
                         writer.WriteEndElement();
