@@ -626,7 +626,7 @@ namespace GooglePlayServices
                         "With auto-resolution of Android dependencies disabled you must " +
                         "manually resolve dependencies using the " +
                         "\"Assets > Play Services Resolver > Android Resolver > " +
-                        "Resolve Client Jars\" menu item.\n\nFailure to resolve Android " +
+                        "Resolve\" menu item.\n\nFailure to resolve Android " +
                         "dependencies will result in an non-functional application.",
                         "Yes", "Not Now", "Silence Warning")) {
                         case 0:  // Yes
@@ -930,7 +930,7 @@ namespace GooglePlayServices
         /// <summary>
         /// Add a menu item for resolving the jars manually.
         /// </summary>
-        [MenuItem("Assets/Play Services Resolver/Android Resolver/Resolve Client Jars")]
+        [MenuItem("Assets/Play Services Resolver/Android Resolver/Resolve")]
         public static void MenuResolve() {
             ExecuteMenuResolve(false);
         }
@@ -938,7 +938,7 @@ namespace GooglePlayServices
         /// <summary>
         /// Add a menu item to force resolve the jars manually.
         /// </summary>
-        [MenuItem("Assets/Play Services Resolver/Android Resolver/Force Resolve Client Jars")]
+        [MenuItem("Assets/Play Services Resolver/Android Resolver/Force Resolve")]
         public static void MenuForceResolve() {
             ExecuteMenuResolve(true);
         }
