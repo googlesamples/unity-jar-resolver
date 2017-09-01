@@ -362,6 +362,16 @@ public class IOSResolver : AssetPostprocessor {
     // A nag prompt disabler setting for turning on workspace integration.
     private const string PREFERENCE_WARN_UPGRADE_WORKSPACE =
         PREFERENCE_NAMESPACE + "UpgradeToWorkspaceWarningDisabled";
+    // List of preference keys, used to restore default settings.
+    private static string[] PREFERENCE_KEYS = new [] {
+        PREFERENCE_COCOAPODS_INSTALL_ENABLED,
+        PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
+        PREFERENCE_PODFILE_GENERATION_ENABLED,
+        PREFERENCE_VERBOSE_LOGGING_ENABLED,
+        PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED,
+        PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR,
+        PREFERENCE_WARN_UPGRADE_WORKSPACE
+    };
 
     // Whether the xcode extension was successfully loaded.
     private static bool iOSXcodeExtensionLoaded = true;
@@ -589,6 +599,13 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Reset settings of this plugin to default values.
+    /// </summary>
+    internal static void RestoreDefaultSettings() {
+        VersionHandlerImpl.RestoreDefaultSettings(PREFERENCE_KEYS);
+    }
+
+    /// <summary>
     /// The method used to integrate Cocoapods with the build.
     /// </summary>
     public enum CocoapodsIntegrationMethod {
@@ -596,7 +613,6 @@ public class IOSResolver : AssetPostprocessor {
         Project,
         Workspace
     };
-
 
     /// <summary>
     /// When first upgrading, decide on workspace integration based on previous settings.
