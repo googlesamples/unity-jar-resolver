@@ -94,6 +94,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         cocoapodsIntegrationMenuIndex = EditorGUILayout.Popup(cocoapodsIntegrationMenuIndex,
             cocopodsIntegrationStrings);
         GUILayout.EndHorizontal();
+
         GUILayout.BeginHorizontal();
         if (integrationMapping[cocoapodsIntegrationMenuIndex] !=
                 IOSResolver.CocoapodsIntegrationMethod.None && !podfileGenerationEnabled) {
@@ -127,7 +128,6 @@ public class IOSResolverSettingsDialog : EditorWindow
             GUILayout.Label("Cocoapod tool installation can be performed via the menu option: " +
                             "Assets > Play Services Resolver > iOS Resolver > Install Cocoapods");
         }
-        EditorGUI.EndDisabledGroup();
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
