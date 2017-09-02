@@ -489,6 +489,7 @@ namespace GooglePlayServices
         /// Called from EditorApplication.update to signal the class has been initialized.
         /// </summary>
         private static void InitializationComplete() {
+            EditorApplication.update -= InitializationComplete;
             Initialized = true;
         }
 
@@ -847,6 +848,8 @@ namespace GooglePlayServices
         private static void ResolveUnsafe(Action resolutionComplete = null,
                                           bool forceResolution = false)
         {
+            JavaUtilities.CheckJdkForApiLevel();
+
             if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
 
             xmlDependencies.ReadAll(PlayServicesSupport.Log);
