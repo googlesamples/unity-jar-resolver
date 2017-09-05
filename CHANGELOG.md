@@ -1,3 +1,21 @@
+# Version 1.2.47 - Aug 29, 2017
+## New Features
+* Android and iOS dependencies can now be specified using *Dependencies.xml
+  files.  This is now the preferred method for registering dependencies,
+  we may remove the API for dependency addition in future.
+* Added "Reset to Defaults" button to each settings dialog to restore default
+  settings.
+* Android Resolver now validates the configured JDK is new enough to build
+  recently released Android libraries.
+## Bug Fixes
+* Fixed a bug that caused dependencies with the "LATEST" version specification
+  to be ignored when using the Gradle mode of the Android Resolver.
+* Fixed a race condition when running Android Resolution.
+* Fixed Android Resolver logging if a PlayServicesSupport instance is created
+  with no logging enabled before the Android Resolver is initialized.
+* Fixed iOS resolver dialog in Unity 4.
+* Fixed iOS Cocoapod Xcode project integration in Unity 4.
+
 # Version 1.2.46 - Aug 22, 2017
 ## Bug Fixes
 * GradlePrebuild Android resolver on Windows now correctly locates dependent
