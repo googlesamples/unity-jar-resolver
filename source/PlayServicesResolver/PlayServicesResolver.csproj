@@ -60,6 +60,7 @@
     <Compile Include="src\DefaultResolver.cs" />
     <Compile Include="src\GradlePreBuildResolver.cs" />
     <Compile Include="src\IResolver.cs" />
+    <Compile Include="src\JavaUtilities.cs" />
     <Compile Include="src\PlayServicesResolver.cs" />
     <Compile Include="src\ResolverVer1_1.cs" />
     <Compile Include="src\SettingsDialog.cs" />

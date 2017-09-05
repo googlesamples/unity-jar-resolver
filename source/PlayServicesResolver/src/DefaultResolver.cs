@@ -213,49 +213,6 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Find a Java tool.
-        /// </summary>
-        /// <param name="toolName">Name of the tool to search for.</param>
-        private string FindJavaTool(string javaTool)
-        {
-            string javaHome = UnityEditor.EditorPrefs.GetString("JdkPath");
-            if (string.IsNullOrEmpty(javaHome))
-            {
-                javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
-            }
-            string toolPath;
-            if (javaHome != null)
-            {
-                toolPath = Path.Combine(
-                    javaHome, Path.Combine(
-                        "bin", javaTool + CommandLine.GetExecutableExtension()));
-                if (!File.Exists(toolPath))
-                {
-                    EditorUtility.DisplayDialog("Play Services Dependencies",
-                                                "JAVA_HOME environment references a directory (" +
-                                                javaHome + ") that does not contain " + javaTool +
-                                                " which is required to process Play Services " +
-                                                "dependencies.", "OK");
-                    throw new Exception("JAVA_HOME references incomplete Java distribution.  " +
-                                        javaTool + " not found.");
-                }
-            } else {
-                toolPath = CommandLine.FindExecutable(javaTool);
-                if (!File.Exists(toolPath))
-                {
-                    EditorUtility.DisplayDialog("Play Services Dependencies",
-                                                "Unable to find " + javaTool + " in the system " +
-                                                "path.  This tool is required to process Play " +
-                                                "Services dependencies.  Either set JAVA_HOME " +
-                                                "or add " + javaTool + " to the PATH variable " +
-                                                "to resolve this error.", "OK");
-                    throw new Exception(javaTool + " not found.");
-                }
-            }
-            return toolPath;
-        }
-
-        /// <summary>
         /// Create a temporary directory.
         /// </summary>
         /// <returns>If temporary directory creation fails, return null.</returns>
@@ -291,7 +248,7 @@ namespace GooglePlayServices
                 string aarPath = Path.GetFullPath(aarFile);
                 string extractFilesArg = extractFilenames != null && extractFilenames.Length > 0 ?
                     " \"" + String.Join("\" \"", extractFilenames) + "\"" : "";
-                CommandLine.Result result = CommandLine.Run(FindJavaTool("jar"),
+                CommandLine.Result result = CommandLine.Run(JavaUtilities.JarBinaryPath,
                                                             "xvf " + "\"" + aarPath + "\"" +
                                                             extractFilesArg,
                                                             workingDirectory: outputDirectory);
@@ -319,7 +276,7 @@ namespace GooglePlayServices
             try {
                 string aarPath = Path.GetFullPath(aarFile);
                 CommandLine.Result result = CommandLine.Run(
-                    FindJavaTool("jar"),
+                    JavaUtilities.JarBinaryPath,
                     String.Format("cvf \"{0}\" -C \"{1}\" .", aarPath, inputDirectory));
                 if (result.exitCode != 0) {
                     Debug.LogError(String.Format("Error archiving {0}\n" +
