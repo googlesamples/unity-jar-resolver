@@ -106,5 +106,9 @@
       <Project>{5378B37A-887E-49ED-A8AE-42FA843AA9DC}</Project>
       <Name>VersionHandler</Name>
     </ProjectReference>
+    <ProjectReference Include="..\VersionHandlerImpl\VersionHandlerImpl.csproj">
+      <Project>{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}</Project>
+      <Name>VersionHandlerImpl</Name>
+    </ProjectReference>
   </ItemGroup>
 </Project>

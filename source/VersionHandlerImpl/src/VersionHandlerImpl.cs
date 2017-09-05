@@ -1393,6 +1393,13 @@ public class VersionHandlerImpl : AssetPostprocessor {
         "Google.VersionHandler.RenameToCanonicalFilenames";
     private const string PREFERENCE_VERBOSE_LOGGING_ENABLED =
         "Google.VersionHandler.VerboseLoggingEnabled";
+    // List of preference keys, used to restore default settings.
+    private static string[] PREFERENCE_KEYS = new [] {
+        PREFERENCE_ENABLED,
+        PREFERENCE_CLEANUP_PROMPT_ENABLED,
+        PREFERENCE_RENAME_TO_CANONICAL_FILENAMES,
+        PREFERENCE_VERBOSE_LOGGING_ENABLED
+    };
 
     // Name of this plugin.
     private const string PLUGIN_NAME = "Google Version Handler";
@@ -1502,6 +1509,23 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                   method), level: LogLevel.Error);
             }
         }
+    }
+
+    /// <summary>
+    /// Reset settings to default values.
+    /// </summary>
+    /// <param name="preferenceKeys">List of preferences that should be reset / deleted.</param>
+    internal static void RestoreDefaultSettings(IEnumerable<string> preferenceKeys) {
+        foreach (var key in preferenceKeys) {
+            if (EditorPrefs.HasKey(key)) EditorPrefs.DeleteKey(key);
+        }
+    }
+
+    /// <summary>
+    /// Reset settings of this plugin to default values.
+    /// </summary>
+    internal static void RestoreDefaultSettings() {
+        RestoreDefaultSettings(PREFERENCE_KEYS);
     }
 
     /// <summary>

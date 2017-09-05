@@ -25,28 +25,63 @@ using UnityEngine;
 /// </summary>
 public class IOSResolverSettingsDialog : EditorWindow
 {
-    bool cocoapodsInstallEnabled;
-    bool podfileGenerationEnabled;
-    bool podToolExecutionViaShellEnabled;
-    bool autoPodToolInstallInEditorEnabled;
-    bool verboseLoggingEnabled;
-    int cocoapodsIntegrationMenuIndex;
+    /// <summary>
+    /// Loads / saves settings for this dialog.
+    /// </summary>
+    private class Settings {
+        internal bool cocoapodsInstallEnabled;
+        internal bool podfileGenerationEnabled;
+        internal bool podToolExecutionViaShellEnabled;
+        internal bool autoPodToolInstallInEditorEnabled;
+        internal bool verboseLoggingEnabled;
+        internal int cocoapodsIntegrationMenuIndex;
+
+        /// <summary>
+        /// Load settings into the dialog.
+        /// </summary>
+        internal Settings() {
+            cocoapodsInstallEnabled = IOSResolver.CocoapodsInstallEnabled;
+            podfileGenerationEnabled = IOSResolver.PodfileGenerationEnabled;
+            podToolExecutionViaShellEnabled = IOSResolver.PodToolExecutionViaShellEnabled;
+            autoPodToolInstallInEditorEnabled = IOSResolver.AutoPodToolInstallInEditorEnabled;
+            verboseLoggingEnabled = IOSResolver.VerboseLoggingEnabled;
+            cocoapodsIntegrationMenuIndex = FindIndexFromCocoapodsIntegrationMethod(
+                IOSResolver.CocoapodsIntegrationMethodPref);
+        }
+
+        /// <summary>
+        /// Save dialog settings to preferences.
+        /// </summary>
+        internal void Save() {
+            IOSResolver.PodfileGenerationEnabled = podfileGenerationEnabled;
+            IOSResolver.CocoapodsInstallEnabled = cocoapodsInstallEnabled;
+            IOSResolver.PodToolExecutionViaShellEnabled = podToolExecutionViaShellEnabled;
+            IOSResolver.AutoPodToolInstallInEditorEnabled = autoPodToolInstallInEditorEnabled;
+            IOSResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
+            IOSResolver.CocoapodsIntegrationMethodPref =
+                integrationMapping[cocoapodsIntegrationMenuIndex];
+        }
+    }
+
+    private Settings settings;
 
     static string[] cocopodsIntegrationStrings = new string[] {
         "Xcode Workspace - Add Cocoapods to the Xcode workspace",
         "Xcode Project - Add Cocoapods to the Xcode project",
         "None - Do not integrate Cocoapods.",
     };
-    // index to enum
-    static IOSResolver.CocoapodsIntegrationMethod[] integrationMapping =
+
+    // Menu item index to enum.
+    private static IOSResolver.CocoapodsIntegrationMethod[] integrationMapping =
             new IOSResolver.CocoapodsIntegrationMethod[] {
         IOSResolver.CocoapodsIntegrationMethod.Workspace,
         IOSResolver.CocoapodsIntegrationMethod.Project,
         IOSResolver.CocoapodsIntegrationMethod.None,
     };
+
     // enum to index (linear search because there's no point in creating a reverse mapping
     // with such a small list).
-    private int FindIndexFromCocoapodsIntegrationMethod(
+    private static int FindIndexFromCocoapodsIntegrationMethod(
             IOSResolver.CocoapodsIntegrationMethod enumToFind) {
         for (int i = 0; i < integrationMapping.Length; i++) {
             if (integrationMapping[i] == enumToFind) return i;
@@ -60,16 +95,15 @@ public class IOSResolverSettingsDialog : EditorWindow
                             minSize.x, minSize.y);
     }
 
+    /// <summary>
+    /// Load settings for this dialog.
+    /// </summary>
+    private void LoadSettings() {
+        settings = new Settings();
+    }
+
     public void OnEnable() {
-        cocoapodsInstallEnabled = IOSResolver.CocoapodsInstallEnabled;
-
-        podfileGenerationEnabled = IOSResolver.PodfileGenerationEnabled;
-
-        podToolExecutionViaShellEnabled = IOSResolver.PodToolExecutionViaShellEnabled;
-        autoPodToolInstallInEditorEnabled = IOSResolver.AutoPodToolInstallInEditorEnabled;
-        verboseLoggingEnabled = IOSResolver.VerboseLoggingEnabled;
-        cocoapodsIntegrationMenuIndex = FindIndexFromCocoapodsIntegrationMethod(
-                IOSResolver.CocoapodsIntegrationMethodPref);
+        LoadSettings();
     }
 
     /// <summary>
@@ -81,7 +115,8 @@ public class IOSResolverSettingsDialog : EditorWindow
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Podfile Generation", EditorStyles.boldLabel);
-        podfileGenerationEnabled = EditorGUILayout.Toggle(podfileGenerationEnabled);
+        settings.podfileGenerationEnabled =
+            EditorGUILayout.Toggle(settings.podfileGenerationEnabled);
         GUILayout.EndHorizontal();
         GUILayout.Label("Podfile generation is required to install Cocoapods.  " +
                         "It may be desirable to disable Podfile generation if frameworks " +
@@ -91,15 +126,15 @@ public class IOSResolverSettingsDialog : EditorWindow
         GUILayout.Label("Cocoapods Integration", EditorStyles.boldLabel);
         GUILayout.EndHorizontal();
         GUILayout.BeginHorizontal();
-        cocoapodsIntegrationMenuIndex = EditorGUILayout.Popup(cocoapodsIntegrationMenuIndex,
-            cocopodsIntegrationStrings);
+        settings.cocoapodsIntegrationMenuIndex = EditorGUILayout.Popup(
+            settings.cocoapodsIntegrationMenuIndex, cocopodsIntegrationStrings);
         GUILayout.EndHorizontal();
 
         GUILayout.BeginHorizontal();
-        if (integrationMapping[cocoapodsIntegrationMenuIndex] !=
-                IOSResolver.CocoapodsIntegrationMethod.None && !podfileGenerationEnabled) {
+        if (integrationMapping[settings.cocoapodsIntegrationMenuIndex] !=
+                IOSResolver.CocoapodsIntegrationMethod.None && !settings.podfileGenerationEnabled) {
             GUILayout.Label("Cocoapod installation requires Podfile generation to be enabled.");
-        } else if (integrationMapping[cocoapodsIntegrationMenuIndex] ==
+        } else if (integrationMapping[settings.cocoapodsIntegrationMenuIndex] ==
                    IOSResolver.CocoapodsIntegrationMethod.Workspace) {
             GUILayout.Label("Unity Cloud Build and Unity 5.5 and below do not open generated " +
                             "Xcode workspaces so this plugin will fall back to Xcode Project " +
@@ -109,19 +144,20 @@ public class IOSResolverSettingsDialog : EditorWindow
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Use Shell to Execute Cocoapod Tool", EditorStyles.boldLabel);
-        podToolExecutionViaShellEnabled = EditorGUILayout.Toggle(podToolExecutionViaShellEnabled);
+        settings.podToolExecutionViaShellEnabled =
+            EditorGUILayout.Toggle(settings.podToolExecutionViaShellEnabled);
         GUILayout.EndHorizontal();
-        if (podToolExecutionViaShellEnabled) {
+        if (settings.podToolExecutionViaShellEnabled) {
             GUILayout.Label("Shell execution is useful when configuration in the shell " +
                             "environment (e.g ~/.profile) is required to execute Cocoapods tools.");
         }
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Auto Install Cocoapod Tools in Editor", EditorStyles.boldLabel);
-        autoPodToolInstallInEditorEnabled =
-            EditorGUILayout.Toggle(autoPodToolInstallInEditorEnabled);
+        settings.autoPodToolInstallInEditorEnabled =
+            EditorGUILayout.Toggle(settings.autoPodToolInstallInEditorEnabled);
         GUILayout.EndHorizontal();
-        if (autoPodToolInstallInEditorEnabled) {
+        if (settings.autoPodToolInstallInEditorEnabled) {
             GUILayout.Label("Automatically installs the Cocoapod tool if the editor isn't " +
                             "running in batch mode");
         } else {
@@ -131,24 +167,25 @@ public class IOSResolverSettingsDialog : EditorWindow
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
-        verboseLoggingEnabled = EditorGUILayout.Toggle(verboseLoggingEnabled);
+        settings.verboseLoggingEnabled = EditorGUILayout.Toggle(settings.verboseLoggingEnabled);
         GUILayout.EndHorizontal();
 
         GUILayout.Space(10);
+
+        if (GUILayout.Button("Reset to Defaults")) {
+            // Load default settings into the dialog but preserve the state in the user's
+            // saved preferences.
+            var backupSettings = new Settings();
+            IOSResolver.RestoreDefaultSettings();
+            LoadSettings();
+            backupSettings.Save();
+        }
+
         GUILayout.BeginHorizontal();
         bool closeWindow = GUILayout.Button("Cancel");
         bool ok = GUILayout.Button("OK");
         closeWindow |= ok;
-        if (ok)
-        {
-            IOSResolver.PodfileGenerationEnabled = podfileGenerationEnabled;
-            IOSResolver.CocoapodsInstallEnabled = cocoapodsInstallEnabled;
-            IOSResolver.PodToolExecutionViaShellEnabled = podToolExecutionViaShellEnabled;
-            IOSResolver.AutoPodToolInstallInEditorEnabled = autoPodToolInstallInEditorEnabled;
-            IOSResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
-            IOSResolver.CocoapodsIntegrationMethodPref =
-                integrationMapping[cocoapodsIntegrationMenuIndex];
-        }
+        if (ok) settings.Save();
         if (closeWindow) Close();
         GUILayout.EndHorizontal();
         GUILayout.EndVertical();
