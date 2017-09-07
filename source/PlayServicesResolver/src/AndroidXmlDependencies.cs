@@ -64,7 +64,7 @@ namespace GooglePlayServices {
                 verbose: true);
 
             if (!XmlUtilities.ParseXmlTextFileElements(
-                filename, PlayServicesSupport.Log,
+                filename, logger,
                 (reader, elementName, isStart, parentElementName, elementNameStack) => {
                     if (elementName == "dependencies" && parentElementName == "") {
                         return true;

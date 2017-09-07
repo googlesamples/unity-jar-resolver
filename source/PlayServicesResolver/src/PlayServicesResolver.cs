@@ -130,7 +130,7 @@ namespace GooglePlayServices
                 var packages = new HashSet<string>();
                 var files = new HashSet<string>();
                 if (!XmlUtilities.ParseXmlTextFileElements(
-                    DEPENDENCY_STATE_FILE, PlayServicesSupport.Log,
+                    DEPENDENCY_STATE_FILE, PlayServicesResolver.LogMessageWithLevel,
                     (reader, elementName, isStart, parentElementName, elementNameStack) => {
                         if (isStart) {
                             if (elementName == "dependencies" && parentElementName == "") {
@@ -501,6 +501,15 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Implementation of PlayServicesSupport.LogMessageWithLevel() that can be used to
+        /// route logging back to LogDelegate().
+        /// </summary>
+        internal static void LogMessageWithLevel(string message,
+                                                 PlayServicesSupport.LogLevel level) {
+            PlayServicesSupport.Log(message, level);
+        }
+
+        /// <summary>
         /// Called from EditorApplication.update to signal the class has been initialized.
         /// </summary>
         private static void InitializationComplete() {
@@ -867,7 +876,7 @@ namespace GooglePlayServices
 
             if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
 
-            xmlDependencies.ReadAll(PlayServicesSupport.Log);
+            xmlDependencies.ReadAll(PlayServicesResolver.LogMessageWithLevel);
 
             if (forceResolution) {
                 DeleteLabeledAssets();
