@@ -173,6 +173,21 @@ namespace GooglePlayServices
                 return state != null && Packages.SetEquals(state.Packages) &&
                     Files.SetEquals(state.Files);
             }
+
+            /// <summary>
+            /// Generate a hash of this object.
+            /// </summary>
+            /// <returns>Hash of this object.</returns>
+            public override int GetHashCode() {
+                int hash = 0;
+                foreach (var file in Files) {
+                    hash ^= file.GetHashCode();
+                }
+                foreach (var pkg in Packages) {
+                    hash ^= pkg.GetHashCode();
+                }
+                return hash;
+            }
         }
 
         /// <summary>
