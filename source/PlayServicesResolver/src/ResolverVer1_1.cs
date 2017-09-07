@@ -446,6 +446,8 @@ namespace GooglePlayServices
                     if (!validScheme) {
                         repo = "file:///" + Path.GetFullPath(repo).Replace("\\", "/");
                     }
+                    // Escape the URI to handle special characters like spaces.
+                    repo = Uri.EscapeUriString(repo);
                     if (repoSet.Contains(repo)) continue;
                     repoSet.Add(repo);
                     repoList.Add(repo);
