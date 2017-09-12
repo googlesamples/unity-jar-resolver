@@ -126,6 +126,10 @@ target in the Unity editor.
    2. Copy and rename the SampleDependencies.xml file into your
       plugin and add the dependencies your plugin requires.
 
+      The XML file just needs to be under an `Editor` directory and match the
+      name `*Dependencies.xml`. For example,
+      `MyPlugin/Editor/MyPluginDependencies.xml`.
+
 For example, to add the Google Play Games library
 (`com.google.android.gms:play-services-games` package) at version `9.8.0` to
 the set of a plugin's Android dependencies:
@@ -245,6 +249,18 @@ to the Xcode project exported by Unity.
 ## Usage
 
 Dependencies for iOS are added by referring to CocoaPods.
+
+   1. Add the unitypackage to your plugin project (assuming you are developing a
+      plugin).  Please read the [Plugin Redistribution](#plugin-redistribution)
+      section when you're considering how to export your package to share with
+      your users.
+
+   2. Copy and rename the SampleDependencies.xml file into your
+      plugin and add the dependencies your plugin requires.
+
+      The XML file just needs to be under an `Editor` directory and match the
+      name `*Dependencies.xml`. For example,
+      `MyPlugin/Editor/MyPluginDependencies.xml`.
 
 For example, to add the AdMob pod, version 7.0 or greater with bitcode enabled:
 
