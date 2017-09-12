@@ -21,6 +21,7 @@ namespace GooglePlayServices
     using System.IO;
     using System.Text.RegularExpressions;
     using System.Xml;
+    using Google;
     using Google.JarResolver;
     using UnityEditor;
     using UnityEngine;
@@ -130,7 +131,7 @@ namespace GooglePlayServices
                 var packages = new HashSet<string>();
                 var files = new HashSet<string>();
                 if (!XmlUtilities.ParseXmlTextFileElements(
-                    DEPENDENCY_STATE_FILE, PlayServicesResolver.LogMessageWithLevel,
+                    DEPENDENCY_STATE_FILE, logger,
                     (reader, elementName, isStart, parentElementName, elementNameStack) => {
                         if (isStart) {
                             if (elementName == "dependencies" && parentElementName == "") {
@@ -386,6 +387,11 @@ namespace GooglePlayServices
         private static string previousAndroidTargetDeviceAbi = DEFAULT_ANDROID_TARGET_DEVICE_ABI;
 
         /// <summary>
+        /// Logger for this module.
+        /// </summary>
+        private static Google.Logger logger = new Google.Logger();
+
+        /// <summary>
         /// Get a string representation of the target ABI.
         /// </summary>
         /// This uses reflection to retrieve the property as it is not present in Unity version
@@ -498,15 +504,6 @@ namespace GooglePlayServices
                 default:
                     break;
             }
-        }
-
-        /// <summary>
-        /// Implementation of PlayServicesSupport.LogMessageWithLevel() that can be used to
-        /// route logging back to LogDelegate().
-        /// </summary>
-        internal static void LogMessageWithLevel(string message,
-                                                 PlayServicesSupport.LogLevel level) {
-            PlayServicesSupport.Log(message, level);
         }
 
         /// <summary>
@@ -876,7 +873,7 @@ namespace GooglePlayServices
 
             if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
 
-            xmlDependencies.ReadAll(PlayServicesResolver.LogMessageWithLevel);
+            xmlDependencies.ReadAll(logger);
 
             if (forceResolution) {
                 DeleteLabeledAssets();
@@ -1000,6 +997,7 @@ namespace GooglePlayServices
             }
             previousGradlePrebuildEnabled = GooglePlayServices.SettingsDialog.PrebuildWithGradle;
             PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;
+            logger.Verbose = GooglePlayServices.SettingsDialog.VerboseLogging;
             if (Initialized) {
                 if (Resolver != null) AutoResolve();
             }

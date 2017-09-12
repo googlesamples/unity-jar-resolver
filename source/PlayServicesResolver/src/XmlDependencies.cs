@@ -19,7 +19,7 @@ namespace GooglePlayServices {
     using System;
     using System.Collections.Generic;
     using System.Text.RegularExpressions;
-    using Google.JarResolver;
+    using Google;
     using UnityEditor;
 
     /// <summary>
@@ -61,26 +61,25 @@ namespace GooglePlayServices {
         /// Read XML declared dependencies.
         /// </summary>
         /// <param name="filename">File to read.</param>
-        /// <param name="logger">Logging delegate.</param>
+        /// <param name="logger">Logger class.</param>
         /// <returns>true if the file was read successfully, false otherwise.</returns>
-        protected virtual bool Read(string filename,
-                                    PlayServicesSupport.LogMessageWithLevel logger) {
+        protected virtual bool Read(string filename, Logger logger) {
             return false;
         }
 
         /// <summary>
         /// Find and read all XML declared dependencies.
         /// </summary>
-        /// <param name="logger">Logging delegate.</param>
+        /// <param name="logger">Logger class.</param>
         /// <returns>true if all files were read successfully, false otherwise.</returns>
-        public virtual bool ReadAll(PlayServicesSupport.LogMessageWithLevel logger) {
+        public virtual bool ReadAll(Logger logger) {
             bool success = true;
             foreach (var filename in FindFiles()) {
                 if (!Read(filename, logger)) {
-                    logger(String.Format("Unable to read {0} from {1}.\n" +
+                    logger.Log(String.Format("Unable to read {0} from {1}.\n" +
                                          "{0} in this file will be ignored.", dependencyType,
-                                         filename),
-                           level: PlayServicesSupport.LogLevel.Error);
+                                             filename),
+                               level: LogLevel.Error);
                     success = false;
                 }
             }

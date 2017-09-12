@@ -38,6 +38,7 @@ namespace GooglePlayServices
             internal bool explodeAars;
             internal bool verboseLogging;
             internal bool autoResolutionDisabledWarning;
+            internal bool useProjectSettings;
 
             /// <summary>
             /// Load settings into the dialog.
@@ -51,6 +52,7 @@ namespace GooglePlayServices
                 explodeAars = SettingsDialog.ExplodeAars;
                 verboseLogging = SettingsDialog.VerboseLogging;
                 autoResolutionDisabledWarning = SettingsDialog.AutoResolutionDisabledWarning;
+                useProjectSettings = SettingsDialog.UseProjectSettings;
             }
 
             /// <summary>
@@ -65,6 +67,7 @@ namespace GooglePlayServices
                 SettingsDialog.ExplodeAars = explodeAars;
                 SettingsDialog.VerboseLogging = verboseLogging;
                 SettingsDialog.AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
+                SettingsDialog.UseProjectSettings = useProjectSettings;
             }
         }
 
@@ -101,57 +104,64 @@ namespace GooglePlayServices
 
         private Settings settings;
 
+        private static ProjectSettings projectSettings = new ProjectSettings(Namespace);
+
         /// <summary>
         /// Reset settings of this plugin to default values.
         /// </summary>
         internal static void RestoreDefaultSettings() {
-            VersionHandlerImpl.RestoreDefaultSettings(PreferenceKeys);
+            projectSettings.DeleteKeys(PreferenceKeys);
         }
 
         internal static bool EnableAutoResolution {
-            set { EditorPrefs.SetBool(AutoResolveKey, value); }
-            get { return EditorPrefs.GetBool(AutoResolveKey, true); }
+            set { projectSettings.SetBool(AutoResolveKey, value); }
+            get { return projectSettings.GetBool(AutoResolveKey, true); }
         }
 
         internal static bool PrebuildWithGradle {
-            private set { EditorPrefs.SetBool(PrebuildWithGradleKey, value); }
-            get { return EditorPrefs.GetBool(PrebuildWithGradleKey, false); }
+            private set { projectSettings.SetBool(PrebuildWithGradleKey, value); }
+            get { return projectSettings.GetBool(PrebuildWithGradleKey, false); }
         }
 
         internal static bool FetchDependenciesWithGradle {
-            private set { EditorPrefs.SetBool(FetchDependenciesWithGradleKey, value); }
-            get { return EditorPrefs.GetBool(FetchDependenciesWithGradleKey, true); }
+            private set { projectSettings.SetBool(FetchDependenciesWithGradleKey, value); }
+            get { return projectSettings.GetBool(FetchDependenciesWithGradleKey, true); }
         }
 
         internal static bool InstallAndroidPackages {
-            private set { EditorPrefs.SetBool(PackageInstallKey, value); }
-            get { return EditorPrefs.GetBool(PackageInstallKey, true); }
+            private set { projectSettings.SetBool(PackageInstallKey, value); }
+            get { return projectSettings.GetBool(PackageInstallKey, true); }
         }
 
         internal static string PackageDir {
-            private set { EditorPrefs.SetString(PackageDirKey, value); }
+            private set { projectSettings.SetString(PackageDirKey, value); }
             get {
                 return ConfigurablePackageDir ?
-                    ValidatePackageDir(EditorPrefs.GetString(PackageDirKey, DefaultPackageDir)) :
+                    ValidatePackageDir(projectSettings.GetString(PackageDirKey, DefaultPackageDir)) :
                     DefaultPackageDir;
             }
         }
 
         internal static bool AutoResolutionDisabledWarning {
-            set { EditorPrefs.SetBool(AutoResolutionDisabledWarningKey, value); }
-            get { return EditorPrefs.GetBool(AutoResolutionDisabledWarningKey, true); }
+            set { projectSettings.SetBool(AutoResolutionDisabledWarningKey, value); }
+            get { return projectSettings.GetBool(AutoResolutionDisabledWarningKey, true); }
+        }
+
+        internal static bool UseProjectSettings {
+            get { return projectSettings.UseProjectSettings; }
+            set { projectSettings.UseProjectSettings = value; }
         }
 
         // Whether AARs that use variable expansion should be exploded when Gradle builds are
         // enabled.
         internal static bool ExplodeAars {
-            private set { EditorPrefs.SetBool(ExplodeAarsKey, value); }
-            get { return EditorPrefs.GetBool(ExplodeAarsKey, true); }
+            private set { projectSettings.SetBool(ExplodeAarsKey, value); }
+            get { return projectSettings.GetBool(ExplodeAarsKey, true); }
         }
 
         internal static bool VerboseLogging {
-            private set { EditorPrefs.SetBool(VerboseLoggingKey, value); }
-            get { return EditorPrefs.GetBool(VerboseLoggingKey, false); }
+            private set { projectSettings.SetBool(VerboseLoggingKey, value); }
+            get { return projectSettings.GetBool(VerboseLoggingKey, false); }
         }
 
         internal static string ValidatePackageDir(string directory) {
@@ -262,6 +272,11 @@ namespace GooglePlayServices
             GUILayout.BeginHorizontal();
             GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
             settings.verboseLogging = EditorGUILayout.Toggle(settings.verboseLogging);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Use project settings", EditorStyles.boldLabel);
+            settings.useProjectSettings = EditorGUILayout.Toggle(settings.useProjectSettings);
             GUILayout.EndHorizontal();
 
             GUILayout.Space(10);

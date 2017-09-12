@@ -1414,6 +1414,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
     // Whether compilation is currently occuring.
     private static bool compiling = false;
 
+    // Settings used by this module.
+    internal static ProjectSettings settings = new ProjectSettings("Google.VersionHandler.");
+
     /// <summary>
     /// Enables / disables assets imported at multiple revisions / versions.
     /// In addition, this module will read text files matching _manifest_
@@ -1512,20 +1515,18 @@ public class VersionHandlerImpl : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Reset settings to default values.
-    /// </summary>
-    /// <param name="preferenceKeys">List of preferences that should be reset / deleted.</param>
-    internal static void RestoreDefaultSettings(IEnumerable<string> preferenceKeys) {
-        foreach (var key in preferenceKeys) {
-            if (EditorPrefs.HasKey(key)) EditorPrefs.DeleteKey(key);
-        }
-    }
-
-    /// <summary>
     /// Reset settings of this plugin to default values.
     /// </summary>
     internal static void RestoreDefaultSettings() {
-        RestoreDefaultSettings(PREFERENCE_KEYS);
+        settings.DeleteKeys(PREFERENCE_KEYS);
+    }
+
+    /// <summary>
+    /// Whether to use project level settings.
+    /// </summary>
+    public static bool UseProjectSettings {
+        get { return settings.UseProjectSettings; }
+        set { settings.UseProjectSettings = value; }
     }
 
     /// <summary>
@@ -1534,27 +1535,27 @@ public class VersionHandlerImpl : AssetPostprocessor {
     public static bool Enabled {
         get {
             return !System.Environment.CommandLine.Contains("-gvh_disable") &&
-                EditorPrefs.GetBool(PREFERENCE_ENABLED, defaultValue: true);
+                settings.GetBool(PREFERENCE_ENABLED, defaultValue: true);
         }
-        set { EditorPrefs.SetBool(PREFERENCE_ENABLED, value); }
+        set { settings.SetBool(PREFERENCE_ENABLED, value); }
     }
 
     /// <summary>
     /// Enable / disable prompting the user on clean up.
     /// </summary>
     public static bool CleanUpPromptEnabled {
-        get { return EditorPrefs.GetBool(PREFERENCE_CLEANUP_PROMPT_ENABLED,
-                                         defaultValue: true); }
-        set { EditorPrefs.SetBool(PREFERENCE_CLEANUP_PROMPT_ENABLED, value); }
+        get { return settings.GetBool(PREFERENCE_CLEANUP_PROMPT_ENABLED,
+                                      defaultValue: true); }
+        set { settings.SetBool(PREFERENCE_CLEANUP_PROMPT_ENABLED, value); }
     }
 
     /// <summary>
     /// Enable / disable renaming to canonical filenames.
     /// </summary>
     public static bool RenameToCanonicalFilenames {
-        get { return EditorPrefs.GetBool(PREFERENCE_RENAME_TO_CANONICAL_FILENAMES,
-                                         defaultValue: false); }
-        set { EditorPrefs.SetBool(PREFERENCE_RENAME_TO_CANONICAL_FILENAMES, value); }
+        get { return settings.GetBool(PREFERENCE_RENAME_TO_CANONICAL_FILENAMES,
+                                      defaultValue: false); }
+        set { settings.SetBool(PREFERENCE_RENAME_TO_CANONICAL_FILENAMES, value); }
     }
 
     /// <summary>
@@ -1562,9 +1563,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     public static bool VerboseLoggingEnabled {
         get { return System.Environment.CommandLine.Contains("-batchmode") ||
-                EditorPrefs.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
-                                    defaultValue: false); }
-        set { EditorPrefs.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
+                settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
+                                 defaultValue: false); }
+        set { settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
     }
 
     /// <summary>
@@ -1598,29 +1599,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Log severity.
+    /// Logger for this module.
     /// </summary>
-    internal enum LogLevel {
-        Info,
-        Warning,
-        Error,
-    };
+    private static Logger logger = new Logger();
 
     /// <summary>
     /// Whether to also log to a file in the project.
     /// </summary>
-    internal static bool LogToFile { get; set; }
-
-    /// <summary>
-    /// Write a message to the log file.
-    /// </summary>
-    /// <param name="message">Message to log.</param>
-    internal static void WriteToLogFile(string message) {
-        if (LogToFile) {
-            using (var file = new StreamWriter("VersionHandlerSave.log", true)) {
-                file.WriteLine(message);
-            }
-        }
+    internal static bool LogToFile {
+        get { return logger.LogFilename != null; }
+        set { logger.LogFilename = value ? "VersionHandlerSave.log" : null; }
     }
 
     /// <summary>
@@ -1632,22 +1620,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// <param name="level">Severity of the message.</param>
     internal static void Log(string message, bool verbose = false,
                              LogLevel level = LogLevel.Info) {
-        if (!verbose || VerboseLoggingEnabled) {
-            switch (level) {
-                case LogLevel.Info:
-                    Debug.Log(message);
-                    WriteToLogFile(message);
-                    break;
-                case LogLevel.Warning:
-                    Debug.LogWarning(message);
-                    WriteToLogFile("WARNING: " + message);
-                    break;
-                case LogLevel.Error:
-                    Debug.LogError(message);
-                    WriteToLogFile("ERROR: " + message);
-                    break;
-            }
-        }
+        logger.Level = VerboseLoggingEnabled ? LogLevel.Verbose : LogLevel.Info;
+        logger.Log(message, level: verbose ? LogLevel.Verbose : level);
     }
 
     /// <summary>

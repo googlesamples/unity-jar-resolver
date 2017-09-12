@@ -35,6 +35,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         internal bool autoPodToolInstallInEditorEnabled;
         internal bool verboseLoggingEnabled;
         internal int cocoapodsIntegrationMenuIndex;
+        internal bool useProjectSettings;
 
         /// <summary>
         /// Load settings into the dialog.
@@ -47,6 +48,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             verboseLoggingEnabled = IOSResolver.VerboseLoggingEnabled;
             cocoapodsIntegrationMenuIndex = FindIndexFromCocoapodsIntegrationMethod(
                 IOSResolver.CocoapodsIntegrationMethodPref);
+            useProjectSettings = IOSResolver.UseProjectSettings;
         }
 
         /// <summary>
@@ -60,6 +62,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             IOSResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
             IOSResolver.CocoapodsIntegrationMethodPref =
                 integrationMapping[cocoapodsIntegrationMenuIndex];
+            IOSResolver.UseProjectSettings = useProjectSettings;
         }
     }
 
@@ -168,6 +171,11 @@ public class IOSResolverSettingsDialog : EditorWindow
         GUILayout.BeginHorizontal();
         GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
         settings.verboseLoggingEnabled = EditorGUILayout.Toggle(settings.verboseLoggingEnabled);
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Use project settings", EditorStyles.boldLabel);
+        settings.useProjectSettings = EditorGUILayout.Toggle(settings.useProjectSettings);
         GUILayout.EndHorizontal();
 
         GUILayout.Space(10);

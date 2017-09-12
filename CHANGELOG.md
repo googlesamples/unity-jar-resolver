@@ -1,3 +1,12 @@
+# Version 1.2.48 - Sep 12, 2017
+## New Features
+* Changed settings to be per-project by default.
+
+## Bug Fixes
+* Added Google maven repository to fix GradlePrebuild resolution with Google
+  components.
+* Fixed Android Resolution failure with spaces in paths.
+
 # Version 1.2.47 - Aug 29, 2017
 ## New Features
 * Android and iOS dependencies can now be specified using *Dependencies.xml

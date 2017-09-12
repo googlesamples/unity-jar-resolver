@@ -194,7 +194,7 @@ public class IOSResolver : AssetPostprocessor {
         /// Read XML declared dependencies.
         /// </summary>
         /// <param name="filename">File to read.</param>
-        /// <param name="logger">Logging delegate.</param>
+        /// <param name="logger">Logger to log with.</param>
         ///
         /// Parses dependencies in the form:
         ///
@@ -210,8 +210,7 @@ public class IOSResolver : AssetPostprocessor {
         ///     </iosPod>
         ///   </iosPods>
         /// </dependencies>
-        protected override bool Read(string filename,
-                                     PlayServicesSupport.LogMessageWithLevel logger) {
+        protected override bool Read(string filename, Logger logger) {
             IOSResolver.Log(String.Format("Reading iOS dependency XML file {0}", filename),
                             verbose: true);
             var sources = new List<string>();
@@ -242,10 +241,10 @@ public class IOSResolver : AssetPostprocessor {
                             minTargetSdk = reader.GetAttribute("minTargetSdk");
                             sources = new List<string>();
                             if (podName == null) {
-                                logger(
+                                logger.Log(
                                     String.Format("Pod name not specified while reading {0}:{1}\n",
                                                   filename, reader.LineNumber),
-                                    level: PlayServicesSupport.LogLevel.Warning);
+                                    level: LogLevel.Warning);
                                 return false;
                             }
                         } else {
@@ -415,6 +414,9 @@ public class IOSResolver : AssetPostprocessor {
     // Parses dependencies from XML dependency files.
     private static IOSXmlDependencies xmlDependencies = new IOSXmlDependencies();
 
+    // Project level settings for this module.
+    private static ProjectSettings settings = new ProjectSettings(PREFERENCE_NAMESPACE);
+
     // Search for a file up to a maximum search depth stopping the
     // depth first search each time the specified file is found.
     private static List<string> FindFile(
@@ -545,7 +547,7 @@ public class IOSResolver : AssetPostprocessor {
         // Prompt the user to use workspaces if they aren't at least using project level
         // integration.
         if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
-            (CocoapodsIntegrationMethod)EditorPrefs.GetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
+            (CocoapodsIntegrationMethod)settings.GetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
                 CocoapodsIntegrationUpgradeDefault) == CocoapodsIntegrationMethod.None &&
             !InBatchMode && !UpgradeToWorkspaceWarningDisabled) {
 
@@ -557,8 +559,8 @@ public class IOSResolver : AssetPostprocessor {
                 "to integrating Cocoapods with the .xcodeproj file.\n",
                 "Yes", "Not Now", "Silence Warning")) {
                 case 0:  // Yes
-                    EditorPrefs.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
-                                       (int)CocoapodsIntegrationMethod.Workspace);
+                    settings.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
+                                    (int)CocoapodsIntegrationMethod.Workspace);
                     break;
                 case 1:  // Not now
                     break;
@@ -602,7 +604,7 @@ public class IOSResolver : AssetPostprocessor {
     /// Reset settings of this plugin to default values.
     /// </summary>
     internal static void RestoreDefaultSettings() {
-        VersionHandlerImpl.RestoreDefaultSettings(PREFERENCE_KEYS);
+        settings.DeleteKeys(PREFERENCE_KEYS);
     }
 
     /// <summary>
@@ -630,11 +632,11 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static CocoapodsIntegrationMethod CocoapodsIntegrationMethodPref {
         get {
-            return (CocoapodsIntegrationMethod)EditorPrefs.GetInt(
+            return (CocoapodsIntegrationMethod)settings.GetInt(
                 PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
                 defaultValue: CocoapodsIntegrationUpgradeDefault);
         }
-        set { EditorPrefs.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD, (int)value); }
+        set { settings.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD, (int)value); }
     }
 
     /// <summary>
@@ -654,27 +656,27 @@ public class IOSResolver : AssetPostprocessor {
     /// CocoapodsIntegrationEnabled.
     /// </summary>
     private static bool LegacyCocoapodsInstallEnabled {
-        get { return EditorPrefs.GetBool(PREFERENCE_COCOAPODS_INSTALL_ENABLED,
+        get { return settings.GetBool(PREFERENCE_COCOAPODS_INSTALL_ENABLED,
                                          defaultValue: true); }
-        set { EditorPrefs.SetBool(PREFERENCE_COCOAPODS_INSTALL_ENABLED, value); }
+        set { settings.SetBool(PREFERENCE_COCOAPODS_INSTALL_ENABLED, value); }
     }
 
     /// <summary>
     /// Enable / disable Podfile generation.
     /// </summary>
     public static bool PodfileGenerationEnabled {
-        get { return EditorPrefs.GetBool(PREFERENCE_PODFILE_GENERATION_ENABLED,
+        get { return settings.GetBool(PREFERENCE_PODFILE_GENERATION_ENABLED,
                                          defaultValue: true); }
-        set { EditorPrefs.SetBool(PREFERENCE_PODFILE_GENERATION_ENABLED, value); }
+        set { settings.SetBool(PREFERENCE_PODFILE_GENERATION_ENABLED, value); }
     }
 
     /// <summary>
     /// Enable / disable execution of the pod tool via the shell.
     /// </summary>
     public static bool PodToolExecutionViaShellEnabled {
-        get { return EditorPrefs.GetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED,
-                                         defaultValue: false); }
-        set { EditorPrefs.SetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED, value); }
+        get { return settings.GetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED,
+                                      defaultValue: false); }
+        set { settings.SetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED, value); }
     }
 
     /// <summary>
@@ -682,29 +684,34 @@ public class IOSResolver : AssetPostprocessor {
     /// editor isn't launched in batch mode.
     /// </summary>
     public static bool AutoPodToolInstallInEditorEnabled {
-        get { return EditorPrefs.GetBool(PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR,
-                                         defaultValue: true); }
-        set { EditorPrefs.SetBool(PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR, value); }
+        get { return settings.GetBool(PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR,
+                                      defaultValue: true); }
+        set { settings.SetBool(PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR, value); }
     }
 
     /// <summary>
     /// Get / set the nag prompt disabler setting for turning on workspace integration.
     /// </summary>
     public static bool UpgradeToWorkspaceWarningDisabled {
-        get { return EditorPrefs.GetBool(PREFERENCE_WARN_UPGRADE_WORKSPACE,
-                                         defaultValue: false); }
-        set { EditorPrefs.SetBool(PREFERENCE_WARN_UPGRADE_WORKSPACE, value); }
+        get { return settings.GetBool(PREFERENCE_WARN_UPGRADE_WORKSPACE, defaultValue: false); }
+        set { settings.SetBool(PREFERENCE_WARN_UPGRADE_WORKSPACE, value); }
     }
 
     /// <summary>
     /// Enable / disable verbose logging.
     /// </summary>
     public static bool VerboseLoggingEnabled {
-        get { return EditorPrefs.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
-                                         defaultValue: false); }
-        set { EditorPrefs.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
+        get { return settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, defaultValue: false); }
+        set { settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
     }
 
+    /// <summary>
+    /// Whether to use project level settings.
+    /// </summary>
+    public static bool UseProjectSettings {
+        get { return settings.UseProjectSettings; }
+        set { settings.UseProjectSettings = value; }
+    }
 
     /// <summary>
     /// Determine whether it's possible to perform iOS dependency injection.
@@ -779,17 +786,10 @@ public class IOSResolver : AssetPostprocessor {
         }
     }
 
-    /// <summary>
-    /// Log severity.
-    /// </summary>
-    internal enum LogLevel {
-        Info,
-        Warning,
-        Error,
-    };
-
     private delegate void LogMessageDelegate(string message, bool verbose = false,
                                             LogLevel level = LogLevel.Info);
+
+    private static Google.Logger logger = new Google.Logger();
 
     /// <summary>
     /// Log a message.
@@ -800,19 +800,8 @@ public class IOSResolver : AssetPostprocessor {
     /// <param name="level">Severity of the message.</param>
     internal static void Log(string message, bool verbose = false,
                              LogLevel level = LogLevel.Info) {
-        if (!verbose || VerboseLoggingEnabled || InBatchMode) {
-            switch (level) {
-                case LogLevel.Info:
-                    Debug.Log(message);
-                    break;
-                case LogLevel.Warning:
-                    Debug.LogWarning(message);
-                    break;
-                case LogLevel.Error:
-                    Debug.LogError(message);
-                    break;
-            }
-        }
+        logger.Level = (VerboseLoggingEnabled || InBatchMode) ? LogLevel.Verbose : LogLevel.Info;
+        logger.Log(message, level: verbose ? LogLevel.Verbose : level);
     }
 
     /// <summary>
@@ -2432,7 +2421,7 @@ public class IOSResolver : AssetPostprocessor {
             pods.Remove(podName);
         }
         // Read pod specifications from XML dependencies.
-        xmlDependencies.ReadAll(IOSXmlDependencies.LogMessage);
+        xmlDependencies.ReadAll(logger);
     }
 
     /// <summary>

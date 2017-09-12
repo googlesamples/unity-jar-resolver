@@ -19,6 +19,7 @@ namespace GooglePlayServices {
     using System;
     using System.Collections.Generic;
     using System.Xml;
+    using Google;
     using Google.JarResolver;
     using UnityEditor;
 
@@ -35,8 +36,8 @@ namespace GooglePlayServices {
         /// <summary>
         /// Read XML declared dependencies.
         /// </summary>
-        /// <param name="svcSupport">Instance to add dependencies to.</param>
         /// <param name="filename">File to read.</param>
+        /// <param name="logger">Logger instance to log with.</param>
         ///
         /// Parses dependencies in the form:
         ///
@@ -52,16 +53,15 @@ namespace GooglePlayServices {
         ///     </androidPackage>
         ///   </androidPackages>
         /// </dependencies>
-        protected override bool Read(string filename,
-                                     PlayServicesSupport.LogMessageWithLevel logger) {
+        protected override bool Read(string filename, Logger logger) {
             List<string> androidSdkPackageIds = null;
             string group = null;
             string artifact = null;
             string versionSpec = null;
             List<string> repositories = null;
-            PlayServicesSupport.Log(
+            logger.Log(
                 String.Format("Reading Android dependency XML file {0}", filename),
-                verbose: true);
+                level: LogLevel.Verbose);
 
             if (!XmlUtilities.ParseXmlTextFileElements(
                 filename, logger,
@@ -85,12 +85,12 @@ namespace GooglePlayServices {
                             var spec = reader.GetAttribute("spec") ?? "";
                             var specComponents = spec.Split(new [] { ':' });
                             if (specComponents.Length != 3) {
-                                logger(
+                                logger.Log(
                                     String.Format(
                                         "Ignoring invalid package specification '{0}' " +
                                         "while reading {1}:{2}\n",
                                         spec, filename, reader.LineNumber),
-                                    level: PlayServicesSupport.LogLevel.Warning);
+                                    level: LogLevel.Warning);
                                 return false;
                             }
                             group = specComponents[0];
@@ -136,7 +136,8 @@ namespace GooglePlayServices {
         /// <summary>
         /// Find and read all XML declared dependencies.
         /// </summary>
-        public override bool ReadAll(PlayServicesSupport.LogMessageWithLevel logger) {
+        /// <param name="logger">Logger to log with.</param>
+        public override bool ReadAll(Logger logger) {
             const string XML_DEPENDENCIES_INSTANCE = "InternalXmlDependencies";
             if (PlayServicesSupport.instances.TryGetValue(XML_DEPENDENCIES_INSTANCE,
                                                           out svcSupport)) {

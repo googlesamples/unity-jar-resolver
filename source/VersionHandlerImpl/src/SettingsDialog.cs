@@ -49,6 +49,11 @@ public class SettingsDialog : EditorWindow
         internal bool verboseLoggingEnabled;
 
         /// <summary>
+        /// Whether settings are project specific.
+        /// </summary>
+        internal bool useProjectSettings;
+
+        /// <summary>
         /// Load settings into the dialog.
         /// </summary>
         internal Settings() {
@@ -56,6 +61,7 @@ public class SettingsDialog : EditorWindow
             cleanUpPromptEnabled = VersionHandlerImpl.CleanUpPromptEnabled;
             renameToCanonicalFilenames = VersionHandlerImpl.RenameToCanonicalFilenames;
             verboseLoggingEnabled = VersionHandlerImpl.VerboseLoggingEnabled;
+            useProjectSettings = VersionHandlerImpl.UseProjectSettings;
         }
 
         /// <summary>
@@ -66,6 +72,7 @@ public class SettingsDialog : EditorWindow
             VersionHandlerImpl.CleanUpPromptEnabled = cleanUpPromptEnabled;
             VersionHandlerImpl.RenameToCanonicalFilenames = renameToCanonicalFilenames;
             VersionHandlerImpl.VerboseLoggingEnabled = verboseLoggingEnabled;
+            VersionHandlerImpl.UseProjectSettings = useProjectSettings;
         }
     }
 
@@ -126,6 +133,11 @@ public class SettingsDialog : EditorWindow
         GUILayout.BeginHorizontal();
         GUILayout.Label("Verbose logging", EditorStyles.boldLabel);
         settings.verboseLoggingEnabled = EditorGUILayout.Toggle(settings.verboseLoggingEnabled);
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Use project settings", EditorStyles.boldLabel);
+        settings.useProjectSettings = EditorGUILayout.Toggle(settings.useProjectSettings);
         GUILayout.EndHorizontal();
 
         GUILayout.Space(10);
