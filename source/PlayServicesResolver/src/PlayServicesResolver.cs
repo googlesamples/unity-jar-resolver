@@ -842,7 +842,7 @@ namespace GooglePlayServices
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
-        private static void Resolve(Action resolutionComplete = null,
+        public static void Resolve(Action resolutionComplete = null,
                                     bool forceResolution = false) {
             bool firstJob;
             lock (resolutionJobs) {
