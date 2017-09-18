@@ -1,3 +1,11 @@
+# Version 1.2.49 - Sep 18, 2017
+## Bug Fixes
+* Removed modulemap parsing in iOS Resolver.
+  The framework *.modulemap did not need to be parsed by the iOS Resolver
+  when injecting Cocaopods into a Xcode project.  Simply adding a modular
+  framework to a Xcode project results in Xcode's Clang parsing the associated
+  modulemap and injecting any compile and link flags into the build process.
+
 # Version 1.2.48 - Sep 12, 2017
 ## New Features
 * Changed settings to be per-project by default.

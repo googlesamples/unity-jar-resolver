@@ -2065,7 +2065,6 @@ public class IOSResolver : AssetPostprocessor {
         project.ReadFromString(File.ReadAllText(pbxprojPath));
         string target = project.TargetGuidByName(TARGET_NAME);
 
-        HashSet<string> frameworks = new HashSet<string>();
         HashSet<string> linkFlags = new HashSet<string>();
         foreach (var frameworkFullPath in
                  Directory.GetDirectories(podsDir, "*.framework",
@@ -2097,35 +2096,6 @@ public class IOSResolver : AssetPostprocessor {
                 project.AddFile(destFrameworkPath,
                                 destFrameworkPath,
                                 UnityEditor.iOS.Xcode.PBXSourceTree.Source));
-
-            string moduleMapPath =
-                Path.Combine(Path.Combine(destFrameworkFullPath, "Modules"),
-                             "module.modulemap");
-
-            if (File.Exists(moduleMapPath)) {
-                Log(String.Format("Reading module map {0}", moduleMapPath), verbose: true);
-                // Parse the modulemap, format spec here:
-                // http://clang.llvm.org/docs/Modules.html#module-map-language
-                using (StreamReader moduleMapFile =
-                       new StreamReader(moduleMapPath)) {
-                    string line;
-                    char[] delim = {' '};
-                    while ((line = moduleMapFile.ReadLine()) != null) {
-                        string[] items = line.TrimStart(delim).Split(delim, 2);
-                        if (items.Length > 1) {
-                            if (items[0] == "link") {
-                                if (items[1].StartsWith("framework")) {
-                                    items = items[1].Split(delim, 2);
-                                    frameworks.Add(items[1].Trim(
-                                        new char[] {'\"'}) + ".framework");
-                                } else {
-                                    linkFlags.Add("-l" + items[1]);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
 
             foreach (var resourcesSearchPath in
                      new [] { destFrameworkFullPath,
@@ -2192,9 +2162,6 @@ public class IOSResolver : AssetPostprocessor {
                 "$(PROJECT_DIR)/" + Path.GetDirectoryName(libraryRelativePath));
         }
 
-        foreach (var framework in frameworks) {
-            project.AddFrameworkToProject(target, framework, false);
-        }
         foreach (var linkFlag in linkFlags) {
             project.AddBuildProperty(target, "OTHER_LDFLAGS", linkFlag);
         }
