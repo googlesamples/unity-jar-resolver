@@ -550,6 +550,7 @@ namespace GooglePlayServices
                     " ",
                     new [] {
                         "-b", buildScript,
+                        SettingsDialog.UseGradleDaemon ? "--daemon" : "--no-daemon",
                         String.Format("\"-PANDROID_HOME={0}\"", androidSdkPath),
                         String.Format("\"-PTARGET_DIR={0}\"",
                                       Path.GetFullPath(destinationDirectory)),
@@ -855,8 +856,7 @@ namespace GooglePlayServices
                             }
                             // Start installation.
                             sdkManager.InstallPackages(
-                                installPackages,
-                                (bool success) => { if (success) resolve(); });
+                                installPackages, (bool success) => { resolve(); });
                         });
                     });
         }

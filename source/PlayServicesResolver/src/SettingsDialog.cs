@@ -32,6 +32,7 @@ namespace GooglePlayServices
         private class Settings {
             internal bool enableAutoResolution;
             internal bool prebuildWithGradle;
+            internal bool useGradleDaemon;
             internal bool fetchDependenciesWithGradle;
             internal bool installAndroidPackages;
             internal string packageDir;
@@ -46,6 +47,7 @@ namespace GooglePlayServices
             internal Settings() {
                 enableAutoResolution = SettingsDialog.EnableAutoResolution;
                 prebuildWithGradle = SettingsDialog.PrebuildWithGradle;
+                useGradleDaemon = SettingsDialog.UseGradleDaemon;
                 fetchDependenciesWithGradle = SettingsDialog.FetchDependenciesWithGradle;
                 installAndroidPackages = SettingsDialog.InstallAndroidPackages;
                 packageDir = SettingsDialog.PackageDir;
@@ -60,6 +62,7 @@ namespace GooglePlayServices
             /// </summary>
             internal void Save() {
                 SettingsDialog.PrebuildWithGradle = prebuildWithGradle;
+                SettingsDialog.UseGradleDaemon = useGradleDaemon;
                 SettingsDialog.FetchDependenciesWithGradle = fetchDependenciesWithGradle;
                 SettingsDialog.EnableAutoResolution = enableAutoResolution;
                 SettingsDialog.InstallAndroidPackages = installAndroidPackages;
@@ -82,6 +85,7 @@ namespace GooglePlayServices
             Namespace + "AutoResolutionDisabledWarning";
         private const string FetchDependenciesWithGradleKey =
             Namespace + "FetchDependenciesWithGradle";
+        private const string UseGradleDaemonKey = Namespace + "UseGradleDaemon";
         // List of preference keys, used to restore default settings.
         private static string[] PreferenceKeys = new [] {
             AutoResolveKey,
@@ -91,7 +95,8 @@ namespace GooglePlayServices
             ExplodeAarsKey,
             VerboseLoggingKey,
             AutoResolutionDisabledWarningKey,
-            FetchDependenciesWithGradleKey
+            FetchDependenciesWithGradleKey,
+            UseGradleDaemonKey
         };
 
         private const string AndroidPluginsDir = "Assets/Plugins/Android";
@@ -126,6 +131,11 @@ namespace GooglePlayServices
         internal static bool FetchDependenciesWithGradle {
             private set { projectSettings.SetBool(FetchDependenciesWithGradleKey, value); }
             get { return projectSettings.GetBool(FetchDependenciesWithGradleKey, true); }
+        }
+
+        internal static bool UseGradleDaemon {
+            private set { projectSettings.SetBool(UseGradleDaemonKey, value); }
+            get { return projectSettings.GetBool(UseGradleDaemonKey, false); }
         }
 
         internal static bool InstallAndroidPackages {
@@ -172,7 +182,7 @@ namespace GooglePlayServices
         }
 
         public void Initialize() {
-            minSize = new Vector2(300, 300);
+            minSize = new Vector2(350, 350);
             position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                                 minSize.x, minSize.y);
         }
@@ -212,6 +222,17 @@ namespace GooglePlayServices
                                 "manager's local maven repository and user specified local " +
                                 "maven repositories for dependencies.");
             }
+            EditorGUI.BeginDisabledGroup(settings.fetchDependenciesWithGradle == false);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Use Gradle Daemon", EditorStyles.boldLabel);
+            settings.useGradleDaemon = EditorGUILayout.Toggle(settings.useGradleDaemon);
+            GUILayout.EndHorizontal();
+            GUILayout.Label(
+                settings.useGradleDaemon ?
+                ("Gradle Daemon will be used to fetch dependencies.  " +
+                 "This is faster but can be flakey in some environments.") :
+                ("Gradle Daemon will not be used.  This is slow but reliable."));
+            EditorGUI.EndDisabledGroup();
             EditorGUI.EndDisabledGroup();
 
             GUILayout.BeginHorizontal();

@@ -1,3 +1,16 @@
+# Version 1.2.50 - Sep 18, 2017
+## New Features
+* Added option to disable the Gradle daemon in the Android Resolver.
+  This daemon is now disabled by default as some users are getting into a state
+  where multiple daemon instances are being spawned when changing dependencies
+  which eventually results in Android resolution failing until all daemon
+  processes are manually killed.
+
+## Bug Fixes
+* Android resolution is now always executed if the user declines the update
+  of their Android SDK.  This ensure users can continue to use out of date
+  Android SDK packages if they desire.
+
 # Version 1.2.49 - Sep 18, 2017
 ## Bug Fixes
 * Removed modulemap parsing in iOS Resolver.
