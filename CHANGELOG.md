@@ -1,3 +1,13 @@
+# Version 1.2.51 - Sep 20, 2017
+## Changes
+* Changed iOS Resolver to execute the CocoaPods "pod" command via the shell
+  by default.  Some developers customize their shell environment to use
+  custom ssh certs to access internal git repositories that host pods so
+  executing "pod" via the shell will work for these scenarios.
+  The drawback of executing "pod" via the shell could potentially cause
+  users problems if they break their shell environment.  Though users who
+  customize their shell environments will be able to resolve these issues.
+
 # Version 1.2.50 - Sep 18, 2017
 ## New Features
 * Added option to disable the Gradle daemon in the Android Resolver.

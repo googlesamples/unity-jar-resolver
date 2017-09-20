@@ -675,7 +675,7 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static bool PodToolExecutionViaShellEnabled {
         get { return settings.GetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED,
-                                      defaultValue: false); }
+                                      defaultValue: true); }
         set { settings.SetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED, value); }
     }
 
