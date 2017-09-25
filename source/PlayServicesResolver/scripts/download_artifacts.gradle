@@ -63,7 +63,9 @@ configurations {
   // Configuration used to search the initial set of packages before applying
   // a fallback search strategy.
   userPackages
-  // Configuration used to aggregate the final set of packages we'll copy.
+  // Set of packages with version locked dependencies.
+  nonVersionLockedPackages
+  // Configuration used to aggregate the set of packages we'll copy.
   copyPackages
 }
 
@@ -99,6 +101,19 @@ def getVersionlessArtifactFilenames(versionedFiles) {
     }
   }
   return versionlessFilenames
+}
+
+// Sort a list of version strings.
+// The returned list contains a list of oldest to most recent version.
+def sortVersionStrings(versions) {
+  // The following sorts by comparing the indices of the versions.
+  // If all common indices match, the longer of the two is more recent.
+  return versions.sort(false) {
+    a, b -> [a, b]*.tokenize('.')*.collect { it as int }.with {
+      u, v -> [u, v].transpose().findResult {
+        x, y -> x <=> y ?: null } ?: u.size() <=> v.size()
+    }
+  }
 }
 
 // Configure project properties.
@@ -190,8 +205,86 @@ project.ext {
     packagesToCopyByUserPackages[pkg] = it.key
   }
 
-  // Expose set of packages to copyPackages.
-  packagesToCopy = packagesToCopyByUserPackages
+  packagesToCopyByUserPackages.each {
+    project.dependencies.nonVersionLockedPackages it.key
+  }
+
+  // Resolve the current set of packages including any srcaar packages injected
+  // in packagesToCopyByUserPackages.
+  def resolvedArtifacts = project.configurations.nonVersionLockedPackages.
+    resolvedConfiguration.lenientConfiguration.getArtifacts(
+        Specs.satisfyAll())
+
+  // Set of packages to copy, exposed to the copyPackages task.
+  packagesToCopy = [:]
+  // Set of packages with modified versions due to conflicting dependencies.
+  packagesModified = []
+  // Packages that should be version locked.
+  def versionLockedModuleIds = [
+    // * com.google.android.gms.* packages are released a single set that
+    //   typically are not compatible between revisions.  e.g If a user depends
+    //   upon play-services-games:9.8.0 they'll also require
+    //   play-services-base:9.8.0 etc.
+    // * com.google.firebase.* packages are versioned in the same way as
+    //   com.google.android.gms.* with dependencies upon the gms (Play Services)
+    //   components. and need to be pinned to the same com.google.android.gms.*
+    //   packages.
+    //   com.google.firebase.* packages that end with -unity$ are shipped
+    //   separately so they are *not* locked to Google Play services and
+    //   Firebase packages.  This is handled below by excludeModuleIds.
+    ~/^com\.google\.(android\.gms|firebase):.*/,
+    // com.android.support packages all need to be included at the same
+    // revision.
+    ~/^com\.android\.support:.*/,
+  ]
+  // Regular expression used to exclude packages from version locking.
+  def excludeModuleIds = ~/^com\.google\.firebase:[^:]+-unity:.*/
+  // Version lock packages.
+  versionLockedModuleIds.each {
+    def artifacts = []
+    def versionLockedModuleId = it;
+    // Scan the packages for ones that need to be version locked, add all
+    // others to the set of packages to copy.
+    resolvedArtifacts.each {
+      def moduleVersionId = it.moduleVersion.id;
+      def moduleVersionIdString = moduleVersionId.toString()
+      def versionLockThisModule = (
+        moduleVersionIdString ==~ versionLockedModuleId)
+      // Ignore packages that match any regular expression in
+      // versionLockedModuleIds except the one being evaluated
+      // versionLockedModuleId.
+      def versionLockedModule = false
+      versionLockedModuleIds.each {
+        versionLockedModule |= (versionLockedModuleId != it &&
+                                moduleVersionIdString ==~ it)
+      }
+      if (versionLockedModule || moduleVersionIdString ==~ excludeModuleIds ||
+          !versionLockThisModule) {
+        if (!versionLockedModule) {
+          def moduleWithType = [moduleVersionIdString, it.type].join("@")
+          packagesToCopy[moduleWithType] = moduleWithType
+        }
+        return
+      }
+      artifacts += [it]
+    }
+    // Pin each version locked package to the most recent version of
+    // each package in the set.
+    def maxVersion = sortVersionStrings(artifacts.collect {
+                                          it.moduleVersion.id.version })[-1]
+    artifacts.each {
+      def moduleVersion = it.moduleVersion.id
+      def newModuleVersion = [moduleVersion.group, moduleVersion.name,
+                              maxVersion].join(":")
+      def moduleWithType = [newModuleVersion, it.type].join("@")
+      // Report modified packages due to conflicting dependencies here.
+      if (moduleVersion.version != maxVersion) {
+        packagesModified.add([moduleVersion.toString(),
+                              newModuleVersion])
+      }
+      packagesToCopy[moduleWithType] = moduleWithType
+    }
+  }
 
   // Location to copy referenced packages.
   if (!project.hasProperty("TARGET_DIR")) {
@@ -250,6 +343,12 @@ task copyPackages(type: Copy) {
     if (missingPackages) {
       println "Missing artifacts:"
       missingPackages.each { println it }
+      println ""
+    }
+    def packagesModified = project.ext.packagesModified
+    if (packagesModified) {
+      println "Modified artifacts:"
+      packagesModified.each { println it[0] + " --> " + it[1] }
       println ""
     }
   }

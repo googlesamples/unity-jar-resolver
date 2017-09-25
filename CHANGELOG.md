@@ -1,3 +1,8 @@
+# Version 1.2.52 - Sep 25, 2017
+## New Features
+* Changed Android Resolver's Gradle resolution to resolve conflicting
+  dependencies across Google Play services and Android Support library packages.
+
 # Version 1.2.51 - Sep 20, 2017
 ## Changes
 * Changed iOS Resolver to execute the CocoaPods "pod" command via the shell

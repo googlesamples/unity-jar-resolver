@@ -307,21 +307,25 @@ namespace GooglePlayServices
         /// <param name="copiedArtifacts">Returns a list of copied artifact files.</param>
         /// <param name="missingArtifacts">Returns a list of missing artifact
         /// specifications.</param>
+        /// <param name="modifiedArtifacts">Returns a list of artifact specifications that were
+        /// modified.</param>
         private void ParseDownloadGradleArtifactsGradleOutput(
                 string output, string destinationDirectory,
-                out List<string> copiedArtifacts, out List<string> missingArtifacts) {
+                out List<string> copiedArtifacts, out List<string> missingArtifacts,
+                out List<string> modifiedArtifacts) {
             // Parse stdout for copied and missing artifacts.
             copiedArtifacts = new List<string>();
             missingArtifacts = new List<string>();
+            modifiedArtifacts = new List<string>();
             string currentHeader = null;
             const string COPIED_ARTIFACTS_HEADER = "Copied artifacts:";
             const string MISSING_ARTIFACTS_HEADER = "Missing artifacts:";
+            const string MODIFIED_ARTIFACTS_HEADER = "Modified artifacts:";
             foreach (var line in output.Split(new string[] { "\r\n", "\n" },
                                               StringSplitOptions.None)) {
-                if (line.StartsWith(COPIED_ARTIFACTS_HEADER)) {
-                    currentHeader = line;
-                    continue;
-                } else if (line.StartsWith(MISSING_ARTIFACTS_HEADER)) {
+                if (line.StartsWith(COPIED_ARTIFACTS_HEADER) ||
+                    line.StartsWith(MISSING_ARTIFACTS_HEADER) ||
+                    line.StartsWith(MODIFIED_ARTIFACTS_HEADER)) {
                     currentHeader = line;
                     continue;
                 } else if (String.IsNullOrEmpty(line.Trim())) {
@@ -336,6 +340,8 @@ namespace GooglePlayServices
                                                          line.Trim()).Replace("\\", "/"));
                     } else if (currentHeader == MISSING_ARTIFACTS_HEADER) {
                         missingArtifacts.Add(line.Trim());
+                    } else if (currentHeader == MODIFIED_ARTIFACTS_HEADER) {
+                        modifiedArtifacts.Add(line.Trim());
                     }
                 }
             }
@@ -467,11 +473,21 @@ namespace GooglePlayServices
                 // Parse stdout for copied and missing artifacts.
                 List<string> copiedArtifacts;
                 List<string> missingArtifacts;
+                List<string> modifiedArtifacts;
                 ParseDownloadGradleArtifactsGradleOutput(result.stdout, destinationDirectory,
                                                          out copiedArtifacts,
-                                                         out missingArtifacts);
+                                                         out missingArtifacts,
+                                                         out modifiedArtifacts);
                 // Label all copied files.
                 PlayServicesResolver.LabelAssets(copiedArtifacts);
+                // Display a warning about modified artifact versions.
+                if (modifiedArtifacts.Count > 0) {
+                    PlayServicesSupport.Log(
+                        String.Format("Some conflicting dependencies were found.\n" +
+                                      "The following dependency versions were modified:\n" +
+                                      "{0}\n", String.Join("\n", modifiedArtifacts.ToArray())),
+                        level: PlayServicesSupport.LogLevel.Warning);
+                }
                 // Poke the explode cache for each copied file and add the exploded paths to the
                 // output list set.
                 var copiedArtifactsSet = new HashSet<string>(copiedArtifacts);
