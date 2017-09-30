@@ -842,15 +842,23 @@ namespace GooglePlayServices
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
+        /// <param name="resolutionCompleteWithResult">Delegate called when resolution is complete
+        /// with a parameter that indicates whether it succeeded or failed.</param>
         public static void Resolve(Action resolutionComplete = null,
-                                    bool forceResolution = false) {
+                                   bool forceResolution = false,
+                                   Action<bool> resolutionCompleteWithResult = null) {
             bool firstJob;
             lock (resolutionJobs) {
                 firstJob = resolutionJobs.Count == 0;
                 resolutionJobs.Enqueue(() => {
                         ResolveUnsafe(
-                            resolutionComplete: () => {
-                                resolutionComplete();
+                            resolutionComplete: (success) => {
+                                if (resolutionComplete != null) {
+                                    resolutionComplete();
+                                }
+                                if (resolutionCompleteWithResult != null) {
+                                    resolutionCompleteWithResult(success);
+                                }
                                 ExecuteNextResolveJob();
                             },
                             forceResolution: forceResolution);
@@ -862,11 +870,12 @@ namespace GooglePlayServices
         /// <summary>
         /// Resolve dependencies.
         /// </summary>
-        /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
+        /// <param name="resolutionComplete">Delegate called when resolution is complete
+        /// with a parameter that indicates whether it succeeded or failed.</param>
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
-        private static void ResolveUnsafe(Action resolutionComplete = null,
+        private static void ResolveUnsafe(Action<bool> resolutionComplete = null,
                                           bool forceResolution = false)
         {
             JavaUtilities.CheckJdkForApiLevel();
@@ -884,7 +893,7 @@ namespace GooglePlayServices
                 var previousState = DependencyState.ReadFromFile();
                 if (previousState != null) {
                     if (currentState.Equals(previousState)) {
-                        if (resolutionComplete != null) resolutionComplete();
+                        if (resolutionComplete != null) resolutionComplete(true);
                         return;
                     }
                     // Delete all labeled assets to make sure we don't leave any stale transitive
@@ -909,9 +918,11 @@ namespace GooglePlayServices
                                           DependencyState.GetState().WriteToFile();
                                           PlayServicesSupport.Log(String.Format(
                                               "Resolution {0}.\n\n{1}",
-                                              succeeded ? "Complete" : "Failed",
+                                              succeeded ? "Succeeded" : "Failed",
                                               lastError), verbose: true);
-                                          if (resolutionComplete != null) resolutionComplete();
+                                          if (resolutionComplete != null) {
+                                              resolutionComplete(succeeded);
+                                          }
                                       };
                                       updateQueue.Enqueue(complete);
                                   });
@@ -964,9 +975,12 @@ namespace GooglePlayServices
                 return;
             }
             Resolve(
-                resolutionComplete: () => {
-                        EditorUtility.DisplayDialog("Android Jar Dependencies",
-                                                    "Resolution Complete", "OK");
+                resolutionCompleteWithResult: (success) => {
+                        EditorUtility.DisplayDialog(
+                            "Android Dependencies",
+                            String.Format("Resolution {0}", success ? "Succeeded" :
+                                          "Failed!\n\nYour application will not run, see " +
+                                          "the log for details."), "OK");
                 },
                 forceResolution: forceResolution);
         }

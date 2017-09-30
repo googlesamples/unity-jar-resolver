@@ -783,6 +783,7 @@ namespace GooglePlayServices
                         var missingArtifacts = new List<string>();
                         foreach (var dep in requiredDependencies) missingArtifacts.Add(dep.Key);
                         LogMissingDependenciesError(missingArtifacts);
+                        resolutionComplete();
                         return;
                     }
                     // Attempt resolution.
