@@ -46,7 +46,7 @@ namespace GooglePlayServices {
         /// <returns>List of XML dependency filenames in the project.</returns>
         private List<string> FindFiles() {
             var matchingFiles = new List<string>();
-            foreach (var assetGuid in AssetDatabase.FindAssets("t:Object")) {
+            foreach (var assetGuid in AssetDatabase.FindAssets("t:TextAsset")) {
                 var dependencyFile = AssetDatabase.GUIDToAssetPath(assetGuid);
                 foreach (var regex in fileRegularExpressions) {
                     if (regex.Match(dependencyFile).Success) {
