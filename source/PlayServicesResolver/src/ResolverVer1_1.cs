@@ -599,6 +599,165 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Search the project for AARs & JARs that could conflict with each other and resolve
+        /// the conflicts if possible.
+        /// </summary>
+        ///
+        /// This handles the following cases:
+        /// 1. If any libraries present match the name play-services-* and google-play-services.jar
+        ///    is included in the project the user will be warned of incompatibility between
+        ///    the legacy JAR and the newer AAR libraries.
+        /// 2. If a managed (labeled) library conflicting with one or more versions of unmanaged
+        ///    (e.g play-services-base-10.2.3.aar (managed) vs. play-services-10.2.2.aar (unmanaged)
+        ///     and play-services-base-9.2.4.aar (unmanaged))
+        ///    The user is warned about the unmanaged conflicting libraries and, if they're
+        ///    older than the managed library, prompted to delete the unmanaged libraries.
+        private void FindAndResolveConflicts() {
+            Func<string, string> getVersionlessArtifactFilename = (filename) => {
+                var basename = Path.GetFileName(filename);
+                int split = basename.LastIndexOf("-");
+                return split >= 0 ? basename.Substring(0, split) : basename;
+            };
+            var managedPlayServicesArtifacts = new List<string>();
+            // Gather artifacts managed by the resolver indexed by versionless name.
+            var managedArtifacts = new Dictionary<string, string>();
+            var managedArtifactFilenames = new HashSet<string>();
+            foreach (var filename in PlayServicesResolver.FindLabeledAssets()) {
+                var artifact = getVersionlessArtifactFilename(filename);
+                managedArtifacts[artifact] = filename;
+                if (artifact.StartsWith("play-services-")) {
+                    managedPlayServicesArtifacts.Add(filename);
+                }
+            }
+            managedArtifactFilenames.UnionWith(managedArtifacts.Values);
+
+            // Gather all artifacts (AARs, JARs) that are not managed by the resolver.
+            var unmanagedArtifacts = new Dictionary<string, List<string>>();
+            var packagingExtensions = new HashSet<string>(Dependency.Packaging);
+            // srcaar files are ignored by Unity so are not included in the build.
+            packagingExtensions.Remove(".srcaar");
+            // List of paths to the legacy google-play-services.jar
+            var playServicesJars = new List<string>();
+            const string playServicesJar = "google-play-services.jar";
+            foreach (var assetGuid in AssetDatabase.FindAssets("t:Object")) {
+                var filename = AssetDatabase.GUIDToAssetPath(assetGuid);
+                // Ignore all assets that are managed by the plugin and, since the asset database
+                // could be stale at this point, check the file exists.
+                if (!managedArtifactFilenames.Contains(filename) &&
+                    (File.Exists(filename) || Directory.Exists(filename))) {
+                    if (Path.GetFileName(filename).ToLower() == playServicesJar) {
+                        playServicesJars.Add(filename);
+                    } else if (packagingExtensions.Contains(
+                                   Path.GetExtension(filename).ToLower())) {
+                        var versionlessFilename = getVersionlessArtifactFilename(filename);
+                        List<string> existing;
+                        var unmanaged = unmanagedArtifacts.TryGetValue(
+                            versionlessFilename, out existing) ? existing : new List<string>();
+                        unmanaged.Add(filename);
+                        unmanagedArtifacts[versionlessFilename] = unmanaged;
+                    }
+                }
+            }
+
+            // Check for conflicting Play Services versions.
+            // It's not possible to resolve this automatically as google-play-services.jar used to
+            // include all libraries so we don't know the set of components the developer requires.
+            if (managedPlayServicesArtifacts.Count > 0 && playServicesJars.Count > 0) {
+                PlayServicesSupport.Log(
+                    String.Format(
+                        "Legacy {0} found!\n\n" +
+                        "Your application will not build in the current state.\n" +
+                        "{0} library (found in the following locations):\n" +
+                        "{1}\n" +
+                        "\n" +
+                        "{0} is incompatible with plugins that use newer versions of Google\n" +
+                        "Play services (conflicting libraries in the following locations):\n" +
+                        "{2}\n" +
+                        "\n" +
+                        "To resolve this issue find the plugin(s) that use\n" +
+                        "{0} and either add newer versions of the required libraries or\n" +
+                        "contact the plugin vendor to do so.\n\n",
+                        playServicesJar, String.Join("\n", playServicesJars.ToArray()),
+                        String.Join("\n", managedPlayServicesArtifacts.ToArray())),
+                    level: PlayServicesSupport.LogLevel.Warning);
+            }
+
+            // For each managed artifact aggregate the set of conflicting unmanaged artifacts.
+            var conflicts = new Dictionary<string, List<string>>();
+            foreach (var managed in managedArtifacts) {
+                List<string> unmanagedFilenames;
+                if (unmanagedArtifacts.TryGetValue(managed.Key, out unmanagedFilenames)) {
+                    // Found a conflict
+                    List<string> existingConflicts;
+                    var unmanagedConflicts = conflicts.TryGetValue(
+                            managed.Value, out existingConflicts) ?
+                        existingConflicts : new List<string>();
+                    unmanagedConflicts.AddRange(unmanagedFilenames);
+                    conflicts[managed.Value] = unmanagedConflicts;
+                }
+            }
+
+            // Warn about each conflicting version and attempt to resolve each conflict by removing
+            // older unmanaged versions.
+            Func<string, string> getVersionFromFilename = (filename) => {
+                string basename = Path.GetFileNameWithoutExtension(Path.GetFileName(filename));
+                return basename.Substring(getVersionlessArtifactFilename(basename).Length + 1);
+            };
+            foreach (var conflict in conflicts) {
+                var currentVersion = getVersionFromFilename(conflict.Key);
+                var conflictingVersionsSet = new HashSet<string>();
+                foreach (var conflictFilename in conflict.Value) {
+                    conflictingVersionsSet.Add(getVersionFromFilename(conflictFilename));
+                }
+                var conflictingVersions = new List<string>(conflictingVersionsSet);
+                conflictingVersions.Sort(Dependency.versionComparer);
+
+                var warningMessage = String.Format(
+                    "Found conflicting Android library {0}\n" +
+                    "\n" +
+                    "{1} (managed by the Android Resolver) conflicts with:\n" +
+                    "{2}\n",
+                    getVersionlessArtifactFilename(conflict.Key),
+                    conflict.Key, String.Join("\n", conflict.Value.ToArray()));
+
+                // If the conflicting versions are older than the current version we can
+                // possibly clean up the old versions automatically.
+                if (Dependency.versionComparer.Compare(conflictingVersions[0],
+                                                       currentVersion) >= 0) {
+                    if (EditorUtility.DisplayDialog(
+                            "Resolve Conflict?",
+                            warningMessage +
+                            "\n" +
+                            "The conflicting libraries are older than the library managed by " +
+                            "the Android Resolver.  Would you like to remove the old libraries " +
+                            "to resolve the conflict?",
+                            "Yes", "No")) {
+                        foreach (var filename in conflict.Value) {
+                            PlayServicesSupport.DeleteExistingFileOrDirectory(
+                                filename, includeMetaFiles: true);
+                        }
+                        warningMessage = null;
+                    }
+                }
+
+                if (!String.IsNullOrEmpty(warningMessage)) {
+                    PlayServicesSupport.Log(
+                        warningMessage +
+                        "\n" +
+                        "Your application is unlikely to build in the current state.\n" +
+                        "\n" +
+                        "To resolve this problem you can try one of the following:\n" +
+                        "* Updating the dependencies managed by the Android Resolver\n" +
+                        "  to remove references to old libraries.  Be careful to not\n" +
+                        "  include conflicting versions of Google Play services.\n" +
+                        "* Contacting the plugin vendor(s) with conflicting\n" +
+                        "  dependencies and asking them to update their plugin.\n",
+                        level: PlayServicesSupport.LogLevel.Warning);
+                }
+            }
+        }
+
+        /// <summary>
         /// Perform the resolution and the exploding/cleanup as needed.
         /// </summary>
         public override void DoResolution(
@@ -609,6 +768,7 @@ namespace GooglePlayServices
             // is not thread safe.
             System.Action resolve = () => {
                 System.Action unlockResolveAndSignalResolutionComplete = () => {
+                    FindAndResolveConflicts();
                     lock (resolveLock) {
                         resolveActionActive = null;
                     }
