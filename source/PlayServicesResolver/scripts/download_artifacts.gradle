@@ -86,6 +86,21 @@ def getVersionlessArtifactByPackage(packages) {
   return versionlessArtifactByPackage
 }
 
+// From a set of package specifiers dictionary of package names indexed
+// by group:artifact strings (e.g, com.example:my-package:1.2.3@aar would
+// become ret[com.example:my-package] = "com.example:my-package:1.2.3")
+// Package specifiers without at least a group and artifact are ignored.
+def getGroupArtifacts(packages) {
+  def groupArtifacts = [:]
+  packages.each {
+    def components = it.split(":")
+    if (components.size() >= 2) {
+      groupArtifacts[[components[0], components[1]].join(":")] = it
+    }
+  }
+  return groupArtifacts;
+}
+
 // Given a set of versioned artifact File objects, generate a set of
 // versionless artifact filenames.  All files without a version
 // specifier are ignored.
@@ -282,6 +297,16 @@ project.ext {
         packagesModified.add([moduleVersion.toString(),
                               newModuleVersion])
       }
+      packagesToCopy[moduleWithType] = moduleWithType
+    }
+  }
+
+  // Scan for user specified artifacts that were not resolved and add them to
+  // the list of packages to copy so they can be reported as missing.
+  foundArtifacts = getGroupArtifacts(packagesToCopy.keySet())
+  getGroupArtifacts(versionlessArtifactByPackage.keySet()).each {
+    if (!foundArtifacts.keySet().contains(it.key)) {
+      def moduleWithType = it.value + "@aar"
       packagesToCopy[moduleWithType] = moduleWithType
     }
   }
