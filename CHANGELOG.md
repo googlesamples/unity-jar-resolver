@@ -1,3 +1,16 @@
+# Version 1.2.53 - Oct 2, 2017
+## New Features
+* Changed Android Resolver "resolution complete" dialog so that it now displays
+  failures.
+* Android Resolver now detects conflicting libraries that it does not manage
+  warning the user if they're newer than the managed libraries and prompting
+  the user to clean them up if they're older or at the same version.
+
+## Bug Fixes
+* Improved Android Resolver auto-resolution speed.
+* Fixed bug in the Gradle Android Resolver which would result in resolution
+  succeding when some dependencies are not found.
+
 # Version 1.2.52 - Sep 25, 2017
 ## New Features
 * Changed Android Resolver's Gradle resolution to resolve conflicting
