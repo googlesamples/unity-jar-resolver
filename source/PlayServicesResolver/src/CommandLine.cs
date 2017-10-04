@@ -506,16 +506,22 @@ namespace GooglePlayServices
         /// <summary>
         /// Execute a command line tool.
         /// </summary>
-        /// <param name="toolPath">Tool to execute.</param>
+        /// <param name="toolPath">Tool to execute.  On Windows, if the path to this tool contains
+        /// single quotes (apostrophes) the tool will be executed via the shell.</param>
         /// <param name="arguments">String to pass to the tools' command line.</param>
         /// <param name="workingDirectory">Directory to execute the tool from.</param>
         /// <param name="envVars">Additional environment variables to set for the command.</param>
         /// <param name="ioHandler">Allows a caller to provide interactive input and also handle
-        /// both output and error streams from a single delegate.</param>
+        /// both output and error streams from a single delegate.  NOTE: This is ignored if
+        /// shell execution is enabled.</param>
         /// <param name="useShellExecution">Execute the command via the shell.  This disables
         /// I/O redirection and causes a window to be popped up when the command is executed.
         /// This uses file redirection to retrieve the standard output stream.
         /// </param>
+        /// <param name="stdoutRedirectionInShellMode">Enables stdout and stderr redirection when
+        /// executing a command via the shell.  This requires:
+        /// * cmd.exe (on Windows) or bash (on OSX / Linux) are in the path.
+        /// * Arguments containing whitespace are quoted.</param>
         /// <returns>CommandLineTool result if successful, raises an exception if it's not
         /// possible to execute the tool.</returns>
         public static Result RunViaShell(
@@ -528,6 +534,15 @@ namespace GooglePlayServices
             Console.InputEncoding = System.Text.Encoding.UTF8;
             Console.OutputEncoding = System.Text.Encoding.UTF8;
 
+            // Mono 3.x on Windows can't execute tools with single quotes (apostrophes) in the path.
+            // The following checks for this condition and forces shell execution of tools in these
+            // paths which works fine as the shell tool should be in the system PATH.
+            if (UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform &&
+                toolPath.Contains("\'")) {
+                useShellExecution = true;
+                stdoutRedirectionInShellMode = true;
+            }
+
             string stdoutFileName = null;
             string stderrFileName = null;
             if (useShellExecution && stdoutRedirectionInShellMode) {
@@ -536,19 +551,20 @@ namespace GooglePlayServices
                 string shellCmd ;
                 string shellArgPrefix;
                 string shellArgPostfix;
-                if (UnityEngine.RuntimePlatform.WindowsEditor ==
-                    UnityEngine.Application.platform) {
+                string escapedToolPath = toolPath;
+                if (UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform) {
                     shellCmd = "cmd.exe";
-                    shellArgPrefix = "/c";
-                    shellArgPostfix = "";
+                    shellArgPrefix = "/c \"";
+                    shellArgPostfix = "\"";
                 } else {
                     shellCmd = "bash";
                     shellArgPrefix = "-l -c '";
                     shellArgPostfix = "'";
+                    escapedToolPath = toolPath.Replace("'", "'\\''");
                 }
-                arguments = String.Format("{0}{1} {2} 1> {3} 2> {4}{5}", shellArgPrefix,
-                                          toolPath, arguments, stdoutFileName, stderrFileName,
-                                          shellArgPostfix);
+                arguments = String.Format("{0}\"{1}\" {2} 1> {3} 2> {4}{5}", shellArgPrefix,
+                                          escapedToolPath, arguments, stdoutFileName,
+                                          stderrFileName, shellArgPostfix);
                 toolPath = shellCmd;
             }
 

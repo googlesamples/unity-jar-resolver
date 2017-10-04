@@ -1,3 +1,9 @@
+# Version 1.2.54 - Oct 4, 2017
+## Bug Fixes
+* Fixed execution of command line tools on Windows when the path to the tool
+  contains a single quote (apostrophe).  In this case we fallback to executing
+  the tool via the system shell.
+
 # Version 1.2.53 - Oct 2, 2017
 ## New Features
 * Changed Android Resolver "resolution complete" dialog so that it now displays
