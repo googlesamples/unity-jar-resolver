@@ -361,6 +361,9 @@ public class IOSResolver : AssetPostprocessor {
     // A nag prompt disabler setting for turning on workspace integration.
     private const string PREFERENCE_WARN_UPGRADE_WORKSPACE =
         PREFERENCE_NAMESPACE + "UpgradeToWorkspaceWarningDisabled";
+    // Whether to skip pod install when using workspace integration.
+    private const string PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION =
+        PREFERENCE_NAMESPACE + "SkipPodInstallWhenUsingWorkspaceIntegration";
     // List of preference keys, used to restore default settings.
     private static string[] PREFERENCE_KEYS = new [] {
         PREFERENCE_COCOAPODS_INSTALL_ENABLED,
@@ -369,7 +372,8 @@ public class IOSResolver : AssetPostprocessor {
         PREFERENCE_VERBOSE_LOGGING_ENABLED,
         PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED,
         PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR,
-        PREFERENCE_WARN_UPGRADE_WORKSPACE
+        PREFERENCE_WARN_UPGRADE_WORKSPACE,
+        PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION
     };
 
     // Whether the xcode extension was successfully loaded.
@@ -703,6 +707,16 @@ public class IOSResolver : AssetPostprocessor {
     public static bool VerboseLoggingEnabled {
         get { return settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, defaultValue: false); }
         set { settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
+    }
+
+    /// <summary>
+    /// Skip pod install when using workspace integration, let user manually run it.
+    /// </summary>
+    public static bool SkipPodInstallWhenUsingWorkspaceIntegration {
+        get { return settings.GetBool(PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION,
+                                      defaultValue: false); }
+        set { settings.SetBool(PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION,
+                               value); }
     }
 
     /// <summary>
@@ -1934,6 +1948,14 @@ public class IOSResolver : AssetPostprocessor {
                 "  https://guides.cocoapods.org/using/using-cocoapods.html\n\n",
                 POD_EXECUTABLE, pathToBuiltProject, GetPodfilePath(pathToBuiltProject)),
                 level: LogLevel.Warning);
+            return;
+        }
+        // Skip running "pod install" if requested. This is helpful if the user want to run pod tool
+        // manually, in case pod tool customizations are necessary (custom flag or repo setup).
+        if (UnityCanLoadWorkspace &&
+            CocoapodsIntegrationMethodPref == CocoapodsIntegrationMethod.Workspace &&
+            SkipPodInstallWhenUsingWorkspaceIntegration) {
+            Log("Skipping pod install.", level: LogLevel.Warning);
             return;
         }
 
