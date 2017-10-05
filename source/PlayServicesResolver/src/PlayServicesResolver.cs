@@ -272,6 +272,11 @@ namespace GooglePlayServices
         private static bool previousGradlePrebuildEnabled = false;
 
         /// <summary>
+        /// Value of the InstallAndroidPackages before settings were changed.
+        /// </summary>
+        private static bool previousInstallAndroidPackages = false;
+
+        /// <summary>
         /// The value of GradleBuildEnabled when PollBuildSystem() was called.
         /// </summary>
         private static bool previousGradleBuildEnabled = false;
@@ -482,6 +487,8 @@ namespace GooglePlayServices
             EditorApplication.update += PumpUpdateQueue;
 
             previousGradlePrebuildEnabled = GooglePlayServices.SettingsDialog.PrebuildWithGradle;
+            previousInstallAndroidPackages =
+                GooglePlayServices.SettingsDialog.InstallAndroidPackages;
 
             OnSettingsChanged();
         }
@@ -1006,10 +1013,14 @@ namespace GooglePlayServices
         /// </summary>
         internal static void OnSettingsChanged() {
             if (previousGradlePrebuildEnabled !=
-                GooglePlayServices.SettingsDialog.PrebuildWithGradle) {
+                GooglePlayServices.SettingsDialog.PrebuildWithGradle ||
+                previousInstallAndroidPackages !=
+                GooglePlayServices.SettingsDialog.InstallAndroidPackages) {
                 DeleteLabeledAssets();
             }
             previousGradlePrebuildEnabled = GooglePlayServices.SettingsDialog.PrebuildWithGradle;
+            previousInstallAndroidPackages =
+                GooglePlayServices.SettingsDialog.InstallAndroidPackages;
             PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;
             logger.Verbose = GooglePlayServices.SettingsDialog.VerboseLogging;
             if (Initialized) {

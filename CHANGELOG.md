@@ -1,3 +1,7 @@
+# Version 1.2.55 - Oct 4, 2017
+## Bug Fixes
+* Force Android Resolution when the "Install Android Packages" setting changes.
+
 # Version 1.2.54 - Oct 4, 2017
 ## Bug Fixes
 * Fixed execution of command line tools on Windows when the path to the tool
