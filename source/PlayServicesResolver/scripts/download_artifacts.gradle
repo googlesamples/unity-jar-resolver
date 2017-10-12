@@ -283,21 +283,23 @@ project.ext {
       }
       artifacts += [it]
     }
-    // Pin each version locked package to the most recent version of
-    // each package in the set.
-    def maxVersion = sortVersionStrings(artifacts.collect {
-                                          it.moduleVersion.id.version })[-1]
-    artifacts.each {
-      def moduleVersion = it.moduleVersion.id
-      def newModuleVersion = [moduleVersion.group, moduleVersion.name,
-                              maxVersion].join(":")
-      def moduleWithType = [newModuleVersion, it.type].join("@")
-      // Report modified packages due to conflicting dependencies here.
-      if (moduleVersion.version != maxVersion) {
-        packagesModified.add([moduleVersion.toString(),
-                              newModuleVersion])
+    if (artifacts.size > 0) {
+      // Pin each version locked package to the most recent version of
+      // each package in the set.
+      def maxVersion = sortVersionStrings(artifacts.collect {
+                                            it.moduleVersion.id.version })[-1]
+      artifacts.each {
+        def moduleVersion = it.moduleVersion.id
+        def newModuleVersion = [moduleVersion.group, moduleVersion.name,
+                                maxVersion].join(":")
+        def moduleWithType = [newModuleVersion, it.type].join("@")
+        // Report modified packages due to conflicting dependencies here.
+        if (moduleVersion.version != maxVersion) {
+          packagesModified.add([moduleVersion.toString(),
+                                newModuleVersion])
+        }
+        packagesToCopy[moduleWithType] = moduleWithType
       }
-      packagesToCopy[moduleWithType] = moduleWithType
     }
   }
 
