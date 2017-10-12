@@ -281,11 +281,12 @@ public class IOSResolver : AssetPostprocessor {
         new SortedDictionary<string, Pod>();
 
     // Order of post processing operations.
-    private const int BUILD_ORDER_CHECK_COCOAPODS_INSTALL = 1;
-    private const int BUILD_ORDER_PATCH_PROJECT = 2;
-    private const int BUILD_ORDER_GEN_PODFILE = 3;
-    private const int BUILD_ORDER_INSTALL_PODS = 4;
-    private const int BUILD_ORDER_UPDATE_DEPS = 5;
+    private const int BUILD_ORDER_REFRESH_DEPENDENCIES = 1;
+    private const int BUILD_ORDER_CHECK_COCOAPODS_INSTALL = 2;
+    private const int BUILD_ORDER_PATCH_PROJECT = 3;
+    private const int BUILD_ORDER_GEN_PODFILE = 4;
+    private const int BUILD_ORDER_INSTALL_PODS = 5;
+    private const int BUILD_ORDER_UPDATE_DEPS = 6;
 
     // This is appended to the Podfile filename to store a backup of the original Podfile.
     // ie. "Podfile_Unity".
@@ -572,10 +573,6 @@ public class IOSResolver : AssetPostprocessor {
                     UpgradeToWorkspaceWarningDisabled = true;
                     break;
             }
-        }
-
-        if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
-            RefreshXmlDependencies();
         }
     }
 
@@ -1363,6 +1360,18 @@ public class IOSResolver : AssetPostprocessor {
 
         // If this wasn't started interactively, block until execution is complete.
         if (!interactive) complete.WaitOne();
+    }
+
+    /// <summary>
+    /// Refresh XML dependencies if the plugin is enabled.
+    /// </summary>
+    /// <param name="buildTarget">Unused</param>
+    /// <param name="pathToBuiltProject">Unused</param>
+    [PostProcessBuildAttribute(BUILD_ORDER_REFRESH_DEPENDENCIES)]
+    public static void OnPostProcessRefreshXmlDependencies(BuildTarget buildTarget,
+                                                           string pathToBuiltProject) {
+        if (!CocoapodsIntegrationEnabled) return;
+        RefreshXmlDependencies();
     }
 
     /// <summary>
@@ -2396,7 +2405,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Read XML dependencies.
+    /// Read XML dependencies if the plugin is enabled.
     /// </summary>
     private static void RefreshXmlDependencies() {
         // Remove all pods that were added via XML dependencies.
@@ -2411,35 +2420,6 @@ public class IOSResolver : AssetPostprocessor {
         }
         // Read pod specifications from XML dependencies.
         xmlDependencies.ReadAll(logger);
-    }
-
-    /// <summary>
-    /// Called by Unity when all assets have been updated. This
-    /// is used to kick off resolving the dependendencies declared.
-    /// </summary>
-    /// <param name="importedAssets">Imported assets. (unused)</param>
-    /// <param name="deletedAssets">Deleted assets. (unused)</param>
-    /// <param name="movedAssets">Moved assets. (unused)</param>
-    /// <param name="movedFromAssetPaths">Moved from asset paths. (unused)</param>
-    private static void OnPostprocessAllAssets(string[] importedAssets,
-                                               string[] deletedAssets,
-                                               string[] movedAssets,
-                                               string[] movedFromAssetPaths) {
-        bool reloadXmlDependencies = false;
-        var changedAssets = new HashSet<string>();
-        foreach (var assetGroup in new [] { importedAssets,  deletedAssets, movedAssets}) {
-            changedAssets.UnionWith(assetGroup);
-        }
-        foreach (var asset in changedAssets) {
-            foreach (var regexp in xmlDependencies.fileRegularExpressions) {
-                if (regexp.Match(asset).Success) {
-                    reloadXmlDependencies = true;
-                }
-            }
-        }
-        if (reloadXmlDependencies) {
-            RefreshXmlDependencies();
-        }
     }
 }
 
