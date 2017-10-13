@@ -1,3 +1,8 @@
+# Version 1.2.56 - Oct 12, 2017
+## Bug Fixes
+* Fixed Gradle artifact download with non-version locked artifacts.
+* Changed iOS resolver to only load dependencies at build time.
+
 # Version 1.2.55 - Oct 4, 2017
 ## Bug Fixes
 * Force Android Resolution when the "Install Android Packages" setting changes.
