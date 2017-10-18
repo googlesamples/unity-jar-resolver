@@ -52,6 +52,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\Logger.cs" />
+    <Compile Include="src\FileUtils.cs" />
     <Compile Include="src\ProjectSettings.cs" />
     <Compile Include="src\SettingsDialog.cs" />
     <Compile Include="src\VersionHandlerImpl.cs" />

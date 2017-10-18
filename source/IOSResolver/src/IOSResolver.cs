@@ -169,23 +169,6 @@ public class IOSResolver : AssetPostprocessor {
 
     private class IOSXmlDependencies : XmlDependencies {
 
-        // Adapter method for PlayServicesSupport.LogMessageWithLevel.
-        internal static void LogMessage(string message, PlayServicesSupport.LogLevel level) {
-            LogLevel iosLevel = LogLevel.Info;
-            switch (level) {
-                case PlayServicesSupport.LogLevel.Info:
-                    iosLevel = LogLevel.Info;
-                    break;
-                case PlayServicesSupport.LogLevel.Warning:
-                    iosLevel = LogLevel.Warning;
-                    break;
-                case PlayServicesSupport.LogLevel.Error:
-                    iosLevel = LogLevel.Error;
-                    break;
-            }
-            IOSResolver.Log(message, level: iosLevel);
-        }
-
         public IOSXmlDependencies() {
             dependencyType = "iOS dependencies";
         }
@@ -2119,8 +2102,7 @@ public class IOSResolver : AssetPostprocessor {
 
             Log(String.Format("Moving framework {0} --> {1}", frameworkFullPath,
                               destFrameworkFullPath), verbose: true);
-            PlayServicesSupport.DeleteExistingFileOrDirectory(
-                destFrameworkFullPath);
+            FileUtils.DeleteExistingFileOrDirectory(destFrameworkFullPath);
             Directory.Move(frameworkFullPath, destFrameworkFullPath);
             project.AddFileToBuild(
                 target,
@@ -2158,8 +2140,7 @@ public class IOSResolver : AssetPostprocessor {
                                          new DirectoryInfo(resFolder).Name);
                         string destFolderFullPath =
                             Path.Combine(pathToBuiltProject, destFolder);
-                        PlayServicesSupport.DeleteExistingFileOrDirectory(
-                            destFolderFullPath);
+                        FileUtils.DeleteExistingFileOrDirectory(destFolderFullPath);
                         Log(String.Format("Moving resource directory {0} --> {1}", resFolder,
                                           destFolderFullPath), verbose: true);
                         Directory.Move(resFolder, destFolderFullPath);

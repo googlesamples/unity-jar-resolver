@@ -814,8 +814,7 @@ namespace GooglePlayServices
             if (filenames == null) return false;
             bool deletedFiles = false;
             foreach (string artifact in filenames) {
-                deletedFiles |= PlayServicesSupport.DeleteExistingFileOrDirectory(
-                    artifact, includeMetaFiles: true);
+                deletedFiles |= FileUtils.DeleteExistingFileOrDirectory(artifact);
             }
             if (deletedFiles) AssetDatabase.Refresh();
             return deletedFiles;
@@ -1124,8 +1123,7 @@ namespace GooglePlayServices
         /// </summary>
         internal static void DeleteLabeledAssets() {
             foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
-                PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
-                                                                  includeMetaFiles: true);
+                FileUtils.DeleteExistingFileOrDirectory(assetPath);
             }
             AssetDatabase.Refresh();
         }

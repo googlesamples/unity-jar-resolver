@@ -17,6 +17,7 @@
 namespace GooglePlayServices
 {
     using UnityEditor;
+    using Google;
     using Google.JarResolver;
     using System.IO;
     using UnityEngine;
@@ -352,7 +353,7 @@ namespace GooglePlayServices
                                                   dir, aarFile, antProject), verbose: true);
             abi = null;
             string workingDir = Path.Combine(dir, Path.GetFileNameWithoutExtension(aarFile));
-            PlayServicesSupport.DeleteExistingFileOrDirectory(workingDir, includeMetaFiles: true);
+            FileUtils.DeleteExistingFileOrDirectory(workingDir);
             Directory.CreateDirectory(workingDir);
             if (!ExtractAar(aarFile, null, workingDir)) return false;
             ReplaceVariables(workingDir);
@@ -386,9 +387,8 @@ namespace GooglePlayServices
             nativeLibsDir = nativeLibsDir ?? jniLibDir;
             if (Directory.Exists(jniLibDir)) {
                 if (jniLibDir != nativeLibsDir) {
-                    PlayServicesSupport.CopyDirectory(jniLibDir, nativeLibsDir);
-                    PlayServicesSupport.DeleteExistingFileOrDirectory(jniLibDir,
-                                                                      includeMetaFiles: true);
+                    FileUtils.CopyDirectory(jniLibDir, nativeLibsDir);
+                    FileUtils.DeleteExistingFileOrDirectory(jniLibDir);
                 }
                 // Remove shared libraries for all ABIs that are not required for the selected
                 // target ABI.
@@ -397,8 +397,7 @@ namespace GooglePlayServices
                 foreach (var directory in Directory.GetDirectories(nativeLibsDir)) {
                     var abiDir = Path.GetFileName(directory);
                     if (!activeAbis.Contains(abiDir)) {
-                        PlayServicesSupport.DeleteExistingFileOrDirectory(
-                            directory, includeMetaFiles: true);
+                        FileUtils.DeleteExistingFileOrDirectory(directory);
                     }
                 }
                 abi = currentAbi;
@@ -416,20 +415,17 @@ namespace GooglePlayServices
                     });
                 }
                 // Clean up the aar file.
-                PlayServicesSupport.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile),
-                                                                  includeMetaFiles: true);
+                FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
                 // Add a tracking label to the exploded files.
                 PlayServicesResolver.LabelAssets(new [] { workingDir });
             } else {
                 // Add a tracking label to the exploded files just in-case packaging fails.
                 PlayServicesResolver.LabelAssets(new [] { workingDir });
                 // Create a new AAR file.
-                PlayServicesSupport.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile),
-                                                                  includeMetaFiles: true);
+                FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
                 if (!ArchiveAar(aarFile, workingDir)) return false;
                 // Clean up the exploded directory.
-                PlayServicesSupport.DeleteExistingFileOrDirectory(workingDir,
-                                                                  includeMetaFiles: true);
+                FileUtils.DeleteExistingFileOrDirectory(workingDir);
             }
             return true;
         }

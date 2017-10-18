@@ -13,6 +13,7 @@
 //  See the License for the specific language governing permissions and
 //    limitations under the License.
 // </copyright>
+using Google;
 using Google.JarResolver;
 using UnityEditor;
 using UnityEngine;
@@ -373,8 +374,7 @@ class GradlePreBuildResolver : DefaultResolver {
                         foreach (var directory in Directory.GetDirectories(libsDir)) {
                             var abiDir = Path.GetFileName(directory).ToLower();
                             if (!activeAbis.Contains(abiDir)) {
-                                PlayServicesSupport.DeleteExistingFileOrDirectory(
-                                    directory, includeMetaFiles: true);
+                                FileUtils.DeleteExistingFileOrDirectory(directory);
                             }
                         }
                     }

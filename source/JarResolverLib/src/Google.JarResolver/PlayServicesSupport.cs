@@ -23,6 +23,8 @@ namespace Google.JarResolver
     using System.Text.RegularExpressions;
     using System.Xml;
 
+    using Google;
+
     /// <summary>
     /// Play services support is a helper class for managing the Google play services
     /// and Android support libraries in a Unity project.  This is done by using
@@ -91,11 +93,6 @@ namespace Google.JarResolver
         /// String that is expanded with the path of the Android SDK.
         /// </summary>
         internal const string SdkVariable = "$SDK";
-
-        /// <summary>
-        /// Extension of Unity metadata files.
-        /// </summary>
-        internal const string MetaExtension = ".meta";
 
         /// <summary>
         /// Error message displayed / logged when the Android SDK path isn't configured.
@@ -302,63 +299,6 @@ namespace Google.JarResolver
         }
 
         /// <summary>
-        /// Delete a file or directory if it exists.
-        /// </summary>
-        /// <param name="path">Path to the file or directory to delete if it exists.</param>
-        public static bool DeleteExistingFileOrDirectory(string path,
-                                                         bool includeMetaFiles = false)
-        {
-            bool deletedFileOrDirectory = false;
-            if (includeMetaFiles && !path.EndsWith(MetaExtension))
-            {
-                deletedFileOrDirectory = DeleteExistingFileOrDirectory(path + MetaExtension);
-            }
-            if (Directory.Exists(path))
-            {
-                var di = new DirectoryInfo(path);
-                di.Attributes &= ~FileAttributes.ReadOnly;
-                foreach (string file in Directory.GetFileSystemEntries(path))
-                {
-                    DeleteExistingFileOrDirectory(file, includeMetaFiles: includeMetaFiles);
-                }
-                Directory.Delete(path);
-                deletedFileOrDirectory = true;
-            }
-            else if (File.Exists(path))
-            {
-                File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
-                File.Delete(path);
-                deletedFileOrDirectory = true;
-            }
-            return deletedFileOrDirectory;
-        }
-
-        /// <summary>
-        /// Copy the contents of a directory to another directory.
-        /// </summary>
-        /// <param name="sourceDir">Path to copy the contents from.</param>
-        /// <param name="targetDir">Path to copy to.</param>
-        public static void CopyDirectory(string sourceDir, string targetDir)
-        {
-            Func<string, string> sourceToTargetPath = (path) => {
-                return Path.Combine(targetDir, path.Substring(sourceDir.Length + 1));
-            };
-            foreach (string sourcePath in
-                     Directory.GetDirectories(sourceDir, "*", SearchOption.AllDirectories))
-            {
-                Directory.CreateDirectory(sourceToTargetPath(sourcePath));
-            }
-            foreach (string sourcePath in
-                     Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
-            {
-                if (!sourcePath.EndsWith(PlayServicesSupport.MetaExtension))
-                {
-                    File.Copy(sourcePath, sourceToTargetPath(sourcePath));
-                }
-            }
-        }
-
-        /// <summary>
         /// Lookup common package IDs for a dependency.
         /// </summary>
         private static Dependency AddCommonPackageIds(Dependency dep) {
@@ -550,7 +490,7 @@ namespace Google.JarResolver
             foreach (var path in filesInDestDir)
             {
                 // Ignore Unity's .meta files.
-                if (path.EndsWith(MetaExtension)) continue;
+                if (path.EndsWith(FileUtils.META_EXTENSION)) continue;
 
                 string filename = Path.GetFileName(path);
                 // Strip the package extension from filenames.  Directories generated from
@@ -591,8 +531,7 @@ namespace Google.JarResolver
                                     Log(String.Format(
                                         "Deleting exploded AAR ({0}) that should not be exploded.",
                                         aarFile), verbose: true);
-                                    DeleteExistingFileOrDirectory(path,
-                                                                  includeMetaFiles: true);
+                                    FileUtils.DeleteExistingFileOrDirectory(path);
                                     reportDependency = false;
                                 }
                             }
@@ -1133,8 +1072,7 @@ namespace Google.JarResolver
                     string newVersion = ExtractVersionFromFileName(dep.BestVersion);
                     if ((oldVersion == null || (newVersion != null && oldVersion != newVersion)) &&
                         (confirmer == null || confirmer(oldDepFilenamePair.Key, dep))) {
-                        DeleteExistingFileOrDirectory(oldDepFilenamePair.Value,
-                                                      includeMetaFiles: true);
+                        FileUtils.DeleteExistingFileOrDirectory(oldDepFilenamePair.Value);
                     } else {
                         continue;
                     }
@@ -1157,8 +1095,7 @@ namespace Google.JarResolver
                         doCopy = File.GetLastWriteTime(existingName).CompareTo(
                             File.GetLastWriteTime(aarFile)) < 0;
                         if (doCopy) {
-                            DeleteExistingFileOrDirectory(existingName,
-                                                          includeMetaFiles: true);
+                            FileUtils.DeleteExistingFileOrDirectory(existingName);
                         }
                     }
                     if (doCopy) {

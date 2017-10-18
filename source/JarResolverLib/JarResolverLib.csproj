@@ -41,6 +41,7 @@
     <Compile Include="src\Google.JarResolver\Dependency.cs" />
     <Compile Include="src\Google.JarResolver\PlayServicesSupport.cs" />
     <Compile Include="src\Google.JarResolver\ResolutionException.cs" />
+    <Compile Include="..\VersionHandlerImpl\src\FileUtils.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>

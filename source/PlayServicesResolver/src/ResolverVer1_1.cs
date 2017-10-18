@@ -19,6 +19,7 @@ namespace GooglePlayServices
     using UnityEngine;
     using UnityEditor;
     using System.Collections.Generic;
+    using Google;
     using Google.JarResolver;
     using System;
     using System.Collections;
@@ -538,8 +539,7 @@ namespace GooglePlayServices
                                                   (new List<string>(staleArtifacts)).ToArray())),
                         verbose: true);
                     foreach (var assetPath in staleArtifacts) {
-                        PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
-                                                                          includeMetaFiles: true);
+                        FileUtils.DeleteExistingFileOrDirectory(assetPath);
                     }
 
                 }
@@ -770,8 +770,7 @@ namespace GooglePlayServices
                             "to resolve the conflict?",
                             "Yes", "No")) {
                         foreach (var filename in conflict.Value) {
-                            PlayServicesSupport.DeleteExistingFileOrDirectory(
-                                filename, includeMetaFiles: true);
+                            FileUtils.DeleteExistingFileOrDirectory(filename);
                         }
                         warningMessage = null;
                     }
@@ -893,8 +892,7 @@ namespace GooglePlayServices
                                 String.Join("\n",
                                             (new List<string>(currentDependencyPaths)).ToArray())),
                             verbose: true);
-                        PlayServicesSupport.DeleteExistingFileOrDirectory(assetPath,
-                                                                          includeMetaFiles: true);
+                        FileUtils.DeleteExistingFileOrDirectory(assetPath);
                     }
                 }
             }
@@ -1287,8 +1285,7 @@ namespace GooglePlayServices
                         aarData.targetAbi = aarData.targetAbi ?? AarExplodeData.ABI_UNIVERSAL;
                     } else {
                         // Clean up previously expanded / exploded versions of the AAR.
-                        PlayServicesSupport.DeleteExistingFileOrDirectory(
-                            DetermineExplodedAarPath(aarPath), includeMetaFiles: true);
+                        FileUtils.DeleteExistingFileOrDirectory(DetermineExplodedAarPath(aarPath));
                     }
                     aarData.gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
                     aarData.gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
@@ -1438,7 +1435,7 @@ namespace GooglePlayServices
                         throw e;
                     }
                     finally {
-                        PlayServicesSupport.DeleteExistingFileOrDirectory(temporaryDirectory);
+                        FileUtils.DeleteExistingFileOrDirectory(temporaryDirectory);
                     }
                 }
             }
