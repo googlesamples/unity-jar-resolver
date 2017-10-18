@@ -363,6 +363,33 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Generates a Gradle (Java) properties string from a dictionary of key value pairs.
+        /// Details of the format is documented in
+        /// http://docs.oracle.com/javase/7/docs/api/java/util/Properties.html#\
+        /// store%28java.io.Writer,%20java.lang.String%29
+        /// </summary>
+        /// <param name="properties">Properties to generate a string from.  Each value must not
+        /// contain a newline.</param>
+        /// <returns>String with Gradle (Java) properties</returns>
+        private string GenerateGradleProperties(Dictionary<string, string> properties) {
+            var lines = new List<string>();
+            foreach (var kv in properties) {
+                var escapedKey = kv.Key.Replace(" ", "\\ ");
+                var elementAfterLeadingWhitespace = kv.Value.TrimStart(new [] { ' ' });
+                var escapedElement =
+                    kv.Value.Substring(elementAfterLeadingWhitespace.Length).Replace(" ", "\\ ") +
+                    elementAfterLeadingWhitespace
+                        .Replace("\\", "\\\\")
+                        .Replace("#", "\\#")
+                        .Replace("!", "\\!")
+                        .Replace("=", "\\=")
+                        .Replace(":", "\\:");
+                lines.Add(String.Format("{0}={1}", escapedKey, escapedElement));
+            }
+            return String.Join("\n", lines.ToArray());
+        }
+
+        /// <summary>
         /// Perform resolution using Gradle.
         /// </summary>
         /// <param name="svcSupport">PlayServicesSupport instance.</param>
@@ -376,12 +403,12 @@ namespace GooglePlayServices
                 PlayServicesSupport svcSupport, string destinationDirectory,
                 string androidSdkPath, bool logErrorOnMissingArtifacts,
                 System.Action<List<Dependency>> resolutionComplete) {
-            var gradleWrapper = Path.Combine(
+            var gradleWrapper = Path.GetFullPath(Path.Combine(
                 gradleBuildDirectory,
                 UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform ?
-                    "gradlew.bat" : "gradlew");
-            var buildScript = Path.Combine(
-                gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "download_artifacts.gradle");
+                    "gradlew.bat" : "gradlew"));
+            var buildScript = Path.GetFullPath(Path.Combine(
+                gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "download_artifacts.gradle"));
             // Get all dependencies.
             var allDependencies = svcSupport.LoadDependencies(true, keepMissing: true,
                                                               findCandidates: true);
@@ -561,25 +588,34 @@ namespace GooglePlayServices
                                          dependency.VersionlessKey + ":+" : dependency.Key);
             }
 
-            var gradleArguments =
-                String.Join(
-                    " ",
-                    new [] {
-                        "-b", buildScript,
-                        SettingsDialog.UseGradleDaemon ? "--daemon" : "--no-daemon",
-                        String.Format("\"-PANDROID_HOME={0}\"", androidSdkPath),
-                        String.Format("\"-PTARGET_DIR={0}\"",
-                                      Path.GetFullPath(destinationDirectory)),
-                        String.Format("\"-PMAVEN_REPOS={0}\"",
-                                      String.Join(";", repoList.ToArray())),
-                        String.Format("\"-PPACKAGES_TO_COPY={0}\"",
-                                      String.Join(";", filteredDependencies.ToArray()))
-                    });
+            var gradleProjectProperties = new Dictionary<string, string>() {
+                { "ANDROID_HOME", androidSdkPath },
+                { "TARGET_DIR", Path.GetFullPath(destinationDirectory) },
+                { "MAVEN_REPOS", String.Join(";", repoList.ToArray()) },
+                { "PACKAGES_TO_COPY", String.Join(";", filteredDependencies.ToArray()) }
+            };
+            var gradleArguments = new List<string> {
+                "-b", buildScript,
+                SettingsDialog.UseGradleDaemon ? "--daemon" : "--no-daemon",
+            };
+            foreach (var kv in gradleProjectProperties) {
+                gradleArguments.Add(String.Format("\"-P{0}={1}\"", kv.Key, kv.Value));
+            }
+            var gradleArgumentsString = String.Join(" ", gradleArguments.ToArray());
+
+            // Generate gradle.properties to set properties in the script rather than using
+            // the command line.
+            // Some users of Windows 10 systems have had issues running the Gradle resolver
+            // which is suspected to be caused by command line argument parsing.
+            // Using both gradle.properties and properties specified via command line arguments
+            // works fine.
+            File.WriteAllText(Path.Combine(gradleBuildDirectory, "gradle.properties"),
+                              GenerateGradleProperties(gradleProjectProperties));
 
             PlayServicesSupport.Log(String.Format("Running dependency fetching script\n" +
                                                   "\n" +
                                                   "{0} {1}\n",
-                                                  gradleWrapper, gradleArguments),
+                                                  gradleWrapper, gradleArgumentsString),
                                     verbose: true);
 
             // Run the build script to perform the resolution popping up a window in the editor.
@@ -589,11 +625,12 @@ namespace GooglePlayServices
             window.modal = false;
             window.progressTitle = window.summaryText;
             window.autoScrollToBottom = true;
-            window.RunAsync(gradleWrapper, gradleArguments,
+            window.RunAsync(gradleWrapper, gradleArgumentsString,
                             (result) => {
                                 window.Close();
                                 scheduleOnMainThread(result);
                             },
+                            workingDirectory: gradleBuildDirectory,
                             maxProgressLines: 50);
             window.Show();
         }
