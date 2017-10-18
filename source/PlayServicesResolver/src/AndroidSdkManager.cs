@@ -15,6 +15,7 @@
 // </copyright>
 
 namespace GooglePlayServices {
+    using Google;
     using Google.JarResolver;
     using System;
     using System.Diagnostics;
@@ -182,10 +183,10 @@ namespace GooglePlayServices {
                 try {
                     componentInteger = Convert.ToInt64(component);
                 } catch (FormatException) {
-                    PlayServicesSupport.Log(
+                    PlayServicesResolver.Log(
                         String.Format("Unable to convert version string {0} to " +
                                       "integer value", versionString),
-                        level: PlayServicesSupport.LogLevel.Warning);
+                        level: LogLevel.Warning);
                     return 0;
                 }
                 versionInteger += (componentInteger * currentMultiplier);
@@ -241,9 +242,9 @@ namespace GooglePlayServices {
             try {
                 propertiesText = File.ReadAllText(propertiesPath);
             } catch (Exception e) {
-                PlayServicesSupport.Log(String.Format("Unable to read {0}\n{1}\n",
+                PlayServicesResolver.Log(String.Format("Unable to read {0}\n{1}\n",
                                                       propertiesPath, e.ToString()),
-                                        verbose: true);
+                                         level: LogLevel.Verbose);
                 return null;
             }
             // Unfortunately the package name is simply based upon the path within the SDK.
@@ -405,10 +406,11 @@ namespace GooglePlayServices {
                                          Action<CommandLine.Result> complete) {
             var window = CommandLineDialog.CreateCommandLineDialog(
                 "Querying Android SDK packages");
-            PlayServicesSupport.Log(String.Format("Query Android SDK packages\n" +
-                                                  "\n" +
-                                                  "{0} {1}\n",
-                                                  toolPath, toolArguments), verbose: true);
+            PlayServicesResolver.Log(String.Format("Query Android SDK packages\n" +
+                                                   "\n" +
+                                                   "{0} {1}\n",
+                                                   toolPath, toolArguments),
+                                     level: LogLevel.Verbose);
             window.summaryText = "Getting Installed Android SDK packages.";
             window.modal = false;
             window.progressTitle = window.summaryText;
@@ -418,7 +420,7 @@ namespace GooglePlayServices {
                 (CommandLine.Result result) => {
                     window.Close();
                     if (result.exitCode != 0) {
-                        PlayServicesSupport.Log(String.Format(PACKAGES_MISSING, result.message));
+                        PlayServicesResolver.Log(String.Format(PACKAGES_MISSING, result.message));
                     }
                     complete(result);
                 },
@@ -443,10 +445,11 @@ namespace GooglePlayServices {
                 HashSet<AndroidSdkPackageNameVersion> packages,
                 string licenseQuestion, string licenseAgree, string licenseDecline,
                 Regex licenseTextHeader, Action<bool> complete) {
-            PlayServicesSupport.Log(String.Format("Install Android SDK packages\n" +
-                                                  "\n" +
-                                                  "{0} {1}\n",
-                                                  toolPath, toolArguments), verbose: true);
+            PlayServicesResolver.Log(String.Format("Install Android SDK packages\n" +
+                                                   "\n" +
+                                                   "{0} {1}\n",
+                                                   toolPath, toolArguments),
+                                     level: LogLevel.Verbose);
             // Display the license retrieval dialog.
             DisplayInstallLicenseDialog(
                 toolPath, toolArguments, true,
@@ -507,7 +510,7 @@ namespace GooglePlayServices {
                     "Aborted installation of the following packages:\n" :
                     "Android package installation failed.\n\n" +
                     "Failed when installing the following packages:\n";
-                PlayServicesSupport.Log(
+                PlayServicesResolver.Log(
                     String.Format(
                         "{0}\n" +
                         "{1}\n\n" +
@@ -515,8 +518,7 @@ namespace GooglePlayServices {
                         succeeded ? "Successfully installed Android packages.\n\n" : failedMessage,
                         AndroidSdkPackageNameVersion.ListToString(packages),
                         toolResult.message),
-                    level: succeeded ? PlayServicesSupport.LogLevel.Info :
-                        PlayServicesSupport.LogLevel.Warning);
+                    level: succeeded ? LogLevel.Info : LogLevel.Warning);
             }
         }
 
@@ -544,8 +546,8 @@ namespace GooglePlayServices {
             window.autoScrollToBottom = true;
             CommandLine.IOHandler ioHandler = null;
             if (licenseResponder != null) ioHandler = licenseResponder.AggregateLine;
-            PlayServicesSupport.Log(String.Format("{0} {1}", toolPath, toolArguments),
-                                    verbose: true);
+            PlayServicesResolver.Log(String.Format("{0} {1}", toolPath, toolArguments),
+                                     level: LogLevel.Verbose);
             window.RunAsync(
                 toolPath, toolArguments,
                 (CommandLine.Result result) => {
@@ -919,8 +921,9 @@ namespace GooglePlayServices {
                     packagesString),
                 "Yes", cancel: "No");
             if (!installPackage) {
-                PlayServicesSupport.Log("User cancelled installation of Android SDK tools package.",
-                                         level: PlayServicesSupport.LogLevel.Warning);
+                PlayServicesResolver.Log(
+                    "User cancelled installation of Android SDK tools package.",
+                    level: LogLevel.Warning);
                 complete(false);
                 return;
             }
@@ -945,7 +948,7 @@ namespace GooglePlayServices {
         /// <returns>String with the path to the tool if found, null otherwise.</returns>
         private static string FindAndroidSdkTool(string toolName, string sdkPath = null) {
             if (String.IsNullOrEmpty(sdkPath)) {
-                PlayServicesSupport.Log(String.Format(
+                PlayServicesResolver.Log(String.Format(
                     "{0}\n" +
                     "Falling back to searching for the Android SDK tool {1} in the system path.",
                     PlayServicesSupport.AndroidSdkConfigurationError, toolName));
@@ -974,7 +977,7 @@ namespace GooglePlayServices {
         /// </summary>
         /// <param name="complete">Action called with null.</param>
         private static void CreateFailed(Action<IAndroidSdkManager> complete) {
-            PlayServicesSupport.Log(String.Format(
+            PlayServicesResolver.Log(String.Format(
                 "Unable to find either the {0} or {1} command line tool.\n\n" +
                 "It is not possible to query or install Android SDK packages.\n" +
                 "To resolve this issue, open the Android Package Manager" +

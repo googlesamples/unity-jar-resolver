@@ -180,8 +180,8 @@ namespace GooglePlayServices
             if (!File.Exists(aarExplodeDataFile)) {
                 // Build aarExplodeData from the current set of AARs in the project.
                 foreach (string path in PlayServicesResolver.FindLabeledAssets()) {
-                    PlayServicesSupport.Log(String.Format("Caching AAR {0} state",
-                                                          path), verbose: true);
+                    PlayServicesResolver.Log(String.Format("Caching AAR {0} state",
+                                                           path), LogLevel.Verbose);
                     ShouldExplode(path);
                 }
                 return;
@@ -355,11 +355,11 @@ namespace GooglePlayServices
         private void LogMissingDependenciesError(List<string> missingArtifacts) {
             // Log error for missing packages.
             if (missingArtifacts.Count > 0) {
-                PlayServicesSupport.Log(
+                PlayServicesResolver.Log(
                    String.Format("Resolution failed\n\n" +
                                  "Failed to fetch the following dependencies:\n{0}\n\n",
                                  String.Join("\n", missingArtifacts.ToArray())),
-                   level: PlayServicesSupport.LogLevel.Error);
+                   level: LogLevel.Error);
             }
         }
 
@@ -428,10 +428,10 @@ namespace GooglePlayServices
                             "gradle/wrapper/gradle-wrapper.properties",
                             "gradlew",
                             "gradlew.bat"}, gradleBuildDirectory)) {
-                    PlayServicesSupport.Log(
+                    PlayServicesResolver.Log(
                        String.Format("Unable to extract Gradle build component {0}\n\n" +
                                      "Resolution failed.", gradleTemplateZip),
-                       level: PlayServicesSupport.LogLevel.Error);
+                       level: LogLevel.Error);
                     resolutionComplete(allDependenciesList);
                     return;
                 }
@@ -445,11 +445,11 @@ namespace GooglePlayServices
                     var result = CommandLine.Run("chmod",
                                                  String.Format("ug+x \"{0}\"", gradleWrapper));
                     if (result.exitCode != 0) {
-                        PlayServicesSupport.Log(
+                        PlayServicesResolver.Log(
                             String.Format("Failed to make \"{0}\" executable.\n\n" +
                                           "Resolution failed.\n\n{1}", gradleWrapper,
                                           result.message),
-                            level: PlayServicesSupport.LogLevel.Error);
+                            level: LogLevel.Error);
                         resolutionComplete(allDependenciesList);
                         return;
                     }
@@ -491,10 +491,10 @@ namespace GooglePlayServices
             // Executed when Gradle finishes execution.
             CommandLine.CompletionHandler gradleComplete = (result) => {
                 if (result.exitCode != 0) {
-                    PlayServicesSupport.Log(
+                    PlayServicesResolver.Log(
                         String.Format("Gradle failed to fetch dependencies.\n\n" +
                                       "{0}", result.message),
-                        level: PlayServicesSupport.LogLevel.Error);
+                        level: LogLevel.Error);
                     resolutionComplete(allDependenciesList);
                     return;
                 }
@@ -510,11 +510,11 @@ namespace GooglePlayServices
                 PlayServicesResolver.LabelAssets(copiedArtifacts);
                 // Display a warning about modified artifact versions.
                 if (modifiedArtifacts.Count > 0) {
-                    PlayServicesSupport.Log(
+                    PlayServicesResolver.Log(
                         String.Format("Some conflicting dependencies were found.\n" +
                                       "The following dependency versions were modified:\n" +
                                       "{0}\n", String.Join("\n", modifiedArtifacts.ToArray())),
-                        level: PlayServicesSupport.LogLevel.Warning);
+                        level: LogLevel.Warning);
                 }
                 // Poke the explode cache for each copied file and add the exploded paths to the
                 // output list set.
@@ -533,11 +533,11 @@ namespace GooglePlayServices
                     }
                 }
                 if (staleArtifacts.Count > 0) {
-                    PlayServicesSupport.Log(
+                    PlayServicesResolver.Log(
                         String.Format("Deleting stale dependencies:\n{0}",
                                       String.Join("\n",
                                                   (new List<string>(staleArtifacts)).ToArray())),
-                        verbose: true);
+                        level: LogLevel.Verbose);
                     foreach (var assetPath in staleArtifacts) {
                         FileUtils.DeleteExistingFileOrDirectory(assetPath);
                     }
@@ -556,13 +556,13 @@ namespace GooglePlayServices
                         // class with the partial data we have now.
                         var components = new List<string>(artifact.Split(new char[] { ':' }));
                         if (components.Count < 2) {
-                            PlayServicesSupport.Log(
+                            PlayServicesResolver.Log(
                                 String.Format(
                                     "Found invalid missing artifact {0}\n" +
                                     "Something went wrong with the gradle artifact download " +
                                     "script\n." +
                                     "Please report a bug", artifact),
-                                level: PlayServicesSupport.LogLevel.Warning);
+                                level: LogLevel.Warning);
                             continue;
                         } else if (components.Count < 3 || components[2] == "+") {
                             components.Add("LATEST");
@@ -612,11 +612,11 @@ namespace GooglePlayServices
             File.WriteAllText(Path.Combine(gradleBuildDirectory, "gradle.properties"),
                               GenerateGradleProperties(gradleProjectProperties));
 
-            PlayServicesSupport.Log(String.Format("Running dependency fetching script\n" +
-                                                  "\n" +
-                                                  "{0} {1}\n",
-                                                  gradleWrapper, gradleArgumentsString),
-                                    verbose: true);
+            PlayServicesResolver.Log(String.Format("Running dependency fetching script\n" +
+                                                   "\n" +
+                                                   "{0} {1}\n",
+                                                   gradleWrapper, gradleArgumentsString),
+                                     level: LogLevel.Verbose);
 
             // Run the build script to perform the resolution popping up a window in the editor.
             var window = CommandLineDialog.CreateCommandLineDialog(
@@ -700,7 +700,7 @@ namespace GooglePlayServices
             // It's not possible to resolve this automatically as google-play-services.jar used to
             // include all libraries so we don't know the set of components the developer requires.
             if (managedPlayServicesArtifacts.Count > 0 && playServicesJars.Count > 0) {
-                PlayServicesSupport.Log(
+                PlayServicesResolver.Log(
                     String.Format(
                         "Legacy {0} found!\n\n" +
                         "Your application will not build in the current state.\n" +
@@ -716,7 +716,7 @@ namespace GooglePlayServices
                         "contact the plugin vendor to do so.\n\n",
                         playServicesJar, String.Join("\n", playServicesJars.ToArray()),
                         String.Join("\n", managedPlayServicesArtifacts.ToArray())),
-                    level: PlayServicesSupport.LogLevel.Warning);
+                    level: LogLevel.Warning);
             }
 
             // For each managed artifact aggregate the set of conflicting unmanaged artifacts.
@@ -777,7 +777,7 @@ namespace GooglePlayServices
                 }
 
                 if (!String.IsNullOrEmpty(warningMessage)) {
-                    PlayServicesSupport.Log(
+                    PlayServicesResolver.Log(
                         warningMessage +
                         "\n" +
                         "Your application is unlikely to build in the current state.\n" +
@@ -788,7 +788,7 @@ namespace GooglePlayServices
                         "  include conflicting versions of Google Play services.\n" +
                         "* Contacting the plugin vendor(s) with conflicting\n" +
                         "  dependencies and asking them to update their plugin.\n",
-                        level: PlayServicesSupport.LogLevel.Warning);
+                        level: LogLevel.Warning);
                 }
             }
         }
@@ -847,7 +847,8 @@ namespace GooglePlayServices
                 GooglePlayServices.SettingsDialog.FetchDependenciesWithGradle;
             var sdkPath = svcSupport.SDK;
             System.Action resolve = () => {
-                PlayServicesSupport.Log("Performing Android Dependency Resolution", verbose: true);
+                PlayServicesResolver.Log("Performing Android Dependency Resolution",
+                                         LogLevel.Verbose);
                 if (fetchDependenciesWithGradle) {
                     GradleResolution(svcSupport, destinationDirectory, sdkPath, true,
                                      (missingArtifacts) => { resolutionComplete(); });
@@ -885,13 +886,13 @@ namespace GooglePlayServices
                     }
                     if (!assetTargetPaths.Exists(
                              targetPath => currentDependencyPaths.Contains(targetPath))) {
-                        PlayServicesSupport.Log(
+                        PlayServicesResolver.Log(
                             String.Format(
                                 "Deleting stale dependency {0} not in required paths:\n{1}",
                                 assetPath,
                                 String.Join("\n",
                                             (new List<string>(currentDependencyPaths)).ToArray())),
-                            verbose: true);
+                            level: LogLevel.Verbose);
                         FileUtils.DeleteExistingFileOrDirectory(assetPath);
                     }
                 }
@@ -899,13 +900,13 @@ namespace GooglePlayServices
 
             // If dependencies are not missing, don't perform resolution.
             if (dependencies == null) {
-                PlayServicesSupport.Log("No missing or stale Android dependencies found.",
-                                        verbose: true);
+                PlayServicesResolver.Log("No missing or stale Android dependencies found.",
+                                         level: LogLevel.Verbose);
                 resolutionComplete();
                 return;
             }
-            PlayServicesSupport.Log("Found missing Android dependencies, resolving.",
-                                    verbose: true);
+            PlayServicesResolver.Log("Found missing Android dependencies, resolving.",
+                                     level: LogLevel.Verbose);
 
             System.Action<List<Dependency>> reportOrInstallMissingArtifacts =
                     (List<Dependency> requiredDependencies) => {
@@ -926,11 +927,11 @@ namespace GooglePlayServices
                             repoPaths: svcSupport.RepositoryPaths).Values);
                 }
                 foreach (Dependency dependency in requiredDependencies) {
-                    PlayServicesSupport.Log(
+                    PlayServicesResolver.Log(
                         String.Format("Missing Android component {0} (Android SDK Packages: {1})",
                                       dependency.Key, dependency.PackageIds != null ?
                                       String.Join(",", dependency.PackageIds) : "(none)"),
-                        verbose: true);
+                        level: LogLevel.Verbose);
                     if (dependency.PackageIds != null) {
                         foreach (string packageId in dependency.PackageIds) {
                             HashSet<string> dependencySet;
@@ -960,13 +961,13 @@ namespace GooglePlayServices
                         var depString = System.String.Join(
                             "\n", (new List<string>(requiredPackages[pkg])).ToArray());
                         if (installPackages.Contains(packageNameVersion)) {
-                            PlayServicesSupport.Log(
+                            PlayServicesResolver.Log(
                                 String.Format(
                                     "Android SDK package {0} is not installed or out of " +
                                     "date.\n\n" +
                                     "This is required by the following dependencies:\n" +
                                     "{1}", pkg, depString),
-                                level: PlayServicesSupport.LogLevel.Warning);
+                                level: LogLevel.Warning);
                         }
                     }
                     if (fetchDependenciesWithGradle) {
@@ -1016,7 +1017,7 @@ namespace GooglePlayServices
                 sdkPath,
                 (IAndroidSdkManager sdkManager) => {
                     if (sdkManager == null) {
-                        PlayServicesSupport.Log(
+                        PlayServicesResolver.Log(
                             String.Format(
                                 "Unable to find the Android SDK manager tool.\n\n" +
                                 "The following Required Android packages cannot be installed:\n" +
@@ -1026,7 +1027,7 @@ namespace GooglePlayServices
                                 AndroidSdkPackageNameVersion.ListToString(installPackages),
                                 String.IsNullOrEmpty(sdkPath) ?
                                     PlayServicesSupport.AndroidSdkConfigurationError : ""),
-                            level: PlayServicesSupport.LogLevel.Error);
+                            level: LogLevel.Error);
                         return;
                     }
                     // Get the set of available and installed packages.
@@ -1045,7 +1046,7 @@ namespace GooglePlayServices
                                 var availablePackage =
                                     packages.GetMostRecentAvailablePackage(pkg.Name);
                                 if (availablePackage == null || !availablePackage.Installed) {
-                                    PlayServicesSupport.Log(
+                                    PlayServicesResolver.Log(
                                         String.Format(
                                             "Android SDK package {0} ({1}) {2}\n\n" +
                                             "This is required by the following dependencies:\n" +
@@ -1054,7 +1055,7 @@ namespace GooglePlayServices
                                                 "not installed or out of date." :
                                                 "not available for installation.",
                                             depString),
-                                        level: PlayServicesSupport.LogLevel.Warning);
+                                        level: LogLevel.Warning);
                                     if (availablePackage == null) {
                                         installPackages.Remove(pkg);
                                     } else if (!availablePackage.Installed) {
@@ -1090,12 +1091,13 @@ namespace GooglePlayServices
                 var aarData = kv.Value;
                 // If the cached file has been removed, ditch it from the cache.
                 if (!(File.Exists(aarData.path) || Directory.Exists(aarData.path))) {
-                    PlayServicesSupport.Log(String.Format("Found missing AAR {0}", aarData.path),
-                                            verbose: true);
+                    PlayServicesResolver.Log(String.Format("Found missing AAR {0}", aarData.path),
+                                             level: LogLevel.Verbose);
                     aarsToResolve.Add(aar);
                 } else if (AarExplodeDataIsDirty(aarData)) {
-                    PlayServicesSupport.Log(String.Format("AAR {0} needs to be refreshed",
-                                                          aarData.path), verbose: true);
+                    PlayServicesResolver.Log(String.Format("AAR {0} needs to be refreshed",
+                                                          aarData.path),
+                                             level: LogLevel.Verbose);
                     packagesToUpdate.Add(aarData.path);
                     aarsToResolve.Add(aar);
                 }
@@ -1218,7 +1220,7 @@ namespace GooglePlayServices
             }
             catch (Google.JarResolver.ResolutionException e)
             {
-                PlayServicesSupport.Log(e.ToString(), level: PlayServicesSupport.LogLevel.Error);
+                PlayServicesResolver.Log(e.ToString(), level: LogLevel.Error);
                 return;
             }
 
@@ -1429,9 +1431,9 @@ namespace GooglePlayServices
                         }
                     }
                     catch (System.Exception e) {
-                        PlayServicesSupport.Log(
+                        PlayServicesResolver.Log(
                             String.Format("Unable to examine AAR file {0}\n\n{1}", aarPath, e),
-                            level: PlayServicesSupport.LogLevel.Error);
+                            level: LogLevel.Error);
                         throw e;
                     }
                     finally {

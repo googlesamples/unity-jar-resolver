@@ -497,20 +497,33 @@ namespace GooglePlayServices
         /// Called from PlayServicesSupport to log a message.
         /// </summary>
         internal static void LogDelegate(string message, PlayServicesSupport.LogLevel level) {
+            Google.LogLevel loggerLogLevel = Google.LogLevel.Info;
             switch (level) {
                 case PlayServicesSupport.LogLevel.Info:
-                    UnityEngine.Debug.Log(message);
+                    loggerLogLevel = Google.LogLevel.Info;
                     break;
                 case PlayServicesSupport.LogLevel.Warning:
-                    UnityEngine.Debug.LogWarning(message);
+                    loggerLogLevel = Google.LogLevel.Warning;
                     break;
                 case PlayServicesSupport.LogLevel.Error:
-                    UnityEngine.Debug.LogError(message);
-                    lastError = message;
+                    loggerLogLevel = Google.LogLevel.Error;
                     break;
                 default:
                     break;
             }
+            Log(message, level: loggerLogLevel);
+        }
+
+        /// <summary>
+        /// Log a filtered message to Unity log, error messages are stored in
+        /// PlayServicesSupport.lastError.
+        /// </summary>
+        /// <param name="message">String to write to the log.</param>
+        /// <param name="level">Severity of the message, if this is below the currently selected
+        /// Level property the message will not be logged.</param>
+        internal static void Log(string message, Google.LogLevel level = LogLevel.Info) {
+            if (level == LogLevel.Error) lastError = message;
+            logger.Log(message, level: level);
         }
 
         /// <summary>
@@ -610,11 +623,10 @@ namespace GooglePlayServices
             foreach (var asset in filesToCheck) {
                 foreach (var pattern in autoResolveFilePatterns) {
                     if (pattern.Match(asset).Success) {
-                        PlayServicesSupport.Log(
-                            String.Format("Found asset {0} matching {1}, attempting " +
+                        Log(String.Format("Found asset {0} matching {1}, attempting " +
                                           "auto-resolution.",
                                           asset, pattern.ToString()),
-                            level: PlayServicesSupport.LogLevel.Info, verbose: true);
+                            level: LogLevel.Verbose);
                         resolve = true;
                         break;
                     }
@@ -909,7 +921,7 @@ namespace GooglePlayServices
             }
 
             System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
-            PlayServicesSupport.Log("Resolving...", verbose: true);
+            Log("Resolving...", level: LogLevel.Verbose);
 
             lastError = "";
             Resolver.DoResolution(svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
@@ -922,10 +934,10 @@ namespace GooglePlayServices
                                           bool succeeded = String.IsNullOrEmpty(lastError);
                                           AssetDatabase.Refresh();
                                           DependencyState.GetState().WriteToFile();
-                                          PlayServicesSupport.Log(String.Format(
+                                          Log(String.Format(
                                               "Resolution {0}.\n\n{1}",
                                               succeeded ? "Succeeded" : "Failed",
-                                              lastError), verbose: true);
+                                              lastError), level: LogLevel.Verbose);
                                           if (resolutionComplete != null) {
                                               resolutionComplete(succeeded);
                                           }

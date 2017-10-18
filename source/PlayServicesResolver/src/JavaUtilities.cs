@@ -21,6 +21,7 @@ namespace GooglePlayServices {
     using System.IO;
     using UnityEditor;
 
+    using Google;
     using Google.JarResolver;
 
     /// <summary>
@@ -152,13 +153,13 @@ namespace GooglePlayServices {
         /// <param name="javaPath">Path to the java tool.</param>
         /// <param name="commandLineSummary">Summary of the executed command line.</param>
         private static void LogJdkVersionFailedWarning(string javaPath, string commandLineSummary) {
-            PlayServicesSupport.Log(
+            PlayServicesResolver.Log(
                 String.Format(
                     "Failed to get Java version when running {0}\n" +
                     "It is not be possible to verify your Java installation is new enough to " +
                     "compile with the latest Android SDK\n\n" +
                     "{1}", javaPath, commandLineSummary),
-                level: PlayServicesSupport.LogLevel.Warning);
+                level: LogLevel.Warning);
         }
 
         /// <summary>
@@ -204,14 +205,14 @@ namespace GooglePlayServices {
             }
             // If the user's installed JDK is too old, report an error.
             if (majorMinorVersion < MINIMUM_JDK_VERSION_MAJOR_MINOR) {
-                PlayServicesSupport.Log(
+                PlayServicesResolver.Log(
                     String.Format("The configured JDK {0} is too old to build Android " +
                                   "applications with recent libraries.\n" +
                                   "Please install JDK version {1} or newer and configure Unity " +
                                   "to use the new JDK installation in the " +
                                   "'Unity Preferences > External Tools' menu.\n",
                                   majorMinorVersion, MINIMUM_JDK_VERSION_MAJOR_MINOR),
-                    level: PlayServicesSupport.LogLevel.Error);
+                    level: LogLevel.Error);
             }
         }
     }

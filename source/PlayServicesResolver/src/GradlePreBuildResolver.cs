@@ -248,10 +248,10 @@ class GradlePreBuildResolver : DefaultResolver {
             // A value of -1 means the targetSDK Version enum returned "Auto"
             // instead of an actual version, so it's up to us to actually figure it out.
             targetSdkVersion = GetLatestInstalledAndroidPlatformVersion(packages);
-            PlayServicesSupport.Log(
-                String.Format("TargetSDK is set to Auto-detect, and the latest Platform has been " +
-                    "detected as: android-{0}", targetSdkVersion),
-                level: PlayServicesSupport.LogLevel.Info, verbose: true);
+            PlayServicesResolver.Log(
+                String.Format("TargetSDK is set to Auto-detect, and the latest Platform has " +
+                              "been detected as: android-{0}", targetSdkVersion),
+                level: LogLevel.Verbose);
 
             errorIntro = String.Format("The Target SDK is set to automatically pick the highest " +
                 "installed platform in the Android Player Settings, which appears to be " +
@@ -274,16 +274,18 @@ class GradlePreBuildResolver : DefaultResolver {
             buildToolsVersion = GetLatestMinorBuildToolsVersion(packages, targetSdkVersion);
 
             if (buildToolsVersion == null) {
-                PlayServicesSupport.Log(errorIntro + String.Format("no build-tools are available " +
+                PlayServicesResolver.Log(
+                    errorIntro + String.Format("no build-tools are available " +
                     "at this level in the sdk manager. This plugin has been tested with " +
                     "platforms up to android-{0} using build-tools {0}.{1}.{2}. You can try " +
                     "selecting a lower targetSdkVersion in the Android Player Settings.  Please ",
                     TESTED_BUILD_TOOLS_VERSION_MAJOR, TESTED_BUILD_TOOLS_VERSION_MINOR,
                     TESTED_BUILD_TOOLS_VERSION_REV) + errorOutro,
-                    level: PlayServicesSupport.LogLevel.Error);
+                    level: LogLevel.Error);
                 return;
             } else {
-                PlayServicesSupport.Log(errorIntro + String.Format("this plugin has only been " +
+                PlayServicesResolver.Log(
+                    errorIntro + String.Format("this plugin has only been " +
                     "tested with build-tools up to version {0}.{1}.{2}. Corresponding " +
                     "build-tools version {3} will be used, however this is untested with this " +
                     "plugin and MAY NOT WORK! If you have trouble, please select a target SDK " +
@@ -292,7 +294,7 @@ class GradlePreBuildResolver : DefaultResolver {
                     TESTED_BUILD_TOOLS_VERSION_MAJOR,
                     TESTED_BUILD_TOOLS_VERSION_MINOR,
                     TESTED_BUILD_TOOLS_VERSION_REV,
-                    buildToolsVersion) + errorOutro, level: PlayServicesSupport.LogLevel.Warning);
+                    buildToolsVersion) + errorOutro, level: LogLevel.Warning);
             }
         }
 
@@ -404,9 +406,9 @@ class GradlePreBuildResolver : DefaultResolver {
             sdkPath,
             (IAndroidSdkManager sdkManager) => {
                 if (sdkManager == null) {
-                    PlayServicesSupport.Log(
+                    PlayServicesResolver.Log(
                         String.Format("Unable to find the Android SDK manager tool."),
-                        level: PlayServicesSupport.LogLevel.Error);
+                        level: LogLevel.Error);
                     return;
                 }
 
@@ -414,9 +416,9 @@ class GradlePreBuildResolver : DefaultResolver {
                 sdkManager.QueryPackages(
                     (AndroidSdkPackageCollection packages) => {
                         if (packages == null) {
-                            PlayServicesSupport.Log(
-                                String.Format("No packages returned from the Android SDK Manager."),
-                                level: PlayServicesSupport.LogLevel.Error);
+                            PlayServicesResolver.Log(
+                                String.Format("No packages returned from the Android SDK " +
+                                              "Manager."), level: LogLevel.Error);
                             return;
                         }
 

@@ -24,6 +24,8 @@ namespace GooglePlayServices
     using UnityEditor;
     using UnityEngine;
 
+    using Google;
+
     public class CommandLineDialog : TextAreaDialog
     {
         /// <summary>
@@ -90,8 +92,9 @@ namespace GooglePlayServices
             /// </summary>
             public void CommandLineToolCompletion(CommandLine.Result result)
             {
-                Google.JarResolver.PlayServicesSupport.Log(
-                    String.Format("Command completed: {0}", result.message), verbose: true);
+                PlayServicesResolver.Log(
+                    String.Format("Command completed: {0}", result.message),
+                    level: LogLevel.Verbose);
                 this.result = result;
             }
 
@@ -218,8 +221,8 @@ namespace GooglePlayServices
             CommandLine.CompletionHandler reporterUpdateDisable =
                 (CommandLine.Result unusedResult) => { this.UpdateEvent -= reporter.Update; };
             reporter.Complete += reporterUpdateDisable;
-            Google.JarResolver.PlayServicesSupport.Log(String.Format(
-                "Executing command: {0} {1}", toolPath, arguments), verbose: true);
+            PlayServicesResolver.Log(String.Format(
+                "Executing command: {0} {1}", toolPath, arguments), level: LogLevel.Verbose);
             CommandLine.RunAsync(toolPath, arguments, reporter.CommandLineToolCompletion,
                                  workingDirectory: workingDirectory, envVars: envVars,
                                  ioHandler: reporter.AggregateLine);
