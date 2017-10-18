@@ -219,13 +219,8 @@ By default the Android Resolver will use Gradle to download dependencies prior
 to integrating them into a Unity project.  This works with Unity's internal
 build system and Gradle / Android Studio project export.
 
-In addition, the Android Resolver supports a legacy mode that only fetches
-dependencies from a user's local Android SDK.  This mode has limited support
-for conflict resolution and doesn't support online maven repositories,
-therefore may be removed in the future.
-
-Finally, the Android Resolver supports a Gradle prebuild mode to provide
-minification without exporting to a Gradle / Android Studio project.
+Also, the Android Resolver supports an *experimental* Gradle prebuild mode to
+provide minification without exporting to a Gradle / Android Studio project.
 For more information about this mode see
 [gradle_prebuild.md](gralde_prebuild.md).
 

@@ -33,7 +33,6 @@ namespace GooglePlayServices
             internal bool enableAutoResolution;
             internal bool prebuildWithGradle;
             internal bool useGradleDaemon;
-            internal bool fetchDependenciesWithGradle;
             internal bool installAndroidPackages;
             internal string packageDir;
             internal bool explodeAars;
@@ -48,7 +47,6 @@ namespace GooglePlayServices
                 enableAutoResolution = SettingsDialog.EnableAutoResolution;
                 prebuildWithGradle = SettingsDialog.PrebuildWithGradle;
                 useGradleDaemon = SettingsDialog.UseGradleDaemon;
-                fetchDependenciesWithGradle = SettingsDialog.FetchDependenciesWithGradle;
                 installAndroidPackages = SettingsDialog.InstallAndroidPackages;
                 packageDir = SettingsDialog.PackageDir;
                 explodeAars = SettingsDialog.ExplodeAars;
@@ -63,7 +61,6 @@ namespace GooglePlayServices
             internal void Save() {
                 SettingsDialog.PrebuildWithGradle = prebuildWithGradle;
                 SettingsDialog.UseGradleDaemon = useGradleDaemon;
-                SettingsDialog.FetchDependenciesWithGradle = fetchDependenciesWithGradle;
                 SettingsDialog.EnableAutoResolution = enableAutoResolution;
                 SettingsDialog.InstallAndroidPackages = installAndroidPackages;
                 if (SettingsDialog.ConfigurablePackageDir) SettingsDialog.PackageDir = packageDir;
@@ -83,8 +80,6 @@ namespace GooglePlayServices
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
         private const string AutoResolutionDisabledWarningKey =
             Namespace + "AutoResolutionDisabledWarning";
-        private const string FetchDependenciesWithGradleKey =
-            Namespace + "FetchDependenciesWithGradle";
         private const string UseGradleDaemonKey = Namespace + "UseGradleDaemon";
         // List of preference keys, used to restore default settings.
         private static string[] PreferenceKeys = new [] {
@@ -95,7 +90,6 @@ namespace GooglePlayServices
             ExplodeAarsKey,
             VerboseLoggingKey,
             AutoResolutionDisabledWarningKey,
-            FetchDependenciesWithGradleKey,
             UseGradleDaemonKey
         };
 
@@ -126,11 +120,6 @@ namespace GooglePlayServices
         internal static bool PrebuildWithGradle {
             private set { projectSettings.SetBool(PrebuildWithGradleKey, value); }
             get { return projectSettings.GetBool(PrebuildWithGradleKey, false); }
-        }
-
-        internal static bool FetchDependenciesWithGradle {
-            private set { projectSettings.SetBool(FetchDependenciesWithGradleKey, value); }
-            get { return projectSettings.GetBool(FetchDependenciesWithGradleKey, true); }
         }
 
         internal static bool UseGradleDaemon {
@@ -182,7 +171,7 @@ namespace GooglePlayServices
         }
 
         public void Initialize() {
-            minSize = new Vector2(350, 350);
+            minSize = new Vector2(350, 300);
             position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                                 minSize.x, minSize.y);
         }
@@ -209,21 +198,6 @@ namespace GooglePlayServices
 
             EditorGUI.BeginDisabledGroup(settings.prebuildWithGradle == true);
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Fetch Dependencies with Gradle", EditorStyles.boldLabel);
-            settings.fetchDependenciesWithGradle =
-                EditorGUILayout.Toggle(settings.fetchDependenciesWithGradle);
-            GUILayout.EndHorizontal();
-            if (settings.fetchDependenciesWithGradle) {
-                GUILayout.Label("AARs are fetched using Gradle which enables assets to be " +
-                                "fetched from remote Maven repositories and Gradle version " +
-                                "expressions.");
-            } else {
-                GUILayout.Label("Legacy AAR fetching method that only queries the Android SDK " +
-                                "manager's local maven repository and user specified local " +
-                                "maven repositories for dependencies.");
-            }
-            EditorGUI.BeginDisabledGroup(settings.fetchDependenciesWithGradle == false);
-            GUILayout.BeginHorizontal();
             GUILayout.Label("Use Gradle Daemon", EditorStyles.boldLabel);
             settings.useGradleDaemon = EditorGUILayout.Toggle(settings.useGradleDaemon);
             GUILayout.EndHorizontal();
@@ -232,7 +206,6 @@ namespace GooglePlayServices
                 ("Gradle Daemon will be used to fetch dependencies.  " +
                  "This is faster but can be flakey in some environments.") :
                 ("Gradle Daemon will not be used.  This is slow but reliable."));
-            EditorGUI.EndDisabledGroup();
             EditorGUI.EndDisabledGroup();
 
             GUILayout.BeginHorizontal();

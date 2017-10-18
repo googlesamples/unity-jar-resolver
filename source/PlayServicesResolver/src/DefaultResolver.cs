@@ -120,13 +120,10 @@ namespace GooglePlayServices
         /// </summary>
         /// <param name="svcSupport">Svc support.</param>
         /// <param name="destinationDirectory">Destination directory.</param>
-        /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
         /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
-        public virtual void DoResolution(
-            PlayServicesSupport svcSupport,
-            string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
-            System.Action resolutionComplete)
+        public virtual void DoResolution(PlayServicesSupport svcSupport,
+                                         string destinationDirectory,
+                                         System.Action resolutionComplete)
         {
             resolutionComplete();
         }
@@ -150,17 +147,6 @@ namespace GooglePlayServices
         /// null otherwise.</returns>
         public virtual string[] OnBuildSettings() { return null; }
 
-        /// <summary>
-        /// Determine whether to replace a dependency with a new version.
-        /// </summary>
-        /// <param name="oldDependency">Previous version of the dependency.</param>
-        /// <param name="newDependency">New version of the dependency.</param>
-        /// <returns>true if the dependency should be replaced, false otherwise.</returns>
-        public virtual bool ShouldReplaceDependency(Dependency oldDependency,
-                                                    Dependency newDependency) {
-            return false;
-        }
-
         #endregion
 
         /// <summary>
@@ -168,14 +154,10 @@ namespace GooglePlayServices
         /// </summary>
         /// <param name="svcSupport">Svc support.</param>
         /// <param name="destinationDirectory">Destination directory.</param>
-        /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
-        public virtual void DoResolution(
-            PlayServicesSupport svcSupport,
-            string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation)
+        public virtual void DoResolution(PlayServicesSupport svcSupport,
+                                         string destinationDirectory)
         {
-            DoResolution(svcSupport, destinationDirectory, handleOverwriteConfirmation,
-                () => {});
+            DoResolution(svcSupport, destinationDirectory, () => {});
         }
 
         /// <summary>

@@ -925,10 +925,6 @@ namespace GooglePlayServices
 
             lastError = "";
             Resolver.DoResolution(svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
-                                  (oldDependency, newDependency) => {
-                                      return Resolver.ShouldReplaceDependency(oldDependency,
-                                                                              newDependency);
-                                  },
                                   () => {
                                       System.Action complete = () => {
                                           bool succeeded = String.IsNullOrEmpty(lastError);

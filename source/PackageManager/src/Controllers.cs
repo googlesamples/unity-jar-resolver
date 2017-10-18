@@ -1223,8 +1223,6 @@ namespace Google.PackageManager {
                                          repositories);
                     }
 
-                    var dependencySet = support.ResolveDependencies(true);
-                    client.depNames.AddRange(dependencySet.Keys);
                     WriteProjectPackages();
                     EnsurePluginsDirectory();
 
@@ -1233,7 +1231,6 @@ namespace Google.PackageManager {
                             string.Format("About to resolve for client: {0}", client.Name));
                         GooglePlayServices.PlayServicesResolver.Resolver.DoResolution(support,
                             "Assets/Plugins/Android",
-                            GooglePlayServices.PlayServicesResolver.HandleOverwriteConfirmation,
                             () => {
                                 AssetDatabase.Refresh();
                                 LoggingController.Log(

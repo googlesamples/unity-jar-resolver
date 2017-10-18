@@ -320,7 +320,7 @@ class GradlePreBuildResolver : DefaultResolver {
 
         // This creates an enumerable of strings with the json lines for each dep like this:
         // "[\"namespace\", \"package\", \"version\"]"
-        var dependencies = svcSupport.LoadDependencies(true, true, false);
+        var dependencies = PlayServicesSupport.GetAllDependencies();
         var depLines = from d in dependencies
             select "[" + ToJSONList(DepsVersionAsArray(d.Value)) + "]";
         // Get a flattened list of dependencies, excluding any with the "$SDK" path variable,
@@ -394,11 +394,9 @@ class GradlePreBuildResolver : DefaultResolver {
     /// </summary>
     /// <param name="svcSupport">Svc support.</param>
     /// <param name="destinationDirectory">Destination directory.</param>
-    /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
     /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
     public override void DoResolution(PlayServicesSupport svcSupport, string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
-            System.Action resolutionComplete) {
+                                      System.Action resolutionComplete) {
 
         var sdkPath = svcSupport.SDK;
         // Find / upgrade the Android SDK manager.

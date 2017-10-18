@@ -72,11 +72,9 @@ namespace GooglePlayServices
         /// </summary>
         /// <param name="svcSupport">Svc support.</param>
         /// <param name="destinationDirectory">Destination directory.</param>
-        /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
         /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
         void DoResolution(PlayServicesSupport svcSupport,
                           string destinationDirectory,
-                          PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
                           System.Action resolutionComplete);
 
         /// <summary>
@@ -84,10 +82,8 @@ namespace GooglePlayServices
         /// </summary>
         /// <param name="svcSupport">Svc support.</param>
         /// <param name="destinationDirectory">Destination directory.</param>
-        /// <param name="handleOverwriteConfirmation">Handle overwrite confirmation.</param>
         void DoResolution(PlayServicesSupport svcSupport,
-                          string destinationDirectory,
-                          PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation);
+                          string destinationDirectory);
 
         /// <summary>
         /// Called during Update to allow the resolver to check the bundle ID of the application
@@ -104,14 +100,6 @@ namespace GooglePlayServices
         /// <returns>Array of packages that should be re-resolved if resolution should occur,
         /// null otherwise.</returns>
         string[] OnBuildSettings();
-
-        /// <summary>
-        /// Determine whether to replace a dependency with a new version.
-        /// </summary>
-        /// <param name="oldDependency">Previous version of the dependency.</param>
-        /// <param name="newDependency">New version of the dependency.</param>
-        /// <returns>true if the dependency should be replaced, false otherwise.</returns>
-        bool ShouldReplaceDependency(Dependency oldDependency, Dependency newDependency);
     }
 }
 

@@ -393,7 +393,6 @@ namespace GooglePlayServices
         /// <summary>
         /// Perform resolution using Gradle.
         /// </summary>
-        /// <param name="svcSupport">PlayServicesSupport instance.</param>
         /// <param name="destinationDirectory">Directory to copy packages into.</param>
         /// <param name="androidSdkPath">Path to the Android SDK.  This is required as
         /// PlayServicesSupport.SDK can only be called from the main thread.</param>
@@ -401,8 +400,8 @@ namespace GooglePlayServices
         /// <param name="resolutionComplete">Called when resolution is complete with a list of
         /// packages that were not found.</param>
         private void GradleResolution(
-                PlayServicesSupport svcSupport, string destinationDirectory,
-                string androidSdkPath, bool logErrorOnMissingArtifacts,
+                string destinationDirectory, string androidSdkPath,
+                bool logErrorOnMissingArtifacts,
                 System.Action<List<Dependency>> resolutionComplete) {
             var gradleWrapper = Path.GetFullPath(Path.Combine(
                 gradleBuildDirectory,
@@ -411,8 +410,7 @@ namespace GooglePlayServices
             var buildScript = Path.GetFullPath(Path.Combine(
                 gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "download_artifacts.gradle"));
             // Get all dependencies.
-            var allDependencies = svcSupport.LoadDependencies(true, keepMissing: true,
-                                                              findCandidates: true);
+            var allDependencies = PlayServicesSupport.GetAllDependencies();
             var allDependenciesList = new List<Dependency>(allDependencies.Values);
 
             // Extract Gradle wrapper and the build script to the build directory.
@@ -798,7 +796,6 @@ namespace GooglePlayServices
         /// </summary>
         public override void DoResolution(
             PlayServicesSupport svcSupport, string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
             System.Action resolutionComplete) {
             // Run resolution on the main thread to serialize the operation as DoResolutionUnsafe
             // is not thread safe.
@@ -810,7 +807,7 @@ namespace GooglePlayServices
                     }
                     resolutionComplete();
                 };
-                DoResolutionUnsafe(svcSupport, destinationDirectory, handleOverwriteConfirmation,
+                DoResolutionUnsafe(svcSupport, destinationDirectory,
                                    unlockResolveAndSignalResolutionComplete);
             };
             lock (resolveLock) {
@@ -839,74 +836,16 @@ namespace GooglePlayServices
         /// </summary>
          private void DoResolutionUnsafe(
             PlayServicesSupport svcSupport, string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation,
             System.Action resolutionComplete)
         {
             // Cache the setting as it can only be queried from the main thread.
-            bool fetchDependenciesWithGradle =
-                GooglePlayServices.SettingsDialog.FetchDependenciesWithGradle;
             var sdkPath = svcSupport.SDK;
             System.Action resolve = () => {
                 PlayServicesResolver.Log("Performing Android Dependency Resolution",
                                          LogLevel.Verbose);
-                if (fetchDependenciesWithGradle) {
-                    GradleResolution(svcSupport, destinationDirectory, sdkPath, true,
-                                     (missingArtifacts) => { resolutionComplete(); });
-                } else {
-                    DoResolutionNoAndroidPackageChecks(svcSupport, destinationDirectory,
-                                                       handleOverwriteConfirmation);
-                    resolutionComplete();
-                }
+                GradleResolution(destinationDirectory, sdkPath, true,
+                                 (missingArtifacts) => { resolutionComplete(); });
             };
-
-            Dictionary<string, string> pathsByDependencyKey;
-            var dependencies = svcSupport.FindMissingDependencyPaths(destinationDirectory,
-                                                                     out pathsByDependencyKey);
-            // When fetching assets with Gradle we don't know the transitive set of artifacts
-            // unless we run Gradle.  Therefore, it's not possible to quickly determine which
-            // set of assets is stale.  In this case, we simply don't clean stale assets unless
-            // resolution is required.
-            if (!fetchDependenciesWithGradle) {
-                // If any dependencies are no longer present we'll assume dependencies have been
-                // added or removed so clean all stale tracked dependencies.
-                var currentDependencyPaths = new HashSet<string>();
-                // Normalize paths Windows paths to compare with POSIX file systems
-                // (used by Maven).
-                foreach (var assetPath in pathsByDependencyKey.Values) {
-                    currentDependencyPaths.Add(assetPath.Replace("\\", "/"));
-                }
-                foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
-                    var assetBasename = Directory.Exists(assetPath) ?
-                        assetPath : Path.Combine(Path.GetDirectoryName(assetPath),
-                                                 Path.GetFileNameWithoutExtension(assetPath));
-                    assetBasename = assetBasename.Replace("\\", "/");
-                    var assetTargetPaths = new List<string> { assetBasename };
-                    foreach (var extension in Dependency.Packaging) {
-                        assetTargetPaths.Add(assetBasename + extension);
-                    }
-                    if (!assetTargetPaths.Exists(
-                             targetPath => currentDependencyPaths.Contains(targetPath))) {
-                        PlayServicesResolver.Log(
-                            String.Format(
-                                "Deleting stale dependency {0} not in required paths:\n{1}",
-                                assetPath,
-                                String.Join("\n",
-                                            (new List<string>(currentDependencyPaths)).ToArray())),
-                            level: LogLevel.Verbose);
-                        FileUtils.DeleteExistingFileOrDirectory(assetPath);
-                    }
-                }
-            }
-
-            // If dependencies are not missing, don't perform resolution.
-            if (dependencies == null) {
-                PlayServicesResolver.Log("No missing or stale Android dependencies found.",
-                                         level: LogLevel.Verbose);
-                resolutionComplete();
-                return;
-            }
-            PlayServicesResolver.Log("Found missing Android dependencies, resolving.",
-                                     level: LogLevel.Verbose);
 
             System.Action<List<Dependency>> reportOrInstallMissingArtifacts =
                     (List<Dependency> requiredDependencies) => {
@@ -915,16 +854,9 @@ namespace GooglePlayServices
                 // Retrieve the set of required packages and whether they're installed.
                 var requiredPackages = new Dictionary<string, HashSet<string>>();
 
-                if (fetchDependenciesWithGradle) {
-                    if (requiredDependencies.Count == 0) {
-                        resolutionComplete();
-                        return;
-                    }
-                } else {
-                    requiredDependencies = new List<Dependency>(
-                        PlayServicesSupport.GetTransitiveDependencies(
-                            svcSupport.LoadDependencies(true, keepMissing: true),
-                            repoPaths: svcSupport.RepositoryPaths).Values);
+                if (requiredDependencies.Count == 0) {
+                    resolutionComplete();
+                    return;
                 }
                 foreach (Dependency dependency in requiredDependencies) {
                     PlayServicesResolver.Log(
@@ -970,33 +902,24 @@ namespace GooglePlayServices
                                 level: LogLevel.Warning);
                         }
                     }
-                    if (fetchDependenciesWithGradle) {
-                        // At this point we've already tried resolving with Gradle.  Therefore,
-                        // Android SDK package installation is disabled or not required trying
-                        // to resolve again only repeats the same operation we've already
-                        // performed.  So we just report report the missing artifacts as an error
-                        // and abort.
-                        var missingArtifacts = new List<string>();
-                        foreach (var dep in requiredDependencies) missingArtifacts.Add(dep.Key);
-                        LogMissingDependenciesError(missingArtifacts);
-                        resolutionComplete();
-                        return;
-                    }
-                    // Attempt resolution.
-                    resolve();
+                    // At this point we've already tried resolving with Gradle.  Therefore,
+                    // Android SDK package installation is disabled or not required trying
+                    // to resolve again only repeats the same operation we've already
+                    // performed.  So we just report report the missing artifacts as an error
+                    // and abort.
+                    var missingArtifacts = new List<string>();
+                    foreach (var dep in requiredDependencies) missingArtifacts.Add(dep.Key);
+                    LogMissingDependenciesError(missingArtifacts);
+                    resolutionComplete();
                     return;
                 }
                 InstallAndroidSdkPackagesAndResolve(sdkPath, installPackages,
                                                     requiredPackages, resolve);
             };
 
-            if (fetchDependenciesWithGradle) {
-                GradleResolution(svcSupport, destinationDirectory, sdkPath,
-                                 !AndroidPackageInstallationEnabled(),
-                                 reportOrInstallMissingArtifacts);
-            } else {
-                reportOrInstallMissingArtifacts(null);
-            }
+            GradleResolution(destinationDirectory, sdkPath,
+                             !AndroidPackageInstallationEnabled(),
+                             reportOrInstallMissingArtifacts);
         }
 
         /// <summary>
@@ -1109,36 +1032,6 @@ namespace GooglePlayServices
             return packagesToUpdate.Count > 0 ? packagesToUpdate.ToArray() : null;
         }
 
-        /// <summary>
-        /// Determine whether to replace a dependency with a new version.
-        /// </summary>
-        /// <param name="oldDependency">Previous version of the dependency.</param>
-        /// <param name="newDependency">New version of the dependency.</param>
-        /// <returns>true if the dependency should be replaced, false otherwise.</returns>
-        public override bool ShouldReplaceDependency(Dependency oldDependency,
-                                                     Dependency newDependency) {
-            var artifactPath = FindAarInTargetPath(oldDependency.BestVersionArtifactPath);
-            // If we're unable to find the specified artifact then it's possible the oldDependency
-            // doesn't have a valid version string.
-            if (String.IsNullOrEmpty(artifactPath)) return true;
-
-            // ShouldExplode() creates an AarExplodeData entry if it isn't present.
-            ShouldExplode(artifactPath);
-            // NOTE: explodeData will only be null here if the artifact was deleted prior to
-            // the call to ShouldExplode().
-            AarExplodeData explodeData = FindAarExplodeDataEntry(artifactPath);
-            if (explodeData != null && explodeData.ignoredVersion == newDependency.BestVersion) {
-                return false;
-            }
-            var overwrite = PlayServicesResolver.HandleOverwriteConfirmation(oldDependency,
-                                                                             newDependency);
-            if (explodeData != null) {
-                explodeData.ignoredVersion = overwrite ? "" : newDependency.BestVersion;
-            }
-            SaveAarExplodeCache();
-            return overwrite;
-        }
-
         #endregion
 
         /// <summary>
@@ -1193,42 +1086,6 @@ namespace GooglePlayServices
                 aarData.gradleExport != PlayServicesResolver.GradleProjectExportEnabled ||
                 (aarData.explode && !PlayServicesResolver.GradleBuildEnabled ?
                  !Directory.Exists(aarData.path) : !File.Exists(aarData.path));
-        }
-
-        /// <summary>
-        /// Perform resolution with no Android package dependency checks.
-        /// </summary>
-        private void DoResolutionNoAndroidPackageChecks(
-            PlayServicesSupport svcSupport, string destinationDirectory,
-            PlayServicesSupport.OverwriteConfirmation handleOverwriteConfirmation)
-        {
-            var updatedAars = new HashSet<string>();
-            try
-            {
-                // Get the collection of dependencies that need to be copied.
-                Dictionary<string, Dependency> deps =
-                    svcSupport.ResolveDependencies(true, destDirectory: destinationDirectory,
-                                                   explodeAar: (aarPath) => {
-                                                       return ShouldExplode(aarPath);
-                                                   });
-                // Copy the list
-                updatedAars.UnionWith(svcSupport.CopyDependencies(
-                    deps, destinationDirectory, handleOverwriteConfirmation).Values);
-                // Label all copied files so they can be cleaned up if resolution needs to be
-                // triggered again.
-                PlayServicesResolver.LabelAssets(updatedAars);
-            }
-            catch (Google.JarResolver.ResolutionException e)
-            {
-                PlayServicesResolver.Log(e.ToString(), level: LogLevel.Error);
-                return;
-            }
-
-            // we want to look at all the .aars to decide to explode or not.
-            // Some aars have variables in their AndroidManifest.xml file,
-            // e.g. ${applicationId}.  Unity does not understand how to process
-            // these, so we handle it here.
-            ProcessAars(destinationDirectory, updatedAars);
         }
 
         /// <summary>
