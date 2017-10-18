@@ -1,3 +1,11 @@
+# Version 1.2.57 - Oct 18, 2017
+## Bug Fixes
+* Updated Gradle wrapper to 4.2.1 to fix issues using Gradle with the
+  latest openjdk.
+* Android Gradle resolution now also uses gradle.properties to pass
+  parameters to Gradle in an attempt to workaround problems with
+  command line argument parsing on Windows 10.
+
 # Version 1.2.56 - Oct 12, 2017
 ## Bug Fixes
 * Fixed Gradle artifact download with non-version locked artifacts.
