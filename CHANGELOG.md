@@ -1,3 +1,8 @@
+# Version 1.2.59 - Oct 19, 2017
+## Bug Fixes
+* Fixed execution of Android Gradle resolution script when it's located
+  in a path with whitespace.
+
 # Version 1.2.58 - Oct 19, 2017
 ## Changes
 * Removed legacy resolution method from Android Resolver.

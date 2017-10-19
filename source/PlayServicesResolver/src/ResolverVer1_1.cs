@@ -593,7 +593,7 @@ namespace GooglePlayServices
                 { "PACKAGES_TO_COPY", String.Join(";", filteredDependencies.ToArray()) }
             };
             var gradleArguments = new List<string> {
-                "-b", buildScript,
+                String.Format("-b \"{0}\"", buildScript),
                 SettingsDialog.UseGradleDaemon ? "--daemon" : "--no-daemon",
             };
             foreach (var kv in gradleProjectProperties) {
