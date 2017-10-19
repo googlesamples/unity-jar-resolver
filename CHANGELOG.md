@@ -1,3 +1,9 @@
+# Version 1.2.58 - Oct 19, 2017
+## Changes
+* Removed legacy resolution method from Android Resolver.
+  It is now only possible to use the Gradle or Gradle prebuild resolution
+  methods.
+
 # Version 1.2.57 - Oct 18, 2017
 ## Bug Fixes
 * Updated Gradle wrapper to 4.2.1 to fix issues using Gradle with the
