@@ -19,6 +19,7 @@ namespace GooglePlayServices {
     using System.Collections.Generic;
     using System.Globalization;
     using System.IO;
+    using System.Text.RegularExpressions;
     using UnityEditor;
 
     using Google;
@@ -185,19 +186,12 @@ namespace GooglePlayServices {
             float majorMinorVersion = 0;
             // The version string is can be reported via stderr or stdout so scrape the
             // concatenated message string.
-            foreach (var line in CommandLine.SplitLines(result.message)) {
-                if (line.StartsWith("java version ")) {
-                    var tokens = line.Split();
-                    var versionString = tokens[tokens.Length - 1].Trim(new [] { '"' });
-                    var components = versionString.Split(new [] { '.' });
-                    if (components.Length < 2) {
-                        continue;
-                    }
-                    if (!float.TryParse(components[0] + "." + components[1], NumberStyles.Any,
-                                        CultureInfo.InvariantCulture, out majorMinorVersion)) {
-                        continue;
-                    }
-                }
+            string pattern = "^(?<model>java||openjdk) version \"(?<major>\\d).(?<minor>\\d).(?<patch>\\d).*$";
+            
+            Match match = Regex.Match(result.message,pattern,RegexOptions.Multiline);
+            if (match.Success) {
+                float.TryParse(match.Groups["major"].Value + "." + match.Groups["minor"].Value, NumberStyles.Any,
+                                        CultureInfo.InvariantCulture, out majorMinorVersion);
             }
             if (majorMinorVersion == 0) {
                 LogJdkVersionFailedWarning(javaPath, result.message);
