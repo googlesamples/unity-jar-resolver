@@ -116,12 +116,9 @@ project.ext {
     if (os_windows) {
         nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
             fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2.bat'})
-    } else if (os_osx) {
+    } else if (os_osx || os_linux) {
         nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
             fileTree(dir: unity_root).matching { include '**/nunit-console2'})
-    } else if (os_linux) {
-        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
-            fileTree(dir: unity_root).matching { include '**/nunit-console'})
     }
     if (nunit_console_exe == null || !nunit_console_exe.exists()) {
         logger.warn("nunit_console command not found, compilation may fail.")
