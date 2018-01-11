@@ -1,3 +1,13 @@
+# Version 1.2.60 - Jan 12, 2018
+## Changes
+* Added support for Maven / Ivy version specifications for Android packages.
+* Added support for Android SNAPSHOT packages.
+
+## Bug Fixes
+* Fixed Openjdk version check.
+* Fixed non-deterministic Android package resolution when two packages contain
+  an artifact with the same name.
+
 # Version 1.2.59 - Oct 19, 2017
 ## Bug Fixes
 * Fixed execution of Android Gradle resolution script when it's located

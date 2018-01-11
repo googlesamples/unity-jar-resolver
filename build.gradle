@@ -132,7 +132,7 @@ project.ext {
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
     dllDir = 'Assets/PlayServicesResolver/Editor'
-    pluginVersion = '1.2.59.0'
+    pluginVersion = '1.2.60.0'
     currentPluginPath = file('.').absolutePath
     currentPluginBasename = 'play-services-resolver'
     currentPluginName = (currentPluginBasename + '-' + pluginVersion +
@@ -427,6 +427,12 @@ task build_unityPackage(dependsOn: 'copy_plugin') {
   dependsOn {
     tasks.findAll { task -> task.name.startsWith('PackageSample') }
   }
+}
+
+task test_downloadArtifacts(type: GradleBuild) {
+  description "Run tests for the download_artifacts.gradle script."
+  ext.remoteTaskPhase = "build"
+  buildFile "source/PlayServicesResolver/scripts/download_artifacts_test.gradle"
 }
 
 task clean() {

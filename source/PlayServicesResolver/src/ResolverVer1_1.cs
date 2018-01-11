@@ -660,7 +660,8 @@ namespace GooglePlayServices
             foreach (var filename in PlayServicesResolver.FindLabeledAssets()) {
                 var artifact = getVersionlessArtifactFilename(filename);
                 managedArtifacts[artifact] = filename;
-                if (artifact.StartsWith("play-services-")) {
+                if (artifact.StartsWith("play-services-") ||
+                    artifact.StartsWith("com.google.android.gms.play-services-")) {
                     managedPlayServicesArtifacts.Add(filename);
                 }
             }

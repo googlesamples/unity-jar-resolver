@@ -1,5 +1,6 @@
 automation/
 build/
+download_artifacts_test_output/
 
 .gradle/
 
