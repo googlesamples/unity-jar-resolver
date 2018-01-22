@@ -659,10 +659,14 @@ namespace GooglePlayServices
             var managedArtifactFilenames = new HashSet<string>();
             foreach (var filename in PlayServicesResolver.FindLabeledAssets()) {
                 var artifact = getVersionlessArtifactFilename(filename);
-                managedArtifacts[artifact] = filename;
-                if (artifact.StartsWith("play-services-") ||
-                    artifact.StartsWith("com.google.android.gms.play-services-")) {
-                    managedPlayServicesArtifacts.Add(filename);
+                // Ignore non-existent files as it's possible for the asset database to reference
+                // missing files if it hasn't been refreshed or completed a refresh.
+                if (File.Exists(filename) || Directory.Exists(filename)) {
+                    managedArtifacts[artifact] = filename;
+                    if (artifact.StartsWith("play-services-") ||
+                        artifact.StartsWith("com.google.android.gms.play-services-")) {
+                        managedPlayServicesArtifacts.Add(filename);
+                    }
                 }
             }
             managedArtifactFilenames.UnionWith(managedArtifacts.Values);

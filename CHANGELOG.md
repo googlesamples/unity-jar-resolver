@@ -1,3 +1,8 @@
+# Version 1.2.61 - Jan 22, 2017
+## Bug Fixes
+* Fixed Android Resolver reporting non-existent conflicting dependencies when
+  Gradle build system is enabled.
+
 # Version 1.2.60 - Jan 12, 2018
 ## Changes
 * Added support for Maven / Ivy version specifications for Android packages.
