@@ -845,6 +845,19 @@ namespace GooglePlayServices
         {
             // Cache the setting as it can only be queried from the main thread.
             var sdkPath = svcSupport.SDK;
+            // If the Android SDK path isn't set or doesn't exist report an error.
+            if (String.IsNullOrEmpty(sdkPath) || !Directory.Exists(sdkPath)) {
+                PlayServicesResolver.Log(String.Format(
+                    "Android dependency resolution failed, your application will probably " +
+                    "not run.\n\n" +
+                    "Android SDK path must be set to a valid directory ({0})\n" +
+                    "This must be configured in the 'Preference > External Tools > Android SDK'\n" +
+                    "menu option.\n", String.IsNullOrEmpty(sdkPath) ? "{none}" : sdkPath),
+                    level: LogLevel.Error);
+                resolutionComplete();
+                return;
+            }
+
             System.Action resolve = () => {
                 PlayServicesResolver.Log("Performing Android Dependency Resolution",
                                          LogLevel.Verbose);

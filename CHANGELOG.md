@@ -1,3 +1,8 @@
+# Version 1.2.62 - TBD
+## Bug Fixes
+* Fixed Android Resolver throwing NullReferenceException when the Android SDK
+  path isn't set.
+
 # Version 1.2.61 - Jan 22, 2017
 ## Bug Fixes
 * Fixed Android Resolver reporting non-existent conflicting dependencies when
