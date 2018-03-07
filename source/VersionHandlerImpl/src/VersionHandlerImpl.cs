@@ -21,6 +21,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System;
 
 namespace Google {
@@ -62,9 +63,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
         // Separator for fields in each metadata token in the supplied
         // filename or label.
         private static char[] FIELD_SEPARATOR = new char[] { '-' };
-
         // Prefix which identifies the targets metadata in the filename or
         // asset label.
+
         private static string[] TOKEN_TARGETS = new [] { "targets-", "t" };
         // Prefix which identifies the version metadata in the filename or
         // asset label.
@@ -138,6 +139,21 @@ public class VersionHandlerImpl : AssetPostprocessor {
         // Matches the .NET framework 3.5 enum value
         // UnityEditor.PlayerSettings.scriptingRuntimeVersion in Unity 2017 and beyond.
         private const string SCRIPTING_RUNTIME_LEGACY = "Legacy";
+
+        // Regular expression which matches valid version strings.
+        private static Regex VERSION_REGEX = new Regex("^[0-9][0-9.]+$");
+        // Regular expression which matches valid .NET framework versions.
+        private static Regex DOTNET_RUNTIME_REGEX =
+            new Regex("^(" + String.Join("|", (new List<string> {
+                        DOTNET_RUNTIME_VERSION_LEGACY,
+                        DOTNET_RUNTIME_VERSION_LATEST,
+                        SCRIPTING_RUNTIME_LEGACY }).ToArray()) + ")$",
+                RegexOptions.IgnoreCase);
+        // Regular expression which matches valid
+        private static Regex BUILD_TARGET_REGEX =
+            new Regex("^(editor|" + String.Join(
+                        "|", (new List<string>(BUILD_TARGET_NAME_TO_ENUM_NAME.Keys)).ToArray()) +
+                      ")$", RegexOptions.IgnoreCase);
 
         /// <summary>
         /// Get a set of build target names mapped to supported BuildTarget
@@ -276,10 +292,13 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 filenameComponents.basenameNoExtension.Split(
                     FILENAME_TOKEN_SEPARATOR);
             if (tokens.Length > 1) {
-                filenameComponents.basenameNoExtension = tokens[0];
+                var basenameNoExtension = tokens[0];
                 for (int i = 1; i < tokens.Length; ++i) {
-                    ParseToken(tokens[i]);
+                    if (!ParseToken(tokens[i])) {
+                        basenameNoExtension += FILENAME_TOKEN_SEPARATOR[0] + tokens[i];
+                    }
                 }
+                filenameComponents.basenameNoExtension = basenameNoExtension;
             }
             // Parse metadata from asset labels if it hasn't been specified in
             // the filename.
@@ -324,6 +343,20 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Determine whether a list of string match a regular expression.
+        /// </summary>
+        /// <param name="items">Items to compare against the specific regular expression.</param>
+        /// <param name="regEx">Regular expression to compare against each item.</param>
+        /// <returns>true if all items in the list match the regular expression, false otherwise.
+        /// </returns>
+        private bool StringListMatchesRegex(IEnumerable<string> items, Regex regEx) {
+            foreach (var item in items) {
+                if (!regEx.Match(item).Success) return false;
+            }
+            return true;
+        }
+
+        /// <summary>
         /// Parse a metadata token and store the value this class.
         /// </summary>
         /// <param name="token">Token to parse.</param>
@@ -338,12 +371,12 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 return true;
             }
             values = MatchPrefixesGetValues(token, TOKEN_DOTNET_TARGETS, prefix);
-            if (values != null) {
+            if (values != null && StringListMatchesRegex(values, DOTNET_RUNTIME_REGEX)) {
                 dotNetTargets = values;
                 return true;
             }
             values = MatchPrefixesGetValues(token, TOKEN_TARGETS, prefix);
-            if (values != null) {
+            if (values != null && StringListMatchesRegex(values, BUILD_TARGET_REGEX)) {
                 if (targets == null) {
                     // Convert all target names to lower case.
                     targets = new string[values.Length];
@@ -354,7 +387,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 }
             }
             values = MatchPrefixesGetValues(token, TOKEN_VERSION, prefix);
-            if (values != null) {
+            if (values != null && StringListMatchesRegex(values, VERSION_REGEX)) {
                 if (String.IsNullOrEmpty(versionString) && values.Length > 0) {
                     versionString = values[0];
                     return true;

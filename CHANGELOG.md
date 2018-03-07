@@ -2,6 +2,8 @@
 ## Bug Fixes
 * Fixed Android Resolver throwing NullReferenceException when the Android SDK
   path isn't set.
+* Fixed Version Handler renaming files with underscores if the
+  "Rename to Canonical Filenames" setting is enabled.
 
 # Version 1.2.61 - Jan 22, 2017
 ## Bug Fixes
