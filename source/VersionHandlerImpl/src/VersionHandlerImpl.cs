@@ -1724,7 +1724,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
     private static void MoveAssetToTrash(string filename) {
         Log("Moved obsolete file to trash: " + filename, verbose: true);
         if (!AssetDatabase.MoveAssetToTrash(filename)) {
-            Log("Failed to move obsolete file to trash: " + filename,
+            Log("Failed to move obsolete file to trash: " + filename + "\n" +
+                "You may need to restart Unity.",
                 level: LogLevel.Error);
         }
     }
@@ -1755,7 +1756,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         var obsoleteFiles = new ObsoleteFiles(
             ManifestReferences.FindAndReadManifests(metadataSet), metadataSet);
 
-        // Obsolete files that are no longer reference can be safely
+        // Obsolete files that are no longer referenced can be safely
         // deleted, prompt the user for confirmation if they have the option
         // enabled.
         bool deleteFiles = true;

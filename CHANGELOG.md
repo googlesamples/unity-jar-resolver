@@ -1,4 +1,7 @@
-# Version 1.2.62 - TBD
+# Version 1.2.62 - Mar 12, 2017
+## Changes
+* Improved error reporting when a file can't be moved to trash by the
+  Version Handler.
 ## Bug Fixes
 * Fixed Android Resolver throwing NullReferenceException when the Android SDK
   path isn't set.
