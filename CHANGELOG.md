@@ -1,3 +1,10 @@
+# Version 1.2.63 - Feb 15, 2018
+## Bug Fixes
+* Fixed iOS Resolver include search paths taking precedence over system headers
+  when using project level resolution.
+* Fixed iOS Resolver includes relative to library root, when using project level
+  resolution.
+
 # Version 1.2.62 - Mar 12, 2017
 ## Changes
 * Improved error reporting when a file can't be moved to trash by the

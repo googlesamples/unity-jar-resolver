@@ -2215,6 +2215,16 @@ public class IOSResolver : AssetPostprocessor {
             sourcePodLibraries.Add(podPathProjectPath.Split(new [] { '/', '\\' })[1]);
         }
 
+        // Also, in the case of leveldb, there's source in a folder like "db", which
+        // includes headers as "db/headername.h", so we should also include the library
+        // root.
+        foreach (var podLibrary in sourcePodLibraries) {
+            project.UpdateBuildProperty(
+                    new [] { target }, "USER_HEADER_SEARCH_PATHS",
+                    new [] { "$(SRCROOT)/Pods/" + podLibrary },
+                    new string[] {});
+        }
+
         // The BuildConfigNames property was introduced in Unity 2017, use it if it's available
         // otherwise fallback to a list of known build configurations.
         IEnumerable<string> configNames = null;
