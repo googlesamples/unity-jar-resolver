@@ -1402,9 +1402,9 @@ public class IOSResolver : AssetPostprocessor {
         project.SetBuildProperty(target, "CLANG_ENABLE_MODULES", "YES");
         project.AddBuildProperty(target, "OTHER_LDFLAGS", "$(inherited)");
         project.AddBuildProperty(target, "OTHER_CFLAGS", "$(inherited)");
-        project.AddBuildProperty(target, "HEADER_SEARCH_PATHS",
+        project.AddBuildProperty(target, "USER_HEADER_SEARCH_PATHS",
                                  "$(inherited)");
-        project.AddBuildProperty(target, "HEADER_SEARCH_PATHS",
+        project.AddBuildProperty(target, "USER_HEADER_SEARCH_PATHS",
                                  "$(PROJECT_DIR)/" + PODS_DIR + "/Headers/Public");
         project.AddBuildProperty(target, "FRAMEWORK_SEARCH_PATHS",
                                  "$(inherited)");
@@ -2201,7 +2201,7 @@ public class IOSResolver : AssetPostprocessor {
             // Some source pods (e.g Protobuf) can include files relative to the Pod root,
             // add include paths relative to the Pod's source files for this use case.
             project.UpdateBuildProperty(
-                    new [] { target }, "HEADER_SEARCH_PATHS",
+                    new [] { target }, "USER_HEADER_SEARCH_PATHS",
                     new [] { "$(SRCROOT)/" + Path.GetDirectoryName(podPathProjectPath.Value) },
                     new string[] {});
         }
