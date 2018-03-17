@@ -117,7 +117,7 @@ def createStartParameters(packagesToCopy, targetDir) {
   startParameters.projectProperties = [
     "ANDROID_HOME": project.ext.androidHome,
     "PACKAGES_TO_COPY": packagesToCopy,
-    "TARGET_DIR": targetDir.name,
+    "TARGET_DIR": targetDir.absolutePath,
     "MAVEN_REPOS": mavenRepo.toURI().toString()
   ]
   startParameters.logLevel = logging.level
@@ -215,7 +215,7 @@ def downloadScriptOutputToSectionsList(output) {
 // * Validates the script output matches scriptOutput (list of strings where
 //   each element is a section of the script's parsed output).
 def createTestTask(taskName, taskDescription, packageSpecification,
-                   outputInputFileMap, scriptOutput) {
+                   outputInputFileMap, scriptOutput, iterations=1) {
   // Create a target directory relative to the output directory.
   def targetDirFile = new File(project.ext.outputDir, taskName)
   // Move output file paths relative to the target directory and input paths
@@ -226,30 +226,34 @@ def createTestTask(taskName, taskDescription, packageSpecification,
       movedOutputInputFileMap[new File(targetDirFile, outputFile)] =
         inputFile != null ? new File(project.ext.mavenRepo, inputFile) : null
   }
-
-  def testTask = tasks.create(name: taskName,
-                              description: taskDescription,
-                              type: GradleBuild,
-                              dependsOn: createTestDirectoryTask(targetDirFile))
-  testTask.with {
-    outputs.files movedOutputInputFileMap.keySet()
-    startParameter createStartParameters(packageSpecification,
-                                         targetDirFile)
-    buildFile project.ext.buildFile
-    dir project.ext.outputDir
-    doFirst { project.ext.standardOutputErrorLogger.install(it) }
-    doLast {
-      project.ext.standardOutputErrorLogger.uninstall(it)
-      validateOutputFilesExist(it)
-      validateFilesMatch(it, movedOutputInputFileMap)
-      if (scriptOutput != null) {
-        assert downloadScriptOutputToSectionsList(
-          project.ext.standardOutputErrorLogger.output) == scriptOutput
+  def createDirectoryTask = createTestDirectoryTask(targetDirFile)
+  iterations.times {
+    def currentIteration = it + 1
+    def currentTaskName = taskName + (iterations > 1 ? "$currentIteration" : "")
+    println currentTaskName
+    def testTask = tasks.create(name: currentTaskName,
+                                description: taskDescription,
+                                type: GradleBuild,
+                                dependsOn: createDirectoryTask)
+    testTask.with {
+      outputs.files movedOutputInputFileMap.keySet()
+      startParameter createStartParameters(packageSpecification,
+                                           targetDirFile)
+      buildFile project.ext.buildFile
+      dir project.ext.outputDir
+      doFirst { project.ext.standardOutputErrorLogger.install(it) }
+      doLast {
+        project.ext.standardOutputErrorLogger.uninstall(it)
+        validateOutputFilesExist(it)
+        validateFilesMatch(it, movedOutputInputFileMap)
+        if (scriptOutput != null) {
+          assert downloadScriptOutputToSectionsList(
+            project.ext.standardOutputErrorLogger.output) == scriptOutput
+        }
       }
     }
+    project.ext.testTaskNames.add(currentTaskName)
   }
-  project.ext.testTaskNames.add(taskName)
-  return testTask
 }
 
 createTestTask(
@@ -264,6 +268,21 @@ createTestTask(
   ["Copied artifacts:\n" +
    "android.arch.core.common-1.0.0.jar\n" +
    "com.android.support.support-annotations-26.1.0.jar"])
+
+createTestTask(
+  "testDownloadAvailableTwice",
+  "Downloads a single artifact and it's dependencies from maven.",
+  "android.arch.core:common:1.0.0",
+  ["android.arch.core.common-1.0.0.jar":
+   "android/arch/core/common/1.0.0/common-1.0.0.jar",
+   "com.android.support.support-annotations-26.1.0.jar":
+   "com/android/support/support-annotations/26.1.0/" +
+   "support-annotations-26.1.0.jar"],
+  ["Copied artifacts:\n" +
+   "android.arch.core.common-1.0.0.jar\n" +
+   "com.android.support.support-annotations-26.1.0.jar"],
+  2 /* iterations */)
+
 
 createTestTask(
   "testDownloadAvailableWithSameName",

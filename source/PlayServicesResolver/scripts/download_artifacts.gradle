@@ -387,28 +387,36 @@ project.ext {
               getVersionlessArtifactByPackage(packageSpecifier),
               artifact.moduleVersion.id.version,
               packageType == "srcaar" ? "aar" : packageType)
-    def copyTask = tasks.create(
-      name: "copy_" + artifactTargetFilename,
-      type: Copy,
-      description: sprintf("Copy %s (%s) to %s", packageSpecifier,
-                           artifact.file, artifactTargetFilename))
-    copyTask.with {
-      from artifact.file
-      into targetDir
-      rename(
-        // Rename the file to the target filename and log the copied file &
-        // artifact so that they can be summarized when all copy artifact tasks
-        // are complete.
-        {
-          String filename ->
-            copiedFileArtifacts.add([new File(artifactTargetFilename),
-                                     artifact])
-            return artifactTargetFilename
-        }
-      )
-      doFirst { logger.info(description) }
+    artifactTargetFile = new File(targetDir,
+                                  artifactTargetFilename)
+    if (artifactTargetFile.exists()) {
+      // If the target file already exists simply report it as copied.
+      copiedFileArtifacts.add([artifactTargetFile, artifact])
+    } else {
+      // If the target file does not exist generate a task to copy it.
+      def copyTask = tasks.create(
+        name: "copy_" + artifactTargetFilename,
+          type: Copy,
+          description: sprintf("Copy %s (%s) to %s", packageSpecifier,
+                               artifact.file, artifactTargetFilename))
+      copyTask.with {
+        from artifact.file
+        into targetDir
+        rename(
+          // Rename the file to the target filename and log the copied file &
+          // artifact so that they can be summarized when all copy artifact
+          // tasks are complete.
+          {
+            String filename ->
+              copiedFileArtifacts.add([new File(artifactTargetFilename),
+                                       artifact])
+              return artifactTargetFilename
+          }
+        )
+        doFirst { logger.info(description) }
+      }
+      copyTasks.add(copyTask)
     }
-    copyTasks.add(copyTask)
   }
 }
 

@@ -1,3 +1,8 @@
+# Version 1.2.64 - Mar 16, 2017
+## Bug Fixes
+* Fixed bug in download_artifacts.gradle (used by Android Resolver) which
+  reported a failure if required artifacts already exist.
+
 # Version 1.2.63 - Feb 15, 2018
 ## Bug Fixes
 * Fixed iOS Resolver include search paths taking precedence over system headers
