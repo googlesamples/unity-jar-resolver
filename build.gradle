@@ -17,6 +17,12 @@ project.ext {
         sdk_root = System.getenv("ANDROID_HOME")
     }
 
+    unity_search_dir_excludes_string = System.getProperty("UNITY_EXCLUDES")
+    unity_search_dir_excludes =
+        unity_search_dir_excludes_string ?
+            unity_search_dir_excludes_string.tokenize(";") :
+            ["**/PackageManager/Editor"]
+
     // Determine the current OS.
     os_name = System.getProperty("os.name").toLowerCase();
     os_osx = os_name.contains("mac os x");
@@ -62,7 +68,9 @@ project.ext {
     // find unity engine dll
     unity_dll_path =  findUnityPath("UNITY_DLL_PATH", true,
                             fileTree(dir: unity_root).matching {
-                                include '**/Managed/UnityEngine.dll'});
+                                include '**/Managed/UnityEngine.dll'
+                                exclude unity_search_dir_excludes
+                            });
 
     if (unity_dll_path == null || !unity_dll_path.exists()) {
         logger.warn('Unity Editor and Runtime DLLs not found, compilation may fail!')
@@ -76,7 +84,7 @@ project.ext {
         fileTree(dir: os_osx ? unity_root.parentFile : unity_root, includes: [
             '**/PlaybackEngines/iOSSupport/UnityEditor.iOS.Extensions.dll',
             '**/PlaybackEngines/iossupport/UnityEditor.iOS.Extensions.dll'
-        ]))
+        ], exclude: unity_search_dir_excludes))
 
     if (unity_ios_dll_path == null || !unity_ios_dll_path.exists()) {
         logger.warn('Unity iOS Playback engine not found, compilation may fail!')
@@ -89,6 +97,7 @@ project.ext {
     unity_nunit_dll_path = findUnityPath("UNITY_NUNIT_PATH", true,
                                 fileTree(dir: unity_root).matching {
                                     include '**/nunit.framework.dll'
+                                    exclude unity_search_dir_excludes
                                 })
 
     if (unity_nunit_dll_path == null || !unity_nunit_dll_path.exists()) {
@@ -100,10 +109,16 @@ project.ext {
 // xbuild is used to build the dlls.
     if (os_windows) {
         xbuild_exe = findUnityPath("XBUILD_EXE", false,
-            fileTree(dir: unity_root).matching { include '**/Mono/bin/xbuild.bat'})
+            fileTree(dir: unity_root).matching {
+                include '**/Mono/bin/xbuild.bat'
+                exclude unity_search_dir_excludes
+            })
     } else if (os_osx || os_linux) {
         xbuild_exe = findUnityPath("XBUILD_EXE", false,
-            fileTree(dir: unity_root).matching { include '**/xbuild'})
+            fileTree(dir: unity_root).matching {
+                include '**/xbuild'
+                exclude unity_search_dir_excludes
+            })
     }
     if (xbuild_exe == null || !xbuild_exe.exists()) {
         logger.warn("xbuild command not found, compilation may fail.")
@@ -115,10 +130,16 @@ project.ext {
 // nunit-console is used to run tests.
     if (os_windows) {
         nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
-            fileTree(dir: unity_root).matching { include '**/Mono/bin/nunit-console2.bat'})
+            fileTree(dir: unity_root).matching {
+                include '**/Mono/bin/nunit-console2.bat'
+                exclude unity_search_dir_excludes
+            })
     } else if (os_osx || os_linux) {
         nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
-            fileTree(dir: unity_root).matching { include '**/nunit-console2'})
+            fileTree(dir: unity_root).matching {
+                include '**/nunit-console2'
+                exclude unity_search_dir_excludes
+            })
     }
     if (nunit_console_exe == null || !nunit_console_exe.exists()) {
         logger.warn("nunit_console command not found, compilation may fail.")
