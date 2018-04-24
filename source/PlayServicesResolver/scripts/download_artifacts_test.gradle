@@ -230,7 +230,6 @@ def createTestTask(taskName, taskDescription, packageSpecification,
   iterations.times {
     def currentIteration = it + 1
     def currentTaskName = taskName + (iterations > 1 ? "$currentIteration" : "")
-    println currentTaskName
     def testTask = tasks.create(name: currentTaskName,
                                 description: taskDescription,
                                 type: GradleBuild,
@@ -304,10 +303,10 @@ createTestTask(
 createTestTask(
   "testDownloadUnavailable",
   "Attempts to download a non-existant artifact.",
-  "apackage.thatdoes.notexist:9.9.9",
+  "apackage.thatdoes:notexist:9.9.9",
   [],
   ["Missing artifacts:\n" +
-   "apackage.thatdoes.notexist:9.9.9"])
+   "apackage.thatdoes:notexist:9.9.9"])
 
 createTestTask(
   "testDownloadConflictingVersions",
@@ -407,5 +406,64 @@ createTestTask(
    "Modified artifacts:\n" +
    "com.android.support:support-v4:23.0.1 --> " +
    "com.android.support:support-v4:27.0.2-SNAPSHOT"])
+
+createTestTask(
+  "testDownloadCompatibleCommonDependency",
+  "Download artifacts with compatible dependencies.",
+  "org.test.psr:pull:1.0.2;org.test.psr:push:1.0.3",
+  ["org.test.psr.common-impl-1.0.0.aar":
+   "org/test/psr/common-impl/1.0.0/common-impl-1.0.0.aar",
+   "org.test.psr.common-1.0.1.aar":
+   "org/test/psr/common/1.0.1/common-1.0.1.aar",
+   "org.test.psr.pull-1.0.2.aar":
+   "org/test/psr/pull/1.0.2/pull-1.0.2.aar",
+   "org.test.psr.push-1.0.3.aar":
+   "org/test/psr/push/1.0.3/push-1.0.3.aar"],
+  ["Copied artifacts:\n" +
+   "org.test.psr.common-1.0.1.aar\n" +
+   "org.test.psr.common-impl-1.0.0.aar\n" +
+   "org.test.psr.pull-1.0.2.aar\n" +
+   "org.test.psr.push-1.0.3.aar"])
+
+createTestTask(
+  "testDownloadIncompatibleCommonDependency",
+  "Download artifacts with incomaptible dependencies.\n" +
+  "This should result in a forced upgrade of the minimal set of new versions",
+  "org.test.psr:push:2.0.2;org.test.psr:pull:2.0.3",
+  ["org.test.psr.pull-2.0.3.aar": "org/test/psr/pull/2.0.3/pull-2.0.3.aar",
+   "org.test.psr.push-2.0.4.aar": "org/test/psr/push/2.0.4/push-2.0.4.aar",
+   "org.test.psr.common-impl-2.3.0.aar":
+   "org/test/psr/common-impl/2.3.0/common-impl-2.3.0.aar",
+   "org.test.psr.common-2.4.0.aar":
+   "org/test/psr/common/2.4.0/common-2.4.0.aar"],
+  ["Copied artifacts:\n" +
+   "org.test.psr.common-2.4.0.aar\n" +
+   "org.test.psr.common-impl-2.3.0.aar\n" +
+   "org.test.psr.pull-2.0.3.aar\n" +
+   "org.test.psr.push-2.0.4.aar",
+   "Modified artifacts:\n" +
+   "org.test.psr:pull:2.0.3 --> org.test.psr:pull:2.0.+\n" +
+   "org.test.psr:push:2.0.2 --> org.test.psr:push:2.0.+"])
+
+createTestTask(
+  "testDownloadIncompatibleMajorVersions",
+  "Download artifacts with incompatible major versioned dependencies.\n" +
+  "This should result in a forced upgrade to the latest compatible major " +
+  "version",
+  "org.test.psr:push:5.0.1;org.test.psr:pull:6.0.1",
+  ["org.test.psr.pull-6.0.1.aar": "org/test/psr/pull/6.0.1/pull-6.0.1.aar",
+   "org.test.psr.push-5.0.1.aar": "org/test/psr/push/5.0.1/push-5.0.1.aar",
+   "org.test.psr.common-5.0.1.aar":
+   "org/test/psr/common/5.0.1/common-5.0.1.aar",
+   "org.test.psr.common-impl-5.0.0.aar":
+   "org/test/psr/common-impl/5.0.0/common-impl-5.0.0.aar"],
+  ["Copied artifacts:\n" +
+   "org.test.psr.common-5.0.1.aar\n" +
+   "org.test.psr.common-impl-5.0.0.aar\n" +
+   "org.test.psr.pull-6.0.1.aar\n" +
+   "org.test.psr.push-5.0.1.aar",
+   "Modified artifacts:\n" +
+   "org.test.psr:pull:6.0.1 --> org.test.psr:pull:+\n" +
+   "org.test.psr:push:5.0.1 --> org.test.psr:push:+"])
 
 project.defaultTasks = project.ext.testTaskNames

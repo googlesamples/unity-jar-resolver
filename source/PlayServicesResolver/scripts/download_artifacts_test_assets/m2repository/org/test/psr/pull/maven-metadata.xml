@@ -1,0 +1,15 @@
+<metadata>
+  <groupId>org.test.psr</groupId>
+  <artifactId>pull</artifactId>
+  <versioning>
+    <release>6.0.1</release>
+    <versions>
+      <version>1.0.2</version>
+      <version>2.0.3</version>
+      <version>6.0.1</version>
+
+    </versions>
+    <lastUpdated/>
+  </versioning>
+</metadata>
+
