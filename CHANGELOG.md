@@ -1,3 +1,7 @@
+# Version 1.2.65 - April 26, 2017
+## Bug Fixes
+* Fix CocoaPods casing in logs and comments.
+
 # Version 1.2.64 - Mar 16, 2017
 ## Bug Fixes
 * Fixed bug in download_artifacts.gradle (used by Android Resolver) which
