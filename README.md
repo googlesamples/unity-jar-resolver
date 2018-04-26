@@ -346,9 +346,7 @@ Unity -gvh_disable \
 ## Building from Source
 
 To build this plugin from source you need the following tools installed:
-   * monodevelop
-   * nunit-console
-   * Unity
+   * Unity (with iOS and Android modules installed)
 
 You can build the plugin by running the following from your shell
 (Linux / OSX):
