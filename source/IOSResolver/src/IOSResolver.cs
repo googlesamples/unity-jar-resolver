@@ -275,9 +275,9 @@ public class IOSResolver : AssetPostprocessor {
     // ie. "Podfile_Unity".
     private const string UNITY_PODFILE_BACKUP_POSTFIX = "_Unity.backup";
 
-    // Installation instructions for the Cocoapods command line tool.
+    // Installation instructions for the CocoaPods command line tool.
     private const string COCOAPOD_INSTALL_INSTRUCTIONS = (
-        "You can install cocoapods with the Ruby gem package manager:\n" +
+        "You can install CocoaPods with the Ruby gem package manager:\n" +
         " > sudo gem install -n /usr/local/bin cocoapods\n" +
         " > pod setup");
 
@@ -368,17 +368,17 @@ public class IOSResolver : AssetPostprocessor {
     private static string IOS_PLAYBACK_ENGINES_PATH =
         Path.Combine("PlaybackEngines", "iOSSupport");
 
-    // Directory containing downloaded Cocoapods relative to the project
+    // Directory containing downloaded CocoaPods relative to the project
     // directory.
     private const string PODS_DIR = "Pods";
-    // Name of the project within PODS_DIR that references downloaded Cocoapods.
+    // Name of the project within PODS_DIR that references downloaded CocoaPods.
     private const string PODS_PROJECT_NAME = "Pods";
     // Prefix for static library filenames.
     private const string LIBRARY_FILENAME_PREFIX = "lib";
     // Extension for static library filenames.
     private const string LIBRARY_FILENAME_EXTENSION = ".a";
 
-    // Version of the Cocoapods installation.
+    // Version of the CocoaPods installation.
     private static string podsVersion = "";
 
     private static string PODFILE_GENERATED_COMMENT = "# IOSResolver Generated Podfile";
@@ -540,11 +540,11 @@ public class IOSResolver : AssetPostprocessor {
             !InBatchMode && !UpgradeToWorkspaceWarningDisabled) {
 
             switch (EditorUtility.DisplayDialogComplex(
-                "Warning: Cocoapods integration is disabled!",
-                "Would you like to enable Cocoapods integration with workspaces?\n\n" +
-                "Unity 5.6+ now supports loading workspaces generated from Cocoapods.\n" +
+                "Warning: CocoaPods integration is disabled!",
+                "Would you like to enable CocoaPods integration with workspaces?\n\n" +
+                "Unity 5.6+ now supports loading workspaces generated from CocoaPods.\n" +
                 "If you enable this, and still use Unity less than 5.6, it will fallback " +
-                "to integrating Cocoapods with the .xcodeproj file.\n",
+                "to integrating CocoaPods with the .xcodeproj file.\n",
                 "Yes", "Not Now", "Silence Warning")) {
                 case 0:  // Yes
                     settings.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
@@ -612,7 +612,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// IOSResolver Unity Preferences setting indicating which Cocoapods integration method to use.
+    /// IOSResolver Unity Preferences setting indicating which CocoaPods integration method to use.
     /// </summary>
     public static CocoapodsIntegrationMethod CocoapodsIntegrationMethodPref {
         get {
@@ -624,7 +624,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Deprecated: Enable / disable Cocoapods installation.
+    /// Deprecated: Enable / disable CocoaPods installation.
     /// Please use CocoapodsIntegrationEnabled instead.
     /// </summary>
     [System.Obsolete("CocoapodsInstallEnabled is deprecated, please use " +
@@ -747,7 +747,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Whether or not we should do Xcode workspace level integration of cocoapods.
+    /// Whether or not we should do Xcode workspace level integration of CocoaPods.
     /// False if the Unity version doesn't support loading workspaces.
     /// </summary>
     private static bool CocoapodsWorkspaceIntegrationEnabled {
@@ -758,7 +758,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Whether or not we should do Xcode project level integration of cocoapods.
+    /// Whether or not we should do Xcode project level integration of CocoaPods.
     /// True if configured for project integration or workspace integration is enabled but using
     /// an older version of Unity that doesn't support loading workspaces (as a fallback).
     /// </summary>
@@ -1149,7 +1149,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Menu item that installs Cocoapods if it's not already installed.
+    /// Menu item that installs CocoaPods if it's not already installed.
     /// </summary>
     [MenuItem("Assets/Play Services Resolver/iOS Resolver/Install Cocoapods")]
     public static void InstallCocoapodsMenu() {
@@ -1157,7 +1157,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Auto install Cocoapods tools if they're not already installed.
+    /// Auto install CocoaPods tools if they're not already installed.
     /// </summary>
     public static void AutoInstallCocoapods() {
         InstallCocoapodsInteractive(displayAlreadyInstalled: false);
@@ -1165,7 +1165,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Interactively installs Cocoapods if it's not already installed.
+    /// Interactively installs CocoaPods if it's not already installed.
     /// </summary>
     public static void InstallCocoapodsInteractive(bool displayAlreadyInstalled = true) {
         bool installCocoapods = true;
@@ -1218,7 +1218,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Install Cocoapods if it's not already installed.
+    /// Install CocoaPods if it's not already installed.
     /// </summary>
     /// <param name="interactive">Whether this method should display information in pop-up
     /// dialogs.</param>
@@ -1243,7 +1243,7 @@ public class IOSResolver : AssetPostprocessor {
 
         var podToolPath = FindPodTool();
         if (!String.IsNullOrEmpty(podToolPath)) {
-            var installationFoundMessage = "Cocoapods installation detected " + podToolPath;
+            var installationFoundMessage = "CocoaPods installation detected " + podToolPath;
             if (displayAlreadyInstalled) logMessage(installationFoundMessage);
             cocoapodsToolsInstallPresent = true;
             return;
@@ -1283,7 +1283,7 @@ public class IOSResolver : AssetPostprocessor {
 
         var commandList = new List<CommandItem>();
         if (!QueryGemInstalled("activesupport", logMessage: logMessage)) {
-            // Workaround activesupport (dependency of the Cocoapods gem) requiring
+            // Workaround activesupport (dependency of the CocoaPods gem) requiring
             // Ruby 2.2.2 and above.
             // https://github.com/CocoaPods/CocoaPods/issues/4711
             commandList.Add(
@@ -1306,7 +1306,7 @@ public class IOSResolver : AssetPostprocessor {
                 commandIndex += 1;
                 if (result.exitCode != 0) {
                     logMessage(String.Format(
-                        "Failed to install Cocoapods for the current user.\n\n" +
+                        "Failed to install CocoaPods for the current user.\n\n" +
                         "{0}\n" +
                         "'{1} {2}' failed with code ({3}):\n" +
                         "{4}\n\n" +
@@ -1329,17 +1329,17 @@ public class IOSResolver : AssetPostprocessor {
                         return -1;
                     }
                     if (dialog != null) {
-                        dialog.bodyText += ("\n\nDownloading Cocoapods Master Repository\n" +
+                        dialog.bodyText += ("\n\nDownloading CocoaPods Master Repository\n" +
                                             "(this can take a while)\n");
                     }
                     commands[commandIndex].Command = podToolPath;
                 } else if (commandIndex == commands.Length) {
                     complete.Set();
-                    logMessage("Cocoapods tools successfully installed.");
+                    logMessage("CocoaPods tools successfully installed.");
                     cocoapodsToolsInstallPresent = true;
                 }
                 return commandIndex;
-            }, displayDialog: interactive, summaryText: "Installing Cocoapods...");
+            }, displayDialog: interactive, summaryText: "Installing CocoaPods...");
 
         // If this wasn't started interactively, block until execution is complete.
         if (!interactive) complete.WaitOne();
@@ -1358,7 +1358,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// If Cocoapod installation is enabled, prompt the user to install Cocoapods if it's not
+    /// If Cocoapod installation is enabled, prompt the user to install CocoaPods if it's not
     /// present on the machine.
     /// </summary>
     [PostProcessBuildAttribute(BUILD_ORDER_CHECK_COCOAPODS_INSTALL)]
@@ -1390,11 +1390,11 @@ public class IOSResolver : AssetPostprocessor {
         var podsWithoutBitcode = FindPodsWithBitcodeDisabled();
         bool bitcodeDisabled = podsWithoutBitcode.Count > 0;
         if (bitcodeDisabled) {
-            Log("Bitcode is disabled due to the following Cocoapods (" +
+            Log("Bitcode is disabled due to the following CocoaPods (" +
                 String.Join(", ", podsWithoutBitcode.ToArray()) + ")",
                 level: LogLevel.Warning);
         }
-        // Configure project settings for Cocoapods.
+        // Configure project settings for CocoaPods.
         string pbxprojPath = GetProjectPath(pathToBuiltProject);
         var project = new UnityEditor.iOS.Xcode.PBXProject();
         project.ReadFromString(File.ReadAllText(pbxprojPath));
@@ -1527,7 +1527,7 @@ public class IOSResolver : AssetPostprocessor {
     /// <summary>
     /// Generate the sources section from the set of "pods" in this class.
     ///
-    /// Each source is interleaved across each pod - removing duplicates - as Cocoapods searches
+    /// Each source is interleaved across each pod - removing duplicates - as CocoaPods searches
     /// each source in order for each pod.
     ///
     /// See Pod.sources for more information.
@@ -1651,14 +1651,14 @@ public class IOSResolver : AssetPostprocessor {
     private static string FindPodTool() {
         foreach (string path in POD_SEARCH_PATHS) {
             string podPath = Path.Combine(path, POD_EXECUTABLE);
-            Log("Searching for cocoapods tool in " + podPath,
+            Log("Searching for CocoaPods tool in " + podPath,
                 verbose: true);
             if (File.Exists(podPath)) {
-                Log("Found cocoapods tool in " + podPath, verbose: true);
+                Log("Found CocoaPods tool in " + podPath, verbose: true);
                 return podPath;
             }
         }
-        Log("Querying gems for cocoapods install path", verbose: true);
+        Log("Querying gems for CocoaPods install path", verbose: true);
         var environment = ReadGemsEnvironment();
         if (environment != null) {
             const string executableDir = "EXECUTABLE DIRECTORY";
@@ -1669,10 +1669,10 @@ public class IOSResolver : AssetPostprocessor {
                         var binPath = environmentVariable == executableDir ? path :
                             Path.Combine(path, "bin");
                         var podPath = Path.Combine(binPath, POD_EXECUTABLE);
-                        Log("Checking gems install path for cocoapods tool " + podPath,
+                        Log("Checking gems install path for CocoaPods tool " + podPath,
                             verbose: true);
                         if (File.Exists(podPath)) {
-                            Log("Found cocoapods tool in " + podPath, verbose: true);
+                            Log("Found CocoaPods tool in " + podPath, verbose: true);
                             return podPath;
                         }
                     }
@@ -1757,7 +1757,7 @@ public class IOSResolver : AssetPostprocessor {
                                          CommandItemCompletionHandler completionDelegate,
                                          bool displayDialog = false, string summaryText = null) {
         var envVars = new Dictionary<string,string>() {
-            // Cocoapods requires a UTF-8 terminal, otherwise it displays a warning.
+            // CocoaPods requires a UTF-8 terminal, otherwise it displays a warning.
             {"LANG", (System.Environment.GetEnvironmentVariable("LANG") ??
                       "en_US.UTF-8").Split('.')[0] + ".UTF-8"},
             {"PATH", ("/usr/local/bin:" +
@@ -1933,9 +1933,9 @@ public class IOSResolver : AssetPostprocessor {
         if (!CocoapodsIntegrationEnabled || !cocoapodsToolsInstallPresent) {
             Log(String.Format(
                 "Cocoapod installation is disabled.\n" +
-                "If Cocoapods are not installed in your project it will not link.\n\n" +
+                "If CocoaPods are not installed in your project it will not link.\n\n" +
                 "The command '{0} install' must be executed from the {1} directory to generate " +
-                "a Xcode workspace that includes the Cocoapods referenced by {2}.\n" +
+                "a Xcode workspace that includes the CocoaPods referenced by {2}.\n" +
                 "For more information see:\n" +
                 "  https://guides.cocoapods.org/using/using-cocoapods.html\n\n",
                 POD_EXECUTABLE, pathToBuiltProject, GetPodfilePath(pathToBuiltProject)),
@@ -1958,7 +1958,7 @@ public class IOSResolver : AssetPostprocessor {
 
         if (result.exitCode != 0 ||
             (!String.IsNullOrEmpty(podsVersion) && podsVersion[0] == '0')) {
-            Log("Error running cocoapods. Please ensure you have at least " +
+            Log("Error running CocoaPods. Please ensure you have at least " +
                 "version 1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS + "\n\n" +
                 "'" + POD_EXECUTABLE + " --version' returned status: " +
                 result.exitCode.ToString() + "\n" +
@@ -1986,13 +1986,13 @@ public class IOSResolver : AssetPostprocessor {
             // If the repo update still didn't fix the problem...
             if (result2.exitCode != 0) {
                 Log("iOS framework addition failed due to a " +
-                    "Cocoapods installation failure. This will will likely " +
+                    "CocoaPods installation failure. This will will likely " +
                     "result in an non-functional Xcode project.\n\n" +
                     "After the failure, \"pod repo update\" " +
                     "was executed and " +
                     (repoUpdateSucceeded ? "succeeded. " : "failed. ") +
                     "\"pod install\" was then attempted again, and still " +
-                    "failed. This may be due to a broken Cocoapods " +
+                    "failed. This may be due to a broken CocoaPods " +
                     "installation. See: " +
                     "https://guides.cocoapods.org/using/troubleshooting.html " +
                     "for potential solutions.\n\n" +
@@ -2022,7 +2022,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Finds the frameworks downloaded by cocoapods in the Pods directory
+    /// Finds the frameworks downloaded by CocoaPods in the Pods directory
     /// and adds them to the project.
     /// </summary>
     [PostProcessBuildAttribute(BUILD_ORDER_UPDATE_DEPS)]
@@ -2059,11 +2059,11 @@ public class IOSResolver : AssetPostprocessor {
             Directory.Exists(workspacePath)) {
             Log("Removing the generated workspace to force Unity to directly load the " +
                 "xcodeproj.\nSince Unity 5.6, Unity can now load workspace files generated " +
-                "from Cocoapods integration, however the IOSResolver Settings are configured " +
+                "from CocoaPods integration, however the IOSResolver Settings are configured " +
                 "to use project level integration. It's recommended that you use workspace " +
                 "integration instead.\n" +
                 "You can manage this setting from: Assets > Play Services Resolver > " +
-                "iOS Resolver > Settings, using the Cocoapods Integration drop down menu.",
+                "iOS Resolver > Settings, using the CocoaPods Integration drop down menu.",
                 level: LogLevel.Warning);
             Directory.Delete(workspacePath, true);
         }
@@ -2380,13 +2380,13 @@ public class IOSResolver : AssetPostprocessor {
         } else if (File.Exists(podsProjectPath + ".xml")) {
             // If neither the Pod pbxproj or pbxproj.xml are present pod
             // install failed earlier and an error has already been report.
-            Log("Old Cocoapods installation detected (version: " +
+            Log("Old CocoaPods installation detected (version: " +
                 podsVersion + ").  Unable to include " +
                 "source pods, your project will not build.\n" +
                 "\n" +
                 "Older versions of the pod tool generate xml format Xcode " +
                 "projects which can not be read by Unity's xcodeapi.  To " +
-                "resolve this issue update Cocoapods to at least version " +
+                "resolve this issue update CocoaPods to at least version " +
                 "1.1.0\n\n" +
                 COCOAPOD_INSTALL_INSTRUCTIONS,
                 level: LogLevel.Error);
