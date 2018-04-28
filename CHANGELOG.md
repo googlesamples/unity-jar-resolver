@@ -1,3 +1,10 @@
+# Version 1.2.66 - April 27, 2017
+## Bug Fixes
+* Fixed Version Handler renaming of Linux libraries with hypens in filenames.
+  Previously, libraries named Foo-1.2.3.so were not being renamed to
+  libFoo-1.2.3.so on Linux which could break native library loading on some
+  versions of Unity.
+
 # Version 1.2.65 - April 26, 2017
 ## Bug Fixes
 * Fix CocoaPods casing in logs and comments.

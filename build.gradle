@@ -153,7 +153,7 @@ project.ext {
     buildPath = file('build').absolutePath
     exportPath = file('build/plugin.unitypackage').absolutePath
     dllDir = 'Assets/PlayServicesResolver/Editor'
-    pluginVersion = '1.2.65.0'
+    pluginVersion = '1.2.66.0'
     currentPluginPath = file('.').absolutePath
     currentPluginBasename = 'play-services-resolver'
     currentPluginName = (currentPluginBasename + '-' + pluginVersion +

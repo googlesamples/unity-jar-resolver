@@ -395,7 +395,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             values = MatchPrefixesGetValues(token, TOKEN_LINUX_LIBRARY_BASENAME, prefix);
             if (values != null) {
-                linuxLibraryBasename = values[0];
+                linuxLibraryBasename = String.Join(FIELD_SEPARATOR[0].ToString(), values);
                 return true;
             }
             return false;
