@@ -2244,9 +2244,17 @@ public class IOSResolver : AssetPostprocessor {
             { XCCONFIG_PREFIX + ".release.xcconfig", "Release" },
         };
         Regex XCCONFIG_LINE_RE = new Regex(@"\s*(\S+)\s*=\s*(.*)");
+        var filenames = FindFilesWithExtensions(podsDir, new HashSet<string>(new []
+            { ".xcconfig" }));
+        var validCompileOptions = new HashSet<string> {
+            "GCC_PREPROCESSOR_DEFINITIONS",
+            "HEADER_SEARCH_PATHS",
+            "LIBRARY_SEARCH_PATHS",
+            "OTHER_CFLAGS",
+            "OTHER_LDFLAGS" };
+
         // Add xcconfig files to the project.
-        foreach (var filename in
-                 FindFilesWithExtensions(podsDir, new HashSet<string>(new [] { ".xcconfig" }))) {
+        foreach (var filename in filenames) {
             string buildConfigPrefix = null;
             // If this config shouldn't be applied to the project, skip it.
             if (!xcconfigBasenameToBuildConfigPrefix.TryGetValue(Path.GetFileName(filename),
@@ -2270,9 +2278,7 @@ public class IOSResolver : AssetPostprocessor {
             // Add options for the current xcconfig and all the other xcconfigs that
             // aren't being built. Since source pods are merged into the main
             // target, their options also need to be.
-            foreach (var xcconfigFile in
-                 FindFilesWithExtensions(podsDir, new HashSet<string>(new [] { ".xcconfig" }))) {
-                Log(xcconfigFile);
+            foreach (var xcconfigFile in filenames) {
                 if (xcconfigFile != filename &&
                     xcconfigBasenameToBuildConfigPrefix.TryGetValue(Path.GetFileName(xcconfigFile),
                                                                  out buildConfigPrefix)) {
@@ -2288,7 +2294,8 @@ public class IOSResolver : AssetPostprocessor {
                     var stripped = line.Trim();
                     if (stripped.StartsWith("//")) continue;
                     // Remove trailing semicolon.
-                    if (stripped.EndsWith(";")) stripped = stripped.Substring(0, stripped.Length - 1);
+                    if (stripped.EndsWith(";")) stripped = stripped.Substring(0,
+                        stripped.Length - 1);
                     // Ignore empty lines.
                     if (stripped.Trim().Length == 0) continue;
                     // Display a warning and ignore include statements.
@@ -2331,19 +2338,12 @@ public class IOSResolver : AssetPostprocessor {
                     foreach (var buildVariableAndValue in buildSettings) {
                         // If we're looking at another xcconfig from a source pod, only grab
                         // options that impact the compile.
-                        if (xcconfigFile != filename) {
-                            if (buildVariableAndValue.Key != "GCC_PREPROCESSOR_DEFINITIONS" &&
-                                buildVariableAndValue.Key != "HEADER_SEARCH_PATHS" &&
-                                buildVariableAndValue.Key != "LIBRARY_SEARCH_PATHS" &&
-                                buildVariableAndValue.Key != "OTHER_CFLAGS" &&
-                                buildVariableAndValue.Key != "OTHER_LDFLAGS") {
-                                continue;
-                            }
-                        }
+                        if (xcconfigFile != filename &&
+                            !validCompileOptions.Contains(buildVariableAndValue.Key)) continue;
                         Log(String.Format(
                             "Applying build setting '{0} = {1}' to build config {2} ({3})",
                             buildVariableAndValue.Key, buildVariableAndValue.Value,
-                            guidAndName.Value, guidAndName.Key));
+                            guidAndName.Value, guidAndName.Key), verbose: true);
                         project.AddBuildPropertyForConfig(guidAndName.Key, buildVariableAndValue.Key,
                                                           buildVariableAndValue.Value);
                     }
