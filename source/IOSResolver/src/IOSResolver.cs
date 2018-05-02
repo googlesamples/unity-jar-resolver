@@ -2279,7 +2279,8 @@ public class IOSResolver : AssetPostprocessor {
             // aren't being built. Since source pods are merged into the main
             // target, their options also need to be.
             var buildTargetXcconfigFiles = new HashSet<string>(xcconfigFiles);
-            buildTargetXcconfigFiles.ExceptWith(new HashSet<string>(xcconfigBasenameToBuildConfigPrefix.Keys));
+            buildTargetXcconfigFiles.ExceptWith(new HashSet<string>(
+                                                xcconfigBasenameToBuildConfigPrefix.Keys));
             buildTargetXcconfigFiles.Add(filename);
             foreach (var buildTargetXcconfig in buildTargetXcconfigFiles) {
                 // Unity's XcodeAPI doesn't expose a way to set the
@@ -2287,7 +2288,8 @@ public class IOSResolver : AssetPostprocessor {
                 // build properties manually.
                 // Parser derived from https://pewpewthespells.com/blog/xcconfig_guide.html
                 var buildSettings = new Dictionary<string, string>();
-                foreach (var line in CommandLine.SplitLines(File.ReadAllText(buildTargetXcconfig))) {
+                foreach (var line in CommandLine.SplitLines(
+                    File.ReadAllText(buildTargetXcconfig))) {
                     var stripped = line.Trim();
                     if (stripped.StartsWith("//")) continue;
                     // Remove trailing semicolon.
@@ -2319,7 +2321,7 @@ public class IOSResolver : AssetPostprocessor {
                     var filteredLinkOptions = new List<string>();
                     const string LIBRARY_OPTION = "-l";
                     foreach (var option in linkOptions.Split()) {
-                        // See https://clang.llvm.org/docs/ClangCommandLineReference.html#linker-flags
+                        // https://clang.llvm.org/docs/ClangCommandLineReference.html#linker-flags
                         if (option.StartsWith(LIBRARY_OPTION) &&
                             sourcePodLibraries.Contains(
                                 option.Substring(LIBRARY_OPTION.Length).Trim('\"').Trim('\''))) {
@@ -2327,7 +2329,8 @@ public class IOSResolver : AssetPostprocessor {
                         }
                         filteredLinkOptions.Add(option);
                     }
-                    buildSettings["OTHER_LDFLAGS"] = String.Join(" ", filteredLinkOptions.ToArray());
+                    buildSettings["OTHER_LDFLAGS"] = String.Join(" ",
+                                                                 filteredLinkOptions.ToArray());
                 }
 
                 // Add the build properties parsed from the xcconfig file to each configuration.
@@ -2341,7 +2344,8 @@ public class IOSResolver : AssetPostprocessor {
                             "Applying build setting '{0} = {1}' to build config {2} ({3})",
                             buildVariableAndValue.Key, buildVariableAndValue.Value,
                             guidAndName.Value, guidAndName.Key), verbose: true);
-                        project.AddBuildPropertyForConfig(guidAndName.Key, buildVariableAndValue.Key,
+                        project.AddBuildPropertyForConfig(guidAndName.Key,
+                                                          buildVariableAndValue.Key,
                                                           buildVariableAndValue.Value);
                     }
                 }
