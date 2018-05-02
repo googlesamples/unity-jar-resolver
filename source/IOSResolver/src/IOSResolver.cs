@@ -2244,7 +2244,7 @@ public class IOSResolver : AssetPostprocessor {
             { XCCONFIG_PREFIX + ".release.xcconfig", "Release" },
         };
         Regex XCCONFIG_LINE_RE = new Regex(@"\s*(\S+)\s*=\s*(.*)");
-        var filenames = FindFilesWithExtensions(podsDir, new HashSet<string>(new []
+        var xcconfigFiles = FindFilesWithExtensions(podsDir, new HashSet<string>(new []
             { ".xcconfig" }));
         var validCompileOptions = new HashSet<string> {
             "GCC_PREPROCESSOR_DEFINITIONS",
@@ -2254,7 +2254,7 @@ public class IOSResolver : AssetPostprocessor {
             "OTHER_LDFLAGS" };
 
         // Add xcconfig files to the project.
-        foreach (var filename in filenames) {
+        foreach (var filename in xcconfigFiles) {
             string buildConfigPrefix = null;
             // If this config shouldn't be applied to the project, skip it.
             if (!xcconfigBasenameToBuildConfigPrefix.TryGetValue(Path.GetFileName(filename),
@@ -2278,19 +2278,16 @@ public class IOSResolver : AssetPostprocessor {
             // Add options for the current xcconfig and all the other xcconfigs that
             // aren't being built. Since source pods are merged into the main
             // target, their options also need to be.
-            foreach (var xcconfigFile in filenames) {
-                if (xcconfigFile != filename &&
-                    xcconfigBasenameToBuildConfigPrefix.TryGetValue(Path.GetFileName(xcconfigFile),
-                                                                 out buildConfigPrefix)) {
-                    continue;
-                }
-
+            var buildTargetXcconfigFiles = new HashSet<string>(xcconfigFiles);
+            buildTargetXcconfigFiles.ExceptWith(new HashSet<string>(xcconfigBasenameToBuildConfigPrefix.Keys));
+            buildTargetXcconfigFiles.Add(filename);
+            foreach (var buildTargetXcconfig in buildTargetXcconfigFiles) {
                 // Unity's XcodeAPI doesn't expose a way to set the
                 // baseConfigurationReference so instead we parse the xcconfig and add the
                 // build properties manually.
                 // Parser derived from https://pewpewthespells.com/blog/xcconfig_guide.html
                 var buildSettings = new Dictionary<string, string>();
-                foreach (var line in CommandLine.SplitLines(File.ReadAllText(xcconfigFile))) {
+                foreach (var line in CommandLine.SplitLines(File.ReadAllText(buildTargetXcconfig))) {
                     var stripped = line.Trim();
                     if (stripped.StartsWith("//")) continue;
                     // Remove trailing semicolon.
@@ -2301,13 +2298,13 @@ public class IOSResolver : AssetPostprocessor {
                     // Display a warning and ignore include statements.
                     if (stripped.StartsWith("#include")) {
                         Log(String.Format("{0} contains unsupported #include statement '{1}'",
-                                          xcconfigFile, stripped), level: LogLevel.Warning);
+                                          buildTargetXcconfig, stripped), level: LogLevel.Warning);
                         continue;
                     }
                     var match = XCCONFIG_LINE_RE.Match(stripped);
                     if (!match.Success) {
                         Log(String.Format("{0} line '{1}' does not contain a variable assignment",
-                                          xcconfigFile, stripped), level: LogLevel.Warning);
+                                          buildTargetXcconfig, stripped), level: LogLevel.Warning);
                         continue;
                     }
                     buildSettings[match.Groups[1].Value] = match.Groups[2].Value;
@@ -2338,7 +2335,7 @@ public class IOSResolver : AssetPostprocessor {
                     foreach (var buildVariableAndValue in buildSettings) {
                         // If we're looking at another xcconfig from a source pod, only grab
                         // options that impact the compile.
-                        if (xcconfigFile != filename &&
+                        if (buildTargetXcconfig != filename &&
                             !validCompileOptions.Contains(buildVariableAndValue.Key)) continue;
                         Log(String.Format(
                             "Applying build setting '{0} = {1}' to build config {2} ({3})",
