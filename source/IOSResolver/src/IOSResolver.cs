@@ -1406,6 +1406,8 @@ public class IOSResolver : AssetPostprocessor {
                                  "$(inherited)");
         project.AddBuildProperty(target, "USER_HEADER_SEARCH_PATHS",
                                  "$(PROJECT_DIR)/" + PODS_DIR + "/Headers/Public");
+        project.AddBuildProperty(target, "HEADER_SEARCH_PATHS",
+                                 "$(PROJECT_DIR)/" + PODS_DIR + "/Headers/Private");
         project.AddBuildProperty(target, "FRAMEWORK_SEARCH_PATHS",
                                  "$(inherited)");
         project.AddBuildProperty(target, "FRAMEWORK_SEARCH_PATHS",
@@ -2265,62 +2267,86 @@ public class IOSResolver : AssetPostprocessor {
             // If no match configs exist, skip this xcconfig file.
             if (configGuidsByName.Count == 0) continue;
 
-            // Unity's XcodeAPI doesn't expose a way to set the
-            // baseConfigurationReference so instead we parse the xcconfig and add the
-            // build properties manually.
-            // Parser derived from https://pewpewthespells.com/blog/xcconfig_guide.html
-            var buildSettings = new Dictionary<string, string>();
-            foreach (var line in CommandLine.SplitLines(File.ReadAllText(filename))) {
-                var stripped = line.Trim();
-                if (stripped.StartsWith("//")) continue;
-                // Remove trailing semicolon.
-                if (stripped.EndsWith(";")) stripped = stripped.Substring(0, stripped.Length - 1);
-                // Ignore empty lines.
-                if (stripped.Trim().Length == 0) continue;
-                // Display a warning and ignore include statements.
-                if (stripped.StartsWith("#include")) {
-                    Log(String.Format("{0} contains unsupported #include statement '{1}'",
-                                      filename, stripped), level: LogLevel.Warning);
+            // Add options for the current xcconfig and all the other xcconfigs that
+            // aren't being built. Since source pods are merged into the main
+            // target, their options also need to be.
+            foreach (var xcconfigFile in
+                 FindFilesWithExtensions(podsDir, new HashSet<string>(new [] { ".xcconfig" }))) {
+                Log(xcconfigFile);
+                if (xcconfigFile != filename &&
+                    xcconfigBasenameToBuildConfigPrefix.TryGetValue(Path.GetFileName(xcconfigFile),
+                                                                 out buildConfigPrefix)) {
                     continue;
                 }
-                var match = XCCONFIG_LINE_RE.Match(stripped);
-                if (!match.Success) {
-                    Log(String.Format("{0} line '{1}' does not contain a variable assignment",
-                                      filename, stripped), level: LogLevel.Warning);
-                    continue;
-                }
-                buildSettings[match.Groups[1].Value] = match.Groups[2].Value;
-            }
 
-            // Since we're building source Pods within the context of the target project, remove
-            // source pod library references from the link options as the intermediate libraries
-            // will not exist.  We derived each source pod library name from the directory that
-            // contains the source pod's source.
-            string linkOptions = null;
-            if (buildSettings.TryGetValue("OTHER_LDFLAGS", out linkOptions)) {
-                var filteredLinkOptions = new List<string>();
-                const string LIBRARY_OPTION = "-l";
-                foreach (var option in linkOptions.Split()) {
-                    // See https://clang.llvm.org/docs/ClangCommandLineReference.html#linker-flags
-                    if (option.StartsWith(LIBRARY_OPTION) &&
-                        sourcePodLibraries.Contains(
-                            option.Substring(LIBRARY_OPTION.Length).Trim('\"').Trim('\''))) {
+                // Unity's XcodeAPI doesn't expose a way to set the
+                // baseConfigurationReference so instead we parse the xcconfig and add the
+                // build properties manually.
+                // Parser derived from https://pewpewthespells.com/blog/xcconfig_guide.html
+                var buildSettings = new Dictionary<string, string>();
+                foreach (var line in CommandLine.SplitLines(File.ReadAllText(xcconfigFile))) {
+                    var stripped = line.Trim();
+                    if (stripped.StartsWith("//")) continue;
+                    // Remove trailing semicolon.
+                    if (stripped.EndsWith(";")) stripped = stripped.Substring(0, stripped.Length - 1);
+                    // Ignore empty lines.
+                    if (stripped.Trim().Length == 0) continue;
+                    // Display a warning and ignore include statements.
+                    if (stripped.StartsWith("#include")) {
+                        Log(String.Format("{0} contains unsupported #include statement '{1}'",
+                                          xcconfigFile, stripped), level: LogLevel.Warning);
                         continue;
                     }
-                    filteredLinkOptions.Add(option);
+                    var match = XCCONFIG_LINE_RE.Match(stripped);
+                    if (!match.Success) {
+                        Log(String.Format("{0} line '{1}' does not contain a variable assignment",
+                                          xcconfigFile, stripped), level: LogLevel.Warning);
+                        continue;
+                    }
+                    buildSettings[match.Groups[1].Value] = match.Groups[2].Value;
                 }
-                buildSettings["OTHER_LDFLAGS"] = String.Join(" ", filteredLinkOptions.ToArray());
-            }
 
-            // Add the build properties parsed from the xcconfig file to each configuration.
-            foreach (var guidAndName in configGuidsByName) {
-                foreach (var buildVariableAndValue in buildSettings) {
-                    Log(String.Format(
-                        "Applying build setting '{0} = {1}' to build config {2} ({3})",
-                        buildVariableAndValue.Key, buildVariableAndValue.Value,
-                        guidAndName.Value, guidAndName.Key), verbose: true);
-                    project.AddBuildPropertyForConfig(guidAndName.Key, buildVariableAndValue.Key,
-                                                      buildVariableAndValue.Value);
+                // Since we're building source Pods within the context of the target project, remove
+                // source pod library references from the link options as the intermediate libraries
+                // will not exist.  We derived each source pod library name from the directory that
+                // contains the source pod's source.
+                string linkOptions = null;
+                if (buildSettings.TryGetValue("OTHER_LDFLAGS", out linkOptions)) {
+                    var filteredLinkOptions = new List<string>();
+                    const string LIBRARY_OPTION = "-l";
+                    foreach (var option in linkOptions.Split()) {
+                        // See https://clang.llvm.org/docs/ClangCommandLineReference.html#linker-flags
+                        if (option.StartsWith(LIBRARY_OPTION) &&
+                            sourcePodLibraries.Contains(
+                                option.Substring(LIBRARY_OPTION.Length).Trim('\"').Trim('\''))) {
+                            continue;
+                        }
+                        filteredLinkOptions.Add(option);
+                    }
+                    buildSettings["OTHER_LDFLAGS"] = String.Join(" ", filteredLinkOptions.ToArray());
+                }
+
+                // Add the build properties parsed from the xcconfig file to each configuration.
+                foreach (var guidAndName in configGuidsByName) {
+                    foreach (var buildVariableAndValue in buildSettings) {
+                        // If we're looking at another xcconfig from a source pod, only grab
+                        // options that impact the compile.
+                        if (xcconfigFile != filename) {
+                            if (buildVariableAndValue.Key != "GCC_PREPROCESSOR_DEFINITIONS" &&
+                                buildVariableAndValue.Key != "HEADER_SEARCH_PATHS" &&
+                                buildVariableAndValue.Key != "LIBRARY_SEARCH_PATHS" &&
+                                buildVariableAndValue.Key != "OTHER_CFLAGS" &&
+                                buildVariableAndValue.Key != "OTHER_LDFLAGS") {
+                                continue;
+                            }
+                        }
+                        Log(String.Format(
+                            "Applying build setting '{0} = {1}' to build config {2} ({3})",
+                            buildVariableAndValue.Key, buildVariableAndValue.Value,
+                            guidAndName.Value, guidAndName.Key));
+                        project.AddBuildPropertyForConfig(guidAndName.Key, buildVariableAndValue.Key,
+                                                          buildVariableAndValue.Value);
+                    }
                 }
             }
         }
