@@ -1,3 +1,11 @@
+# Version 1.2.68 - May 3, 2017
+## Changes
+* Added support for granular builds of Google Play Services.
+
+# Version 1.2.67 - May 1, 2017
+## Changes
+* Improved support for iOS source-only pods in Unity 5.5 and below.
+
 # Version 1.2.66 - April 27, 2017
 ## Bug Fixes
 * Fixed Version Handler renaming of Linux libraries with hypens in filenames.
