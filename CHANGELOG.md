@@ -1,3 +1,7 @@
+# Version 1.2.70 - May 7, 2018
+## Bug Fixes
+* Fixed bitcode flag being ignored for iOS pods.
+
 # Version 1.2.69 - May 7, 2018
 ## Bug Fixes
 * Fixed escaping of local repository paths in Android Resolver.
