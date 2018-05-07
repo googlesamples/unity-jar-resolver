@@ -1,3 +1,7 @@
+# Version 1.2.69 - May 7, 2018
+## Bug Fixes
+* Fixed escaping of local repository paths in Android Resolver.
+
 # Version 1.2.68 - May 3, 2017
 ## Changes
 * Added support for granular builds of Google Play Services.

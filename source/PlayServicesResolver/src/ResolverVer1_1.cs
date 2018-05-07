@@ -138,6 +138,17 @@ namespace GooglePlayServices
         private const int MinorVersion = 1;
         private const int PointVersion = 0;
 
+        // Characters that are parsed by Gradle / Java in property values.
+        // These characters need to be escaped to be correctly interpreted in a property value.
+        private static string[] GradlePropertySpecialCharacters = new string[] {
+            " ", "\\", "#", "!", "=", ":"
+        };
+
+        // Special characters that should not be escaped in URIs for Gradle property values.
+        private static HashSet<string> GradleUriExcludeEscapeCharacters = new HashSet<string> {
+            ":"
+        };
+
         // Queue of System.Action objects for resolve actions to execute on the main thread.
         private static System.Collections.Queue resolveUpdateQueue = new System.Collections.Queue();
         // Currently active resolution operation.
@@ -364,6 +375,29 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Escape all special characters in a gradle property value.
+        /// </summary>
+        /// <param name="value">Value to escape.</param>
+        /// <param name="escapeFunc">Function which generates an escaped character.  By default
+        /// this adds "\\" to each escaped character.</param>
+        /// <param name="charactersToExclude">Characters to exclude from the escaping set.</param>
+        /// <returns>Escaped value.</returns>
+        private static string EscapeGradlePropertyValue(
+                string value, Func<string, string> escapeFunc = null,
+                HashSet<string> charactersToExclude = null) {
+            if (escapeFunc == null) {
+                escapeFunc = (characterToEscape) => { return "\\" + characterToEscape; };
+            }
+            foreach (var characterToEscape in GradlePropertySpecialCharacters) {
+                if (charactersToExclude == null ||
+                    !(charactersToExclude.Contains(characterToEscape))) {
+                    value = value.Replace(characterToEscape, escapeFunc(characterToEscape));
+                }
+            }
+            return value;
+        }
+
+        /// <summary>
         /// Generates a Gradle (Java) properties string from a dictionary of key value pairs.
         /// Details of the format is documented in
         /// http://docs.oracle.com/javase/7/docs/api/java/util/Properties.html#\
@@ -379,12 +413,7 @@ namespace GooglePlayServices
                 var elementAfterLeadingWhitespace = kv.Value.TrimStart(new [] { ' ' });
                 var escapedElement =
                     kv.Value.Substring(elementAfterLeadingWhitespace.Length).Replace(" ", "\\ ") +
-                    elementAfterLeadingWhitespace
-                        .Replace("\\", "\\\\")
-                        .Replace("#", "\\#")
-                        .Replace("!", "\\!")
-                        .Replace("=", "\\=")
-                        .Replace(":", "\\:");
+                    EscapeGradlePropertyValue(elementAfterLeadingWhitespace);
                 lines.Add(String.Format("{0}={1}", escapedKey, escapedElement));
             }
             return String.Join("\n", lines.ToArray());
@@ -478,8 +507,12 @@ namespace GooglePlayServices
                     if (!validScheme) {
                         repo = "file:///" + Path.GetFullPath(repo).Replace("\\", "/");
                     }
-                    // Escape the URI to handle special characters like spaces.
-                    repo = Uri.EscapeUriString(repo);
+                    // Escape the URI to handle special characters like spaces and percent escape
+                    // all characters that are interpreted by gradle.
+                    repo = EscapeGradlePropertyValue(
+                        Uri.EscapeUriString(repo),
+                        escapeFunc: Uri.EscapeDataString,
+                        charactersToExclude: GradleUriExcludeEscapeCharacters);
                     if (repoSet.Contains(repo)) continue;
                     repoSet.Add(repo);
                     repoList.Add(repo);
