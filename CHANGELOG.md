@@ -1,3 +1,8 @@
+# Version 1.2.71 - May 10, 2018
+## Bug Fixes
+* Fixed resolution of Android dependencies when the `Assets/Plugins/Android`
+  directory is named in a different case e.g `Assets/plugins/Android`.
+
 # Version 1.2.70 - May 7, 2018
 ## Bug Fixes
 * Fixed bitcode flag being ignored for iOS pods.

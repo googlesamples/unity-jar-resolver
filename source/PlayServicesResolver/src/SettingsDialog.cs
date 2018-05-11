@@ -16,6 +16,7 @@
 
 namespace GooglePlayServices
 {
+    using System;
     using System.IO;
     using UnityEditor;
     using UnityEngine;
@@ -105,6 +106,9 @@ namespace GooglePlayServices
 
         private static ProjectSettings projectSettings = new ProjectSettings(Namespace);
 
+        // Previously validated package directory.
+        private static string previouslyValidatedPackageDir;
+
         /// <summary>
         /// Reset settings of this plugin to default values.
         /// </summary>
@@ -132,12 +136,14 @@ namespace GooglePlayServices
             get { return projectSettings.GetBool(PackageInstallKey, true); }
         }
 
+
         internal static string PackageDir {
             private set { projectSettings.SetString(PackageDirKey, value); }
             get {
-                return ConfigurablePackageDir ?
-                    ValidatePackageDir(projectSettings.GetString(PackageDirKey, DefaultPackageDir)) :
-                    DefaultPackageDir;
+                return ValidatePackageDir(
+                    ConfigurablePackageDir ?
+                        (projectSettings.GetString(PackageDirKey, DefaultPackageDir)) :
+                        DefaultPackageDir);
             }
         }
 
@@ -164,9 +170,32 @@ namespace GooglePlayServices
         }
 
         internal static string ValidatePackageDir(string directory) {
-            if (!directory.StartsWith(AndroidPluginsDir)) {
+            // Make sure the package directory starts with the same name.
+            // This is case insentitive to handle cases where developers rename Unity
+            // project directories on Windows (which has a case insensitive file system by
+            // default) then they use the project on OSX / Linux.
+            if (!directory.ToLowerInvariant().StartsWith(AndroidPluginsDir.ToLower())) {
                 directory = AndroidPluginsDir;
             }
+            var searchDirectory = FileUtils.FindDirectoryByCaseInsensitivePath(directory);
+            if (directory != searchDirectory &&
+                (previouslyValidatedPackageDir == null ||
+                 searchDirectory != previouslyValidatedPackageDir)) {
+                PlayServicesResolver.Log(
+                    String.Format("Resolving to Android package directory {0} instead of the " +
+                                  "requested target directory {1}\n" +
+                                  "\n" +
+                                  "Is {0} in a different case to {1} ?\n",
+                                  searchDirectory, directory), level: LogLevel.Warning);
+                directory = searchDirectory;
+            } else if (previouslyValidatedPackageDir == null ||
+                       searchDirectory != previouslyValidatedPackageDir){
+                PlayServicesResolver.Log(
+                    String.Format("Android package directory {0} not found.",
+                                  directory), level: LogLevel.Warning);
+            }
+            previouslyValidatedPackageDir = searchDirectory;
+
             return directory;
         }
 

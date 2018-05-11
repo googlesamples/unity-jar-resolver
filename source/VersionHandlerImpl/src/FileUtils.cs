@@ -17,6 +17,7 @@
 namespace Google {
     using System;
     using System.IO;
+    using System.Collections.Generic;
 
     /// <summary>
     /// Utility methods to assist with file management in Unity.
@@ -77,6 +78,53 @@ namespace Google {
                     File.Copy(sourcePath, sourceToTargetPath(sourcePath));
                 }
             }
+        }
+
+        /// <summary>
+        /// Perform a case insensitive search for a path relative to the current directory.
+        /// </summary>
+        /// <remarks>
+        /// Directory.Exists() is case insensitive, so this method finds a directory using a case
+        /// insensitive search returning the name of the first matching directory found.
+        /// </remarks>
+        /// <param name="pathToFind">Path to find relative to the current directory.</param>
+        /// <returns>First case insensitive match for the specified path.</returns>
+        public static string FindDirectoryByCaseInsensitivePath(string pathToFind) {
+            var searchDirectory = ".";
+            // Components of the path.
+            var components = pathToFind.Replace(
+                Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).Split(
+                    new [] { Path.DirectorySeparatorChar });
+            for (int componentIndex = 0;
+                 componentIndex < components.Length && searchDirectory != null;
+                 componentIndex++) {
+                var enumerateDirectory = searchDirectory;
+                var expectedComponent = components[componentIndex];
+                var expectedComponentLower = components[componentIndex].ToLowerInvariant();
+                searchDirectory = null;
+                var matchingPaths = new List<KeyValuePair<int, string>>();
+                foreach (var currentDirectory in
+                         Directory.GetDirectories(enumerateDirectory)) {
+                    // Get the current component of the path we're traversing.
+                    var currentComponent = Path.GetFileName(currentDirectory);
+                    if (currentComponent.ToLowerInvariant() == expectedComponentLower) {
+                        // Add the path to a list and remove "./" from the first component.
+                        matchingPaths.Add(new KeyValuePair<int, string>(
+                            Math.Abs(String.CompareOrdinal(expectedComponent, currentComponent)),
+                            (componentIndex == 0) ? Path.GetFileName(currentDirectory) :
+                                currentDirectory));
+                        break;
+                    }
+                }
+                if (matchingPaths.Count == 0) break;
+                // Sort list in order of ordinal string comparison result.
+                matchingPaths.Sort(
+                    (KeyValuePair<int, string> lhs, KeyValuePair<int, string> rhs) => {
+                        return lhs.Key - rhs.Key;
+                    });
+                searchDirectory = matchingPaths[0].Value;
+            }
+            return searchDirectory;
         }
     }
 }
