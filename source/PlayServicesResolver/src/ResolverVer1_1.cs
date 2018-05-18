@@ -138,6 +138,8 @@ namespace GooglePlayServices
         private const int MinorVersion = 1;
         private const int PointVersion = 0;
 
+        private bool runSynchronously;
+        
         // Characters that are parsed by Gradle / Java in property values.
         // These characters need to be escaped to be correctly interpreted in a property value.
         private static string[] GradlePropertySpecialCharacters = new string[] {
@@ -649,21 +651,29 @@ namespace GooglePlayServices
                                                    gradleWrapper, gradleArgumentsString),
                                      level: LogLevel.Verbose);
 
-            // Run the build script to perform the resolution popping up a window in the editor.
-            var window = CommandLineDialog.CreateCommandLineDialog(
-                "Resolving Android Dependencies");
-            window.summaryText = "Resolving Android Dependencies....";
-            window.modal = false;
-            window.progressTitle = window.summaryText;
-            window.autoScrollToBottom = true;
-            window.RunAsync(gradleWrapper, gradleArgumentsString,
-                            (result) => {
-                                window.Close();
-                                scheduleOnMainThread(result);
-                            },
-                            workingDirectory: gradleBuildDirectory,
-                            maxProgressLines: 50);
-            window.Show();
+            if (runSynchronously)
+            {
+                CommandLine.Run(gradleWrapper, gradleArgumentsString, gradleBuildDirectory);
+            }
+            else
+            {
+                // Run the build script to perform the resolution popping up a window in the editor.
+                var window = CommandLineDialog.CreateCommandLineDialog(
+                    "Resolving Android Dependencies");
+                window.summaryText = "Resolving Android Dependencies....";
+                window.modal = false;
+                window.progressTitle = window.summaryText;
+                window.autoScrollToBottom = true;
+                window.RunAsync(gradleWrapper, gradleArgumentsString,
+                    (result) =>
+                    {
+                        window.Close();
+                        scheduleOnMainThread(result);
+                    },
+                    workingDirectory: gradleBuildDirectory,
+                    maxProgressLines: 50);
+                window.Show();
+            }
         }
 
         /// <summary>
@@ -848,10 +858,24 @@ namespace GooglePlayServices
                 DoResolutionUnsafe(svcSupport, destinationDirectory,
                                    unlockResolveAndSignalResolutionComplete);
             };
-            lock (resolveLock) {
-                resolveUpdateQueue.Enqueue(resolve);
-                EditorApplication.update += UpdateTryResolution;
+
+            if (runSynchronously)
+            {
+                resolve();
+            }else
+            {
+                lock (resolveLock)
+                {
+                    resolveUpdateQueue.Enqueue(resolve);
+                    EditorApplication.update += UpdateTryResolution;
+                }
             }
+        }
+
+        public override void DoResolution(PlayServicesSupport svcSupport, string destinationDirectory)
+        {
+            runSynchronously = true;
+            DoResolution(svcSupport,destinationDirectory,() => {});
         }
 
         // Try executing a resolution.
