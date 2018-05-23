@@ -81,6 +81,16 @@ namespace Google {
         }
 
         /// <summary>
+        /// Normalize a path using system directory separators.
+        /// </summary>
+        /// <param name="path">Path to normalize.</param>
+        /// <returns>Path with consistent directory separators for the platform.</returns>
+        public static string NormalizePathSeparators(string path) {
+            return path != null ? path.Replace(Path.AltDirectorySeparatorChar,
+                                               Path.DirectorySeparatorChar) : null;
+        }
+
+        /// <summary>
         /// Perform a case insensitive search for a path relative to the current directory.
         /// </summary>
         /// <remarks>
@@ -92,8 +102,7 @@ namespace Google {
         public static string FindDirectoryByCaseInsensitivePath(string pathToFind) {
             var searchDirectory = ".";
             // Components of the path.
-            var components = pathToFind.Replace(
-                Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar).Split(
+            var components = NormalizePathSeparators(pathToFind).Split(
                     new [] { Path.DirectorySeparatorChar });
             for (int componentIndex = 0;
                  componentIndex < components.Length && searchDirectory != null;
@@ -124,7 +133,7 @@ namespace Google {
                     });
                 searchDirectory = matchingPaths[0].Value;
             }
-            return searchDirectory;
+            return NormalizePathSeparators(searchDirectory);
         }
     }
 }

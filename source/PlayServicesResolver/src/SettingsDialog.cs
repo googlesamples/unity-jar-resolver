@@ -177,6 +177,7 @@ namespace GooglePlayServices
             if (!directory.ToLowerInvariant().StartsWith(AndroidPluginsDir.ToLower())) {
                 directory = AndroidPluginsDir;
             }
+            directory = FileUtils.NormalizePathSeparators(directory);
             var searchDirectory = FileUtils.FindDirectoryByCaseInsensitivePath(directory);
             if (directory != searchDirectory &&
                 (previouslyValidatedPackageDir == null ||

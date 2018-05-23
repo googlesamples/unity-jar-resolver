@@ -1,3 +1,8 @@
+# Version 1.2.73 - May 30, 2018
+## Bug Fixes
+* Fixed spurious warning message about missing Android plugins directory on
+  Windows.
+
 # Version 1.2.72 - May 23, 2018
 ## Bug Fixes
 * Fixed spurious warning message about missing Android plugins directory.
