@@ -1,3 +1,7 @@
+# Version 1.2.72 - May 23, 2018
+## Bug Fixes
+* Fixed spurious warning message about missing Android plugins directory.
+
 # Version 1.2.71 - May 10, 2018
 ## Bug Fixes
 * Fixed resolution of Android dependencies when the `Assets/Plugins/Android`

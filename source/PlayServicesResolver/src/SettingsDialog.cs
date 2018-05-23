@@ -188,8 +188,9 @@ namespace GooglePlayServices
                                   "Is {0} in a different case to {1} ?\n",
                                   searchDirectory, directory), level: LogLevel.Warning);
                 directory = searchDirectory;
-            } else if (previouslyValidatedPackageDir == null ||
-                       searchDirectory != previouslyValidatedPackageDir){
+            } else if ((previouslyValidatedPackageDir == null ||
+                        searchDirectory != previouslyValidatedPackageDir) &&
+                       searchDirectory == null) {
                 PlayServicesResolver.Log(
                     String.Format("Android package directory {0} not found.",
                                   directory), level: LogLevel.Warning);
