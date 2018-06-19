@@ -1,0 +1,9 @@
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.google.android.gms</groupId>
+  <artifactId>play-services-basement-license</artifactId>
+  <version>12.0.0</version>
+  <packaging>aar</packaging>
+  <name>play-services-basement-license</name>
+<licenses><license><name>Android Software Development Kit License</name><url>https://developer.android.com/studio/terms.html</url><distribution>repo</distribution></license></licenses>
+</project>

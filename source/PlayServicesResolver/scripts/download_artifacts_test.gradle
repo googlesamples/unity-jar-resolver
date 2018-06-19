@@ -118,7 +118,12 @@ def createStartParameters(packagesToCopy, targetDir) {
     "ANDROID_HOME": project.ext.androidHome,
     "PACKAGES_TO_COPY": packagesToCopy,
     "TARGET_DIR": targetDir.absolutePath,
-    "MAVEN_REPOS": mavenRepo.toURI().toString()
+    "MAVEN_REPOS": mavenRepo.toURI().toString(),
+    // Only search the test repo for artifacts to make the tests deterministic.
+    // This disables searching the local Gradle configured repo and remote
+    // repos.
+    "USE_MAVEN_LOCAL_REPO": "0",
+    "USE_REMOTE_MAVEN_REPOS": "0",
   ]
   startParameters.logLevel = logging.level
   return startParameters
@@ -465,5 +470,81 @@ createTestTask(
    "Modified artifacts:\n" +
    "org.test.psr:pull:6.0.1 --> org.test.psr:pull:+\n" +
    "org.test.psr:push:5.0.1 --> org.test.psr:push:+"])
+
+createTestTask(
+  "testDownloadOrderingLowestToHighestVersion",
+  "Download the highest version of the specified set of packages.  The\n" +
+  "packages ordering should not change the resolution result.",
+  "com.android.support:support-annotations:23.+;" +
+  "com.android.support:support-annotations:24.+",
+  [],
+  ["Copied artifacts:\n" +
+   "com.android.support.support-annotations-24.0.0.jar"])
+
+createTestTask(
+  "testDownloadOrderingHighestToLowestVersion",
+  "Download the highest version of the specified set of packages.  The\n" +
+  "packages ordering should not change the resolution result.",
+  "com.android.support:support-annotations:24.+;" +
+  "com.android.support:support-annotations:23.+",
+  [],
+  ["Copied artifacts:\n" +
+   "com.android.support.support-annotations-24.0.0.jar"])
+
+createTestTask(
+  "testVersionLockedAndNonVersionLocked",
+  "Packages are upgraded to the most recent non-version locked package " +
+  "if a mix of version locked vs. non-version locked packages are specified.",
+  "com.google.android.gms:play-services-basement:12.0.0;" +
+  "com.google.android.gms:play-services-tasks:12.0.0;" +
+  "com.google.android.gms:play-services-basement:15.0.0;",
+  ["android.arch.core.common-1.0.0.jar":
+   "android/arch/core/common/1.0.0/common-1.0.0.jar",
+   "android.arch.lifecycle.common-1.0.0.jar":
+   "android/arch/lifecycle/common/1.0.0/common-1.0.0.jar",
+   "android.arch.lifecycle.runtime-1.0.0.aar":
+   "android/arch/lifecycle/runtime/1.0.0/runtime-1.0.0.aar",
+   "com.android.support.support-annotations-26.1.0.jar":
+   "com/android/support/support-annotations/26.1.0/" +
+   "support-annotations-26.1.0.jar",
+   "com.android.support.support-compat-26.1.0.aar":
+   "com/android/support/support-compat/26.1.0/support-compat-26.1.0.aar",
+   "com.android.support.support-core-ui-26.1.0.aar":
+   "com/android/support/support-core-ui/26.1.0/support-core-ui-26.1.0.aar",
+   "com.android.support.support-core-utils-26.1.0.aar":
+   "com/android/support/support-core-utils/26.1.0/" +
+   "support-core-utils-26.1.0.aar",
+   "com.android.support.support-fragment-26.1.0.aar":
+   "com/android/support/support-fragment/26.1.0/support-fragment-26.1.0.aar",
+   "com.android.support.support-media-compat-26.1.0.aar":
+   "com/android/support/support-media-compat/26.1.0/" +
+   "support-media-compat-26.1.0.aar",
+   "com.android.support.support-v4-26.1.0.aar":
+   "com/android/support/support-v4/26.1.0/support-v4-26.1.0.aar",
+   "com.google.android.gms.play-services-basement-15.0.0.aar":
+   "com/google/android/gms/play-services-basement/15.0.0/" +
+   "play-services-basement-15.0.0.aar",
+   "com.google.android.gms.play-services-tasks-15.0.0.aar":
+   "com/google/android/gms/play-services-tasks/15.0.0/" +
+   "play-services-tasks-15.0.0.aar",
+  ],
+  ["Copied artifacts:\n" +
+   "android.arch.core.common-1.0.0.jar\n" +
+   "android.arch.lifecycle.common-1.0.0.jar\n" +
+   "android.arch.lifecycle.runtime-1.0.0.aar\n" +
+   "com.android.support.support-annotations-26.1.0.jar\n" +
+   "com.android.support.support-compat-26.1.0.aar\n" +
+   "com.android.support.support-core-ui-26.1.0.aar\n" +
+   "com.android.support.support-core-utils-26.1.0.aar\n" +
+   "com.android.support.support-fragment-26.1.0.aar\n" +
+   "com.android.support.support-media-compat-26.1.0.aar\n" +
+   "com.android.support.support-v4-26.1.0.aar\n" +
+   "com.google.android.gms.play-services-basement-15.0.0.aar\n" +
+   "com.google.android.gms.play-services-tasks-15.0.0.aar",
+   "Modified artifacts:\n" +
+   "com.google.android.gms:play-services-basement:15.0.0 --> " +
+   "com.google.android.gms:play-services-basement:+\n" +
+   "com.google.android.gms:play-services-tasks:12.0.0 --> " +
+   "com.google.android.gms:play-services-tasks:+"])
 
 project.defaultTasks = project.ext.testTaskNames

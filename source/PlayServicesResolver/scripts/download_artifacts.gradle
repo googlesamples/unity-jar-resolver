@@ -36,6 +36,14 @@ MAVEN_REPOS (optional project property):
   \"-PMAVEN_REPOS=http://some.repos.com;file:///some/other/path\"
   Since this property semicolon separated it needs to be quoted correctly
   when specified via some command line shells.
+USE_MAVEN_LOCAL_REPO (optional project property):
+  Optional property which, when not set to 1, disables the implicit use of local
+  maven repositories (see mavenLocal() in the gradle docs).
+  By default local maven repositories are enabled.
+USE_REMOTE_MAVEN_REPOS (optional project property):
+  Optional property which, when not set to 1, disables the implicit use of
+  remote repositories (maven.google.com, jcenter and maven central) when
+  fetching artifacts.  By default remote repositories are enabled.
 PACKAGES_TO_COPY (required project property):
   Semicolon separated list of Maven artifact specifications.  This will
   result in the script attempting to download the set of artifacts to
@@ -53,9 +61,9 @@ TARGET_DIR (required project property):
 
 buildscript {
   repositories {
-    jcenter()
     mavenLocal()
     mavenCentral()
+    jcenter()
   }
 }
 
@@ -106,7 +114,7 @@ String getVersionlessArtifactByPackage(String packageSpecifier,
                                        boolean colonAsSeparator=false) {
   def (group, artifact, version, artifactType) =
     getComponentsFromPackage(packageSpecifier)
-  if (artifact == null) return null;
+  if (artifact == null) return null
   return [group, artifact].join(colonAsSeparator ? ":" : ".")
 }
 
@@ -141,6 +149,9 @@ Map<String, String> getVersionlessArtifactsByPackage(
  * become ret[com.example:my-package] = "com.example:my-package:1.2.3@aar")
  * Package specifiers without at least a group and artifact are ignored.
  *
+ * If multiple versions of the same package are specified, the highest version
+ * is returned in the map.
+ *
  * @param packages List of package specifier strings.
  *
  * @returns A map of package specifiers by group:name tuples.
@@ -152,7 +163,21 @@ Map<String, String> getPackagesByVersionlessArtifact(
     def versionlessArtifact =
       getVersionlessArtifactByPackage(it, true)
     if (versionlessArtifact) {
-      packagesByVersionlessArtifact[versionlessArtifact] = it
+      def highestVersionPackage = it
+      // If the package has already been seen, select the highest version.
+      def otherPackageSpec = packagesByVersionlessArtifact[versionlessArtifact]
+      if (otherPackageSpec) {
+        def packageSpecByVersion =
+          [it, otherPackageSpec].collectEntries { pkg ->
+            def versionExpression = getComponentsFromPackage(pkg)[2]
+            def version = maxVersionFromVersionExpression(
+              versionExpression ? versionExpression : "")
+            return [version ? version : "0", pkg]
+        }
+        highestVersionPackage = packageSpecByVersion[
+          sortVersionStrings(packageSpecByVersion.keySet())[-1]]
+      }
+      packagesByVersionlessArtifact[versionlessArtifact] = highestVersionPackage
     }
   }
   return packagesByVersionlessArtifact
@@ -362,8 +387,12 @@ String moduleComponentSelectorToString(
  *
  * @param packageSpecifier Package spec to query.
  *
- * @return A value greater than or equal to zero that indicates an opaque
- * package group index, -1 otherwise.
+ * @returns 0 if the package isn't version locked, index value greater than 0
+ * if the package is added to the lockedPackages list or an index value lesser
+ * than 0 if the package is part of a version locked set but is at a non-version
+ * locked version.  For example, if a:b.c:1.0 is version locked and a:b.c:2.0
+ * is not version locked - 1.0 & 2.0 are arbitrary versions - this will return a
+ * positive index value for a:b.c:1.0 and negative value for a:b.c:2.0.
  */
 Integer getVersionLockedPackageIndex(String packageSpecifier) {
   // Packages that should be version-locked.
@@ -399,12 +428,12 @@ Integer getVersionLockedPackageIndex(String packageSpecifier) {
         maxVersionFromVersionExpression(
           splitMinimumVersionExpression(version)[0])
       if (Integer.parseInt(majorVersion) >= 15) {
-        continue;
+        return -(index + 1)
       }
     }
-    return index;
+    return index + 1
   }
-  return -1;
+  return 0
 }
 
 /*
@@ -412,25 +441,54 @@ Integer getVersionLockedPackageIndex(String packageSpecifier) {
  *
  * @param packageSpecifier Package to add to a set if is version-locked.
  * A version-locked package is determined by a return value of >= 0 by
- * the project.ext.isVersionLockedPackageSpec closure.
+ * getVersionLockedPackageIndex().
  * @param lockedPackages Map of sets of version-locked packages.  Each set
- * is indexed by the value returned by the
- * project.ext.isVersionLockedPackageSpec closure.
+ * is indexed by the value returned by getVersionLockedPackageIndex().
+ * @param blacklist Set of package set indexes that should not be used.
+ * This is utilized when a non-version locked package exists in the set of
+ * dependencies for a package and therefore no packages in the set should be
+ * locked to a specific version.
  *
- * @returns true if the package is added to the lockedPackages list,
- * false otherwise.
+ * @returns 0 if the package isn't version locked, index value greater than 0
+ * if the package is added to the lockedPackages list or an index value lesser
+ * than 0 if the package is part of a version locked set but is at a non-version
+ * locked version.  For example, if a:b.c:1.0 is version locked and a:b.c:2.0
+ * is not version locked - 1.0 & 2.0 are arbitrary versions - this will return a
+ * positive index value for a:b.c:1.0 and negative value for a:b.c:2.0.
  */
-boolean addVersionLockedPackageToSet(String packageSpecifier,
-                                     Map<Integer, Set<String>> lockedPackages) {
+Integer addVersionLockedPackageToSet(String packageSpecifier,
+                                     Map<Integer, Set<String>> lockedPackages,
+                                     Set<Integer> blacklist) {
   def index = getVersionLockedPackageIndex(packageSpecifier)
-  if (index < 0) return false
-  def lockedPackageSet = lockedPackages[index]
-  if (!lockedPackageSet) {
-    lockedPackageSet = [].toSet()
+  if (index in blacklist) index = -index
+  if (index > 0) {
+    def lockedPackageSet = lockedPackages[index]
+    if (!lockedPackageSet) {
+      lockedPackageSet = [].toSet()
+    }
+    lockedPackageSet.add(packageSpecifier)
+    lockedPackages[index] = lockedPackageSet
   }
-  lockedPackageSet.add(packageSpecifier)
-  lockedPackages[index] = lockedPackageSet
-  return true
+  return index
+}
+
+/*
+ * Given a set of package specs, generate a blacklist of version locked package
+ * set indexes.
+ *
+ * @param packageSpecifiers List of package specifications to scan for
+ * version-locked package groups that should be blacklisted.
+ *
+ * @returns Set of blacklisted package set indexes that for groups of packages
+ * that should not be version-locked.
+ */
+Set<Integer> createVersionLockedSetBlacklist(List<String> packageSpecifiers) {
+  def blacklist = [].toSet()
+  packageSpecifiers.each { packageSpecifier ->
+    def index = getVersionLockedPackageIndex(packageSpecifier)
+    if (index < 0) blacklist.add(-index)
+  }
+  return blacklist
 }
 
 /*
@@ -459,6 +517,52 @@ List<String> mostRecentVersionLockedPackagesFromSet(
 }
 
 /*
+ * Perform a breadth first walk of a dependency graph optionally calling a
+ * closure for each node in the graph.
+ *
+ * @param root Root of the graph to traverse.
+ * @param closure Closure to call for each node in the graph.
+ * The closure is called with
+ * (DependencyResult dependency, List<DependencyResult> parents)
+ * where dependency is the current dependency and parents is the list of
+ * parents of the current dependency.  This value can be null to just retrieve
+ * a flat list of nodes in the graph.
+ *
+ * @returns List of (dependency, graph nodes) traversed.
+ */
+List<List<DependencyResult, List<DependencyResult>>>
+    walkResolvedComponentResultGraph(ResolvedComponentResult root, closure) {
+  // List of (dependency, parentsList) tuples where dependency is a
+  // DependencyResult describing a node in the graph and parentsList is the
+  // list of DependencyResult nodes that are parents of the "dependency" node.
+  def graphRemaining = []
+  root.dependencies.each { graphRemaining.add([it, []]) }
+
+  def summaryGraph = []
+  // Map of versionless package names to versioned package specification
+  // strings.
+  while (graphRemaining.size > 0) {
+    // Process current node in the graph.
+    def (dependency, parents) = graphRemaining[0]
+    summaryGraph.add(graphRemaining[0])
+    graphRemaining = graphRemaining.drop(1)
+
+    // Call the closure the current node and the current node's parents.
+    if (closure) closure(dependency, parents)
+
+    def componentResult = dependency.selected
+    def parentsOfChildren = parents.clone()
+    parentsOfChildren.addAll(0, [dependency])
+    def children = []
+    componentResult.dependencies.each {
+      children.add([it, parentsOfChildren])
+    }
+    graphRemaining.addAll(0, children)
+  }
+  return summaryGraph
+}
+
+/*
  * Walk a dependency graph loosing the version constraints for the parent of
  * each conflicting dependency.
  *
@@ -482,18 +586,25 @@ List<String> mostRecentVersionLockedPackagesFromSet(
 def loosenVersionContraintsForConflicts(ResolvedComponentResult root,
                                         Set<String> requestedPackages,
                                         boolean applyToTransitiveDependencies) {
+  // NOTE: The version field is ignored in the returned map, this is only used
+  // to look up the type specifier for each package.
   def requestedPackagesByVersionlessArtifacts =
     getPackagesByVersionlessArtifact(requestedPackages)
   def versionlessPackages =
     requestedPackagesByVersionlessArtifacts.keySet().toSet()
-  // List of (dependency, parentsList) tuples where dependency is a
-  // DependencyResult describing a node in the graph and parentsList is the
-  // list of DependencyResult nodes that are parents of the "dependency" node.
-  def graphRemaining = []
-  root.dependencies.each { graphRemaining.add([it, []]) }
+
+  // Build a set of version locked package set indexes that should not be
+  // version locked.
+  def versionLockedSetBlacklist = createVersionLockedSetBlacklist(
+    walkResolvedComponentResultGraph(root, null).collect {
+      dependency, parents ->
+        moduleComponentSelectorToString(dependency.requested as
+                                        ModuleComponentSelector)
+    })
 
   def packages = [:]
   def versionLockedPackages = [:]
+
   // Closure which adds a dependency to the packages map if it is present in
   // the versionlessPackages set.
   def addDependencyToPackages = { dependency, isConflicting ->
@@ -513,9 +624,11 @@ def loosenVersionContraintsForConflicts(ResolvedComponentResult root,
 
     // If the package is version-locked add it to the tracking set so it can
     // be reconciled later.
-    if (addVersionLockedPackageToSet(packageSpec, versionLockedPackages)) {
+    if (addVersionLockedPackageToSet(packageSpec, versionLockedPackages,
+                                     versionLockedSetBlacklist) > 0) {
       return
     }
+
     // If this package wasn't specified by the user, ignore it.
     if (!(versionlessPackageName in versionlessPackages)) {
       return
@@ -551,48 +664,38 @@ def loosenVersionContraintsForConflicts(ResolvedComponentResult root,
     packages[versionlessPackageName] = newPackageSpec
   }
 
-  def summaryGraph = []
   def conflictsFound = false
-  // Map of versionless package names to versioned package specification
-  // strings.
-  while (graphRemaining.size > 0) {
-    // Process current node in the graph.
-    def (dependency, parents) = graphRemaining[0]
-    summaryGraph.add(graphRemaining[0])
-    graphRemaining = graphRemaining.drop(1)
+  def summaryGraph = walkResolvedComponentResultGraph(
+    root, { dependency, parents ->
+      def componentResult = dependency.selected
+      def isConflicting =
+        componentResult.selectionReason.isConflictResolution()
+      conflictsFound |= isConflicting
+      addDependencyToPackages(dependency, isConflicting)
+      if (isConflicting) parents.each { addDependencyToPackages(it, true) }
 
-    def componentResult = dependency.selected
-    def isConflicting = componentResult.selectionReason.isConflictResolution()
-    conflictsFound |= isConflicting
-    addDependencyToPackages(dependency, isConflicting)
-    if (isConflicting) parents.each { addDependencyToPackages(it, true) }
+      def overrideTransitiveDependencies =
+        applyToTransitiveDependencies &&
+        (dependency.requested as ModuleComponentSelector).version == "+"
 
-    def overrideTransitiveDependencies =
-      applyToTransitiveDependencies &&
-      (dependency.requested as ModuleComponentSelector).version == "+"
-    // Schedule traversal of parents again as we're going to modify the version
-    // expression of each child node.
-    def parentsOfChildren = parents.clone()
-    parentsOfChildren.addAll(0, [dependency])
-    def children = []
-    componentResult.dependencies.each {
-      // If the parent's version expression can't be loosened any further, start
-      // overriding the selected version of each transitive dependency.
-      if (overrideTransitiveDependencies) {
-        def packageSpec = moduleComponentSelectorToString(
-          it.requested as ModuleComponentSelector)
-        def versionlessName = getVersionlessArtifactByPackage(packageSpec, true)
-        if (!(versionlessName in versionlessPackages)) {
-          packages[versionlessName] = packageSpec
-          versionlessPackages.add(versionlessName)
-          logger.info(sprintf("Overriding transitive dependency %s",
-                              packageSpec))
+      componentResult.dependencies.each {
+        // If the parent's version expression can't be loosened any further,
+        // start overriding the selected version of each transitive
+        // dependency.
+        if (overrideTransitiveDependencies) {
+          def packageSpec = moduleComponentSelectorToString(
+            it.requested as ModuleComponentSelector)
+          def versionlessName = getVersionlessArtifactByPackage(packageSpec,
+                                                                true)
+          if (!(versionlessName in versionlessPackages)) {
+            packages[versionlessName] = packageSpec
+            versionlessPackages.add(versionlessName)
+            logger.info(sprintf("Overriding transitive dependency %s",
+                                packageSpec))
+          }
         }
       }
-      children.add([it, parentsOfChildren])
-    }
-    graphRemaining.addAll(0, children)
-  }
+    })
 
   // Select the most recent version of each version-locked package and add to
   // the set.
@@ -753,9 +856,19 @@ Set<String> fallbackToSrcAarArtifacts(Iterable<String> packages) {
     searchForSrcAarConfig.resolvedConfiguration.
       lenientConfiguration.getArtifacts(Specs.satisfyAll()), true)
 
-  // Override each package found in the fallback set.
-  foundArtifacts.each { allPackages[it] = fallbackPackages[it] }
-  return allPackages.values().toSet()
+  // Replace all user supplied packages in the output set with discovered srcaar
+  // package specs.
+  def outputPackages = [].toSet()
+  packages.each {
+    def versionlessArtifact =
+      getVersionlessArtifactByPackage(it, true)
+    if (versionlessArtifact && versionlessArtifact in foundArtifacts) {
+      outputPackages.add(fallbackPackages[versionlessArtifact])
+    } else {
+      outputPackages.add(it)
+    }
+  }
+  return outputPackages
 }
 
 def testGetComponentsFromPackage() {
@@ -814,7 +927,9 @@ def testGetVersionlessArtifactsByPackage() {
 def testGetPackagesByVersionlessArtifact() {
   [[["a.b.c:d-e:1.2.3", "a.b.c:e-f:+"],
     ["a.b.c:d-e": "a.b.c:d-e:1.2.3",
-     "a.b.c:e-f": "a.b.c:e-f:+"]]].each { packages, expected ->
+     "a.b.c:e-f": "a.b.c:e-f:+"]],
+   [["a.b.c:d-e:1.2.+", "a.b.c:d-e:2.1.+"],
+    ["a.b.c:d-e": "a.b.c:d-e:2.1.+"]]].each { packages, expected ->
     def result = getPackagesByVersionlessArtifact(packages)
     if (result != expected) {
       throw new Exception(
@@ -847,10 +962,10 @@ def testLoosenVersionExpression() {
 }
 
 def testGetVersionLockedPackageIndex() {
-  ["com.google.android.gms:play-services-base:12.0.1": 0,
-   "com.google.firebase:firebase-core:12.0.1": 0,
-   "com.android.support:support-v4:23.0.+": 1,
-   "com.google.firebase:firebase-app-unity:4.3.0": -1,
+  ["com.google.android.gms:play-services-base:12.0.1": 1,
+   "com.google.firebase:firebase-core:12.0.1": 1,
+   "com.android.support:support-v4:23.0.+": 2,
+   "com.google.firebase:firebase-app-unity:4.3.0": 0,
    "com.google.android.gms:play-services-base:15.1.2": -1].each {
     packageSpec, expectedIndex ->
       def index = getVersionLockedPackageIndex(packageSpec)
@@ -873,19 +988,20 @@ def testAddVersionLockedPackageToSet() {
    ["com.google.firebase:firebase-app-unity:4.3.0", false],
    ["com.google.android.gms:play-services-base:15.1.2", false]].each {
     packageSpecifier, expected ->
-      def result = addVersionLockedPackageToSet(packageSpecifier,
-                                                lockedPackages)
-      if (result != expected) {
+      def resultIndex = addVersionLockedPackageToSet(packageSpecifier,
+                                                     lockedPackages, [].toSet())
+      def result = resultIndex > 0
+      if (expected != result) {
         throw new Exception(
-          sprintf("%s was incorrected added to a version-locked set, " +
+          sprintf("%s was incorrectly added to a version-locked set, " +
                   "returned %b, expected %b", packageSpecifier, result,
                   expected))
       }
   }
   def expectedLockedPackages =
-    [0: ["com.google.android.gms:play-services-base:12.0.1",
+    [1: ["com.google.android.gms:play-services-base:12.0.1",
          "com.google.firebase:firebase-core:12.0.1"].toSet(),
-     1: ["com.android.support:support-v4:23.0.+",
+     2: ["com.android.support:support-v4:23.0.+",
          "com.android.support:support-vector-drawable:24+"].toSet()]
   if (lockedPackages != expectedLockedPackages) {
     throw new Exception(
@@ -894,11 +1010,44 @@ def testAddVersionLockedPackageToSet() {
   }
 }
 
+def testCreateVersionLockedSetBlacklist() {
+  def expectedBlacklist = [1].toSet()
+  def blacklist = createVersionLockedSetBlacklist(
+    ["com.google.android.gms:play-services-base:12.0.1",
+     "com.google.firebase:firebase-core:12.0.1",
+     "com.google.android.gms:play-services-base:15.+",
+     "com.android.support:support-v4:23.0.+"])
+  if (blacklist != expectedBlacklist) {
+    throw new Exception(
+      sprintf("Created invalid blacklist of locked package groups %s, " +
+              "expected %s", blacklist, expectedBlacklist))
+  }
+}
+
+def testAddVersionLockedPackageToSetWithBlacklist() {
+  def blacklist = [1].toSet()
+  def lockedPackages = [:]
+  ["com.google.android.gms:play-services-base:12.0.1": -1,
+   "com.google.firebase:firebase-core:12.0.1": -1,
+   "com.android.support:support-v4:23.0.+": 2].each {
+    packageSpec, expectedIndex ->
+      def resultIndex = addVersionLockedPackageToSet(packageSpec,
+                                                     lockedPackages,
+                                                     blacklist)
+      if (resultIndex != expectedIndex) {
+        throw new Exception(
+          sprintf("%s was incorrectly added to a version-locked set, " +
+                  "return %d, expected %d", packageSpec, resultIndex,
+                  expectedIndex))
+      }
+  }
+}
+
 def testMostRecentVersionLockedPackagesFromSet() {
   def versionLockedSets = [
-    0: ["com.google.android.gms:play-services-base:12.0.1",
+    1: ["com.google.android.gms:play-services-base:12.0.1",
         "com.google.firebase:firebase-core:12.0.+"].toSet(),
-    1: ["com.android.support:support-v4:23.0.+",
+    2: ["com.android.support:support-v4:23.0.+",
         "com.android.support:support-vector-drawable:24.+"].toSet()]
   def versionLockedList =
     mostRecentVersionLockedPackagesFromSet(versionLockedSets)
@@ -953,6 +1102,8 @@ def runTests() {
   testLoosenVersionExpression()
   testGetVersionLockedPackageIndex()
   testAddVersionLockedPackageToSet()
+  testCreateVersionLockedSetBlacklist()
+  testAddVersionLockedPackageToSetWithBlacklist()
   testMostRecentVersionLockedPackagesFromSet()
   testGetModifiedPackageVersions()
   testSortVersionStrings()
@@ -989,6 +1140,15 @@ project.ext {
     }
   }
 
+  def useMavenLocalRepo = true
+  if (project.hasProperty("USE_MAVEN_LOCAL_REPO")) {
+    useMavenLocalRepo = project.getProperty("USE_MAVEN_LOCAL_REPO") == "1"
+  }
+  def useRemoteMavenRepos = true
+  if (project.hasProperty("USE_REMOTE_MAVEN_REPOS")) {
+    useRemoteMavenRepos = project.getProperty("USE_REMOTE_MAVEN_REPOS") == "1"
+  }
+
   // Construct a list of local Maven URIs in the Android SDK.
   if (androidSdkRoot) {
     ["extras/android/m2repository", "extras/google/m2repository"].each {
@@ -997,7 +1157,9 @@ project.ext {
     }
   }
   // Add Google maven repositories.
-  mavenUris.push(new URI("https://maven.google.com"))
+  if (useRemoteMavenRepos) {
+    mavenUris.push(new URI("https://maven.google.com"))
+  }
 
   // List of URIs to add to the set of maven sources.
   mavenRepoUris = mavenUris
@@ -1010,13 +1172,15 @@ project.ext {
         url uri
       }
     }
-    mavenLocal()
-    jcenter()
-    mavenCentral()
+    if (useMavenLocalRepo) mavenLocal()
+    if (useRemoteMavenRepos) {
+      jcenter()
+      mavenCentral()
+    }
   }
 
   project.repositories.each {
-    logger.info(sprintf("MAVEN_REPOS: name=%s url=%s", it.name, it.url));
+    logger.info(sprintf("MAVEN_REPOS: name=%s url=%s", it.name, it.url))
   }
 
   // Set of packages to copy to the target directory.
@@ -1062,19 +1226,26 @@ project.ext {
 
   // If we were unable to find a set of packages with versions that do not
   // conflict we may still end up with transitive references to artifacts at
-  // different versions which should all point at the same version.  So iterate
-  // through all fetched artifacts and explicitly pin all version-locked
-  // transitive dependencies to the same version.
+  // different versions which should all point at the same version.  So,
+  // if possible, iterate through all fetched artifacts and explicitly pin all
+  // version-locked transitive dependencies to the same version.
   def versionLockedPackageSets = [:]
   def previousVersionLockedPackages = [].toSet()
+  def versionLockedSetBlacklist = createVersionLockedSetBlacklist(
+    resolvedArtifacts.collect {
+      resolvedModuleVersionToPackage(it.moduleVersion)
+    })
   resolvedArtifacts.each {
     def packageSpec = resolvedModuleVersionToPackage(it.moduleVersion)
-    if (addVersionLockedPackageToSet(packageSpec, versionLockedPackageSets)) {
+    if (addVersionLockedPackageToSet(packageSpec,
+                                     versionLockedPackageSets,
+                                     versionLockedSetBlacklist) > 0) {
       previousVersionLockedPackages.add(packageSpec)
       return
     }
     packagesToCopy.add(resolvedArtifactToPackage(it))
   }
+
   // Lock each resolved packages to the most recent version.
   def versionLockedPackages = mostRecentVersionLockedPackagesFromSet(
     versionLockedPackageSets)

@@ -29,10 +29,8 @@ using UnityEditor;
 /// them and process all of them at once.
 [InitializeOnLoad]
 public class SampleDependencies : AssetPostprocessor {
-#if UNITY_ANDROID
     /// <summary>Instance of the PlayServicesSupport resolver</summary>
     public static object svcSupport;
-#endif  // UNITY_ANDROID
 
     /// Initializes static members of the class.
     static SampleDependencies() {
