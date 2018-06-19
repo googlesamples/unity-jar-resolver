@@ -647,21 +647,34 @@ namespace GooglePlayServices
                                                    string[] deletedAssets,
                                                    string[] movedAssets,
                                                    string[] movedFromAssetPaths) {
-            if (Resolver != null && Resolver.AutomaticResolutionEnabled()) {
-                // If anything has been removed from the packaging directory schedule resolution.
-                foreach (string asset in deletedAssets) {
-                    if (asset.StartsWith(GooglePlayServices.SettingsDialog.PackageDir)) {
-                        EditorApplication.update -= AutoResolve;
-                        EditorApplication.update += AutoResolve;
-                        return;
+            if (Resolver != null) {
+                // If the manifest changed, try patching it.
+                var manifestPath = FileUtils.NormalizePathSeparators(
+                    GooglePlayServices.SettingsDialog.AndroidManifestPath);
+                foreach (var importedAsset in importedAssets) {
+                    if (FileUtils.NormalizePathSeparators(importedAsset) == manifestPath) {
+                        PatchAndroidManifest(UnityCompat.ApplicationId, null);
+                        break;
                     }
                 }
-                // Schedule a check of imported assets.
-                if (importedAssets.Length > 0 && autoResolveFilePatterns.Count > 0) {
-                    importedAssetsSinceLastResolve = new HashSet<string>(importedAssets);
-                    EditorApplication.update -= CheckImportedAssets;
-                    EditorApplication.update += CheckImportedAssets;
-                    return;
+
+                if (Resolver.AutomaticResolutionEnabled()) {
+                    // If anything has been removed from the packaging directory schedule
+                    // resolution.
+                    foreach (string asset in deletedAssets) {
+                        if (asset.StartsWith(GooglePlayServices.SettingsDialog.PackageDir)) {
+                            EditorApplication.update -= AutoResolve;
+                            EditorApplication.update += AutoResolve;
+                            return;
+                        }
+                    }
+                    // Schedule a check of imported assets.
+                    if (importedAssets.Length > 0 && autoResolveFilePatterns.Count > 0) {
+                        importedAssetsSinceLastResolve = new HashSet<string>(importedAssets);
+                        EditorApplication.update -= CheckImportedAssets;
+                        EditorApplication.update += CheckImportedAssets;
+                        return;
+                    }
                 }
             }
         }
@@ -720,10 +733,143 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Replace attribute values in a tree of XmlElement objects.
+        /// </summary>
+        /// <param name="node">Element to traverse.</param>
+        /// <param name="attributeValueReplacements">Dictionary of attribute values to replace where
+        /// each value in the dictionary replaces the manifest attribute value corresponding to
+        /// the key in the dictionary.  For example, {"foo", "bar"} results in all instances of
+        /// "foo" attribute values being replaced with "bar".  NOTE: Partial replacements are
+        /// applied if the attribute value starts with the dictionary key.  For example,
+        /// {"com.my.app", "com.another.app"} will change...
+        /// * com.my.app.service --> com.another.app.service
+        /// * foo.com.my.app.service --> foo.com.my.app.service (unchanged)
+        /// </param>
+        /// <param name="path">Path of this node in the hierachy of nodes. For example:
+        /// given node is "<c>" in "<a><b><c>" this should be "a/b/c".  If this
+        /// value is null the name of the current node is used.</param>
+        /// <returns>true if any replacements are applied, false otherwise.</returns>
+        private static bool ReplaceVariablesInXmlElementTree(
+                XmlElement node,
+                Dictionary<string, string> attributeValueReplacements,
+                string path = null) {
+            bool replacementsApplied = false;
+            if (path == null) path = node.Name;
+            // Build a dictionary of attribute value replacements.
+            var attributeNamesAndValues = new Dictionary<string, string>();
+            foreach (var attribute in node.Attributes) {
+                // Skip non-XmlAttribute objects.
+                var xmlAttribute = attribute as XmlAttribute;
+                if (xmlAttribute == null) continue;
+                var attributeName = xmlAttribute.Name;
+                var attributeValue = xmlAttribute.Value;
+                foreach (var kv in attributeValueReplacements) {
+                    if (attributeValue.StartsWith(kv.Key) &&
+                        attributeValue != kv.Value) {
+                        attributeNamesAndValues[attributeName] = kv.Value;
+                        break;
+                    }
+                }
+            }
+            // Replace attribute values.
+            foreach (var kv in attributeNamesAndValues) {
+                Log(String.Format("Replacing element: {0} attribute: {1} value: {2} --> {3}",
+                                  path, kv.Key, node.GetAttribute(kv.Key), kv.Value),
+                    level: LogLevel.Verbose);
+                node.SetAttribute(kv.Key, kv.Value);
+                replacementsApplied = true;
+            }
+            // Traverse child tree and apply replacements.
+            foreach (var child in node.ChildNodes) {
+                // Comment elements cannot be cast to XmlElement so ignore them.
+                var childElement = child as XmlElement;
+                if (childElement == null) continue;
+                replacementsApplied |= ReplaceVariablesInXmlElementTree(
+                    childElement, attributeValueReplacements,
+                    path: path + "/" + childElement.Name);
+            }
+            return replacementsApplied;
+        }
+
+        /// <summary>
+        /// Replaces the variables in the AndroidManifest file.
+        /// </summary>
+        /// <param name="androidManifestPath">Path of the manifest file.</param>
+        /// <param name="bundleId">Bundle ID used to replace instances of ${applicationId} in
+        /// attribute values.</param>
+        /// <param name="attributeValueReplacements">Dictionary of attribute values to replace where
+        /// each value in the dictionary replaces the manifest attribute value corresponding to
+        /// the key in the dictionary.  For example, {"foo", "bar"} results in all instances of
+        /// "foo" attribute values being replaced with "bar".  NOTE: Partial replacements are
+        /// applied if the attribute value starts with the dictionary key.  For example,
+        /// {"com.my.app", "com.another.app"} will change...
+        /// * com.my.app.service --> com.another.app.service
+        /// * foo.com.my.app.service --> foo.com.my.app.service (unchanged)
+        /// </param>
+        internal static void ReplaceVariablesInAndroidManifest(
+                string androidManifestPath, string bundleId,
+                Dictionary<string, string> attributeValueReplacements) {
+            if (!File.Exists(androidManifestPath)) return;
+            attributeValueReplacements["${applicationId}"] = bundleId;
+
+            // Read manifest.
+            Log(String.Format("Reading AndroidManifest {0}", androidManifestPath),
+                level: LogLevel.Verbose);
+            var manifest = new XmlDocument();
+            using (var stream = new StreamReader(androidManifestPath)) {
+                manifest.Load(stream);
+            }
+
+            // Log list of replacements that will be applied.
+            var replacementsStringList = new List<string>();
+            foreach (var kv in attributeValueReplacements) {
+                replacementsStringList.Add(String.Format("{0} --> {1}", kv.Key, kv.Value));
+            }
+            Log(String.Format("Will attribute value replacements:\n{0}",
+                              String.Join("\n", replacementsStringList.ToArray())),
+                level: LogLevel.Verbose);
+
+            // Apply replacements.
+            if (ReplaceVariablesInXmlElementTree(manifest.DocumentElement,
+                                                 attributeValueReplacements)) {
+                // Write out modified XML document.
+                using (var xmlWriter = XmlWriter.Create(
+                        androidManifestPath,
+                        new XmlWriterSettings {
+                            Indent = true,
+                            IndentChars = "  ",
+                            NewLineChars = "\n",
+                            NewLineHandling = NewLineHandling.Replace
+                        })) {
+                    manifest.Save(xmlWriter);
+                }
+                Log(String.Format("Saved changes to {0}", androidManifestPath));
+            }
+        }
+
+        /// <summary>
+        /// Apply variable expansion in the AndroidManifest.xml file.
+        /// </summary>
+        private static void PatchAndroidManifest(string bundleId, string previousBundleId) {
+            if (!GooglePlayServices.SettingsDialog.PatchAndroidManifest) return;
+            // We only need to patch the manifest in Unity 2018 and above.
+            if (Google.VersionHandler.GetUnityVersionMajorMinor() < 2018.0f) return;
+            var replacements = new Dictionary<string, string>();
+            Log(String.Format("Patch Android Manifest with new bundle ID {0} -> {1}",
+                              previousBundleId, bundleId));
+            if (!(String.IsNullOrEmpty(previousBundleId) || String.IsNullOrEmpty(bundleId))) {
+                replacements[previousBundleId] = bundleId;
+            }
+            ReplaceVariablesInAndroidManifest(GooglePlayServices.SettingsDialog.AndroidManifestPath,
+                                              bundleId, replacements);
+        }
+
+        /// <summary>
         /// If the user changes the bundle ID, perform resolution again.
         /// </summary>
         private static void ResolveOnBundleIdChanged(object sender,
                                                      BundleIdChangedEventArgs args) {
+            PatchAndroidManifest(args.BundleId, args.PreviousBundleId);
             Reresolve();
         }
 
@@ -1031,7 +1177,10 @@ namespace GooglePlayServices
             PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;
             logger.Verbose = GooglePlayServices.SettingsDialog.VerboseLogging;
             if (Initialized) {
-                if (Resolver != null) AutoResolve();
+                if (Resolver != null) {
+                    PatchAndroidManifest(UnityCompat.ApplicationId, null);
+                    AutoResolve();
+                }
             }
         }
 
@@ -1106,11 +1255,12 @@ namespace GooglePlayServices
                 }
             }
             if (assetsWithoutAssetImporter.Count > 0 && displayWarning) {
-                Debug.LogWarning(String.Format(
+                Log(String.Format(
                     "Failed to add tracking label {0} to some assets.\n\n" +
                     "The following files will not be managed by this module:\n" +
                     "{1}\n", ManagedAssetLabel,
-                    String.Join("\n", new List<string>(assetsWithoutAssetImporter).ToArray())));
+                    String.Join("\n", new List<string>(assetsWithoutAssetImporter).ToArray())),
+                    level: LogLevel.Warning);
             }
             return assetsWithoutAssetImporter;
         }

@@ -288,23 +288,6 @@ namespace GooglePlayServices
                                              {"x86", NATIVE_LIBRARY_ABI_DIRECTORY_X86} };
 
         /// <summary>
-        /// Replaces the variables in the AndroidManifest file.
-        /// </summary>
-        /// <param name="exploded">Exploded.</param>
-        internal void ReplaceVariables(string exploded) {
-            string manifest = Path.Combine(exploded, "AndroidManifest.xml");
-            if (File.Exists(manifest)) {
-                StreamReader sr = new StreamReader(manifest);
-                string body = sr.ReadToEnd();
-                sr.Close();
-                body = body.Replace("${applicationId}", UnityCompat.ApplicationId);
-                using (var wr = new StreamWriter(manifest, false)) {
-                    wr.Write(body);
-                }
-            }
-        }
-
-        /// <summary>
         /// Gets the directory names of currently targeted ABIs.
         /// </summary>
         /// <returns>returns the hashset of directory names, ie. "x86".</returns>
@@ -339,7 +322,9 @@ namespace GooglePlayServices
             FileUtils.DeleteExistingFileOrDirectory(workingDir);
             Directory.CreateDirectory(workingDir);
             if (!ExtractAar(aarFile, null, workingDir)) return false;
-            ReplaceVariables(workingDir);
+            PlayServicesResolver.ReplaceVariablesInAndroidManifest(
+                Path.Combine(workingDir, "AndroidManifest.xml"),
+                UnityCompat.ApplicationId, new Dictionary<string, string>());
 
             string nativeLibsDir = null;
             if (antProject) {

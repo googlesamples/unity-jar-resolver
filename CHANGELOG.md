@@ -1,3 +1,10 @@
+# Version 1.2.74 - Jun 19, 2018
+## New Features
+* Added workaround for broken AndroidManifest.xml variable replacement in
+  Unity 2018.x.  By default ${applicationId} variables will be replaced by
+  the bundle ID in the Plugins/Android/AndroidManifest.xml file.  The
+  behavior can be disabled via the Android Resolver settings menu.
+
 # Version 1.2.73 - May 30, 2018
 ## Bug Fixes
 * Fixed spurious warning message about missing Android plugins directory on

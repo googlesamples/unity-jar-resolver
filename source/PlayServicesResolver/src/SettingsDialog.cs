@@ -37,6 +37,7 @@ namespace GooglePlayServices
             internal bool installAndroidPackages;
             internal string packageDir;
             internal bool explodeAars;
+            internal bool patchAndroidManifest;
             internal bool verboseLogging;
             internal bool autoResolutionDisabledWarning;
             internal bool useProjectSettings;
@@ -51,6 +52,7 @@ namespace GooglePlayServices
                 installAndroidPackages = SettingsDialog.InstallAndroidPackages;
                 packageDir = SettingsDialog.PackageDir;
                 explodeAars = SettingsDialog.ExplodeAars;
+                patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
                 verboseLogging = SettingsDialog.VerboseLogging;
                 autoResolutionDisabledWarning = SettingsDialog.AutoResolutionDisabledWarning;
                 useProjectSettings = SettingsDialog.UseProjectSettings;
@@ -66,6 +68,7 @@ namespace GooglePlayServices
                 SettingsDialog.InstallAndroidPackages = installAndroidPackages;
                 if (SettingsDialog.ConfigurablePackageDir) SettingsDialog.PackageDir = packageDir;
                 SettingsDialog.ExplodeAars = explodeAars;
+                SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
                 SettingsDialog.VerboseLogging = verboseLogging;
                 SettingsDialog.AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
                 SettingsDialog.UseProjectSettings = useProjectSettings;
@@ -78,6 +81,7 @@ namespace GooglePlayServices
         private const string PackageInstallKey = Namespace + "AndroidPackageInstallationEnabled";
         private const string PackageDirKey = Namespace + "PackageDirectory";
         private const string ExplodeAarsKey = Namespace + "ExplodeAars";
+        private const string PatchAndroidManifestKey = Namespace + "PatchAndroidManifest";
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
         private const string AutoResolutionDisabledWarningKey =
             Namespace + "AutoResolutionDisabledWarning";
@@ -89,6 +93,7 @@ namespace GooglePlayServices
             PackageInstallKey,
             PackageDirKey,
             ExplodeAarsKey,
+            PatchAndroidManifestKey,
             VerboseLoggingKey,
             AutoResolutionDisabledWarningKey,
             UseGradleDaemonKey
@@ -164,6 +169,15 @@ namespace GooglePlayServices
             get { return projectSettings.GetBool(ExplodeAarsKey, true); }
         }
 
+        internal static string AndroidManifestPath {
+            get { return Path.Combine(PackageDir, "AndroidManifest.xml"); }
+        }
+
+        internal static bool PatchAndroidManifest {
+            set { projectSettings.SetBool(PatchAndroidManifestKey, value); }
+            get { return projectSettings.GetBool(PatchAndroidManifestKey, true); }
+        }
+
         internal static bool VerboseLogging {
             private set { projectSettings.SetBool(VerboseLoggingKey, value); }
             get { return projectSettings.GetBool(VerboseLoggingKey, false); }
@@ -202,7 +216,7 @@ namespace GooglePlayServices
         }
 
         public void Initialize() {
-            minSize = new Vector2(350, 300);
+            minSize = new Vector2(350, 425);
             position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                                 minSize.x, minSize.y);
         }
@@ -293,6 +307,27 @@ namespace GooglePlayServices
                 EditorGUILayout.Toggle(settings.autoResolutionDisabledWarning);
             GUILayout.EndHorizontal();
             EditorGUI.EndDisabledGroup();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Patch AndroidManifest.xml", EditorStyles.boldLabel);
+            settings.patchAndroidManifest = EditorGUILayout.Toggle(settings.patchAndroidManifest);
+            GUILayout.EndHorizontal();
+            if (settings.patchAndroidManifest) {
+                GUILayout.Label(String.Format(
+                    "Instances of \"applicationId\" variable references will be replaced in " +
+                    "{0} with the bundle ID.  If the bundle ID " +
+                    "is changed the previous bundle ID will be replaced with the new " +
+                    "bundle ID by the plugin.\n\n" +
+                    "This works around a bug in Unity 2018.x where the " +
+                    "\"applicationId\" variable is not replaced correctly.",
+                    AndroidManifestPath));
+            } else {
+                GUILayout.Label(String.Format(
+                    "{0} is not modified.\n\n" +
+                    "If you're using Unity 2018.x and have an AndroidManifest.xml " +
+                    "that uses the \"applicationId\" variable, your build may fail.",
+                    AndroidManifestPath));
+            }
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
