@@ -71,7 +71,7 @@ public class SampleDependencies : AssetPostprocessor {
             playServicesSupport, "CreateInstance",
             new object[] {
                 "GooglePlayGames",
-                EditorPrefs.GetString("AndroidSdkRoot"),
+                null /* No longer required. */,
                 "ProjectSettings"
             });
 

@@ -1,4 +1,18 @@
-# Version TBD
+# Version 1.2.75 - Jun 20, 2018
+## New Features
+* Android Resolver now monitors the Android SDK path when
+  auto-resolution is enabled and triggers resolution when the path is
+  modified.
+
+## Changed
+* Android auto-resolution is now delayed by 3 seconds when the following build
+  settings are changed:
+  - Target ABI.
+  - Gradle build vs. internal build.
+  - Project export.
+* Added a progress bar display when AARs are being processed during Android
+  resolution.
+
 ## Bug Fixes
 * Fixed incorrect Android package version selection when a mix of
   version-locked and non-version-locked packages are specified.

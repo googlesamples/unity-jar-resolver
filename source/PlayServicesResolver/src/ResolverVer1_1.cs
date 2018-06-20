@@ -877,7 +877,7 @@ namespace GooglePlayServices
             System.Action resolutionComplete)
         {
             // Cache the setting as it can only be queried from the main thread.
-            var sdkPath = svcSupport.SDK;
+            var sdkPath = PlayServicesResolver.AndroidSdkRoot;
             // If the Android SDK path isn't set or doesn't exist report an error.
             if (String.IsNullOrEmpty(sdkPath) || !Directory.Exists(sdkPath)) {
                 PlayServicesResolver.Log(String.Format(
@@ -1180,28 +1180,45 @@ namespace GooglePlayServices
         /// <param name="dir">The directory to process.</param>
         /// <param name="updatedFiles">Set of files that were recently updated and should be
         /// processed.</param>
-        private void ProcessAars(string dir, HashSet<string> updatedFiles) {
+        /// <param name="displayProgress">Display a progress bar while processing.</param>
+        private void ProcessAars(string dir, HashSet<string> updatedFiles,
+                                 bool displayProgress = true) {
             // Get set of AAR files and directories we're managing.
             var aars = new HashSet<string>(PlayServicesResolver.FindLabeledAssets());
             foreach (var aarData in aarExplodeData.Values) aars.Add(aarData.path);
-            foreach (string aarPath in aars) {
-                bool explode = ShouldExplode(aarPath);
-                var aarData = FindAarExplodeDataEntry(aarPath);
-                if (AarExplodeDataIsDirty(aarData) || updatedFiles.Contains(aarPath)) {
-                    if (explode && File.Exists(aarPath)) {
-                        ProcessAar(Path.GetFullPath(dir), aarPath,
-                                   !PlayServicesResolver.GradleBuildEnabled,
-                                   out aarData.targetAbi);
-                        aarData.targetAbi = aarData.targetAbi ?? AarExplodeData.ABI_UNIVERSAL;
-                    } else {
-                        // Clean up previously expanded / exploded versions of the AAR.
-                        FileUtils.DeleteExistingFileOrDirectory(DetermineExplodedAarPath(aarPath));
+
+            const string progressBarTitle = "Processing AARs...";
+            float numberOfAars = (float)aars.Count;
+            int aarIndex = 0;
+            displayProgress &= (numberOfAars > 0 && !PlayServicesSupport.InBatchMode);
+            try {
+                foreach (string aarPath in aars) {
+                    if (displayProgress) {
+                        EditorUtility.DisplayProgressBar(progressBarTitle, "",
+                                                         (float)aarIndex / numberOfAars);
+                        aarIndex++;
                     }
-                    aarData.gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
-                    aarData.gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
+                    bool explode = ShouldExplode(aarPath);
+                    var aarData = FindAarExplodeDataEntry(aarPath);
+                    if (AarExplodeDataIsDirty(aarData) || updatedFiles.Contains(aarPath)) {
+                        if (explode && File.Exists(aarPath)) {
+                            ProcessAar(Path.GetFullPath(dir), aarPath,
+                                       !PlayServicesResolver.GradleBuildEnabled,
+                                       out aarData.targetAbi);
+                            aarData.targetAbi = aarData.targetAbi ?? AarExplodeData.ABI_UNIVERSAL;
+                        } else {
+                            // Clean up previously expanded / exploded versions of the AAR.
+                            FileUtils.DeleteExistingFileOrDirectory(
+                                DetermineExplodedAarPath(aarPath));
+                        }
+                        aarData.gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
+                        aarData.gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
+                    }
                 }
+                SaveAarExplodeCache();
+            } finally {
+                if (displayProgress) EditorUtility.ClearProgressBar();
             }
-            SaveAarExplodeCache();
         }
 
         /// <summary>

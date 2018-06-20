@@ -144,7 +144,7 @@ namespace GooglePlayServices {
                 svcSupport.ClearDependencies();
             } else {
                 svcSupport = PlayServicesSupport.CreateInstance(
-                    XML_DEPENDENCIES_INSTANCE, EditorPrefs.GetString("AndroidSdkRoot"),
+                    XML_DEPENDENCIES_INSTANCE, PlayServicesResolver.AndroidSdkRoot,
                     "ProjectSettings", logMessageWithLevel: PlayServicesResolver.LogDelegate);
             }
             return base.ReadAll(logger);

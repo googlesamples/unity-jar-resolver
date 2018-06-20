@@ -192,6 +192,69 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Polls a value and signals a callback with the change after the specified delay
+        /// time.
+        /// </summary>
+        private class PropertyPoller<T> {
+            /// <summary>
+            /// Delegate that is called when a value changes.
+            /// </summary>
+            /// <param name="previousValue">Previous value of the property that
+            /// changed.</param>
+            /// <param name="currentValue">Current value of the property that
+            /// changed.</param>
+            public delegate void Changed(T previousValue, T currentValue);
+
+            // Previous value of the property.
+            private T previousValue = default(T);
+            // Previous value of the property when it was last polled.
+            private T previousPollValue = default(T);
+            // Last time the property was polled.
+            private DateTime previousPollTime = DateTime.Now;
+            // Time to wait before signalling a change.
+            private int delayTimeInSeconds;
+            // Name of the property being polled.
+            private string propertyName;
+
+            /// <summary>
+            /// Create the poller.
+            /// </summary>
+            /// <param name="initialValue">Initial value of the property being polled.</param>
+            /// <param name="propertyName">Name of the property being polled.</param>
+            /// <param name="delayTimeInSeconds">Time to wait before signalling that the value
+            /// has changed.</param>
+            public PropertyPoller(T initialValue, string propertyName, int delayTimeInSeconds = 3) {
+                previousValue = initialValue;
+                this.propertyName = propertyName;
+                this.delayTimeInSeconds = delayTimeInSeconds;
+            }
+
+            /// <summary>
+            /// Poll the specified value for changes.
+            /// </summary>
+            /// <param name="currentValue">Value being polled.</param>
+            /// <param name="changed">Delegate that is called if the value changes.</param>
+            public void Poll(T currentValue, Changed changed) {
+                if (!currentValue.Equals(previousValue)) {
+                    var currentPollTime = DateTime.Now;
+                    if (currentValue.Equals(previousPollValue)) {
+                        if (currentPollTime.Subtract(previousPollTime).Seconds >=
+                            delayTimeInSeconds) {
+                            Log(String.Format("{0} changed: {1} -> {2}", propertyName,
+                                              previousValue, currentValue),
+                                level: LogLevel.Verbose);
+                            changed(previousValue, currentValue);
+                            previousValue = currentValue;
+                        }
+                    } else {
+                        previousPollValue = currentValue;
+                        previousPollTime = currentPollTime;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// The instance to the play services support object.
         /// </summary>
         private static PlayServicesSupport svcSupport;
@@ -227,24 +290,10 @@ namespace GooglePlayServices
         private static bool buildConfigChanged = false;
 
         /// <summary>
-        /// Seconds to wait until re-resolving dependencies after the bundle ID has changed.
+        /// Polls for changes in the bundle ID.
         /// </summary>
-        private const int bundleUpdateDelaySeconds = 3;
-
-        /// <summary>
-        /// Last time the bundle ID was checked.
-        /// </summary>
-        private static DateTime lastBundleIdPollTime = DateTime.Now;
-
-        /// <summary>
-        /// Last bundle ID value.
-        /// </summary>
-        private static string lastBundleId = UnityCompat.ApplicationId;
-
-        /// <summary>
-        /// Last value of bundle ID since the last time OnBundleId() was called.
-        /// </summary>
-        private static string bundleId = UnityCompat.ApplicationId;
+        private static PropertyPoller<string> bundleIdPoller = new PropertyPoller<string>(
+            UnityCompat.ApplicationId, "Bundle ID");
 
         /// <summary>
         /// Arguments for the bundle ID update event.
@@ -275,16 +324,6 @@ namespace GooglePlayServices
         /// Value of the InstallAndroidPackages before settings were changed.
         /// </summary>
         private static bool previousInstallAndroidPackages = false;
-
-        /// <summary>
-        /// The value of GradleBuildEnabled when PollBuildSystem() was called.
-        /// </summary>
-        private static bool previousGradleBuildEnabled = false;
-
-        /// <summary>
-        /// The value of ProjectExportEnabled when PollBuildSystem() was called.
-        /// </summary>
-        private static bool previousProjectExportEnabled = false;
 
         /// <summary>
         /// Asset label applied to files managed by this plugin.
@@ -345,6 +384,78 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Current build system settings.
+        /// </summary>
+        private struct AndroidBuildSystemSettings {
+            /// <summary>
+            // Whether the Gradle build is enabled.
+            /// </summary>
+            public bool GradleBuildEnabled { get; private set; }
+
+            /// <summary>
+            // Whether project export is enabled.
+            /// </summary>
+            public bool ProjectExportEnabled { get; private set; }
+
+            /// <summary>
+            /// Get the current build settings.
+            /// </summary>
+            public static AndroidBuildSystemSettings Current {
+                get {
+                    return new AndroidBuildSystemSettings(
+                        PlayServicesResolver.GradleBuildEnabled,
+                        PlayServicesResolver.ProjectExportEnabled);
+                }
+            }
+
+            /// <summary>
+            /// Construct build system settings.
+            /// </summary>
+            /// <param name="gradleBuildEnabled">Value for GradleBuildEnabled.</param>
+            /// <param name="projectExportEnabled">Value for ProjectBuildEnabled.</param>
+            AndroidBuildSystemSettings(bool gradleBuildEnabled, bool projectExportEnabled) {
+                GradleBuildEnabled = gradleBuildEnabled;
+                ProjectExportEnabled = projectExportEnabled;
+            }
+
+            /// <summary>
+            // Compare with another AndroidBuildSystemSettings.
+            /// </summary>
+            /// <param name="obj">Object to compare with.</param>
+            /// <returns>true if the object is the same as this, false otherwise.</returns>
+            public override bool Equals(System.Object obj) {
+                var other = (AndroidBuildSystemSettings)obj;
+                return other.GradleBuildEnabled == GradleBuildEnabled &&
+                    other.ProjectExportEnabled == ProjectExportEnabled;
+            }
+
+            /// <summary>
+            /// Generate a hash of this object.
+            /// </summary>
+            /// <returns>Hash of this object.</returns>
+            public override int GetHashCode() {
+                return GradleBuildEnabled.GetHashCode() ^ ProjectExportEnabled.GetHashCode();
+            }
+
+
+            /// <summary>
+            /// Convert this object to a string.
+            /// </summary>
+            /// <returns>String representation.</returns>
+            public override string ToString() {
+                return String.Format("[GradleBuildEnabled={0} ProjectExportEnabled={1}]",
+                                     GradleBuildEnabled, ProjectExportEnabled);
+            }
+        }
+
+        /// <summary>
+        /// Polls for changes in build system settings.
+        /// </summary>
+        private static PropertyPoller<AndroidBuildSystemSettings> androidBuildSystemPoller =
+            new PropertyPoller<AndroidBuildSystemSettings>(
+                AndroidBuildSystemSettings.Current, "Android Build Settings");
+
+        /// <summary>
         /// Arguments for the Android build system changed event.
         /// </summary>
         public class AndroidBuildSystemChangedArgs : EventArgs {
@@ -386,10 +497,11 @@ namespace GooglePlayServices
         internal const string DEFAULT_ANDROID_TARGET_DEVICE_ABI = "fat";
 
         /// <summary>
-        /// The string value of UnityEditor.PlayerSettings.Android.targetDevice when
-        /// PollTargetDevice() was called.
+        /// Polls for changes in the Android device ABI.
         /// </summary>
-        private static string previousAndroidTargetDeviceAbi = DEFAULT_ANDROID_TARGET_DEVICE_ABI;
+        private static PropertyPoller<string> androidTargetDeviceAbiPoller =
+            new PropertyPoller<string>(DEFAULT_ANDROID_TARGET_DEVICE_ABI,
+                                       "Android Target Device ABI");
 
         /// <summary>
         /// Logger for this module.
@@ -448,6 +560,39 @@ namespace GooglePlayServices
         private static string lastError = null;
 
         /// <summary>
+        /// Get the Android SDK directory.
+        /// </summary>
+        public static string AndroidSdkRoot {
+            get { return EditorPrefs.GetString("AndroidSdkRoot"); }
+        }
+
+        /// <summary>
+        /// Polls for changes in AndroidSdkRoot.
+        /// </summary>
+        private static PropertyPoller<string> androidSdkRootPoller =
+            new PropertyPoller<string>(AndroidSdkRoot, "Android SDK Path");
+
+        /// <summary>
+        /// Arguments for the AndroidSdkRootChanged event.
+        /// </summary>
+        public class AndroidSdkRootChangedArgs : EventArgs {
+            /// <summary>
+            /// AndroidSdkRoot before it changed.
+            /// </summary>
+            public string PreviousAndroidSdkRoot { get; set; }
+
+            /// <summary>
+            ///  AndroidSdkRoot when this event was fired.
+            /// </summary>
+            public string AndroidSdkRoot { get; set; }
+        }
+
+        /// <summary>
+        /// Event which is fired when the Android SDK root changes.
+        /// </summary>
+        public static event EventHandler<AndroidSdkRootChangedArgs> AndroidSdkRootChanged;
+
+        /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver()
@@ -462,7 +607,7 @@ namespace GooglePlayServices
 
                 svcSupport = PlayServicesSupport.CreateInstance(
                     "PlayServicesResolver",
-                    EditorPrefs.GetString("AndroidSdkRoot"),
+                    AndroidSdkRoot,
                     "ProjectSettings",
                     logMessageWithLevel: LogDelegate);
 
@@ -474,6 +619,8 @@ namespace GooglePlayServices
                 AndroidBuildSystemChanged += ResolveOnBuildSystemChanged;
                 AndroidTargetDeviceAbiChanged -= ResolveOnTargetDeviceAbiChanged;
                 AndroidTargetDeviceAbiChanged += ResolveOnTargetDeviceAbiChanged;
+                AndroidSdkRootChanged -= ResolveOnAndroidSdkRootChange;
+                AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
             }
             EditorApplication.update -= PollBundleId;
             EditorApplication.update += PollBundleId;
@@ -481,6 +628,8 @@ namespace GooglePlayServices
             EditorApplication.update += PollBuildSystem;
             EditorApplication.update -= PollTargetDeviceAbi;
             EditorApplication.update += PollTargetDeviceAbi;
+            EditorApplication.update -= PollAndroidSdkRoot;
+            EditorApplication.update += PollAndroidSdkRoot;
             EditorApplication.update -= InitializationComplete;
             EditorApplication.update += InitializationComplete;
             EditorApplication.update -= PumpUpdateQueue;
@@ -825,7 +974,7 @@ namespace GooglePlayServices
             foreach (var kv in attributeValueReplacements) {
                 replacementsStringList.Add(String.Format("{0} --> {1}", kv.Key, kv.Value));
             }
-            Log(String.Format("Will attribute value replacements:\n{0}",
+            Log(String.Format("Will apply attribute value replacements:\n{0}",
                               String.Join("\n", replacementsStringList.ToArray())),
                 level: LogLevel.Verbose);
 
@@ -843,7 +992,8 @@ namespace GooglePlayServices
                         })) {
                     manifest.Save(xmlWriter);
                 }
-                Log(String.Format("Saved changes to {0}", androidManifestPath));
+                Log(String.Format("Saved changes to {0}", androidManifestPath),
+                    level: LogLevel.Verbose);
             }
         }
 
@@ -856,7 +1006,8 @@ namespace GooglePlayServices
             if (Google.VersionHandler.GetUnityVersionMajorMinor() < 2018.0f) return;
             var replacements = new Dictionary<string, string>();
             Log(String.Format("Patch Android Manifest with new bundle ID {0} -> {1}",
-                              previousBundleId, bundleId));
+                              previousBundleId, bundleId),
+                level: LogLevel.Verbose);
             if (!(String.IsNullOrEmpty(previousBundleId) || String.IsNullOrEmpty(bundleId))) {
                 replacements[previousBundleId] = bundleId;
             }
@@ -876,34 +1027,15 @@ namespace GooglePlayServices
         /// <summary>
         /// If the user changes the bundle ID, perform resolution again.
         /// </summary>
-        private static void PollBundleId()
-        {
-            string currentBundleId = UnityCompat.ApplicationId;
-            DateTime currentPollTime = DateTime.Now;
-            if (currentBundleId != bundleId)
-            {
-                // If the bundle ID setting hasn't changed for a while.
-                if (currentBundleId == lastBundleId)
-                {
-                    if (currentPollTime.Subtract(lastBundleIdPollTime).Seconds >=
-                        bundleUpdateDelaySeconds)
-                    {
-                        if (BundleIdChanged != null) {
-                            BundleIdChanged(null,
-                                            new BundleIdChangedEventArgs {
-                                                PreviousBundleId = bundleId,
-                                                BundleId = currentBundleId
-                                            });
-                        }
-                        bundleId = currentBundleId;
+        private static void PollBundleId() {
+            bundleIdPoller.Poll(UnityCompat.ApplicationId, (previousValue, currentValue) => {
+                    if (BundleIdChanged != null) {
+                        BundleIdChanged(null, new BundleIdChangedEventArgs {
+                                PreviousBundleId = previousValue,
+                                BundleId = currentValue
+                            });
                     }
-                }
-                else
-                {
-                    lastBundleId = currentBundleId;
-                    lastBundleIdPollTime = currentPollTime;
-                }
-            }
+                });
         }
 
         /// <summary>
@@ -917,40 +1049,34 @@ namespace GooglePlayServices
         /// <summary>
         /// Poll the Android build system selection for changes.
         /// </summary>
-        private static void PollBuildSystem()
-        {
-            bool gradleBuildEnabled = GradleBuildEnabled;
-            bool projectExportEnabled = ProjectExportEnabled;
-            if (previousGradleBuildEnabled != gradleBuildEnabled ||
-                previousProjectExportEnabled != projectExportEnabled)
-            {
-                if (AndroidBuildSystemChanged != null)
-                {
-                    AndroidBuildSystemChanged(null, new AndroidBuildSystemChangedArgs {
-                            GradleBuildEnabled = gradleBuildEnabled,
-                            PreviousGradleBuildEnabled = previousGradleBuildEnabled,
-                            ProjectExportEnabled = projectExportEnabled,
-                            PreviousProjectExportEnabled = previousProjectExportEnabled,
-                        });
-                }
-                previousGradleBuildEnabled = gradleBuildEnabled;
-                previousProjectExportEnabled = projectExportEnabled;
-            }
+        private static void PollBuildSystem() {
+            androidBuildSystemPoller.Poll(
+                AndroidBuildSystemSettings.Current,
+                (previousValue, currentValue) => {
+                    if (AndroidBuildSystemChanged != null) {
+                        AndroidBuildSystemChanged(null, new AndroidBuildSystemChangedArgs {
+                                GradleBuildEnabled = currentValue.GradleBuildEnabled,
+                                PreviousGradleBuildEnabled = previousValue.GradleBuildEnabled,
+                                ProjectExportEnabled = currentValue.ProjectExportEnabled,
+                                PreviousProjectExportEnabled = previousValue.ProjectExportEnabled,
+                            });
+                    }
+                });
         }
 
         /// <summary>
         /// Poll the target device ABI for changes.
         /// </summary>
         private static void PollTargetDeviceAbi() {
-            string currentAbi = AndroidTargetDeviceAbi;
-            if (currentAbi != previousAndroidTargetDeviceAbi &&
-                AndroidTargetDeviceAbiChanged != null) {
-                AndroidTargetDeviceAbiChanged(null, new AndroidTargetDeviceAbiChangedArgs {
-                        PreviousAndroidTargetDeviceAbi = previousAndroidTargetDeviceAbi,
-                        AndroidTargetDeviceAbi = currentAbi
-                    });
-            }
-            previousAndroidTargetDeviceAbi = currentAbi;
+            androidTargetDeviceAbiPoller.Poll(AndroidTargetDeviceAbi,
+                                              (previousValue, currentValue) => {
+                    if (AndroidTargetDeviceAbiChanged != null) {
+                        AndroidTargetDeviceAbiChanged(null, new AndroidTargetDeviceAbiChangedArgs {
+                                PreviousAndroidTargetDeviceAbi = previousValue,
+                                AndroidTargetDeviceAbi = currentValue
+                            });
+                    }
+                });
         }
 
         /// <summary>
@@ -960,6 +1086,28 @@ namespace GooglePlayServices
         private static void ResolveOnTargetDeviceAbiChanged(
                 object sender, AndroidTargetDeviceAbiChangedArgs args) {
             Reresolve();
+        }
+
+        /// <summary>
+        /// Poll the Android SDK path for changes.
+        /// </summary>
+        private static void PollAndroidSdkRoot() {
+            androidSdkRootPoller.Poll(AndroidSdkRoot, (previousValue, currentValue) => {
+                    if (AndroidSdkRootChanged != null) {
+                        AndroidSdkRootChanged(null, new AndroidSdkRootChangedArgs {
+                                PreviousAndroidSdkRoot = previousValue,
+                                AndroidSdkRoot = currentValue
+                            });
+                    }
+                });
+        }
+
+        /// <summary>
+        /// Run Android resolution when the Android SDK path changes.
+        /// </summary>
+        private static void ResolveOnAndroidSdkRootChange(
+                object sender, AndroidSdkRootChangedArgs args) {
+            Resolve(forceResolution: true);
         }
 
         /// <summary>

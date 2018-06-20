@@ -41,11 +41,6 @@ namespace Google.JarResolver
         private string clientName;
 
         /// <summary>
-        /// The path to the Android SDK.
-        /// </summary>
-        private static string userSdkPath;
-
-        /// <summary>
         /// Log severity.
         /// </summary>
         public enum LogLevel {
@@ -138,30 +133,6 @@ namespace Google.JarResolver
                     "extra-google-m2repository")
         };
 
-        private static string SDKInternal
-        {
-            get
-            {
-                var sdkPath = userSdkPath;
-#if UNITY_EDITOR
-                if (String.IsNullOrEmpty(sdkPath)) {
-                    sdkPath = UnityEditor.EditorPrefs.GetString("AndroidSdkRoot");
-                }
-#endif  // UNITY_EDITOR
-                if (string.IsNullOrEmpty(sdkPath)) {
-                    sdkPath = System.Environment.GetEnvironmentVariable("ANDROID_HOME");
-                }
-                return sdkPath;
-            }
-        }
-
-        /// <summary>
-        /// Gets the Android SDK.  If it is not set, the environment
-        /// variable ANDROID_HOME is used.
-        /// </summary>
-        /// <value>The SD.</value>
-        public string SDK { get { return PlayServicesSupport.SDKInternal; } }
-
         /// <summary>
         /// Whether verbose logging is enabled.
         /// </summary>
@@ -180,7 +151,7 @@ namespace Google.JarResolver
         /// This is used to uniquely identify
         /// the calling client so that dependencies can be associated with a specific
         /// client to help in resetting dependencies.</param>
-        /// <param name="sdkPath">Sdk path for Android SDK.</param>
+        /// <param name="sdkPath">Sdk path for Android SDK (unused).</param>
         /// <param name="settingsDirectory">This parameter is obsolete.</param>
         /// <param name="logger">Delegate used to write messages to the log.</param>
         /// <param name="logMessageWithLevel">Delegate used to write messages to the log.  If
@@ -201,7 +172,7 @@ namespace Google.JarResolver
         /// This is used to uniquely identify
         /// the calling client so that dependencies can be associated with a specific
         /// client to help in resetting dependencies.</param>
-        /// <param name="sdkPath">Sdk path for Android SDK.</param>
+        /// <param name="sdkPath">Sdk path for Android SDK (unused).</param>
         /// <param name="additionalRepositories">Array of additional repository paths. can be
         /// null</param>
         /// <param name="settingsDirectory">This parameter is obsolete.</param>
@@ -220,12 +191,6 @@ namespace Google.JarResolver
             PlayServicesSupport.logger =
                 PlayServicesSupport.logger ?? (logMessageWithLevel ??
                                                (logger != null ? legacyLogger : null));
-            // Only set the SDK path if it differs to what is configured in the editor or
-            // via an environment variable.  The SDK path can be changed by the user before
-            // this module is reloaded.
-            if (!String.IsNullOrEmpty(sdkPath) && sdkPath != PlayServicesSupport.SDKInternal) {
-                PlayServicesSupport.userSdkPath = sdkPath;
-            }
             string badchars = new string(Path.GetInvalidFileNameChars());
 
             foreach (char ch in clientName)

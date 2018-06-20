@@ -315,7 +315,7 @@ class GradlePreBuildResolver : DefaultResolver {
             {"sdk_version", targetSdkVersion.ToString()},
             {"min_sdk_version", minSdkVersion},
             {"build_tools_version", buildToolsVersion},
-            {"android_sdk_dir", svcSupport.SDK}
+            {"android_sdk_dir", PlayServicesResolver.AndroidSdkRoot}
         };
 
         // This creates an enumerable of strings with the json lines for each dep like this:
@@ -398,7 +398,7 @@ class GradlePreBuildResolver : DefaultResolver {
     public override void DoResolution(PlayServicesSupport svcSupport, string destinationDirectory,
                                       System.Action resolutionComplete) {
 
-        var sdkPath = svcSupport.SDK;
+        var sdkPath = PlayServicesResolver.AndroidSdkRoot;
         // Find / upgrade the Android SDK manager.
         AndroidSdkManager.Create(
             sdkPath,
