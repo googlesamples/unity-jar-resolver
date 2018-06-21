@@ -402,20 +402,11 @@ namespace GooglePlayServices
             /// </summary>
             public static AndroidBuildSystemSettings Current {
                 get {
-                    return new AndroidBuildSystemSettings(
-                        PlayServicesResolver.GradleBuildEnabled,
-                        PlayServicesResolver.ProjectExportEnabled);
+                    return new AndroidBuildSystemSettings {
+                        GradleBuildEnabled = PlayServicesResolver.GradleBuildEnabled,
+                        ProjectExportEnabled = PlayServicesResolver.ProjectExportEnabled
+                    };
                 }
-            }
-
-            /// <summary>
-            /// Construct build system settings.
-            /// </summary>
-            /// <param name="gradleBuildEnabled">Value for GradleBuildEnabled.</param>
-            /// <param name="projectExportEnabled">Value for ProjectBuildEnabled.</param>
-            AndroidBuildSystemSettings(bool gradleBuildEnabled, bool projectExportEnabled) {
-                GradleBuildEnabled = gradleBuildEnabled;
-                ProjectExportEnabled = projectExportEnabled;
             }
 
             /// <summary>
