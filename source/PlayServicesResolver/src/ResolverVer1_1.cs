@@ -137,7 +137,7 @@ namespace GooglePlayServices
         private const int MajorVersion = 1;
         private const int MinorVersion = 1;
         private const int PointVersion = 0;
-
+        
         // Characters that are parsed by Gradle / Java in property values.
         // These characters need to be escaped to be correctly interpreted in a property value.
         private static string[] GradlePropertySpecialCharacters = new string[] {
@@ -426,11 +426,12 @@ namespace GooglePlayServices
         /// <param name="androidSdkPath">Path to the Android SDK.  This is required as
         /// PlayServicesSupport.SDK can only be called from the main thread.</param>
         /// <param name="logErrorOnMissingArtifacts">Log errors when artifacts are missing.</param>
+        /// <param name="runSynchronously">Determines if the resolution should run synchronously.</param>
         /// <param name="resolutionComplete">Called when resolution is complete with a list of
         /// packages that were not found.</param>
         private void GradleResolution(
                 string destinationDirectory, string androidSdkPath,
-                bool logErrorOnMissingArtifacts,
+                bool logErrorOnMissingArtifacts, bool runSynchronously,
                 System.Action<List<Dependency>> resolutionComplete) {
             var gradleWrapper = Path.GetFullPath(Path.Combine(
                 gradleBuildDirectory,
@@ -649,21 +650,29 @@ namespace GooglePlayServices
                                                    gradleWrapper, gradleArgumentsString),
                                      level: LogLevel.Verbose);
 
-            // Run the build script to perform the resolution popping up a window in the editor.
-            var window = CommandLineDialog.CreateCommandLineDialog(
-                "Resolving Android Dependencies");
-            window.summaryText = "Resolving Android Dependencies....";
-            window.modal = false;
-            window.progressTitle = window.summaryText;
-            window.autoScrollToBottom = true;
-            window.RunAsync(gradleWrapper, gradleArgumentsString,
-                            (result) => {
-                                window.Close();
-                                scheduleOnMainThread(result);
-                            },
-                            workingDirectory: gradleBuildDirectory,
-                            maxProgressLines: 50);
-            window.Show();
+            if (runSynchronously)
+            {
+                CommandLine.Run(gradleWrapper, gradleArgumentsString, gradleBuildDirectory);
+            }
+            else
+            {
+                // Run the build script to perform the resolution popping up a window in the editor.
+                var window = CommandLineDialog.CreateCommandLineDialog(
+                    "Resolving Android Dependencies");
+                window.summaryText = "Resolving Android Dependencies....";
+                window.modal = false;
+                window.progressTitle = window.summaryText;
+                window.autoScrollToBottom = true;
+                window.RunAsync(gradleWrapper, gradleArgumentsString,
+                    (result) =>
+                    {
+                        window.Close();
+                        scheduleOnMainThread(result);
+                    },
+                    workingDirectory: gradleBuildDirectory,
+                    maxProgressLines: 50);
+                window.Show();
+            }
         }
 
         /// <summary>
@@ -835,6 +844,18 @@ namespace GooglePlayServices
         public override void DoResolution(
             PlayServicesSupport svcSupport, string destinationDirectory,
             System.Action resolutionComplete) {
+            DoResolutionInternal(svcSupport, destinationDirectory, false, resolutionComplete);
+        }
+
+        /// <summary>
+        /// Perform the resolution and the exploding/cleanup as needed synchronously.
+        /// </summary>
+        public override void DoResolution(PlayServicesSupport svcSupport, string destinationDirectory) {
+            DoResolutionInternal(svcSupport,destinationDirectory,true,() => {});
+        }
+
+        private void DoResolutionInternal(PlayServicesSupport svcSupport, string destinationDirectory, bool runSynchronously,
+            System.Action resolutionComplete) {
             // Run resolution on the main thread to serialize the operation as DoResolutionUnsafe
             // is not thread safe.
             System.Action resolve = () => {
@@ -845,15 +866,22 @@ namespace GooglePlayServices
                     }
                     resolutionComplete();
                 };
-                DoResolutionUnsafe(svcSupport, destinationDirectory,
-                                   unlockResolveAndSignalResolutionComplete);
-            };
-            lock (resolveLock) {
-                resolveUpdateQueue.Enqueue(resolve);
-                EditorApplication.update += UpdateTryResolution;
+                DoResolutionUnsafe(svcSupport, destinationDirectory, runSynchronously,
+                    unlockResolveAndSignalResolutionComplete);
+            }; 
+            if (runSynchronously)
+            {
+                resolve();
+            }else
+            {
+                lock (resolveLock)
+                {
+                    resolveUpdateQueue.Enqueue(resolve);
+                    EditorApplication.update += UpdateTryResolution;
+                }
             }
         }
-
+        
         // Try executing a resolution.
         private static void UpdateTryResolution() {
             lock (resolveLock) {
@@ -873,7 +901,7 @@ namespace GooglePlayServices
         /// This is *not* thread safe.
         /// </summary>
          private void DoResolutionUnsafe(
-            PlayServicesSupport svcSupport, string destinationDirectory,
+            PlayServicesSupport svcSupport, string destinationDirectory, bool runSynchronously,
             System.Action resolutionComplete)
         {
             // Cache the setting as it can only be queried from the main thread.
@@ -894,7 +922,7 @@ namespace GooglePlayServices
             System.Action resolve = () => {
                 PlayServicesResolver.Log("Performing Android Dependency Resolution",
                                          LogLevel.Verbose);
-                GradleResolution(destinationDirectory, sdkPath, true,
+                GradleResolution(destinationDirectory, sdkPath, true, runSynchronously,
                                  (missingArtifacts) => { resolutionComplete(); });
             };
 
@@ -969,7 +997,7 @@ namespace GooglePlayServices
             };
 
             GradleResolution(destinationDirectory, sdkPath,
-                             !AndroidPackageInstallationEnabled(),
+                             !AndroidPackageInstallationEnabled(), runSynchronously,
                              reportOrInstallMissingArtifacts);
         }
 
