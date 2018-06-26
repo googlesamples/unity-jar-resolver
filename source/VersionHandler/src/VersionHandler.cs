@@ -138,7 +138,6 @@ public class VersionHandler {
         EditorApplication.update -= BootStrap;
         if (implAvailable) return;
 
-        UnityEngine.Debug.Log(String.Format("Bootstrapping {0}", VERSION_HANDLER_ASSEMBLY_NAME));
         var assemblies = new List<Match>();
         foreach (string assetGuid in AssetDatabase.FindAssets("l:gvh")) {
             string filename = AssetDatabase.GUIDToAssetPath(assetGuid);

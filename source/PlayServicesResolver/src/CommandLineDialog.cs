@@ -26,7 +26,7 @@ namespace GooglePlayServices
 
     using Google;
 
-    public class CommandLineDialog : TextAreaDialog
+    internal class CommandLineDialog : TextAreaDialog
     {
         /// <summary>
         /// Forwards the output of the currently executing command to a CommandLineDialog window.
@@ -45,6 +45,8 @@ namespace GooglePlayServices
             private volatile int linesReported;
             // Command line tool result, set when command line execution is complete.
             private volatile CommandLine.Result result = null;
+            // Logger for messages.
+            private Google.Logger logger = null;
 
             /// <summary>
             /// Event called on the main / UI thread when the outstanding command line tool
@@ -55,12 +57,13 @@ namespace GooglePlayServices
             /// <summary>
             /// Construct a new reporter.
             /// </summary>
-            public ProgressReporter(CommandLine.IOHandler handler = null)
-            {
+            /// <param name="logger">Logger to log command output.</param>
+            public ProgressReporter(Google.Logger logger) {
                 textQueue = System.Collections.Queue.Synchronized(new System.Collections.Queue());
                 maxProgressLines = 0;
                 linesReported = 0;
                 LineHandler += CommandLineIOHandler;
+                this.logger = logger;
                 Complete = null;
             }
 
@@ -84,7 +87,12 @@ namespace GooglePlayServices
                 // Count lines in stdout.
                 if (data.handle == 0) linesReported += CountLines(data.text);
                 // Enqueue data for the text view.
-                textQueue.Enqueue(System.Text.Encoding.UTF8.GetString(data.data));
+                var newLines = System.Text.Encoding.UTF8.GetString(data.data);
+                textQueue.Enqueue(newLines);
+                // Write to the logger.
+                foreach (var line in CommandLine.SplitLines(newLines)) {
+                    logger.Log(line, level: LogLevel.Verbose);
+                }
             }
 
             /// <summary>
@@ -92,10 +100,24 @@ namespace GooglePlayServices
             /// </summary>
             public void CommandLineToolCompletion(CommandLine.Result result)
             {
-                PlayServicesResolver.Log(
+                logger.Log(
                     String.Format("Command completed: {0}", result.message),
                     level: LogLevel.Verbose);
                 this.result = result;
+                if (ExecutionEnvironment.InBatchMode) {
+                    RunOnMainThread.Run(() => { SignalComplete(); });
+                }
+            }
+
+            /// <summary>
+            /// Signal the completion event handler.
+            /// This method *must* be called from the main thread.
+            /// </summary>
+            private void SignalComplete() {
+                if (Complete != null) {
+                    Complete(result);
+                    Complete = null;
+                }
             }
 
             /// <summary>
@@ -141,11 +163,7 @@ namespace GooglePlayServices
                 if (result != null)
                 {
                     window.progressTitle = "";
-                    if (Complete != null)
-                    {
-                        Complete(result);
-                        Complete = null;
-                    }
+                    SignalComplete();
                 }
             }
         }
@@ -154,6 +172,7 @@ namespace GooglePlayServices
         public string progressTitle;
         public string progressSummary;
         public volatile bool autoScrollToBottom;
+        public Google.Logger logger = new Google.Logger();
 
         /// <summary>
         /// Event delegate called from the Update() method of the window.
@@ -170,10 +189,47 @@ namespace GooglePlayServices
         /// <returns>Reference to the new window.</returns>
         public static CommandLineDialog CreateCommandLineDialog(string title)
         {
-            CommandLineDialog window = (CommandLineDialog)EditorWindow.GetWindow(
-                typeof(CommandLineDialog), true, title);
+            // In batch mode we simply create the class without instancing the visible window.
+            CommandLineDialog window = ExecutionEnvironment.InBatchMode ?
+                new CommandLineDialog() : (CommandLineDialog)EditorWindow.GetWindow(
+                    typeof(CommandLineDialog), true, title);
             window.Initialize();
             return window;
+        }
+
+        /// <summary>
+        /// Alternative the Show() method that does not crash in batch mode.
+        /// </summary>
+        public void Show() {
+            Show(false);
+        }
+
+        /// <summary>
+        /// Alternative Show() method that does not crash in batch mode.
+        /// </summary>
+        /// <param name="immediateDisplay">Display the window now.</param>
+        public void Show(bool immediateDisplay) {
+            if (!ExecutionEnvironment.InBatchMode) {
+                base.Show(immediateDisplay);
+            }
+        }
+
+        /// <summary>
+        /// Alternative Repaint() method that does not crash in batch mode.
+        /// </summary>
+        public void Repaint() {
+            if (!ExecutionEnvironment.InBatchMode) {
+                base.Repaint();
+            }
+        }
+
+        /// <summary>
+        /// Alternative Close() method that does not crash in batch mode.
+        /// </summary>
+        public void Close() {
+            if (!ExecutionEnvironment.InBatchMode) {
+                base.Close();
+            }
         }
 
         /// <summary>
@@ -209,7 +265,8 @@ namespace GooglePlayServices
             string workingDirectory = null, Dictionary<string, string> envVars = null,
             CommandLine.IOHandler ioHandler = null, int maxProgressLines = 0)
         {
-            CommandLineDialog.ProgressReporter reporter = new CommandLineDialog.ProgressReporter();
+            CommandLineDialog.ProgressReporter reporter =
+                new CommandLineDialog.ProgressReporter(logger);
             reporter.maxProgressLines = maxProgressLines;
             // Call the reporter from the UI thread from this window.
             UpdateEvent += reporter.Update;
@@ -221,7 +278,7 @@ namespace GooglePlayServices
             CommandLine.CompletionHandler reporterUpdateDisable =
                 (CommandLine.Result unusedResult) => { this.UpdateEvent -= reporter.Update; };
             reporter.Complete += reporterUpdateDisable;
-            PlayServicesResolver.Log(String.Format(
+            logger.Log(String.Format(
                 "Executing command: {0} {1}", toolPath, arguments), level: LogLevel.Verbose);
             CommandLine.RunAsync(toolPath, arguments, reporter.CommandLineToolCompletion,
                                  workingDirectory: workingDirectory, envVars: envVars,

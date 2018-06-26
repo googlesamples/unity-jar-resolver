@@ -193,6 +193,7 @@ namespace GooglePlayServices
             }
             directory = FileUtils.NormalizePathSeparators(directory);
             var searchDirectory = FileUtils.FindDirectoryByCaseInsensitivePath(directory);
+            if (String.IsNullOrEmpty(searchDirectory)) searchDirectory = directory;
             if (directory != searchDirectory &&
                 (previouslyValidatedPackageDir == null ||
                  searchDirectory != previouslyValidatedPackageDir)) {

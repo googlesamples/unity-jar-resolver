@@ -415,6 +415,7 @@ namespace GooglePlayServices {
             window.modal = false;
             window.progressTitle = window.summaryText;
             window.autoScrollToBottom = true;
+            window.logger = PlayServicesResolver.logger;
             window.RunAsync(
                 toolPath, toolArguments,
                 (CommandLine.Result result) => {
@@ -544,6 +545,7 @@ namespace GooglePlayServices {
             window.bodyText = String.Format("{0} {1}\n\n", toolPath, toolArguments);
             window.progressTitle = window.summaryText;
             window.autoScrollToBottom = true;
+            window.logger = PlayServicesResolver.logger;
             CommandLine.IOHandler ioHandler = null;
             if (licenseResponder != null) ioHandler = licenseResponder.AggregateLine;
             PlayServicesResolver.Log(String.Format("{0} {1}", toolPath, toolArguments),
@@ -574,6 +576,7 @@ namespace GooglePlayServices {
             window.yesText = "agree";
             window.noText = "decline";
             window.result = false;
+            window.logger = PlayServicesResolver.logger;
             window.Repaint();
             window.buttonClicked = (TextAreaDialog dialog) => {
                 window.Close();

@@ -609,7 +609,7 @@ namespace GooglePlayServices
             // Executes gradleComplete on the main thread.
             CommandLine.CompletionHandler scheduleOnMainThread = (result) => {
                 System.Action processResult = () => { gradleComplete(result); };
-                PlayServicesResolver.updateQueue.Enqueue(processResult);
+                RunOnMainThread.Run(processResult);
             };
 
             var filteredDependencies = new List<string>();
@@ -656,6 +656,7 @@ namespace GooglePlayServices
             window.modal = false;
             window.progressTitle = window.summaryText;
             window.autoScrollToBottom = true;
+            window.logger = PlayServicesResolver.logger;
             window.RunAsync(gradleWrapper, gradleArgumentsString,
                             (result) => {
                                 window.Close();
@@ -850,7 +851,7 @@ namespace GooglePlayServices
             };
             lock (resolveLock) {
                 resolveUpdateQueue.Enqueue(resolve);
-                EditorApplication.update += UpdateTryResolution;
+                RunOnMainThread.Run(UpdateTryResolution);
             }
         }
 
@@ -861,8 +862,6 @@ namespace GooglePlayServices
                     if (resolveUpdateQueue.Count > 0) {
                         resolveActionActive = (System.Action)resolveUpdateQueue.Dequeue();
                         resolveActionActive();
-                    } else {
-                        EditorApplication.update -= UpdateTryResolution;
                     }
                 }
             }
@@ -1190,7 +1189,7 @@ namespace GooglePlayServices
             const string progressBarTitle = "Processing AARs...";
             float numberOfAars = (float)aars.Count;
             int aarIndex = 0;
-            displayProgress &= (numberOfAars > 0 && !PlayServicesSupport.InBatchMode);
+            displayProgress &= (numberOfAars > 0 && !ExecutionEnvironment.InBatchMode);
             try {
                 foreach (string aarPath in aars) {
                     if (displayProgress) {

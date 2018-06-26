@@ -143,6 +143,7 @@ class GradlePreBuildResolver : DefaultResolver {
         window.summaryText = "Generating and running Gradle prebuild.";
         window.progressTitle = window.summaryText;
         window.autoScrollToBottom = true;
+        window.logger = PlayServicesResolver.logger;
         window.RunAsync(command, args,
             (result) => {
                 if (result.exitCode != 0) {

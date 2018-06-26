@@ -13,14 +13,14 @@
 //  See the License for the specific language governing permissions and
 //    limitations under the License.
 // </copyright>
-using UnityEditor;
-using UnityEngine;
-
+using Google;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using UnityEditor;
+using UnityEngine;
 
 namespace GooglePlayServices {
 // TODO(butterfield): Move to a new assembly, for common use between plugins.
@@ -119,9 +119,7 @@ public class UnityCompat {
     /// <summary>
     /// Returns whether the editor is running in batch mode.
     /// </summary>
-    public static bool InBatchMode {
-        get { return System.Environment.CommandLine.Contains("-batchmode"); }
-    }
+    public static bool InBatchMode { get { return ExecutionEnvironment.InBatchMode; } }
 
     private static Type AndroidSDKToolsClass {
         get {

@@ -18,7 +18,6 @@ using UnityEngine;
 using UnityEditor;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -1456,15 +1455,13 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// and remove files from older manifest files.
     /// </summary>
     static VersionHandlerImpl() {
-        EditorApplication.update -= UpdateVersionedAssetsOnUpdate;
-        EditorApplication.update += UpdateVersionedAssetsOnUpdate;
         Log("Loaded VersionHandlerImpl", verbose: true);
+        RunOnMainThread.Run(() => { UpdateVersionedAssetsOnUpdate(); }, runNow: false);
     }
 
     static void UpdateVersionedAssetsOnUpdate() {
-        EditorApplication.update -= UpdateVersionedAssetsOnUpdate;
         UpdateVersionedAssets();
-        EditorApplication.update += NotifyWhenCompliationComplete;
+        NotifyWhenCompliationComplete(false);
     }
 
     /// <summary>
@@ -1488,9 +1485,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Method polled from EditorApplication.update that waits until compilation is finished
-    /// prior to calling NotifyUpdateCompleteMethods() if an asset database refresh was in
-    /// progress.
+    /// Polls on main thread until compilation is finished prior to calling
+    /// NotifyUpdateCompleteMethods() if an asset database refresh was in progress or
+    /// forceNotification is true.
     /// </summary>
     /// <remarks>
     /// The typical update flow when the asset database is refreshed looks like this:
@@ -1504,23 +1501,27 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// - This method polls until compilation flag is false, if Refreshing is true
     ///   NotifyUpdateCompleteMethods() is called.
     /// </remarks>
-    private static void NotifyWhenCompliationComplete() {
-        if (EditorApplication.isCompiling) {
-            if (!compiling) {
-                Log("Compiling...", verbose: true);
-            }
-            compiling = true;
-            return;
-        }
-        if (compiling) {
-            Log("Compilation complete.", verbose: true);
-            compiling = false;
-        }
-        EditorApplication.update -= NotifyWhenCompliationComplete;
-        // If a refresh was initiated by this module, clear the refresh flag.
-        var wasRefreshing = Refreshing;
-        Refreshing = false;
-        if (wasRefreshing) NotifyUpdateCompleteMethods();
+    /// <param name="forceNotification">Force notification if the asset database was not
+    /// refreshing.</param>
+    private static void NotifyWhenCompliationComplete(bool forceNotification) {
+        RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                if (EditorApplication.isCompiling) {
+                    if (!compiling) {
+                        Log("Compiling...", verbose: true);
+                    }
+                    compiling = true;
+                    return false;
+                }
+                if (compiling) {
+                    Log("Compilation complete.", verbose: true);
+                    compiling = false;
+                }
+                // If a refresh was initiated by this module, clear the refresh flag.
+                var wasRefreshing = Refreshing;
+                Refreshing = false;
+                if (wasRefreshing || forceNotification) NotifyUpdateCompleteMethods();
+                return true;
+            });
     }
 
     /// <summary>
@@ -1811,30 +1812,14 @@ public class VersionHandlerImpl : AssetPostprocessor {
         if (!Refreshing) {
             // If for some reason, another module caused compilation to occur then we'll postpone
             // notification until it's complete.
-            if (EditorApplication.isCompiling) {
-                EditorApplication.update += NotifyWhenCompliationComplete;
-            } else {
-                // If we're in a quiescent state, notify the update complete methods.
-                NotifyUpdateCompleteMethods();
-            }
+            NotifyWhenCompliationComplete(true);
         }
     }
 
     // Returns the major/minor version of the unity environment we are running in
     // as a float so it can be compared numerically.
     public static float GetUnityVersionMajorMinor() {
-        float result = 5.4f;
-        string version = Application.unityVersion;
-        if (!string.IsNullOrEmpty(version)) {
-            int dotIndex = version.IndexOf('.');
-            if (dotIndex > 0 && version.Length > dotIndex + 1) {
-                if (!float.TryParse(version.Substring(0, dotIndex + 2), NumberStyles.Any,
-                                    CultureInfo.InvariantCulture, out result)) {
-                    result = 5.4f;
-                }
-            }
-        }
-        return result;
+        return ExecutionEnvironment.VersionMajorMinor;
     }
 
     /// <summary>

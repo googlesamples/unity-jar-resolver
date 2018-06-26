@@ -26,6 +26,8 @@ namespace GooglePlayServices
     using UnityEditor;
 #endif  // UNITY_EDITOR
 
+    using Google;
+
     public static class CommandLine
     {
         /// <summary>
@@ -113,6 +115,7 @@ namespace GooglePlayServices
         /// <summary>
         /// Asynchronously execute a command line tool, calling the specified delegate on
         /// completion.
+        /// NOTE: In batch mode this will be executed synchronously.
         /// </summary>
         /// <param name="toolPath">Tool to execute.</param>
         /// <param name="arguments">String to pass to the tools' command line.</param>
@@ -122,17 +125,21 @@ namespace GooglePlayServices
         /// <param name="ioHandler">Allows a caller to provide interactive input and also handle
         /// both output and error streams from a single delegate.</param>
         public static void RunAsync(
-            string toolPath, string arguments, CompletionHandler completionDelegate,
-            string workingDirectory = null,
-            Dictionary<string, string> envVars = null,
-            IOHandler ioHandler = null)
-        {
-            Thread thread = new Thread(new ThreadStart(() => {
-                    Result result = Run(toolPath, arguments, workingDirectory, envVars: envVars,
-                                        ioHandler: ioHandler);
-                    completionDelegate(result);
-                }));
-            thread.Start();
+                string toolPath, string arguments, CompletionHandler completionDelegate,
+                string workingDirectory = null,
+                Dictionary<string, string> envVars = null,
+                IOHandler ioHandler = null) {
+            Action action = () => {
+                Result result = Run(toolPath, arguments, workingDirectory, envVars: envVars,
+                                    ioHandler: ioHandler);
+                completionDelegate(result);
+            };
+            if (ExecutionEnvironment.InBatchMode) {
+                action();
+            } else {
+                Thread thread = new Thread(new ThreadStart(action));
+                thread.Start();
+            }
         }
 
         /// <summary>

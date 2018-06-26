@@ -15,6 +15,7 @@
 // </copyright>
 
 #if UNITY_IOS
+using Google;
 using GooglePlayServices;
 using Google.JarResolver;
 using System;
@@ -526,9 +527,9 @@ public class IOSResolver : AssetPostprocessor {
         // If Cocoapod tool auto-installation is enabled try installing on the first update of
         // the editor when the editor environment has been initialized.
         if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
-            AutoPodToolInstallInEditorEnabled && CocoapodsIntegrationEnabled && !InBatchMode) {
-            EditorApplication.update -= AutoInstallCocoapods;
-            EditorApplication.update += AutoInstallCocoapods;
+            AutoPodToolInstallInEditorEnabled && CocoapodsIntegrationEnabled &&
+            !ExecutionEnvironment.InBatchMode) {
+            RunOnMainThread.Run(() => { AutoInstallCocoapods(); }, runNow: false);
         }
 
 
@@ -537,7 +538,7 @@ public class IOSResolver : AssetPostprocessor {
         if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
             (CocoapodsIntegrationMethod)settings.GetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
                 CocoapodsIntegrationUpgradeDefault) == CocoapodsIntegrationMethod.None &&
-            !InBatchMode && !UpgradeToWorkspaceWarningDisabled) {
+            !ExecutionEnvironment.InBatchMode && !UpgradeToWorkspaceWarningDisabled) {
 
             switch (EditorUtility.DisplayDialogComplex(
                 "Warning: CocoaPods integration is disabled!",
@@ -712,13 +713,6 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static bool Enabled { get { return iOSXcodeExtensionLoaded; } }
 
-    /// <summary>
-    /// Whether the editor was launched in batch mode.
-    /// </summary>
-    private static bool InBatchMode {
-        get { return System.Environment.CommandLine.Contains("-batchmode"); }
-    }
-
     private const float epsilon = 1e-7f;
 
     /// <summary>
@@ -794,7 +788,8 @@ public class IOSResolver : AssetPostprocessor {
     /// <param name="level">Severity of the message.</param>
     internal static void Log(string message, bool verbose = false,
                              LogLevel level = LogLevel.Info) {
-        logger.Level = (VerboseLoggingEnabled || InBatchMode) ? LogLevel.Verbose : LogLevel.Info;
+        logger.Level = (VerboseLoggingEnabled || ExecutionEnvironment.InBatchMode) ?
+            LogLevel.Verbose : LogLevel.Info;
         logger.Log(message, level: verbose ? LogLevel.Verbose : level);
     }
 
@@ -1161,7 +1156,6 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static void AutoInstallCocoapods() {
         InstallCocoapodsInteractive(displayAlreadyInstalled: false);
-        EditorApplication.update -= AutoInstallCocoapods;
     }
 
     /// <summary>
@@ -1277,7 +1271,7 @@ public class IOSResolver : AssetPostprocessor {
                 }
             }
         }
-        if (VerboseLoggingEnabled || InBatchMode) {
+        if (VerboseLoggingEnabled || ExecutionEnvironment.InBatchMode) {
             installArgs += " --verbose";
         }
 
@@ -1772,6 +1766,7 @@ public class IOSResolver : AssetPostprocessor {
             dialog.autoScrollToBottom = true;
             dialog.bodyText = commands[0].ToString() + "\n";
             dialog.summaryText = summaryText ?? dialog.bodyText;
+            dialog.logger = logger;
 
             int index = 0;
             var handlerContainer = new DelegateContainer<CommandLine.CompletionHandler>();

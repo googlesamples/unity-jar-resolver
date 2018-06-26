@@ -238,7 +238,7 @@ namespace GooglePlayServices
                 if (!currentValue.Equals(previousValue)) {
                     var currentPollTime = DateTime.Now;
                     if (currentValue.Equals(previousPollValue)) {
-                        if (currentPollTime.Subtract(previousPollTime).Seconds >=
+                        if (currentPollTime.Subtract(previousPollTime).TotalSeconds >=
                             delayTimeInSeconds) {
                             Log(String.Format("{0} changed: {1} -> {2}", propertyName,
                                               previousValue, currentValue),
@@ -285,9 +285,9 @@ namespace GooglePlayServices
         private static bool autoResolving = false;
 
         /// <summary>
-        /// Flag used to prevent re-entrant resolution when a build configuration changes.
+        /// ID of the job that executes AutoResolve.
         /// </summary>
-        private static bool buildConfigChanged = false;
+        private static int autoResolveJobId = 0;
 
         /// <summary>
         /// Polls for changes in the bundle ID.
@@ -318,12 +318,14 @@ namespace GooglePlayServices
         /// <summary>
         /// The value of GradlePrebuildEnabled before settings was changed.
         /// </summary>
-        private static bool previousGradlePrebuildEnabled = false;
+        private static bool previousGradlePrebuildEnabled =
+            GooglePlayServices.SettingsDialog.PrebuildWithGradle;
 
         /// <summary>
         /// Value of the InstallAndroidPackages before settings were changed.
         /// </summary>
-        private static bool previousInstallAndroidPackages = false;
+        private static bool previousInstallAndroidPackages =
+            GooglePlayServices.SettingsDialog.InstallAndroidPackages;
 
         /// <summary>
         /// Asset label applied to files managed by this plugin.
@@ -497,7 +499,7 @@ namespace GooglePlayServices
         /// <summary>
         /// Logger for this module.
         /// </summary>
-        private static Google.Logger logger = new Google.Logger();
+        internal static Google.Logger logger = new Google.Logger();
 
         /// <summary>
         /// Get a string representation of the target ABI.
@@ -537,12 +539,6 @@ namespace GooglePlayServices
         /// </summary>
         public static event EventHandler<AndroidTargetDeviceAbiChangedArgs>
             AndroidTargetDeviceAbiChanged;
-
-        /// <summary>
-        /// Whether the PlayServicesResolver() class is initialized.  This is false until the
-        /// first editor update is complete.
-        /// </summary>
-        internal static bool Initialized { get; private set; }
 
         // Parses dependencies from XML dependency files.
         private static AndroidXmlDependencies xmlDependencies = new AndroidXmlDependencies();
@@ -586,11 +582,10 @@ namespace GooglePlayServices
         /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
-        static PlayServicesResolver()
-        {
-            updateQueue = System.Collections.Queue.Synchronized(new System.Collections.Queue());
-            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android)
-            {
+        static PlayServicesResolver() {
+            OnSettingsChanged();
+
+            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) {
                 RegisterResolver(new ResolverVer1_1());
                 RegisterResolver(new GradlePreBuildResolver(), ResolverType.GradlePrebuild);
                 // Monitor Android dependency XML files to perform auto-resolution.
@@ -602,35 +597,16 @@ namespace GooglePlayServices
                     "ProjectSettings",
                     logMessageWithLevel: LogDelegate);
 
-                EditorApplication.update -= AutoResolve;
-                EditorApplication.update += AutoResolve;
-                BundleIdChanged -= ResolveOnBundleIdChanged;
                 BundleIdChanged += ResolveOnBundleIdChanged;
-                AndroidBuildSystemChanged -= ResolveOnBuildSystemChanged;
                 AndroidBuildSystemChanged += ResolveOnBuildSystemChanged;
-                AndroidTargetDeviceAbiChanged -= ResolveOnTargetDeviceAbiChanged;
                 AndroidTargetDeviceAbiChanged += ResolveOnTargetDeviceAbiChanged;
-                AndroidSdkRootChanged -= ResolveOnAndroidSdkRootChange;
                 AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
+                ScheduleAutoResolve();
             }
-            EditorApplication.update -= PollBundleId;
-            EditorApplication.update += PollBundleId;
-            EditorApplication.update -= PollBuildSystem;
-            EditorApplication.update += PollBuildSystem;
-            EditorApplication.update -= PollTargetDeviceAbi;
-            EditorApplication.update += PollTargetDeviceAbi;
-            EditorApplication.update -= PollAndroidSdkRoot;
-            EditorApplication.update += PollAndroidSdkRoot;
-            EditorApplication.update -= InitializationComplete;
-            EditorApplication.update += InitializationComplete;
-            EditorApplication.update -= PumpUpdateQueue;
-            EditorApplication.update += PumpUpdateQueue;
-
-            previousGradlePrebuildEnabled = GooglePlayServices.SettingsDialog.PrebuildWithGradle;
-            previousInstallAndroidPackages =
-                GooglePlayServices.SettingsDialog.InstallAndroidPackages;
-
-            OnSettingsChanged();
+            RunOnMainThread.OnUpdate += PollBundleId;
+            RunOnMainThread.OnUpdate += PollBuildSystem;
+            RunOnMainThread.OnUpdate += PollTargetDeviceAbi;
+            RunOnMainThread.OnUpdate += PollAndroidSdkRoot;
         }
 
         /// <summary>
@@ -664,14 +640,6 @@ namespace GooglePlayServices
         internal static void Log(string message, Google.LogLevel level = LogLevel.Info) {
             if (level == LogLevel.Error) lastError = message;
             logger.Log(message, level: level);
-        }
-
-        /// <summary>
-        /// Called from EditorApplication.update to signal the class has been initialized.
-        /// </summary>
-        private static void InitializationComplete() {
-            EditorApplication.update -= InitializationComplete;
-            Initialized = true;
         }
 
         /// <summary>
@@ -738,11 +706,6 @@ namespace GooglePlayServices
         private static HashSet<string> importedAssetsSinceLastResolve = new HashSet<string>();
 
         /// <summary>
-        /// Queue of System.Action objects to execute on the main thread.
-        /// </summary>
-        internal static System.Collections.Queue updateQueue = null;
-
-        /// <summary>
         /// Add file patterns to monitor to trigger auto resolution.
         /// </summary>
         /// <param name="patterns">Set of file patterns to monitor to trigger auto
@@ -756,7 +719,6 @@ namespace GooglePlayServices
         /// triggered.
         /// </summary>
         private static void CheckImportedAssets() {
-            EditorApplication.update -= CheckImportedAssets;
             var filesToCheck = new HashSet<string>(importedAssetsSinceLastResolve);
             importedAssetsSinceLastResolve.Clear();
             bool resolve = false;
@@ -772,7 +734,7 @@ namespace GooglePlayServices
                     }
                 }
             }
-            if (resolve) AutoResolve();
+            if (resolve) ScheduleAutoResolve();
         }
 
         /// <summary>
@@ -803,16 +765,14 @@ namespace GooglePlayServices
                     // resolution.
                     foreach (string asset in deletedAssets) {
                         if (asset.StartsWith(GooglePlayServices.SettingsDialog.PackageDir)) {
-                            EditorApplication.update -= AutoResolve;
-                            EditorApplication.update += AutoResolve;
+                            ScheduleAutoResolve();
                             return;
                         }
                     }
                     // Schedule a check of imported assets.
                     if (importedAssets.Length > 0 && autoResolveFilePatterns.Count > 0) {
                         importedAssetsSinceLastResolve = new HashSet<string>(importedAssets);
-                        EditorApplication.update -= CheckImportedAssets;
-                        EditorApplication.update += CheckImportedAssets;
+                        CheckImportedAssets();
                         return;
                     }
                 }
@@ -820,55 +780,70 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Resolve dependencies if auto-resolution is enabled.
+        /// Schedule auto-resolution.
         /// </summary>
-        private static void AutoResolve() {
-            if (!autoResolving) {
-                if (Resolver.AutomaticResolutionEnabled()) {
-                    // Prevent resolution on the call to OnPostprocessAllAssets().
-                    autoResolving = true;
-                    Resolve(resolutionComplete: () => { autoResolving = false; });
-                } else if (!PlayServicesSupport.InBatchMode &&
-                           GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning &&
-                           PlayServicesSupport.GetAllDependencies().Count > 0) {
-                    switch (EditorUtility.DisplayDialogComplex(
-                        "Warning: Auto-resolution of Android dependencies is disabled!",
-                        "Would you like to enable auto-resolution of Android dependencies?\n\n" +
-                        "With auto-resolution of Android dependencies disabled you must " +
-                        "manually resolve dependencies using the " +
-                        "\"Assets > Play Services Resolver > Android Resolver > " +
-                        "Resolve\" menu item.\n\nFailure to resolve Android " +
-                        "dependencies will result in an non-functional application.",
-                        "Yes", "Not Now", "Silence Warning")) {
-                        case 0:  // Yes
-                            GooglePlayServices.SettingsDialog.EnableAutoResolution = true;
-                            break;
-                        case 1:  // Not now
-                            break;
-                        case 2:  // Ignore
-                            GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning =
-                                false;
-                            break;
-                    }
+        /// <param name="delayInMilliseconds">Time to wait until running AutoResolve().
+        /// Defaults to 1 second.</param>
+        private static void ScheduleAutoResolve(double delayInMilliseconds = 1000.0) {
+            lock (typeof(PlayServicesResolver)) {
+                if (!autoResolving) {
+                    RunOnMainThread.Cancel(autoResolveJobId);
+                    autoResolveJobId = RunOnMainThread.Schedule(
+                        () => {
+                            lock (typeof(PlayServicesResolver)) {
+                                autoResolving = true;
+                            }
+                            AutoResolve(() => {
+                                    lock (typeof(PlayServicesResolver)) {
+                                        autoResolving = false;
+                                        autoResolveJobId = 0;
+                                    }
+                                });
+                        },
+                        delayInMilliseconds);
                 }
             }
-            EditorApplication.update -= AutoResolve;
         }
 
         /// <summary>
-        /// Determine which packages - if any - should be re-resolved.
+        /// Resolve dependencies if auto-resolution is enabled.
         /// </summary>
-        /// <returns>Array of packages that should be re-resolved, null otherwise.</returns>
-        delegate string[] ReevaluatePackages();
+        /// <param name="resolutionComplete">Called when resolution is complete.</param>
+        private static void AutoResolve(Action resolutionComplete) {
+            if (Resolver.AutomaticResolutionEnabled()) {
+                Resolve(resolutionComplete: resolutionComplete);
+            } else if (!ExecutionEnvironment.InBatchMode &&
+                       GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning &&
+                       PlayServicesSupport.GetAllDependencies().Count > 0) {
+                switch (EditorUtility.DisplayDialogComplex(
+                    "Warning: Auto-resolution of Android dependencies is disabled!",
+                    "Would you like to enable auto-resolution of Android dependencies?\n\n" +
+                    "With auto-resolution of Android dependencies disabled you must " +
+                    "manually resolve dependencies using the " +
+                    "\"Assets > Play Services Resolver > Android Resolver > " +
+                    "Resolve\" menu item.\n\nFailure to resolve Android " +
+                    "dependencies will result in an non-functional application.",
+                    "Yes", "Not Now", "Silence Warning")) {
+                    case 0:  // Yes
+                        GooglePlayServices.SettingsDialog.EnableAutoResolution = true;
+                        break;
+                    case 1:  // Not now
+                        break;
+                    case 2:  // Ignore
+                        GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning =
+                            false;
+                        break;
+                }
+                resolutionComplete();
+            }
+        }
 
         /// <summary>
         /// Auto-resolve if any packages need to be resolved.
         /// </summary>
         private static void Reresolve() {
             if (Resolver.AutomaticResolutionEnabled()) {
-                buildConfigChanged = true;
-                if (DeleteFiles(Resolver.OnBuildSettings())) AutoResolve();
-                buildConfigChanged = false;
+                if (DeleteFiles(Resolver.OnBuildSettings())) ScheduleAutoResolve();
             }
         }
 
@@ -904,9 +879,24 @@ namespace GooglePlayServices
                 var attributeName = xmlAttribute.Name;
                 var attributeValue = xmlAttribute.Value;
                 foreach (var kv in attributeValueReplacements) {
-                    if (attributeValue.StartsWith(kv.Key) &&
+                    bool isVariable = kv.Key.StartsWith("${") && kv.Key.EndsWith("}");
+                    if ((attributeValue.StartsWith(kv.Key) ||
+                         (isVariable && attributeValue.Contains(kv.Key))) &&
                         attributeValue != kv.Value) {
-                        attributeNamesAndValues[attributeName] = kv.Value;
+                        // If this is performing a variable replacement, replace all instances of
+                        // the variable e.g:
+                        // If we're doing replacing ${foo} with "baz" and the attribute value is
+                        // "fee.${foo}.bar.${foo}" this yields "fee.baz.bar.baz"
+                        //
+                        // If this is performing a literal value replacement, replace only the
+                        // first instance of the value at the start of the string e.g:
+                        // If we're replacing a.neat.game.rocks with a.neater.game.rocks and the
+                        // attribute value is "a.neat.game.rocks.part1" this yields
+                        // "a.neater.game.rocks.part1".
+                        attributeNamesAndValues[attributeName] =
+                            isVariable ?
+                                attributeValue.Replace(kv.Key, kv.Value) :
+                                kv.Value + attributeValue.Substring(kv.Key.Length);
                         break;
                     }
                 }
@@ -1183,7 +1173,7 @@ namespace GooglePlayServices
         {
             JavaUtilities.CheckJdkForApiLevel();
 
-            if (!buildConfigChanged) DeleteFiles(Resolver.OnBuildSettings());
+            DeleteFiles(Resolver.OnBuildSettings());
 
             xmlDependencies.ReadAll(logger);
 
@@ -1209,33 +1199,21 @@ namespace GooglePlayServices
             Log("Resolving...", level: LogLevel.Verbose);
 
             lastError = "";
-            Resolver.DoResolution(svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
-                                  () => {
-                                      System.Action complete = () => {
-                                          bool succeeded = String.IsNullOrEmpty(lastError);
-                                          AssetDatabase.Refresh();
-                                          DependencyState.GetState().WriteToFile();
-                                          Log(String.Format(
-                                              "Resolution {0}.\n\n{1}",
+            Resolver.DoResolution(
+                svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
+                () => {
+                    RunOnMainThread.Run(() => {
+                            bool succeeded = String.IsNullOrEmpty(lastError);
+                            AssetDatabase.Refresh();
+                            DependencyState.GetState().WriteToFile();
+                            Log(String.Format("Resolution {0}.\n\n{1}",
                                               succeeded ? "Succeeded" : "Failed",
                                               lastError), level: LogLevel.Verbose);
-                                          if (resolutionComplete != null) {
-                                              resolutionComplete(succeeded);
-                                          }
-                                      };
-                                      updateQueue.Enqueue(complete);
-                                  });
-        }
-
-        /// <summary>
-        /// Refreshes the asset database on the main thread when refreshAssetDatabaseComplete
-        /// is set.
-        /// </summary>
-        private static void PumpUpdateQueue() {
-            while (updateQueue.Count > 0) {
-                var action = (System.Action)updateQueue.Dequeue();
-                action();
-            }
+                            if (resolutionComplete != null) {
+                                resolutionComplete(succeeded);
+                            }
+                        });
+                });
         }
 
         /// <summary>
@@ -1315,32 +1293,10 @@ namespace GooglePlayServices
                 GooglePlayServices.SettingsDialog.InstallAndroidPackages;
             PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;
             logger.Verbose = GooglePlayServices.SettingsDialog.VerboseLogging;
-            if (Initialized) {
-                if (Resolver != null) {
-                    PatchAndroidManifest(UnityCompat.ApplicationId, null);
-                    AutoResolve();
-                }
+            if (Resolver != null) {
+                PatchAndroidManifest(UnityCompat.ApplicationId, null);
+                ScheduleAutoResolve(delayInMilliseconds: 0);
             }
-        }
-
-        /// <summary>
-        /// Handles the overwrite confirmation.
-        /// </summary>
-        /// <returns><c>true</c>, if overwrite confirmation was handled,
-        /// <c>false</c> otherwise.</returns>
-        /// <param name="oldDep">Old dependency.</param>
-        /// <param name="newDep">New dependency replacing old.</param>
-        public static bool HandleOverwriteConfirmation(Dependency oldDep, Dependency newDep)
-        {
-            // Don't prompt overwriting the same version, just do it.
-            if (oldDep.BestVersion != newDep.BestVersion)
-            {
-                string msg = "Replace " + oldDep.Artifact + " version " +
-                             oldDep.BestVersion + " with version " + newDep.BestVersion + "?";
-                return EditorUtility.DisplayDialog("Android Jar Dependencies",
-                    msg,"Replace","Keep");
-            }
-            return true;
         }
 
         /// <summary>
