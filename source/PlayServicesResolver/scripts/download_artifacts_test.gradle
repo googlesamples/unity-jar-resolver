@@ -287,7 +287,6 @@ createTestTask(
    "com.android.support.support-annotations-26.1.0.jar"],
   2 /* iterations */)
 
-
 createTestTask(
   "testDownloadAvailableWithSameName",
   "Downloads artifacts with the same artifact name and their dependencies " +
@@ -546,5 +545,17 @@ createTestTask(
    "com.google.android.gms:play-services-basement:+\n" +
    "com.google.android.gms:play-services-tasks:12.0.0 --> " +
    "com.google.android.gms:play-services-tasks:+"])
+
+task testUnitTests(type: GradleBuild, dependsOn: copyTestScript) {
+  def startParameters = new StartParameter()
+  startParameters.projectProperties = ["RUN_TESTS": "1"]
+  startParameters.logLevel = logging.level
+  project.ext.testTaskNames.add(new String("${name}"))
+
+  description "Run unit tests."
+  startParameter startParameters
+  buildFile project.ext.buildFile
+  dir project.ext.outputDir
+}
 
 project.defaultTasks = project.ext.testTaskNames

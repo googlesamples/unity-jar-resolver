@@ -1111,9 +1111,19 @@ def runTests() {
 
 // Configure project properties.
 project.ext {
+  // List of tasks that copy artifacts.
+  copyTasks = []
+  // List of copied file and the associated artifact tuples.
+  copiedFileArtifacts = []
+  // Set of packages to copy, exposed to the copyPackages task.
+  packagesToCopy = [].toSet()
+  // Set of packages with modified versions due to conflicting dependencies.
+  // Maps the versionless package name to a tuple of (oldVersion, newVersion)
+  packagesModified = [:]
+
   if (project.hasProperty("RUN_TESTS")) {
     runTests()
-    System.exit(0)
+    return
   }
 
   // Get the install location of the Android SDK.
@@ -1201,10 +1211,6 @@ project.ext {
   targetDir = project.getProperty("TARGET_DIR")
   logger.info("TARGET_DIR: " + (new File(targetDir).absolutePath).toString())
 
-  // Set of packages with modified versions due to conflicting dependencies.
-  // Maps the versionless package name to a tuple of (oldVersion, newVersion)
-  packagesModified = [:]
-
   // Fallback to search for srcaar artifacts when an artifact is missing.
   packages = fallbackToSrcAarArtifacts(packages)
 
@@ -1220,9 +1226,6 @@ project.ext {
   // in packagesToCopyByUserPackages.
   def resolvedArtifacts = userPackagesToQuery.resolvedConfiguration.
     lenientConfiguration.getArtifacts(Specs.satisfyAll())
-
-  // Set of packages to copy, exposed to the copyPackages task.
-  packagesToCopy = [].toSet()
 
   // If we were unable to find a set of packages with versions that do not
   // conflict we may still end up with transitive references to artifacts at
@@ -1275,10 +1278,6 @@ project.ext {
     project.dependencies.copyPackagesConfig it
   }
 
-  // List of tasks that copy artifacts.
-  copyTasks = []
-  // List of copied file and the associated artifact tuples.
-  copiedFileArtifacts = []
   // Resolve the final set of artifacts to copy.
   def artifactsToCopy = project.configurations.copyPackagesConfig.
     resolvedConfiguration.lenientConfiguration.getArtifacts(Specs.satisfyAll())
