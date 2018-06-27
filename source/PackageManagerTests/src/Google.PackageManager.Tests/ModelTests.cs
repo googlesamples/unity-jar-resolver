@@ -21,9 +21,6 @@ namespace Google.PackageManager.Tests {
 
     [TestFixture]
     public class PackageManagerModelTests {
-        // Path to test data, contains a mock registry and settings config.
-        public const string PATH = "../../testData";
-
         /// <summary>
         /// Tests root models are able to load from file.
         /// Root models include:
@@ -34,7 +31,7 @@ namespace Google.PackageManager.Tests {
         /// </summary>
         [Test]
         public void TestLoadFromFile() {
-            string registryPath = Path.Combine(PATH,"registry/registry.xml");
+            string registryPath = Path.Combine(TestData.PATH,"registry/registry.xml");
             Registry registry = Registry.LoadFromFile(registryPath);
             Assert.AreEqual("registry.google.unity",registry.groupId);
             Assert.AreEqual("jarresolver-google-registry",registry.artifactId);
@@ -44,7 +41,7 @@ namespace Google.PackageManager.Tests {
             Assert.AreEqual(1,registry.modules.module.Count);
             Assert.AreEqual("com.google.unity.example",registry.modules.module[0]);
 
-            string barPluginPath = Path.Combine(PATH,
+            string barPluginPath = Path.Combine(TestData.PATH,
                        "registry/com.google.unity.example/package-manifest.xml");
             PluginMetaData pluginMetaData = PluginMetaData.LoadFromFile(barPluginPath);
             Assert.AreEqual("com.google.unity.example",pluginMetaData.groupId);
@@ -56,7 +53,7 @@ namespace Google.PackageManager.Tests {
             Assert.AreEqual(1,pluginMetaData.versioning.versions.Count);
             Assert.AreEqual(0,pluginMetaData.lastUpdated);
 
-            string barDescriptionPath = Path.Combine(PATH,
+            string barDescriptionPath = Path.Combine(TestData.PATH,
               "registry/com.google.unity.example/gpm-example-plugin/1.0.0.0/description.xml");
             PluginDescription description = PluginDescription.LoadFromFile(barDescriptionPath);
             Assert.NotNull(description.languages);

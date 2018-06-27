@@ -1,22 +1,24 @@
-automation/
-build/
-download_artifacts_test_output/
+/automation/
+/build/
+/download_artifacts_test_output/
+/test_output/
+/gradle.properties
 
 .gradle/
 
-plugin/Assembly-CSharp-Editor.csproj
-plugin/Assets/PlayServicesResolver/Editor/JarResolverLib.dll
-plugin/Assets/Plugins/
-plugin/Assets/Plugins.meta
-plugin/Assets/StyleCop.Cache
-plugin/Assets/StyleCop.Cache.meta
-plugin/Library/
-plugin/ProjectSettings/
-plugin/Temp/
-plugin/obj/
-plugin/plugin.sln
-plugin/plugin.userprefs
+/plugin/Assembly-CSharp-Editor.csproj
+/plugin/Assets/PlayServicesResolver/Editor/JarResolverLib.dll
+/plugin/Assets/Plugins/
+/plugin/Assets/Plugins.meta
+/plugin/Assets/StyleCop.Cache
+/plugin/Assets/StyleCop.Cache.meta
+/plugin/Library/
+/plugin/ProjectSettings/
+/plugin/Temp/
+/plugin/obj/
+/plugin/plugin.sln
+/plugin/plugin.userprefs
 
-unity_dlls/
+/unity_dlls/
 
 .DS_Store

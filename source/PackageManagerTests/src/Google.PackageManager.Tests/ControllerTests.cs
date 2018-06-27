@@ -92,7 +92,12 @@ namespace Google.PackageManager.Tests {
         public static IEditorPrefs editorPrefs = new MockEditorPrefs();
 
         // Path to test data, contains a mock data.
-        public const string PATH = "../../testData";
+        public static string PATH {
+            get {
+                var dir = Environment.GetEnvironmentVariable("TEST_DATA_DIR");
+                return dir != null ? dir : "../../testData";
+            }
+        }
 
         public class MockFetcher : IUriDataFetcher {
             string textResult;

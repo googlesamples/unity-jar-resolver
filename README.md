@@ -379,19 +379,20 @@ You can build the plugin by running the following from your shell
 (Linux / OSX):
 
 ```
-./gradlew build && ./gradlew postbuild
+./gradlew build && ./gradlew release
 ```
 
 or Windows:
 
 ```
-./gradlew.bat build & ./gradlew.bat postbuild
+./gradlew.bat build && ./gradlew.bat release
 ```
 
-The `postbuild` target packages the plugin for redistribution:
+The `release` target packages the plugin for redistribution:
 
    * Updates `play-services-resolver-*.unitypackage`
    * Copies the unpacked plugin to the `exploded` directory.
+   * Updates template metadata files in the `plugin` directory.
 
 ### Releasing
 

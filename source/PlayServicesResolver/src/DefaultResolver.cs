@@ -225,27 +225,8 @@ namespace GooglePlayServices
         /// <param name="outputDirectory">Directory to extract the AAR file to.</param>
         /// <returns>true if successful, false otherwise.</returns>
         internal virtual bool ExtractAar(string aarFile, string[] extractFilenames,
-                                         string outputDirectory)
-        {
-            try {
-                string aarPath = Path.GetFullPath(aarFile);
-                string extractFilesArg = extractFilenames != null && extractFilenames.Length > 0 ?
-                    " \"" + String.Join("\" \"", extractFilenames) + "\"" : "";
-                CommandLine.Result result = CommandLine.Run(JavaUtilities.JarBinaryPath,
-                                                            "xvf " + "\"" + aarPath + "\"" +
-                                                            extractFilesArg,
-                                                            workingDirectory: outputDirectory);
-                if (result.exitCode != 0) {
-                    Debug.LogError("Error expanding " + aarPath + " err: " +
-                                   result.exitCode + ": " + result.stderr);
-                    return false;
-                }
-            }
-            catch (Exception e) {
-                Debug.LogError(e);
-                throw e;
-            }
-            return true;
+                                         string outputDirectory) {
+            return PlayServicesResolver.ExtractZip(aarFile, extractFilenames, outputDirectory);
         }
 
         /// <summary>

@@ -1365,5 +1365,36 @@ namespace GooglePlayServices
             }
             AssetDatabase.Refresh();
         }
+
+        /// <summary>
+        /// Extract a zip file to the specified directory.
+        /// </summary>
+        /// <param name="zipFile">Name of the zip file to extract.</param>
+        /// <param name="extractFilenames">List of files to extract from the archive.  If this array
+        /// is empty or null all files are extracted.</param>
+        /// <param name="outputDirectory">Directory to extract the zip file to.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        internal static bool ExtractZip(string zipFile, string[] extractFilenames,
+                                        string outputDirectory) {
+            try {
+                string zipPath = Path.GetFullPath(zipFile);
+                string extractFilesArg = extractFilenames != null && extractFilenames.Length > 0 ?
+                    String.Format("\"{0}\"", String.Join("\" \"", extractFilenames)) : "";
+                CommandLine.Result result = CommandLine.Run(
+                    JavaUtilities.JarBinaryPath,
+                    String.Format(" xvf \"{0}\" {1}", zipPath, extractFilesArg),
+                    workingDirectory: outputDirectory);
+                if (result.exitCode != 0) {
+                    Log(String.Format("Error extracting \"{0}\"\n" +
+                                      "{1}", zipPath, result.message), level: LogLevel.Error);
+                    return false;
+                }
+            }
+            catch (Exception e) {
+                Log(String.Format("Failed with exception {0}", e.ToString()));
+                throw e;
+            }
+            return true;
+        }
     }
 }

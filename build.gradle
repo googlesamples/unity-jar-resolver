@@ -12,475 +12,1174 @@ buildscript {
  * Project level variables
  */
 project.ext {
-    sdk_root = System.getProperty("ANDROID_HOME")
-    if (sdk_root == null || sdk_root.isEmpty()) {
-        sdk_root = System.getenv("ANDROID_HOME")
+  // Set of properties to cache in the project.properties file.
+  Properties cacheProperties = new Properties()
+
+  // Set of directories to *not* search under the Unity root directory when
+  // searching for components of Unity.
+  String unitySearchDirExcludesString = findProperty("UNITY_EXCLUDES")
+  String[] unitySearchDirExcludes =
+    unitySearchDirExcludesString ?
+      unitySearchDirExcludesString.tokenize(";") :
+      ["**/PackageManager/Editor"]
+
+  // Save the current OS.
+  operatingSystem = OperatingSystem.getOperatingSystem()
+
+  // Default installation path for Unity based upon the host operating system.
+  String defaultUnityPath =
+    [(OperatingSystem.UNKNOWN): "Unity",
+     (OperatingSystem.MAC_OSX):
+     "/Applications/Unity/Unity.app/Contents/MacOS/Unity",
+     (OperatingSystem.WINDOWS):
+     "C:\\Program Files\\Unity\\Editor\\Unity.exe",
+     (OperatingSystem.LINUX): "/opt/Unity/Editor/Unity"][operatingSystem]
+
+  // Search for the Unity editor executable.
+  // The Unity editor is required to package the plug-in.
+  unityExe = findFileProperty("UNITY_EXE", new File(defaultUnityPath), false)
+  if (!unityExe.exists()) unityExe = findFileInPath(unityExe.name)
+  if (unityExe == null) {
+    throw new StopActionException("Unity editor executable (UNITY_EXE) not " +
+                                  "found")
+  }
+  saveProperty("UNITY_EXE", unityExe, cacheProperties)
+
+  // Path fragment that is the parent of the unity executable install location.
+  // This is used to find the unity root directory from the editor executable.
+  String unityExeParentPath =
+    [(OperatingSystem.UNKNOWN): "Editor",
+     (OperatingSystem.MAC_OSX): "Unity.app/Contents/MacOS",
+     (OperatingSystem.WINDOWS): "Editor",
+     (OperatingSystem.LINUX): "Editor"][operatingSystem]
+  File unityRootDir = findFileProperty(
+    "UNITY_DIR", new File(unityExe.parentFile.absolutePath -
+                          unityExeParentPath), true)
+  if (unityRootDir == null) {
+    throw new StopActionException("Unity root directory (UNITY_DIR) not found.")
+  }
+  saveProperty("UNITY_DIR", unityRootDir, cacheProperties)
+
+  FileTree unityRootDirTree = fileTree(dir: unityRootDir)
+
+  // Find unity engine dll under the root directory.
+  unityDllPath = getFileFromPropertyOrFileTree(
+    "UNITY_DLL_PATH", true, {
+      unityRootDirTree.matching {
+        include "**/Managed/UnityEngine.dll"
+        exclude unitySearchDirExcludes
+      }
+    })
+  if (unityDllPath == null) {
+    throw new StopActionException(
+      "UnityEngine.dll and UnityEditor.dll directory (UNITY_DLL_PATH) " +
+      "not found.")
+  }
+  saveProperty("UNITY_DLL_PATH", unityDllPath, cacheProperties)
+
+  // iOS runtime dll.  This is with the playback engine, so the
+  // structure is different for MacOS and the others.
+  unityIosPath = getFileFromPropertyOrFileTree(
+    "UNITY_IOS_PLAYBACK_PATH", true, {
+      unityRootDirTree.matching {
+        include "**/PlaybackEngines/iOSSupport/UnityEditor.iOS.Extensions.dll",
+        "**/PlaybackEngines/iossupport/UnityEditor.iOS.Extensions.dll"
+        exclude unitySearchDirExcludes
+      }
+    })
+  if (unityIosPath == null) {
+    // iOS support is *required* to build the iOS resolver.
+    throw new StopActionException(
+      "UnityEditor.iOS.Extensions.dll directory (UNITY_IOS_PLAYBACK_PATH) " +
+      "not found.")
+  }
+  saveProperty("UNITY_IOS_PLAYBACK_PATH", unityIosPath, cacheProperties)
+
+  // Find xbuild to build the dlls.
+  xbuildExe = getFileFromPropertyOrFileTree(
+    "XBUILD_EXE", false, {
+      unityRootDirTree.matching {
+        include (operatingSystem == OperatingSystem.WINDOWS ?
+                 "**/Mono/bin/xbuild.bat" : "**/xbuild")
+        exclude unitySearchDirExcludes
+      }
+    })
+  if (xbuildExe == null) {
+    throw new StopActionException("xbuild not found (XBUILD_EXE)")
+  }
+  saveProperty("XBUILD_EXE", xbuildExe, cacheProperties)
+
+  // Find the NUnit framework dll.
+  unityNUnitDll = getFileFromPropertyOrFileTree(
+    "UNITY_NUNIT_PATH", true, {
+      unityRootDirTree.matching {
+        include "**/nunit.framework.dll"
+        exclude unitySearchDirExcludes
+      }
+    })
+  if (unityNUnitDll == null) {
+    logger.warn("Unity NUnit DLL not found, tests will not build.")
+  }
+  saveProperty("UNITY_NUNIT_PATH", unityNUnitDll, cacheProperties)
+
+  // nunit-console is used to run tests.
+  nunitConsoleExe = getFileFromPropertyOrFileTree(
+    "NUNIT_CONSOLE_EXE", false, {
+      unityRootDirTree.matching {
+        include (operatingSystem == OperatingSystem.WINDOWS ?
+                 "**/Mono/bin/nunit-console2.bat" :
+                 "**/nunit-console2")
+        exclude unitySearchDirExcludes
+      }
+    })
+  if (nunitConsoleExe == null) {
+    logger.warn("nunit_console not found (NUNIT_CONSOLE_EXE) C# unit test " +
+                "execution will fail.")
+  }
+  saveProperty("NUNIT_CONSOLE_EXE", nunitConsoleExe, cacheProperties)
+
+  // It can take a while to search for build tools, so cache paths in the project
+  // properties.
+  File projectPropertiesFile = new File("gradle.properties")
+  if (!projectPropertiesFile.exists()) {
+    logger.info(sprintf("Saving %s to %s",
+                        cacheProperties.stringPropertyNames(),
+                        projectPropertiesFile))
+    cacheProperties.store(projectPropertiesFile.newWriter(), null)
+  }
+
+  // Get the directory that contains this script.
+  scriptDirectory = buildscript.sourceFile.getParentFile()
+
+  // Directory for intermediate and final build outputs.
+  buildDir = new File(scriptDirectory, "build")
+  // Directory for testing.
+  testDir = new File(scriptDirectory, "test_output")
+  // Directory that contains the template plugin.
+  // Files under this directory are copied into the staging area for the
+  // plugin.
+  pluginTemplateDir = new File(scriptDirectory, "plugin")
+  // Directory where the plugin is staged to be exported as a Unity package.
+  pluginStagingAreaDir = new File(buildDir, "staging")
+  // Directory where the build plugin is unpacked to.
+  pluginExplodedDir = new File(scriptDirectory, "exploded")
+  // Where the exported plugin file is built before it's copied to the release
+  // location.
+  pluginExportFile = new File(buildDir, "plugin.unitypackage")
+  // Directory within the plugin staging area that just contains the plugin.
+  pluginAssetsDir = new File("Assets", "PlayServicesResolver")
+  // Directory within the plugin directory that contains the managed DLLs.
+  pluginEditorDllDir = new File(pluginAssetsDir, "Editor")
+  // Directory which contains the solution for all C# projects with a project in
+  // each subdirectory.
+  pluginSourceDir = new File("source")
+  // Solution which references all projects used by the plugin.
+  pluginSolutionFile = new File(pluginSourceDir, "JarResolver.sln")
+  // Version of the plugin (update this with CHANGELOG.md on each release).
+  pluginVersion = "1.2.75.0"
+  // Base filename of the released plugin.
+  currentPluginBasename = "play-services-resolver"
+  // Versioned release plugin file.
+  pluginReleaseFile = new File(scriptDirectory,
+                               sprintf("%s-%s.unitypackage",
+                                       currentPluginBasename,
+                                       pluginVersion))
+
+  // Common arguments used to execute Unity in batch mode.
+  unityBatchModeArguments = ["-batchmode", "-nographics"]
+  // Extension for Unity asset metadata files.
+  unityMetadataExtension = ".meta"
+}
+
+/*
+ * Host operating system.
+ */
+public enum OperatingSystem {
+  UNKNOWN, MAC_OSX, WINDOWS, LINUX
+
+  /*
+   * Get the current operating system.
+   *
+   * @returns Current host operating system.
+   */
+  public static OperatingSystem getOperatingSystem() {
+    String os_name = System.getProperty("os.name").toLowerCase()
+    if (os_name.contains("mac os x")) {
+      return OperatingSystem.MAC_OSX
+    } else if (os_name.contains("windows")) {
+      return OperatingSystem.WINDOWS
+    } else if (os_name.contains("linux")) {
+      return OperatingSystem.LINUX
     }
+    return OperatingSystem.UNKNOWN
+  }
+}
 
-    unity_search_dir_excludes_string = System.getProperty("UNITY_EXCLUDES")
-    unity_search_dir_excludes =
-        unity_search_dir_excludes_string ?
-            unity_search_dir_excludes_string.tokenize(";") :
-            ["**/PackageManager/Editor"]
+/*
+ * Search the path variable for an executable file.
+ *
+ * @param filename Name of the file to search for.
+ *
+ * @return If found, the File object that references the file, null otherwise.
+ */
+File findFileInPath(String filename) {
+  def stdout = new ByteArrayOutputStream()
+  exec {
+    executable OperatingSystem.getOperatingSystem() == OperatingSystem.WINDOWS ?
+      "where" : "which"
+    args filename
+    ignoreExitValue true
+    standardOutput = stdout
+  }
+  String resultString = stdout.toString()
+  return resultString.isEmpty() ? null : new File(resultString)
+}
 
-    // Determine the current OS.
-    os_name = System.getProperty("os.name").toLowerCase();
-    os_osx = os_name.contains("mac os x");
-    os_windows = os_name.contains("windows");
-    os_linux = os_name.contains("linux");
-
-    // Search for the Unity editor executable.
-    // The Unity editor is required to package the plug-in.
-    unity_exe = System.getProperty("UNITY_EXE")
-    if (unity_exe == null || unity_exe.isEmpty()) {
-        unity_exe = System.getenv("UNITY_EXE")
-    }
-    if (unity_exe == null || unity_exe.isEmpty()) {
-      // TODO: Should probably also search the path using Exec / which / where.
-      if (os_osx) {
-        unity_exe ='/Applications/Unity/Unity.app/Contents/MacOS/Unity'
-      } else if (os_windows) {
-        unity_exe = 'C:\\Program Files\\Unity\\Editor\\Unity.exe'
-      } else if (os_linux) {
-        unity_exe = '/opt/Unity/Editor/Unity'
+/*
+ * Get a property value by name searching project properties, system properties
+ * and environment variables.
+ *
+ * @param propertyName Name of the property to search for.
+ * @param defaultValue Value of the property if it's not found.
+ *
+ * @returns Property value as string if found and not empty, null otherwise.
+ */
+String findProperty(String propertyName, String defaultValue = null) {
+  Closure valueIsSet = {
+    valueString -> valueString != null && !valueString.isEmpty()
+  }
+  String value = null
+  for (def queryObject in [project, System]) {
+    if (queryObject.hasProperty(propertyName)) {
+      value = queryObject.getProperty(propertyName)
+      if (valueIsSet(value)) {
+        return value
       }
     }
-    unity_exe_found = (new File(unity_exe)).exists();
-    if (!unity_exe_found) {
-      logger.warn('Unity editor executable not found, plug-in packaging ' +
-                  'may fail.')
-    }
-
-    // find the unity root directory by working up from the executable.
-    // not, perfect, but pretty close, work up the tree until the
-    // name starts with unity.
-    unity_root = (new File(unity_exe)).getParentFile().getParentFile();
-    while (!unity_root.name.toLowerCase().startsWith("unity")) {
-        if (unity_root.getParentFile() != null) {
-            unity_root = unity_root.getParentFile();
-        } else {
-            break;
-        }
-    }
-
-    logger.info( "Unity root is $unity_root")
-
-    // find unity engine dll
-    unity_dll_path =  findUnityPath("UNITY_DLL_PATH", true,
-                            fileTree(dir: unity_root).matching {
-                                include '**/Managed/UnityEngine.dll'
-                                exclude unity_search_dir_excludes
-                            });
-
-    if (unity_dll_path == null || !unity_dll_path.exists()) {
-        logger.warn('Unity Editor and Runtime DLLs not found, compilation may fail!')
-    } else {
-        logger.info("Unity Engine DLL path is $unity_dll_path")
-    }
-
-    // ios runtime dll.  This is with the playback engine, so the
-    // structure is different for MacOS and the others.
-    unity_ios_dll_path = findUnityPath("UNITY_IOS_PLAYBACK_PATH", true,
-        fileTree(dir: os_osx ? unity_root.parentFile : unity_root, includes: [
-            '**/PlaybackEngines/iOSSupport/UnityEditor.iOS.Extensions.dll',
-            '**/PlaybackEngines/iossupport/UnityEditor.iOS.Extensions.dll'
-        ], exclude: unity_search_dir_excludes))
-
-    if (unity_ios_dll_path == null || !unity_ios_dll_path.exists()) {
-        logger.warn('Unity iOS Playback engine not found, compilation may fail!')
-    } else {
-        logger.info("Unity iOS Playback engine is $unity_ios_dll_path")
-    }
-
-
-    // find the NUnit framework dll.
-    unity_nunit_dll_path = findUnityPath("UNITY_NUNIT_PATH", true,
-                                fileTree(dir: unity_root).matching {
-                                    include '**/nunit.framework.dll'
-                                    exclude unity_search_dir_excludes
-                                })
-
-    if (unity_nunit_dll_path == null || !unity_nunit_dll_path.exists()) {
-        logger.warn('Unity NUnit framework not found, compilation may fail!')
-    } else {
-        logger.info("Unity NUnity framework found in  $unity_nunit_dll_path")
-    }
-
-// xbuild is used to build the dlls.
-    if (os_windows) {
-        xbuild_exe = findUnityPath("XBUILD_EXE", false,
-            fileTree(dir: unity_root).matching {
-                include '**/Mono/bin/xbuild.bat'
-                exclude unity_search_dir_excludes
-            })
-    } else if (os_osx || os_linux) {
-        xbuild_exe = findUnityPath("XBUILD_EXE", false,
-            fileTree(dir: unity_root).matching {
-                include '**/xbuild'
-                exclude unity_search_dir_excludes
-            })
-    }
-    if (xbuild_exe == null || !xbuild_exe.exists()) {
-        logger.warn("xbuild command not found, compilation may fail.")
-        xbuild_exe = null
-    } else {
-        logger.info("xbuild found at $xbuild_exe")
-    }
-
-// nunit-console is used to run tests.
-    if (os_windows) {
-        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
-            fileTree(dir: unity_root).matching {
-                include '**/Mono/bin/nunit-console2.bat'
-                exclude unity_search_dir_excludes
-            })
-    } else if (os_osx || os_linux) {
-        nunit_console_exe = findUnityPath("NUNIT_CONSOLE_EXE", false,
-            fileTree(dir: unity_root).matching {
-                include '**/nunit-console2'
-                exclude unity_search_dir_excludes
-            })
-    }
-    if (nunit_console_exe == null || !nunit_console_exe.exists()) {
-        logger.warn("nunit_console command not found, compilation may fail.")
-        nunit_console_exe = null
-    } else {
-        logger.info("nunit_console found at $nunit_console_exe")
-    }
-
-    pluginSrc = file('plugin').absolutePath
-    pluginProj = file('build/PluginSrc').absolutePath
-    buildPath = file('build').absolutePath
-    exportPath = file('build/plugin.unitypackage').absolutePath
-    dllDir = 'Assets/PlayServicesResolver/Editor'
-    pluginVersion = '1.2.75.0'
-    currentPluginPath = file('.').absolutePath
-    currentPluginBasename = 'play-services-resolver'
-    currentPluginName = (currentPluginBasename + '-' + pluginVersion +
-                         '.unitypackage')
+  }
+  value = System.getenv(propertyName)
+  return valueIsSet(value) ? value : defaultValue
 }
 
-task compile_resolverTests(type: Exec) {
-  description 'Compile the tests for the Mono framework component.'
-  workingDir 'source'
-  commandLine "${xbuild_exe}", '/target:JarResolverTests',
-        "/property:NUnityHintPath=$unity_nunit_dll_path.absolutePath"
-  ext.remoteTaskPhase = 'build'
+/*
+ * Get a property value by name as a file, searching project properties,
+ * system properties and environment variables.
+ *
+ * @param propertyName Name of the property to search for.
+ * @param defaultValue Value of the property if it's not found.
+ * @param mustExist Whether the file must exist.
+ *
+ * @returns Property value as a File if found and exists (if mustExist is true),
+ *  null otherwise.
+ */
+File findFileProperty(String propertyName, File defaultValue = null,
+                      Boolean mustExist = false) {
+  String foundFilePath = findProperty(
+    propertyName, defaultValue != null ? defaultValue.absolutePath : null)
+  File foundFile = foundFilePath != null ? new File(foundFilePath) : null
+  return foundFile != null && (!mustExist || foundFile.exists()) ?
+    foundFile : null
 }
 
-task test_resolverLib(type: Exec, dependsOn: compile_resolverTests) {
-  description 'Runs the tests.'
-  workingDir 'source'
-  commandLine "$nunit_console_exe",
-              "JarResolverTests/bin/Debug/JarResolverTests.dll"
-  ext.remoteTaskPhase = 'build'
-}
-
-task compile_packageManagerTests(type: Exec) {
-  description 'Compile the tests for the Mono framework component.'
-  workingDir 'source'
-  commandLine "${xbuild_exe}", '/target:PackageManagerTests',
-        "/property:NUnityHintPath=$unity_nunit_dll_path.absolutePath"
-  ext.remoteTaskPhase = 'build'
-}
-
-task test_packageManager(type: Exec, dependsOn: compile_packageManagerTests) {
-  description 'Runs the tests.'
-  workingDir 'source'
-  commandLine "$nunit_console_exe",
-              "PackageManagerTests/bin/Debug/PackageManagerTests.dll"
-  ext.remoteTaskPhase = 'build'
-}
-
-/// find paths within the Unity file tree used for building.
-def findUnityPath(propertyKey, wantDirectory, fileTree) {
-
-    def propValue;
-    def fileValue;
-
-    propValue = System.getProperty(propertyKey)
-    if (propValue == null || propValue.isEmpty()) {
-        propValue = System.getenv(propertyKey)
+/*
+ * Get a File from the specified property or the shortest path in the specified
+ * FileTree object.
+ *
+ * @param propertyName Property name to lookup prior to searching the tree
+ *   for a matching file.
+ * @param useParentDirectory If set to true, this returns a File object pointing
+ *   at the parent directory of the file that is found.
+ * @param fileTreeClosure Closure which returns a FileTree object to search.
+ *
+ * @return File if it's found and exists, null otherwise.
+ */
+File getFileFromPropertyOrFileTree(String propertyName,
+                                   Boolean useParentDirectory,
+                                   fileTreeClosure) {
+  File fileValue = findFileProperty(propertyName, null, true)
+  if (fileValue == null) {
+    // Search for the shortest path to the require file.
+    fileTreeClosure().files.each { currentFile ->
+      if (fileValue == null ||
+          fileValue.absolutePath.length() > currentFile.absolutePath.length()) {
+        fileValue = currentFile
+      }
     }
-    // convert string to file object
-    if (propValue != null) {
-        fileValue = file(propValue)
-    } else {
-        fileValue = null
+    if (useParentDirectory && fileValue != null) {
+      fileValue = fileValue.parentFile
     }
-
-    if (fileValue == null || !fileValue.exists()) {
-        // take the shortest path location.
-        fileValue = null
-        fileTree.files.each { p ->
-            if (fileValue == null ||
-                    fileValue.absolutePath.length() > p.absolutePath.length()) {
-                fileValue = p;
-            }
-        }
-    }
-
-    if (wantDirectory) {
-        return fileValue != null ? fileValue.parentFile : null;
-    } else {
-        return fileValue
-    }
+  }
+  return fileValue
 }
 
-// Construct the name of a versioned asset from the source filename and version
-// string.
-// The encoded string takes the form...
-// ${filename}_v${version}_.${extension}
-// where extension is derived from the specified filename.
-def versionedAssetName(filename, version) {
-  def extensionIndex = filename.lastIndexOf('.')
-  def basename = filename.substring(0, extensionIndex)
-  def extension = filename.substring(extensionIndex)
+/*
+ * Set a project property and log it.
+ *
+ * @param name Name of the property.
+ * @param value Value of the property.
+ * @param properties Map of properties to save to.
+ */
+void saveProperty(String name, value, Properties properties) {
+  if (value != null) properties.setProperty(name.toString(), value.toString())
+  logger.info(sprintf("%s: %s", name, value))
+}
+
+/*
+ * Make sure the NUnit DLL property is set.
+ */
+void checkNUnitDllPath() {
+  if (project.ext.unityNUnitDll == null) {
+    throw new StopActionException("NUnit DLL not found.")
+  }
+}
+
+/*
+ * Make sure the NUnit console property is set.
+ */
+void checkNUnitConsolePath() {
+  if (project.ext.nunitConsoleExe == null) {
+    throw new StopActionException("NUnit Console not found.")
+  }
+}
+
+/*
+ * Removes the extension from a filename.
+ *
+ * @param fileObj File object to split into a basename and extension.
+ *
+ * @returns (basename, extension) tuple where basename is the filename without
+ * an extension and extension is the extension.
+ */
+List<String> splitFilenameExtension(File fileObj) {
+  String filename = fileObj.name
+  int extensionIndex =
+    (filename - project.ext.unityMetadataExtension).lastIndexOf(".")
+  if (extensionIndex < 0) return [filename, ""]
+  String basename = filename.substring(0, extensionIndex)
+  String extension = filename.substring(extensionIndex)
+  return [basename, extension]
+}
+
+/*
+ * Construct the name of a versioned asset from the source filename and version
+ * string.  The encoded string takes the form
+ * ${filename}_v${version}.${extension}
+ * where extension is derived from the specified filename.
+ *
+ * @param fileObj File to add version to.
+ *
+ * @returns File which includes an encoded version.
+ */
+File versionedAssetFile(File fileObj) {
+  String basename
+  String extension
+  (basename, extension) = splitFilenameExtension(fileObj)
   // Encode the DLL version and target names into the DLL in the form...
-  // ${dllname}_t${hypen_separated_target_names}_v${version}.dll
-  def targetName = basename
-  if (version != null && !version.isEmpty()) {
-    targetName += '_v' + version
+  // ${dllname}_v${version}.dll
+  String targetName = basename
+  String version = project.ext.pluginVersion
+  if (!(version == null || version.isEmpty())) {
+    targetName += "_v" + version
   }
-  return targetName + extension
+  String filename = targetName + extension
+  return fileObj.parent != null ? new File(fileObj.parent, filename) :
+    new File(filename)
 }
 
-// Generate the tasks to compile a plugin DLL and copy it to the Unity
-// plugin packaging folder.
-def build_pluginDll(projectName, assemblyDllBasename, shouldVersionFilename) {
-  def version = "${pluginVersion}"
-  def projectPath = 'source/' + projectName + '/' + projectName + '.csproj'
-  def assemblyDll = versionedAssetName(assemblyDllBasename, version)
-
-  def compileTask = tasks.create(name: "compile_" + projectName,
-                                 type: Exec,
-                                 description: 'Compile ' + projectName
-                                )
-  compileTask.workingDir('source')
-  compileTask.commandLine(["${xbuild_exe}", "/target:" + projectName,
-        "/property:UnityHintPath=$unity_dll_path.absolutePath",
-        "/property:UnityIosPath=$unity_ios_dll_path.absolutePath"
-    ])
-
-  compileTask.ext.remoteTaskPhase = "build"
-  def assemblyDllSource = file("source/" + projectName + "/bin/Debug/" +
-                               assemblyDllBasename)
-
-  def dllMetaBasename = assemblyDllBasename + ".meta"
-  def dllMeta = "${pluginSrc}/${dllDir}/" + dllMetaBasename
-  def dllMetaVersioned = assemblyDll + ".meta"
-  def copyTask = tasks.create(name: "copy_" + projectName,
-                              type: Copy,
-                              description: ('Copy ' + projectName +
-                                            ' to the Unity packaging folder'),
-                              dependsOn: [compileTask, clean_pluginProjDir])
-  copyTask.from(files(assemblyDllSource, dllMeta))
-  copyTask.into("${pluginProj}/${dllDir}")
-  copyTask.duplicatesStrategy('include')
-  if (shouldVersionFilename) {
-    copyTask.rename({
-                      String fn ->
-                        if (fn.endsWith(dllMetaBasename)) {
-                          return fn.replace(dllMetaBasename, dllMetaVersioned)
-                        } else if (fn.endsWith(assemblyDllBasename)) {
-                          return fn.replace(assemblyDllBasename, assemblyDll)
-                        }
-                        return fn
-                    })
+/*
+ * Remove the version component from a filename.
+ *
+ * @param fileObj File to remove version from.
+ *
+ * @returns File with removed version string.
+ */
+File unversionedAssetFile(File fileObj) {
+  String basename
+  String extension
+  (basename, extension) = splitFilenameExtension(fileObj)
+  def versionRegEx = /^(.*)_(v[^v]+)$/
+  def versionMatch = basename =~ versionRegEx
+  if (versionMatch.matches()) {
+    basename = versionMatch.group(1)
   }
+  String filename = basename + extension
+  return fileObj.parent != null ?
+    new File(fileObj.parent, filename) : new File(filename)
 }
 
-task clean_pluginProjDir(type: Delete) {
-  delete pluginProj
+/*
+ * Copy a file.
+ *
+ * @param sourceFile File to copy.
+ * @param targetFile File to write to.
+ *
+ * @returns targetFile.
+ */
+File copyFile(File sourceFile, File targetFile) {
+  targetFile.parentFile.mkdirs()
+  logger.info(sprintf("Copy %s -> %s", sourceFile.path, targetFile.path))
+  targetFile.newOutputStream() << sourceFile.newInputStream()
+  return targetFile
 }
 
-build_pluginDll("PlayServicesResolver", "Google.JarResolver.dll", true)
-build_pluginDll("VersionHandler", "Google.VersionHandler.dll", false)
-build_pluginDll("VersionHandlerImpl", "Google.VersionHandlerImpl.dll", true)
-build_pluginDll("IOSResolver", "Google.IOSResolver.dll", true)
-build_pluginDll("PackageManager", "Google.PackageManager.dll", true)
-
-task update_metadataForVersion() {
-  description 'Update plugin metadata if the plugin version changed.'
-  if (!file(currentPluginName).exists()) {
-    for (fileobj in fileTree("${pluginSrc}")) {
-      def lines = fileobj.text.split('\n')
-      def outputLines = []
-      for (line in lines) {
-        if (line.contains('guid:')) {
-          line = (
-            'guid: ' + java.util.UUID.randomUUID().toString().replace('-', ''))
-        }
-        outputLines.add(line)
-      }
-      fileobj.write(outputLines.join('\n') + '\n')
+/*
+ * Copy a list of files from one directory into another.
+ *
+ * @param taskName Name of the task.
+ * @param taskDescription Description of the task.
+ * @param filesToCopy List of files to copy with paths relative to the source
+ * directory.
+ * @param sourceDir Directory to copy files from.
+ * @param targetDir Directory to copy files into preserving the relative path of
+ * each file.
+ * @param dependsOn List of dependencies for the task.
+ * @param copyFileClosure Closure which takes (sourceFile, targetFile) to copy a
+ * file.
+ *
+ * @returns Task which copies the specified files.  The ext.sourceTargetFileMap
+ * property of the task contains the mapping of source to target files to be
+ * copied by the task.
+ */
+Task createCopyFilesTask(String taskName, String taskDescription,
+                         Iterable<File> filesToCopy, File sourceDir,
+                         File targetDir, Iterable<Task> dependsOn,
+                         Closure copyFileClosure) {
+  Map<File, File> sourceTargetFileMap = filesToCopy.collectEntries {
+    [(new File(sourceDir, it.path)), (new File(targetDir, it.path))]
+  }
+  if (!copyFileClosure) {
+    copyFileClosure = {
+      sourceFile, targetFile -> copyFile(sourceFile, targetFile)
     }
   }
-}
-
-task copy_pluginTemplate(type: Copy, dependsOn: [update_metadataForVersion,
-                                                 clean_pluginProjDir]) {
-  description 'Copy the template project into the Unity plugin packaging dir.'
-  from "${pluginSrc}"
-  into "${pluginProj}"
-  exclude '**/*.dll.*', '**/*.txt.meta'
-  duplicatesStrategy 'include'
-  ext.remoteTaskPhase = 'build'
-}
-
-task inject_versionIntoMetaFiles(dependsOn: [copy_pluginTemplate,
-                                             'copy_PlayServicesResolver',
-                                             'copy_VersionHandler',
-                                             'copy_VersionHandlerImpl',
-                                             'copy_IOSResolver',
-                                             clean_pluginProjDir]) {
-  description 'Inject the version number into the plugin\'s meta files.'
-  ext.remoteTaskPhase = 'build'
-  doLast {
-    for (fileobj in fileTree("${pluginProj}")) {
-      if (fileobj.path.endsWith('.meta')) {
-        def lines = fileobj.text.split('\n')
-        def outputLines = []
-        for (line in lines) {
-          outputLines.add(line)
-          if (line.contains('labels:')) {
-            outputLines.add("- gvh_v${pluginVersion}")
-          }
-        }
-        fileobj.write(outputLines.join('\n') + '\n')
+  Task copyTask = tasks.create(name: taskName,
+                               description: taskDescription,
+                               type: Task,
+                               dependsOn: dependsOn).with {
+    inputs.files sourceTargetFileMap.keySet()
+    outputs.files sourceTargetFileMap.values()
+    doLast {
+      sourceTargetFileMap.each { sourceFile, targetFile ->
+        copyFileClosure(sourceFile, targetFile)
       }
     }
   }
+  copyTask.ext.sourceTargetFileMap = sourceTargetFileMap
+  return copyTask
 }
 
-task copy_manifestMetadata(type: Copy, dependsOn: clean_pluginProjDir) {
-  def manifestBasename = versionedAssetName(
-    currentPluginBasename + '.txt', null) + '.meta'
-  description 'Copy .meta file for the plugin manifest.'
-  from file("${pluginSrc}/${dllDir}/" + manifestBasename)
-  into file("${pluginProj}/${dllDir}/")
-  rename {
-    String fn ->
-      return fn.replace(manifestBasename,
-                        versionedAssetName(currentPluginBasename + '.txt',
-                                           "${pluginVersion}") +
-                        '.meta')
+/*
+ * Copy a file, injecting release information if it's a Unity asset metadata
+ * file.
+ *
+ * @param sourceFile File to copy from.
+ * @param targetFile File to copy to.
+ *
+ * @return targetFile.
+ */
+File copyAssetMetadataFile(File sourceFile, File targetFile) {
+  if (!sourceFile.name.endsWith(project.ext.unityMetadataExtension)) {
+    return copyFile(sourceFile, targetFile)
   }
-}
+  String[] lines = sourceFile.text.split("\n")
 
-task generate_manifest(dependsOn: ['copy_manifestMetadata',
-                                   'inject_versionIntoMetaFiles',
-                                   clean_pluginProjDir]) {
-  description 'Generate a manifest for the files in the plug-in.'
-  doLast {
-    def dir = file("${pluginProj}/Assets")
-    def list = []
-    dir.eachFileRecurse(groovy.io.FileType.FILES) { filename ->
-      def path = filename.path
-      if (!(path.toLowerCase().endsWith('.meta') ||
-            path.toLowerCase().endsWith('.txt'))) {
-        list << filename.path.replace("${pluginProj}/", '')
+  // Parse the existing version from the asset metadata.
+  def folderAssetRegEx = /^folderAsset:\s+yes\s*$/
+  def versionRegEx = /^(-\s+gvh_v)([a-zA-Z0-9.]+)\s*$/
+  Boolean isFolder = false
+  String currentVersion = ""
+  lines.each { String line ->
+    def versionMatch = line =~ versionRegEx
+    def folderMatch = line =~ folderAssetRegEx
+    if (versionMatch.matches()) {
+      currentVersion = versionMatch.group(2)
+    } else if (folderMatch.matches()) {
+      isFolder = true
+    }
+  }
+  // Ignore folder assets, they don't need to be versioned.
+  if (isFolder) return copyFile(sourceFile, targetFile)
+  Boolean versionChanged = currentVersion != project.ext.pluginVersion
+
+  List<String> outputLines = []
+  lines.each { line ->
+    if (versionChanged) {
+      def guidMatch = (line =~ /^(guid:)\s+(.*)/)
+      def versionLabelMatch = (line =~ versionRegEx)
+      if (guidMatch.matches()) {
+        // Update the metadata's GUID.
+        // If a file is renamed we want to make sure Unity imports it as a new
+        // asset with the new filename.
+        line = sprintf(
+          "%s %s",
+          guidMatch.group(1),
+          java.util.UUID.randomUUID().toString().replace("-", ""))
+      }
+      else if (versionLabelMatch.matches()) {
+        // Update the version metadata for the asset.
+        line = sprintf("%s%s", versionLabelMatch.group(1),
+                       project.ext.pluginVersion)
       }
     }
-    def manifest = file("${pluginProj}/${dllDir}/" +
-                        versionedAssetName(currentPluginBasename + '.txt',
-                                           "${pluginVersion}"))
-    manifest.write(list.join('\n') + '\n')
-  }
-  ext.remoteTaskPhase = 'build'
-}
-
-task tests(dependsOn: ['test_resolverLib','test_packageManager'])
-
-task export_package(dependsOn: 'generate_manifest') {
-  description 'Creates and exports the Plugin unity package.'
-  doLast {
-    def argv = ["-g.building",
-                "-buildTarget",
-                "android",
-                "-batchmode",
-                "-projectPath",
-                "${pluginProj}",
-                "-logFile",
-                "build/unity.log",
-                "-exportPackage",
-                "Assets/PlayServicesResolver",
-                "${exportPath}",
-                "-gvh_disable",
-                "-quit"]
-    exec {
-      executable "${unity_exe}"
-      args argv
+    outputLines.add(line)
+    // If the metadata file does not contain a version label, inject it.
+    if (currentVersion.isEmpty() && line.startsWith("labels:")) {
+      outputLines.add(sprintf("- gvh_v%s", project.ext.pluginVersion))
     }
   }
-  ext.remoteTaskPhase = 'build'
+  targetFile.write(outputLines.join("\n") + "\n")
 
-  dependsOn tests
+  return targetFile
 }
 
-task copy_plugin() {
-  description 'Copy plugin to the current-build directory'
-  doFirst {
-    delete fileTree(dir: currentPluginPath +"/exploded")
-    delete fileTree(dir: currentPluginPath,
-                    includes: [currentPluginBasename + "-*.unitypackage"])
+/*
+ * Build a project with xbuild.
+ *
+ * @param taskName Name of the task.
+ * @param taskDescription Description of the task.
+ * @param projectToBuild Path to the project to build.
+ * @param target Target to build in the project.
+ * @param inputFiles Input files for the project.
+ * @param outputDir Output directory.
+ * @param outputFiles List of output file paths relative to the output
+ * directory.
+ * @param dependsOn List of dependencies for the task.
+ *
+ * @returns Task which builds the specified target.
+ */
+Task createXbuildTask(String taskName, String taskDescription,
+                      File projectToBuild, String target,
+                      Iterable<File> inputFiles, File outputDir,
+                      Iterable<File> outputFiles, Iterable<Task> dependsOn) {
+  File intermediatesDir = new File(outputDir, "obj")
+  File binaryOutputDir = new File(outputDir, "bin")
+  Iterable<File> outputFilesInBinaryOutputDir = outputFiles.collect {
+    return new File(binaryOutputDir, it.path)
+  }
+  Task task = tasks.create(name: taskName,
+                           description: taskDescription,
+                           type: Exec,
+                           dependsOn: dependsOn ? dependsOn : []).with {
+    inputs.files inputFiles
+    outputs.files files(outputFilesInBinaryOutputDir)
+    executable project.ext.xbuildExe
+    workingDir projectToBuild.parentFile.absolutePath
+    args ([sprintf("/target:%s", target),
+           sprintf("/property:UnityHintPath=%s",
+                   project.ext.unityDllPath.absolutePath),
+           sprintf("/property:UnityIosPath=%s",
+                   project.ext.unityIosPath.absolutePath),
+           sprintf("/property:NUnityHintPath=%s",
+                   project.ext.unityNUnitDll ?
+                   project.ext.unityNUnitDll.absolutePath: ""),
+           sprintf("/property:BaseIntermediateOutputPath=%s%s",
+                   intermediatesDir.absolutePath,
+                   File.separator),
+           sprintf("/property:OutputPath=%s%s",
+                   binaryOutputDir.absolutePath,
+                   File.separator),
+           projectToBuild.absolutePath])
+  }
+  task.ext.buildDir = outputDir
+  return task
+}
 
-    copy {
-      from file(exportPath)
-      into file(currentPluginPath)
-      rename ('plugin.unitypackage', currentPluginName)
+/*
+ * Generates tasks to compile a plugin DLL and copy it to plugin staging
+ * area directory.
+ *
+ * @param componentName Basename of the generated tasks.
+ * @param projectName Name of the project under
+ * source/${projectName}/${projectName}.csproj to build.
+ * @param assemblyDllBasename Basename of the output DLL generated from the
+ * specified project.
+ * @param versionDll Whether the output DLL filename should contain the plugin
+ * version.
+ * @param dependsOn List of tasks that should be completed before this plugin
+ * task is executed.
+ *
+ * @returns Task that builds the DLL to the build output folder.
+ */
+Task createBuildPluginDllTask(String componentName,
+                              String projectName,
+                              String assemblyDllBasename,
+                              Boolean versionDll,
+                              Iterable<Task> dependsOn = null) {
+  File projectDir = new File(project.ext.pluginSourceDir, projectName)
+  File projectBuildDir = new File(project.ext.buildDir, projectName)
+
+  // Compile the C# project.
+  Task compileTask = createXbuildTask(
+    sprintf("compile%s", componentName), sprintf("Compile %s", projectName),
+    project.ext.pluginSolutionFile, projectName,
+    fileTree(new File(projectDir, "src")), projectBuildDir,
+    [new File(assemblyDllBasename)], dependsOn)
+  compileTask.ext.componentName = componentName
+
+  // Template metadata for the built DLL.
+  File assemblyDllMetaFile =
+    new File(new File(project.ext.pluginTemplateDir,
+                      project.ext.pluginEditorDllDir.path),
+             assemblyDllBasename + project.ext.unityMetadataExtension)
+  // Optionally map unversioned to versioned filenames.
+  Iterable<File> unversionedFiles = files(compileTask.outputs.files,
+                                          assemblyDllMetaFile)
+
+  File stagingDir = new File(new File(projectBuildDir,
+                                      project.ext.pluginStagingAreaDir.name),
+                             project.ext.pluginEditorDllDir.path)
+  Map<String, File> stagingFileMap =
+    unversionedFiles.collectEntries { File unversionedFile ->
+      File unversionedOutputFile = new File(stagingDir.path,
+                                            unversionedFile.name)
+      return [
+        unversionedFile.path,
+        versionDll ?
+          versionedAssetFile(unversionedOutputFile) :
+          unversionedOutputFile]
+    }
+
+  // Copy files to the staging directory for this project.
+  Task copyTask = tasks.create(
+      name: sprintf("copy%sStaging", componentName),
+      type: Task,
+      description: sprintf("Copy %s DLLs to the plugin staging dir.",
+                         projectName),
+      dependsOn: [compileTask]).with {
+    inputs.files unversionedFiles
+    outputs.files stagingFileMap.values()
+    doLast {
+      inputs.files.each {
+        File inputFile ->
+          copyAssetMetadataFile(inputFile, stagingFileMap[inputFile.path])
+      }
     }
   }
-  doLast {
-    copy {
-      from file("${pluginProj}")
-      into file(currentPluginPath +"/exploded")
-      include "Assets/PlayServicesResolver/**/*"
+  copyTask.ext.stagingDir = stagingDir
+  copyTask.ext.componentName = componentName
+
+  // Generate a clean target for this project.
+  Task cleanTask = tasks.create(name: sprintf("clean%s", projectName),
+               description: sprintf("Clean %s plugin DLL", projectName),
+               type: Delete).with {
+    delete (files(compileTask.outputs.files,
+                  copyTask.outputs.files,
+                  projectBuildDir))
+  }
+  cleanTask.ext.componentName = componentName
+
+  // Return the build target for this project.
+  Task buildTask =
+    tasks.create(name: sprintf("build%s", componentName),
+                 description: sprintf("Build %s plugin DLL",
+                                      projectName),
+                 dependsOn: [copyTask])
+  buildTask.ext.componentName = componentName
+  return buildTask
+}
+
+/*
+ * Create a Nunit test task.
+ *
+ * @param name Name of the task.
+ * @param description Description of the task.
+ * @param testDll Test DLL to execute.  The log file will be placed in the
+ * parent directory of this DLL path.
+ * @param dependsOn Dependencies of the new task.
+ *
+ * @returns Task which executes nunit-console.
+ */
+Task createNUnitTask(String name, String description, File testDll,
+                     Iterable<Task> dependsOn) {
+  File logFileDir = testDll.parentFile.parentFile
+  File logFile = new File(logFileDir, name + ".log")
+  File xmlLogFile = new File(logFileDir, name + ".xml")
+  return tasks.create(name: name,
+                      description: description,
+                      type: Exec,
+                      dependsOn: dependsOn).with {
+    workingDir project.ext.pluginSourceDir
+    outputs.files logFile
+    executable project.ext.nunitConsoleExe
+    args ([sprintf("-output:%s", logFile.absolutePath),
+           sprintf("-xml:%s", xmlLogFile.absolutePath),
+           testDll.absolutePath])
+    doFirst { checkNUnitConsolePath() }
+  }
+}
+
+/*
+ * Create a task to execute Unity.
+ *
+ * @param taskName Name of the task to create.
+ * @param summary Description of the operation being performed with Unity.
+ * "create" is a reserved operation that creates a project.  This is used to
+ * generate the log file name so should be unique for the project and ideally
+ * not contain whitespace.
+ * @param dependsOn Dependencies of the new task.
+ * @param projectName Name of the project directory to use.
+ * @param projectContainerDir Directory that contains the project directory.
+ * @param arguments Command line arguments to pass to Unity.
+ * @param batchMode Whether to run Unity in batch mode.
+ *
+ * @returns Task which executes Unity.
+ * The following extended properties are set on the task:
+ * - ext.projectDir: Directory of the created Unity project.
+ * - ext.containerDir: Directory which contains the Unity project and the logs.
+ *   This is the same as projectContainerDir.
+ * - ext.logFile: Unity log file from the operation.
+ */
+Task createUnityTask(String taskName, String summary,
+                     Iterable<Task> dependsOn, String projectName,
+                     File projectContainerDir, Iterable<String> arguments,
+                     Boolean batchMode) {
+  Boolean createProject = summary == "create"
+  File logFile = new File(projectContainerDir,
+                          sprintf("%s_%s.log", projectName, summary))
+  File projectDir = new File(projectContainerDir, projectName)
+  List<String> executeArguments = []
+  if (batchMode) executeArguments += unityBatchModeArguments
+  executeArguments += [
+    "-logFile", logFile.absolutePath,
+    createProject ? "-createProject" : "-projectPath", projectDir.absolutePath]
+  if (createProject) executeArguments += ["-quit"]
+  executeArguments += arguments
+
+  Task unityTask = tasks.create(name: taskName,
+                                description: sprintf(
+                                  "Run Unity to %s (project: %s)",
+                                  summary, projectName),
+                                type: Exec,
+                                dependsOn: dependsOn).with {
+    outputs.files files(logFile)
+    executable project.ext.unityExe
+    args executeArguments
+  }
+  unityTask.ext.projectDir = projectDir
+  unityTask.ext.containerDir = projectContainerDir
+  unityTask.ext.logFile = logFile
+  return unityTask
+}
+
+/*
+ * Create a task that generates a Unity project.
+ *
+ * @param taskName Name of the task.
+ * @param dependsOn Dependencies of the new task.
+ * @param projectName Name of the project directory to create.
+ * @param projectContainerDir Directory to create the project directory in.
+ *
+ * @returns Task which executes Unity.
+ * The following extended properties are set on the task:
+ * - ext.projectDir: Directory of the created Unity project.
+ * - ext.containerDir: Directory which contains the Unity project and the logs.
+ *   This is the same as projectContainerDir.
+ * - ext.logFile: Unity log file from the operation.
+ */
+Task createUnityProjectTask(String taskName, Iterable<Task> dependsOn,
+                            String projectName, File projectContainerDir) {
+  return createUnityTask(taskName, "create", dependsOn, projectName,
+                         projectContainerDir, [], true).with {
+    doFirst {
+      // Clean / create the output directory.
+      delete ext.containerDir
+      ext.containerDir.mkdirs()
     }
   }
-  ext.remoteTaskPhase = 'postbuild'
 }
 
-task build_unityPackage(dependsOn: 'copy_plugin') {
-  description "Top level task for building the unity package."
-  doLast { println "Packaging Complete!" }
-  ext.remoteTaskPhase = 'build'
-  dependsOn {
-    tasks.findAll { task -> task.name.startsWith('PackageSample') }
+/*
+ * Setup a Unity project for a testing task and import the plugin in
+ * preparation for testing.
+ *
+ * @param taskName Name of the test task.
+ * @param dependsOn Dependencies of the new task.
+ * @param projectName Name of the Unity project to create.
+ * @param batchMode Whether to run Unity in batch mode.
+ *
+ * @returns Task which sets up a Unity project.
+ * The following extended properties are set on the task:
+ * - ext.projectDir: Directory of the created Unity project.
+ * - ext.containerDir: Directory which contains the Unity project and the logs.
+ * - ext.logFile: Unity log file for the import operation.
+ */
+Task createSetupUnityProjectTask(String taskName, Iterable<Task> dependsOn,
+                                 String projectName, Boolean batchMode) {
+  File outputDir = new File(project.ext.testDir, projectName)
+  Task createProject = createUnityProjectTask(
+      sprintf("create%s", taskName), dependsOn, projectName, outputDir)
+  createProject.with {
+    inputs.files files(project.ext.pluginExportFile)
   }
+  return createUnityTask(
+      taskName, "import_plugin", [createProject], projectName, outputDir,
+      ["-importPackage", project.ext.pluginExportFile.absolutePath,
+       "-quit"], batchMode)
 }
 
-task test_downloadArtifacts(type: GradleBuild) {
+/*
+ * Creates a task which runs a test with the Unity plugin.
+ *
+ * @param taskName Name of the test.
+ * @param description Description of the task.
+ * @param dependsOn Dependencies of the new task.
+ * @param testScriptsDir Directory containing scripts to copy into the test
+ *   project and execute for testing.
+ * @param additionalArguments Additional arguments to pass to Unity when
+ *   executing the test.
+ * @param batchMode Whether to execute Unity in batch mode.
+ *
+ * @returns Test task.
+ */
+Task createUnityTestTask(String taskName, String description,
+                         Iterable<Task> dependsOn, File testScriptsDir,
+                         Iterable<String> additionalArguments,
+                         Boolean batchMode) {
+  List<File> inputFiles = fileTree(testScriptsDir).collect {
+    new File(it.absolutePath - testScriptsDir.absolutePath)
+  }
+  // Setup the Unity project.
+  Task setupTestProject = createSetupUnityProjectTask(
+    sprintf("setup%s", taskName), dependsOn, taskName, batchMode)
+  setupTestProject.with {
+    inputs.files inputFiles
+  }
+
+  // Task which copies test scripts into the project.
+  Task copyTestScripts = createCopyFilesTask(
+    sprintf("copyScriptsFor%s", taskName),
+    sprintf("Copy the test scripts into the %s Unity project.", taskName),
+    inputFiles, testScriptsDir, setupTestProject.ext.projectDir,
+    [setupTestProject], null)
+
+  // Create the test task.
+  Task testTask = createUnityTask(taskName, "test", [copyTestScripts],
+                                  setupTestProject.ext.projectDir.name,
+                                  setupTestProject.ext.containerDir,
+                                  additionalArguments, batchMode)
+  testTask.description = description
+
+  // Create a clean task
+  Task cleanTestTask = tasks.create(name: sprintf("clean%s", taskName),
+                                    description: sprintf("Clean %s", taskName),
+                                    type: Delete).with {
+    delete setupTestProject.ext.containerDir
+  }
+
+  return testTask
+}
+
+/*
+ * Creates a task which runs tests with the Unity plugin in batch and
+ * non-batch modes.
+ *
+ * @param taskName Name of the test.
+ * @param description Description of the task.
+ * @param dependsOn Dependencies of the new task.
+ * @param testScriptsDir Directory containing scripts to copy into the test
+ *   project and execute for testing.
+ * @param batchMode Whether to execute Unity in batch mode.
+ *
+ * @returns Test task.
+ */
+Task createUnityTestBatchAndNonBatch(String taskName, String description,
+                                     Iterable<Task> dependsOn,
+                                     File testScriptsDir,
+                                     Iterable<String> additionalArguments) {
+  return tasks.create(name: taskName,
+                      description: description,
+                      dependsOn: [
+                        createUnityTestTask(
+                          sprintf("%sBatchMode", taskName),
+                          sprintf("%s (Batch Mode)", description),
+                          dependsOn, testScriptsDir, additionalArguments, true),
+                        createUnityTestTask(
+                          sprintf("%sInteractiveMode", taskName),
+                          sprintf("%s (Interactive Mode)", description),
+                          dependsOn, testScriptsDir, additionalArguments,
+                          true)])
+}
+
+Task compileResolverLibTests = createXbuildTask(
+    "compileResolverLibTests",
+    "Compile tests for the deprecated Jar Resolver library.",
+    project.ext.pluginSolutionFile, "JarResolverTests",
+    fileTree(new File(new File(project.ext.pluginSourceDir,
+                               "JarResolverLib"), "src")),
+    new File(project.ext.testDir, "ResolverLibTests"),
+    [new File("JarResolverTests.dll")], []).with {
+  doFirst { checkNUnitDllPath() }
+}
+
+Task testResolverLibTests = createNUnitTask(
+  "testResolverLibTests",
+  "Runs the tests for the deprecated Jar Resolver library",
+  compileResolverLibTests.outputs.files[0],
+  [compileResolverLibTests])
+
+task cleanResolverLibTests() {
+  description "Clean test output for the deprecated Jar Resolver library"
+  doLast { delete files(compileResolverLibTests.ext.buildDir,
+                        testResolverLibTests.outputs.files) }
+}
+
+Task compilePackageManagerTests = createXbuildTask(
+    "compilePackageManagerTests",
+    "Compile tests for the package manager.",
+    project.ext.pluginSolutionFile, "PackageManagerTests",
+    fileTree(new File(new File(project.ext.pluginSourceDir,
+                               "PackageManagerTests"), "src")),
+    new File(project.ext.testDir, "PackageManagerTests"),
+    [new File("PackageManagerTests.dll")], []).with {
+  doFirst { checkNUnitDllPath() }
+}
+
+Task testPackageManagerTests = createNUnitTask(
+    "testPackageManagerTests",
+    "Runs tests for the Package Manager",
+    compilePackageManagerTests.outputs.files[0],
+    [compilePackageManagerTests]).with {
+  environment (["TEST_DATA_DIR":
+                (new File(new File(project.ext.pluginSourceDir,
+                                   "PackageManagerTests"),
+                          "testData")).absolutePath])
+}
+
+task cleanPackageManagerTests() {
+  description "Clean Package Manager tests"
+  doLast { delete files(compilePackageManagerTests.ext.buildDir,
+                        testPackageManagerTests.outputs.files) }
+}
+
+task testDownloadArtifacts(type: GradleBuild) {
   description "Run tests for the download_artifacts.gradle script."
-  ext.remoteTaskPhase = "build"
   buildFile "source/PlayServicesResolver/scripts/download_artifacts_test.gradle"
 }
 
-task clean() {
-    doFirst {
-        delete 'build'
-        file("source").listFiles().each { f ->
-            if (file("$f/obj").exists()) {
-                delete "$f/obj"
-            }
-            if (file("$f/bin").exists()) {
-                delete "$f/bin"
-            }
-        }
-     }
-}
+Task buildVersionHandler = createBuildPluginDllTask(
+  "VersionHandler", "VersionHandler", "Google.VersionHandler.dll", false)
+Task buildVersionHandlerImpl = createBuildPluginDllTask(
+  "VersionHandlerImpl", "VersionHandlerImpl", "Google.VersionHandlerImpl.dll",
+  true, [buildVersionHandler])
+Task buildAndroidResolver = createBuildPluginDllTask(
+  "AndroidResolver", "PlayServicesResolver", "Google.JarResolver.dll", true,
+  [buildVersionHandlerImpl])
+Task buildIosResolver = createBuildPluginDllTask(
+  "IosResolver", "IOSResolver", "Google.IOSResolver.dll", true,
+  [buildAndroidResolver])
+Task buildPackageManager = createBuildPluginDllTask(
+  "PackageManager", "PackageManager", "Google.PackageManager.dll", true,
+  [buildVersionHandlerImpl])
 
-defaultTasks = ['prebuild', 'build', 'postbuild']
-for (phase in defaultTasks) {
-  if (!tasks.findByName(phase)) {
-    def build_phase_name = 'Local ' + phase
-    tasks.create(name: phase,
-                 action: { println(build_phase_name) },
-                 description: build_phase_name,
-                 dependsOn: project.tasks.findAll {
-                   task -> task.ext.has('remoteTaskPhase') &&
-                   task.ext.remoteTaskPhase == phase
-                 })
+task preparePluginStagingAreaDir(type: Task) {
+  description "Delete all files that should not be present in staging area."
+  doLast {
+    Set<String> excludePaths = (
+      files(
+        copyPluginTemplateToStagingArea.outputs.files,
+        copyPluginComponentsToStagingArea.outputs.files,
+        generatePluginManifest.outputs.files).files.collect {
+        it.absolutePath
+      }).toSet()
+    fileTree(project.ext.pluginStagingAreaDir).each { fileObj ->
+      if (!excludePaths.contains(fileObj.absolutePath)) {
+        delete fileObj
+      }
+    }
   }
 }
-project.defaultTasks = defaultTasks
+
+Task copyPluginTemplateToStagingArea = createCopyFilesTask(
+  "copyPluginTemplateToStagingArea",
+  "Copy the template project into the Unity plugin packaging dir.",
+  [new File("Assets", "PlayServicesResolver.meta"),
+   new File(new File("Assets", "PlayServicesResolver"), "Editor.meta")],
+  project.ext.pluginTemplateDir, project.ext.pluginStagingAreaDir,
+  [preparePluginStagingAreaDir],
+  { sourceFile, targetFile -> copyAssetMetadataFile(sourceFile, targetFile) })
+
+Iterable<Task> copyComponentsToStagingAreaTasks = [
+    copyAndroidResolverStaging,
+    copyVersionHandlerStaging,
+    copyVersionHandlerImplStaging,
+    copyIosResolverStaging].collect {
+  task ->
+    createCopyFilesTask(
+      sprintf("copy%sToStagingArea", task.ext.componentName),
+      sprintf("Copy %s into the Unity plugin packaging dir.",
+              task.ext.componentName),
+      task.outputs.files.collect {
+        new File(it.absolutePath - task.ext.stagingDir.absolutePath)
+      },
+      task.ext.stagingDir,
+      new File(project.ext.pluginStagingAreaDir,
+               project.ext.pluginEditorDllDir.path),
+      [task], null)
+}
+
+task copyPluginComponentsToStagingArea(
+  dependsOn: copyComponentsToStagingAreaTasks) {
+  description "Copy plugin components into the Unity plugin packaging dir."
+  outputs.files files(copyComponentsToStagingAreaTasks.collect {
+                        task -> task.outputs.files
+                      })
+}
+
+task generatePluginManifest(dependsOn: [preparePluginStagingAreaDir,
+                                        copyPluginTemplateToStagingArea,
+                                        copyPluginComponentsToStagingArea]) {
+  String unversionedManifestName = currentPluginBasename + ".txt"
+  File outputDir = new File(project.ext.pluginStagingAreaDir,
+                            project.ext.pluginEditorDllDir.path)
+  File manifestMetadataTemplateFile =
+    new File(new File(project.ext.pluginTemplateDir,
+                      project.ext.pluginEditorDllDir.path),
+             unversionedManifestName + project.ext.unityMetadataExtension)
+  File manifestFile = versionedAssetFile(
+    new File(outputDir, unversionedManifestName))
+  File manifestMetadataFile = versionedAssetFile(
+    new File(outputDir, manifestMetadataTemplateFile.name))
+
+  description "Generate a manifest for the files in the plug-in."
+  inputs.files files(manifestMetadataTemplateFile)
+  outputs.files files(manifestFile, manifestMetadataFile)
+
+  doLast {
+    List<String> filenameList = []
+    (new File(project.ext.pluginStagingAreaDir, "Assets")).eachFileRecurse(
+        groovy.io.FileType.FILES) { File fileObj ->
+      String absolutePath = fileObj.absolutePath
+      String absolutePathLowerCase = absolutePath.toLowerCase()
+      if (!(absolutePathLowerCase.endsWith(
+              project.ext.unityMetadataExtension) ||
+            absolutePathLowerCase.endsWith(".txt"))) {
+        filenameList.add(
+          absolutePath.replace(
+            project.ext.pluginStagingAreaDir.absolutePath + File.separator, ""))
+      }
+    }
+    manifestFile.write(filenameList.toSorted().join("\n") + "\n")
+    copyFile(manifestMetadataTemplateFile, manifestMetadataFile)
+  }
+}
+
+Task exportPlugin = createUnityTask(
+    "exportPlugin", "export_plugin", [generatePluginManifest],
+    project.ext.pluginStagingAreaDir.name,
+    project.ext.buildDir,
+    ["-g.building",
+     "-buildTarget", "android",
+     "-exportPackage", project.ext.pluginAssetsDir.path,
+     project.ext.pluginExportFile.absolutePath,
+     "-gvh_disable",
+     "-quit"], true)
+exportPlugin.with {
+  description "Exports the plugin staging area directory as a Unity package."
+  inputs.files files(copyPluginTemplateToStagingArea.outputs.files,
+                     copyPluginComponentsToStagingArea.outputs.files)
+  outputs.files files(project.ext.pluginExportFile)
+}
+
+task releasePlugin(dependsOn: exportPlugin) {
+  Map<File, File> pluginTemplateFilesMap = files(
+      copyPluginTemplateToStagingArea.outputs.files,
+      copyPluginComponentsToStagingArea.outputs.files).collectEntries {
+    File inputFile ->
+      return (
+        inputFile.name.endsWith(project.ext.unityMetadataExtension) ?
+        [inputFile,
+         new File(
+           project.ext.pluginTemplateDir,
+           unversionedAssetFile(
+             new File(inputFile.absolutePath -
+                      project.ext.pluginStagingAreaDir.absolutePath)).path)] :
+        [:])
+  }
+
+  description "Copy the plugin to release locations."
+  inputs.files files(project.ext.pluginExportFile,
+                     pluginTemplateFilesMap.keySet())
+  outputs.files files(project.ext.pluginReleaseFile,
+                      fileTree(dir: project.ext.pluginExplodedDir),
+                      pluginTemplateFilesMap.values())
+  doLast {
+    delete fileTree(
+      dir: project.ext.pluginReleaseFile.parentFile,
+      includes: [project.ext.currentPluginBasename + "-*.unitypackage"])
+    copy {
+      from project.ext.pluginExportFile
+      into project.ext.pluginReleaseFile.parentFile
+      rename { src_filename -> project.ext.pluginReleaseFile.name }
+    }
+    delete fileTree(dir: project.ext.pluginExplodedDir)
+    copy {
+      from project.ext.pluginStagingAreaDir
+      into project.ext.pluginExplodedDir
+      include (project.ext.pluginAssetsDir.path + "/**/*")
+    }
+    pluginTemplateFilesMap.each {
+      sourceFile, targetFile -> copyFile(sourceFile, targetFile)
+    }
+    println sprintf("Packaged to %s", project.ext.pluginReleaseFile)
+  }
+}
+
+// TODO: Version Handler tests to implement in both batch and interactive modes
+// - Per platform targeting (iOS, Android, Editor, desktop)
+// - Version enablement, import newer plugin on top of older plugin and validate
+//   new plugin is enabled, old plugin is removed.
+// - Linux library renaming (need to override LibraryPrefix to test)
+// - Canonical filename renaming for versioned filenames
+// - Change settings, restore default settings.
+// - Import plugin into a project and wait for asset processor to enable it.
+// - Switch .NET version, validate DLLs are enabled / disabled as expected.
+
+// TODO: Android Resolver tests to implement in both batch and interactive modes
+// - Resolve with:
+//   - Conflicting dependencies
+//   - FAT ABI vs. single ABI selection
+
+// TODO: iOS Resolver tests (on OSX only)
+// - Import plugin test Cocoapods bootstrap
+// - Pod specification, with reflection & XML, validate both are present in the
+//   set.
+// - Workspace export (Unity 5.6 and above)
+// - Project export
+// - Add a pod which changes the target SDK
+
+createUnityTestBatchAndNonBatch(
+  "testVersionHandlerActivation",
+  ("Imports the plugin into a Unity project and verifies all " +
+   "components can be activated by the Version Handler."),
+  [exportPlugin],
+  new File("source/VersionHandlerImpl/test/activation"), [])
+
+createUnityTestBatchAndNonBatch(
+  "testAndroidResolverAsyncResolve",
+  ("Imports the plugin into a Unity project, runs Android resolution with " +
+   "a combination of dependencies added via the programmatic API and via " +
+   "XML files, verifying all dependencies resolve successfully."),
+  [exportPlugin],
+  new File("source/PlayServicesResolver/test/resolve_async"),
+  ["-buildTarget", "android"])  // TODO: Move this into the test!?
+
+task cleanTests(type: Delete) {
+  description "Clean test directories."
+  delete project.ext.testDir
+}
+
+task cleanAll(type: Delete) {
+  description "Clean the build directory."
+  delete project.ext.buildDir
+}
+
+project.defaultTasks = ["build", "test", "release", "clean"].collect {
+  topLevelTaskName ->
+    tasks.create(name: topLevelTaskName,
+                 description: sprintf("Run all %s tasks",
+                                      topLevelTaskName),
+                 type: Task,
+                 dependsOn: project.tasks.findAll {
+                   task -> task.name.startsWith(topLevelTaskName)
+                 })
+}

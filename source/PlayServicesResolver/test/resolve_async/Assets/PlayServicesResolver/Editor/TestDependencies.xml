@@ -1,0 +1,5 @@
+<dependencies>
+  <androidPackages>
+    <androidPackage spec="com.google.firebase:firebase-common:16.0.0"/>
+  </androidPackages>
+</dependencies>

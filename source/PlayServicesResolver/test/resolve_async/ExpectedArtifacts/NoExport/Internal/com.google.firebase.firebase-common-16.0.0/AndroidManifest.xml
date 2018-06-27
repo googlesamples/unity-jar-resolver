@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.google.firebase.firebase_common">
+  <uses-sdk android:minSdkVersion="14" />
+  <application>
+    <provider android:name="com.google.firebase.provider.FirebaseInitProvider" android:authorities="com.Company.ProductName.firebaseinitprovider" android:exported="false" android:initOrder="100" />
+  </application>
+</manifest>
