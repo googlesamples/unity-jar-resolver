@@ -36,14 +36,17 @@ dependencies on Android) provides solutions for each of these problems.
 ## Android Dependency Management
 
 The *Android Resolver* component of this plugin will download and integrate
-Android libraries and handle any conflicts between plugins using shared
-libraries.  For example, if a Unity plugin `SomePlugin` requires the Google
-Play Games Android library and redistributes this library and its transitive
-dependencies in the folder `SomePlugin/Android/` when a user imports
-`SomeOtherPlugin` that includes the same libraries (potentially at a different
-version) in `SomeOtherPlugin/Android/` the developer using `SomePlugin` and
-`SomeOtherPlugin` will see a hard to interpret build error when building for
-Android.
+Android library dependencies and handle any conflicts between plugins that share 
+the same dependencies.
+
+Without the Android Resolver, typically Unity plugins bundle their AAR and 
+JAR dependencies, e.g. a Unity plugin `SomePlugin` that requires the Google
+Play Games Android library would redistribute the library and its transitive
+dependencies in the folder `SomePlugin/Android/`.  When a user imports
+`SomeOtherPlugin` that includes the same libraries (potentially at different
+versions) in `SomeOtherPlugin/Android/`, the developer using `SomePlugin` and
+`SomeOtherPlugin` will see an error when building for Android that can be hard 
+to interpret.
 
 Using the Android Resolver to manage Android library dependencies:
 
@@ -95,12 +98,12 @@ The Version Handler solves the problem of managing transitive dependencies by:
 
 When using the Version Handler to manage `Play Services Resolver` included in
 `SomePlugin` and `SomeOtherPlugin`, from the prior example, version 1.2 will
-always be actived in a developers Unity project.
+always be the version activated in a developer's Unity project.
 
 Plugin creators are encouraged to adopt this library to ease integration for
-their customers.  For more information about integrating in other plugins
-see the [Plugin Redistribution](#plugin-redistribution) section of this
-document.
+their customers.  For more information about integrating Play Services Resolver
+into your own plugin, see the [Plugin Redistribution](#plugin-redistribution) 
+section of this document.
 
 # Requirements
 
@@ -110,25 +113,79 @@ Unity version 4.6.8 or higher.
 The *Version Handler* component only works with Unity 5.x or higher as it
 depends upon the `PluginImporter` UnityEditor API.
 
-# Android Resolver
+# Getting Started
+
+Before you import the Play Services Resolver into your plugin project, you first 
+need to consider whether you intend to *redistribute* Play Services Resolver
+along with your own plugin.
+
+Redistributing the `Play Services Resolver` inside your own plugin will ease 
+the integration process for your users, by resolving dependency conflicts
+between your plugin and other plugins in a user's project.
+
+If you wish to redistribute the `Play Services Resolver` inside your plugin,
+you **must** follow these steps when importing the 
+`play-services-resolver-*.unitypackage`, and when exporting your own plugin
+package:
+
+   1. Import the `play-services-resolver-*.unitypackage` into your plugin
+      project by 
+      [running Unity from the command line](https://docs.unity3d.com/Manual/CommandLineArguments.html), ensuring that
+      you add the `-gvh_disable` option.
+   1. Export your plugin by [running Unity from the command line](https://docs.unity3d.com/Manual/CommandLineArguments.html), ensuring that 
+      you:
+      - Include the contents of the `Assets/PlayServicesResolver` directory.
+      - Add the `-gvh_disable` option.
+
+You **must** specify the `-gvh_disable` option in order for the Version 
+Handler to work correctly!
+
+For example, the following command will import the
+`play-services-resolver-1.2.46.0.unitypackage` into the project 
+`MyPluginProject` and export the entire Assets folder to 
+`MyPlugin.unitypackage`:
+
+```
+Unity -gvh_disable \
+      -batchmode \
+      -importPackage play-services-resolver-1.2.46.0.unitypackage \
+      -projectPath MyPluginProject \
+      -exportPackage Assets MyPlugin.unitypackage \
+      -quit
+```
+
+## Background
+
+The *Version Handler* component relies upon deferring the load of editor DLLs
+so that it can run first and determine the latest version of a plugin component 
+to activate.  The build of the `Play Services Resolver` plugin has Unity asset
+metadata that is configured so that the editor components are not
+initially enabled when it's imported into a Unity project.  To maintain this
+configuration when importing the `Play Services Resolver` .unitypackage
+into a Unity plugin project, you *must* specify the command line option 
+`-gvh_disable` which will prevent the Version Handler component from running and
+changing the Unity asset metadata.
+
+# Android Resolver Usage
 
 The Android Resolver copies specified dependencies from local or remote Maven
 repositories into the Unity project when a user selects Android as the build
 target in the Unity editor.
 
-## Usage
+   1. Add the `play-services-resolver-*.unitypackage` to your plugin 
+      project (assuming you are developing a plugin). If you are redistributing
+      the Play Services Resolver with your plugin, you **must** follow the
+      import steps in the [Getting Started](#getting-started) section!
 
-   1. Add the unitypackage to your plugin project (assuming you are developing a
-      plugin).  Please read the [Plugin Redistribution](#plugin-redistribution)
-      section when you're considering how to export your package to share with
-      your users.
-
-   2. Copy and rename the SampleDependencies.xml file into your
+   2. Copy and rename the `SampleDependencies.xml` file into your
       plugin and add the dependencies your plugin requires.
 
       The XML file just needs to be under an `Editor` directory and match the
       name `*Dependencies.xml`. For example,
       `MyPlugin/Editor/MyPluginDependencies.xml`.
+
+   3. Follow the steps in the [Getting Started](#getting-started)
+      section when you are exporting your plugin package.
 
 For example, to add the Google Play Games library
 (`com.google.android.gms:play-services-games` package) at version `9.8.0` to
@@ -172,8 +229,9 @@ element:
 ## Auto-resolution
 
 By default the Android Resolver automatically monitors the dependencies you have
-specified and the `Plugins/Android` folder of your Unity project running the
-resolution process when specified dependencies are not present in your project.
+specified and the `Plugins/Android` folder of your Unity project.  The
+resolution process runs when the specified dependencies are not present in your 
+project.
 
 The *auto-resolution* process can be disabled via the
 `Assets > Play Services Resolver > Android Resolver > Settings` menu.
@@ -189,8 +247,8 @@ Some AAR files (for example play-services-measurement) contain variables that
 are processed by the Android Gradle plugin.  Unfortunately, Unity does not
 perform the same processing when using Unity's Internal Build System, so the
 Android Resolver plugin handles known cases of this variable substition
-by exploding the AAR into a folder and replacing ${applicationId} with the
-bundleID.
+by exploding the AAR into a folder and replacing `${applicationId}` with the
+`bundleID`.
 
 Disabling AAR explosion and therefore Android manifest processing can be done
 via the `Assets > Play Services Resolver > Android Resolver > Settings` menu.
@@ -222,7 +280,7 @@ build system and Gradle / Android Studio project export.
 Also, the Android Resolver supports an *experimental* Gradle prebuild mode to
 provide minification without exporting to a Gradle / Android Studio project.
 For more information about this mode see
-[gradle_prebuild.md](gralde_prebuild.md).
+[gradle_prebuild.md](gradle_prebuild.md).
 
 It's possible to change the resolution strategy via the
 `Assets > Play Services Resolver > Android Resolver > Settings` menu.
@@ -234,21 +292,19 @@ The Android Resolver creates the
 of resolved dependencies in a project.  This is used by the auto-resolution
 process to only run the expensive resolution process when necessary.
 
-# iOS Resolver
+# iOS Resolver Usage
 
 The iOS resolver component of this plugin manages
 [CocoaPods](https://cocoapods.org/).  A CocoaPods `Podfile` is generated and
 the `pod` tool is executed as a post build process step to add dependencies
 to the Xcode project exported by Unity.
 
-## Usage
-
 Dependencies for iOS are added by referring to CocoaPods.
 
-   1. Add the unitypackage to your plugin project (assuming you are developing a
-      plugin).  Please read the [Plugin Redistribution](#plugin-redistribution)
-      section when you're considering how to export your package to share with
-      your users.
+   1. Add the `play-services-resolver-*.unitypackage` to your plugin 
+      project (assuming you are developing a plugin). If you are redistributing
+      the Play Services Resolver with your plugin, you **must** follow the
+      import steps in the [Getting Started](#getting-started) section!
 
    2. Copy and rename the SampleDependencies.xml file into your
       plugin and add the dependencies your plugin requires.
@@ -256,6 +312,9 @@ Dependencies for iOS are added by referring to CocoaPods.
       The XML file just needs to be under an `Editor` directory and match the
       name `*Dependencies.xml`. For example,
       `MyPlugin/Editor/MyPluginDependencies.xml`.
+
+   3. Follow the steps in the [Getting Started](#getting-started)
+      section when you are exporting your plugin package.
 
 For example, to add the AdMob pod, version 7.0 or greater with bitcode enabled:
 
@@ -280,15 +339,13 @@ The `CocoaPods` are either:
 The resolution strategy can be changed via the
 `Assets > Play Services Resolver > Android Resolver > Settings` menu.
 
-# Version Handler
+# Version Handler Usage
 
 The Version Handler component of this plugin manages:
 * Shared Unity plugin dependencies.
 * Upgrading Unity plugins by cleaning up old files from previous versions.
 
-## Usage
-
-Unity plugins can be managed by the `Version Handler` using the following steps:
+Unity plugins can be managed by the Version Handler using the following steps:
 
    1. Add the `gvh` asset label to each asset (file) you want Version Handler
       to manage.
@@ -298,13 +355,13 @@ Unity plugins can be managed by the `Version Handler` using the following steps:
       plugin and disable `editor` as a target platform for the DLL.
       The Version Handler will enable the most recent version of this DLL when
       the plugin is imported.
-   1. Optional: If your plugin is included in other Unity plugins you should
+   1. Optional: If your plugin is included in other Unity plugins, you should
       add the version number to each filename and change the GUID of each asset.
       This allows multiple versions of your plugin to be imported into a Unity
-      project and the Version Handler component to activate the most recent
-      version.
+      project, with the Version Handler component activating only the most 
+      recent version.
    1. Create a manifest text file named `MY_UNIQUE_PLUGIN_NAME_VERSION.txt`
-      that lists all files in your plugin relative to the project root.
+      that lists all the files in your plugin relative to the project root.
       Then add the `gvh_manifest` label to the asset to indicate this file is
       a plugin manifest.
    1. Redistribute the `Play Services Resolver` Unity plugin with your plugin.
@@ -317,31 +374,6 @@ If you follow these steps:
    * The latest version of the plugin will be selected when users import
      multiple packages that include your plugin, assuming the steps in
      [Plugin Redistribution](#plugin-redistribution) are followed.
-
-# Plugin Redistribution
-
-The *Version Handler* component relies upon deferring the load of editor DLLs
-so that it can run and determine the latest version of a plugin component to
-activate.  The build of the `Play Services Resolver` plugin has Unity asset
-metadata that is configured to so that the all editor components are not
-initially enabled when it's imported into a Unity project.  To maintain this
-configuration when importing the `Play Services Resolver` .unitypackage file
-into a Unity plugin you *must* specify the command line option `-gvh_disable`
-which will prevent the Version Handler component from running and changing the
-Unity asset metadata.
-
-For example, the following will import the
-`play-services-resolver-1.2.46.0.unitypackage` into the project `pathToPlugin`
-and export the whole project to `MyPlugin.unitypackage`.
-
-```
-Unity -gvh_disable \
-      -batchmode \
-      -importPackage \
-      -projectPath pathToPlugin \
-      -exportPackage Assets MyPlugin.unitypackage \
-      -quit
-```
 
 ## Building from Source
 
