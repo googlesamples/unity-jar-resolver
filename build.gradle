@@ -27,18 +27,27 @@ project.ext {
   operatingSystem = OperatingSystem.getOperatingSystem()
 
   // Default installation path for Unity based upon the host operating system.
-  String defaultUnityPath =
-    [(OperatingSystem.UNKNOWN): "Unity",
+  List<String> defaultUnityPaths =
+    [(OperatingSystem.UNKNOWN): ["Unity"],
      (OperatingSystem.MAC_OSX):
-     "/Applications/Unity/Unity.app/Contents/MacOS/Unity",
+     ["/Applications/Unity/Unity.app/Contents/MacOS/Unity"] +
+     (new FileNameFinder()).getFileNames(
+       "/", "Applications/UnityHub/*/Unity.app/Contents/MacOS/Unity"),
      (OperatingSystem.WINDOWS):
-     "C:\\Program Files\\Unity\\Editor\\Unity.exe",
-     (OperatingSystem.LINUX): "/opt/Unity/Editor/Unity"][operatingSystem]
+     ["\\Program Files\\Unity\\Editor\\Unity.exe"] +
+     (new FileNameFinder()).getFileNames(
+       "\\", "Program Files\\Unity\\Hub\\Editor\\*\\Editor\\Unity.exe"),
+     (OperatingSystem.LINUX): ["/opt/Unity/Editor/Unity"]][operatingSystem]
 
   // Search for the Unity editor executable.
   // The Unity editor is required to package the plug-in.
-  unityExe = findFileProperty("UNITY_EXE", new File(defaultUnityPath), false)
-  if (!unityExe.exists()) unityExe = findFileInPath(unityExe.name)
+  for (defaultUnityPath in defaultUnityPaths) {
+    unityExe = findFileProperty("UNITY_EXE", new File(defaultUnityPath), false)
+    if (unityExe != null && unityExe.exists()) break;
+  }
+  if (unityExe == null || !unityExe.exists()) {
+    unityExe = findFileInPath(unityExe.name)
+  }
   if (unityExe == null) {
     throw new StopActionException("Unity editor executable (UNITY_EXE) not " +
                                   "found")
