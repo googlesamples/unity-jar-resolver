@@ -221,7 +221,11 @@ internal class RunOnMainThread {
             pollingJobs.Add(condition);
         }
         if (ExecutionEnvironment.InBatchMode && OnMainThread) {
-            while (ExecutePollingJobs() > 0) {
+            while (true) {
+                ExecutePollingJobs();
+                lock (pollingJobs) {
+                    if (pollingJobs.IndexOf(condition) < 0) break;
+                }
                 // Wait 100ms.
                 Thread.Sleep(100);
             }
@@ -236,12 +240,15 @@ internal class RunOnMainThread {
     private static int ExecutePollingJobs() {
         int numberOfPollingJobs;
         bool completedJobs = false;
-        lock (pollingJobs) {
-            numberOfPollingJobs = pollingJobs.Count;
-        }
-        for (int i = 0; i < numberOfPollingJobs; ++i) {
+        for (int i = 0; /* The exit condition is checked inside the critical section */ ; i++) {
             Func<bool> conditionJob;
             lock (pollingJobs) {
+                // If we're at the end of the list because another invocation of this method removed
+                // completed jobs, stop executing.
+                numberOfPollingJobs = pollingJobs.Count;
+                if (i >= numberOfPollingJobs) {
+                    break;
+                }
                 conditionJob = pollingJobs[i];
             }
             bool jobComplete = false;
@@ -250,8 +257,8 @@ internal class RunOnMainThread {
             } catch (Exception e) {
                 jobComplete = true;
                 UnityEngine.Debug.LogError(
-                   String.Format("Stopped polling job due to exception: {0}",
-                                 e.ToString()));
+                    String.Format("Stopped polling job due to exception: {0}",
+                                  e.ToString()));
             }
             if (jobComplete) {
                 completePollingJobs.Add(conditionJob);
@@ -261,12 +268,12 @@ internal class RunOnMainThread {
         if (completedJobs) {
             lock (pollingJobs) {
                 foreach (var conditionJob in completePollingJobs) {
-                    pollingJobs.Remove(conditionJob);
-                    numberOfPollingJobs--;
+                    if (pollingJobs.Remove(conditionJob)) numberOfPollingJobs--;
                 }
             }
             completePollingJobs.Clear();
         }
+
         return numberOfPollingJobs;
     }
 
