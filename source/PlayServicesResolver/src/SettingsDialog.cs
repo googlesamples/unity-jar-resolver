@@ -32,7 +32,6 @@ namespace GooglePlayServices
         /// </summary>
         private class Settings {
             internal bool enableAutoResolution;
-            internal bool prebuildWithGradle;
             internal bool useGradleDaemon;
             internal bool installAndroidPackages;
             internal string packageDir;
@@ -47,7 +46,6 @@ namespace GooglePlayServices
             /// </summary>
             internal Settings() {
                 enableAutoResolution = SettingsDialog.EnableAutoResolution;
-                prebuildWithGradle = SettingsDialog.PrebuildWithGradle;
                 useGradleDaemon = SettingsDialog.UseGradleDaemon;
                 installAndroidPackages = SettingsDialog.InstallAndroidPackages;
                 packageDir = SettingsDialog.PackageDir;
@@ -62,7 +60,6 @@ namespace GooglePlayServices
             /// Save dialog settings to preferences.
             /// </summary>
             internal void Save() {
-                SettingsDialog.PrebuildWithGradle = prebuildWithGradle;
                 SettingsDialog.UseGradleDaemon = useGradleDaemon;
                 SettingsDialog.EnableAutoResolution = enableAutoResolution;
                 SettingsDialog.InstallAndroidPackages = installAndroidPackages;
@@ -77,7 +74,6 @@ namespace GooglePlayServices
 
         const string Namespace = "GooglePlayServices.";
         private const string AutoResolveKey = Namespace + "AutoResolverEnabled";
-        private const string PrebuildWithGradleKey = Namespace + "PrebuildWithGradle";
         private const string PackageInstallKey = Namespace + "AndroidPackageInstallationEnabled";
         private const string PackageDirKey = Namespace + "PackageDirectory";
         private const string ExplodeAarsKey = Namespace + "ExplodeAars";
@@ -89,7 +85,6 @@ namespace GooglePlayServices
         // List of preference keys, used to restore default settings.
         private static string[] PreferenceKeys = new [] {
             AutoResolveKey,
-            PrebuildWithGradleKey,
             PackageInstallKey,
             PackageDirKey,
             ExplodeAarsKey,
@@ -124,11 +119,6 @@ namespace GooglePlayServices
         internal static bool EnableAutoResolution {
             set { projectSettings.SetBool(AutoResolveKey, value); }
             get { return projectSettings.GetBool(AutoResolveKey, true); }
-        }
-
-        internal static bool PrebuildWithGradle {
-            private set { projectSettings.SetBool(PrebuildWithGradleKey, value); }
-            get { return projectSettings.GetBool(PrebuildWithGradleKey, false); }
         }
 
         internal static bool UseGradleDaemon {
@@ -238,12 +228,6 @@ namespace GooglePlayServices
             GUILayout.BeginVertical();
 
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Prebuild With Gradle (Experimental)", EditorStyles.boldLabel);
-            settings.prebuildWithGradle = EditorGUILayout.Toggle(settings.prebuildWithGradle);
-            GUILayout.EndHorizontal();
-
-            EditorGUI.BeginDisabledGroup(settings.prebuildWithGradle == true);
-            GUILayout.BeginHorizontal();
             GUILayout.Label("Use Gradle Daemon", EditorStyles.boldLabel);
             settings.useGradleDaemon = EditorGUILayout.Toggle(settings.useGradleDaemon);
             GUILayout.EndHorizontal();
@@ -252,14 +236,12 @@ namespace GooglePlayServices
                 ("Gradle Daemon will be used to fetch dependencies.  " +
                  "This is faster but can be flakey in some environments.") :
                 ("Gradle Daemon will not be used.  This is slow but reliable."));
-            EditorGUI.EndDisabledGroup();
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Enable Auto-Resolution", EditorStyles.boldLabel);
             settings.enableAutoResolution = EditorGUILayout.Toggle(settings.enableAutoResolution);
             GUILayout.EndHorizontal();
 
-            EditorGUI.BeginDisabledGroup(settings.prebuildWithGradle == true);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Install Android Packages", EditorStyles.boldLabel);
             settings.installAndroidPackages =
@@ -299,7 +281,6 @@ namespace GooglePlayServices
                                 "android.defaultConfig.applicationId to your bundle ID in your " +
                                 "build.gradle to generate a functional APK.");
             }
-            EditorGUI.EndDisabledGroup();
 
             EditorGUI.BeginDisabledGroup(settings.enableAutoResolution);
             GUILayout.BeginHorizontal();

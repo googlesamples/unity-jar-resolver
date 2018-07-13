@@ -265,7 +265,6 @@ namespace GooglePlayServices
         public enum ResolverType
         {
             Default,            // Standard versioned resolver
-            GradlePrebuild,     // Used if registered and enabled in the settings.
         }
 
         /// <summary>
@@ -314,12 +313,6 @@ namespace GooglePlayServices
         /// Event which is fired when the bundle ID is updated.
         /// </summary>
         public static event EventHandler<BundleIdChangedEventArgs> BundleIdChanged;
-
-        /// <summary>
-        /// The value of GradlePrebuildEnabled before settings was changed.
-        /// </summary>
-        private static bool previousGradlePrebuildEnabled =
-            GooglePlayServices.SettingsDialog.PrebuildWithGradle;
 
         /// <summary>
         /// Value of the InstallAndroidPackages before settings were changed.
@@ -587,7 +580,6 @@ namespace GooglePlayServices
 
             if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) {
                 RegisterResolver(new ResolverVer1_1());
-                RegisterResolver(new GradlePreBuildResolver(), ResolverType.GradlePrebuild);
                 // Monitor Android dependency XML files to perform auto-resolution.
                 AddAutoResolutionFilePatterns(xmlDependencies.fileRegularExpressions);
 
@@ -670,8 +662,7 @@ namespace GooglePlayServices
         private static ResolverType CurrentResolverType
         {
             get {
-                return GooglePlayServices.SettingsDialog.PrebuildWithGradle ?
-                    ResolverType.GradlePrebuild : ResolverType.Default;
+                return ResolverType.Default;
             }
         }
 
@@ -684,9 +675,6 @@ namespace GooglePlayServices
             get
             {
                 IResolver resolver = null;
-                if (GooglePlayServices.SettingsDialog.PrebuildWithGradle) {
-                    _resolvers.TryGetValue(ResolverType.GradlePrebuild, out resolver);
-                }
                 if (resolver == null) {
                     _resolvers.TryGetValue(ResolverType.Default, out resolver);
                 }
@@ -1282,13 +1270,10 @@ namespace GooglePlayServices
         /// Called when settings change.
         /// </summary>
         internal static void OnSettingsChanged() {
-            if (previousGradlePrebuildEnabled !=
-                GooglePlayServices.SettingsDialog.PrebuildWithGradle ||
-                previousInstallAndroidPackages !=
+            if (previousInstallAndroidPackages !=
                 GooglePlayServices.SettingsDialog.InstallAndroidPackages) {
                 DeleteLabeledAssets();
             }
-            previousGradlePrebuildEnabled = GooglePlayServices.SettingsDialog.PrebuildWithGradle;
             previousInstallAndroidPackages =
                 GooglePlayServices.SettingsDialog.InstallAndroidPackages;
             PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;

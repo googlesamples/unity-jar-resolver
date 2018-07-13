@@ -277,11 +277,6 @@ By default the Android Resolver will use Gradle to download dependencies prior
 to integrating them into a Unity project.  This works with Unity's internal
 build system and Gradle / Android Studio project export.
 
-Also, the Android Resolver supports an *experimental* Gradle prebuild mode to
-provide minification without exporting to a Gradle / Android Studio project.
-For more information about this mode see
-[gradle_prebuild.md](gradle_prebuild.md).
-
 It's possible to change the resolution strategy via the
 `Assets > Play Services Resolver > Android Resolver > Settings` menu.
 
