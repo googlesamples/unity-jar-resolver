@@ -1,3 +1,24 @@
+# Version 1.2.76 - Jul 16, 2018
+## Bug Fixes
+* Fixed variable replacement in AndroidManifest.xml files in the Android
+  Resolver.
+  Version 1.2.75 introduced a regression which caused all variable replacement
+  to replace the *entire* property value rather than the component of the
+  property that referenced a variable.  For example,
+  given "applicationId = com.my.app", "${applicationId}.foo" would be
+  incorrectly expanded as "com.my.app" rather than "com.my.app.foo".  This
+  resulted in numerous issues for Android builds where content provider
+  initialization would fail and services may not start.
+
+## Changed
+* Gradle prebuild experimental feature has been removed from the Android
+  Resolver.  The feature has been broken for some time and added around 8MB
+  to the plugin size.
+* Added better support for execution of plugin components in batch mode.
+  In batch mode UnityEditor.update is sometimes never called - like when a
+  single method is executed - so the new job scheduler will execute all jobs
+  synchronously from the main thread.
+
 # Version 1.2.75 - Jun 20, 2018
 ## New Features
 * Android Resolver now monitors the Android SDK path when

@@ -185,7 +185,7 @@ project.ext {
   // Solution which references all projects used by the plugin.
   pluginSolutionFile = new File(pluginSourceDir, "JarResolver.sln")
   // Version of the plugin (update this with CHANGELOG.md on each release).
-  pluginVersion = "1.2.75.0"
+  pluginVersion = "1.2.76.0"
   // Base filename of the released plugin.
   currentPluginBasename = "play-services-resolver"
   // Versioned release plugin file.
