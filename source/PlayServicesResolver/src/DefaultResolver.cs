@@ -219,19 +219,6 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Extract an AAR (or zip file) to the specified directory.
-        /// </summary>
-        /// <param name="aarFile">Name of the AAR file to extract.</param>
-        /// <param name="extract_filenames">List of files to extract from the AAR.  If this array
-        /// is empty or null all files are extracted.</param>
-        /// <param name="outputDirectory">Directory to extract the AAR file to.</param>
-        /// <returns>true if successful, false otherwise.</returns>
-        internal virtual bool ExtractAar(string aarFile, string[] extractFilenames,
-                                         string outputDirectory) {
-            return PlayServicesResolver.ExtractZip(aarFile, extractFilenames, outputDirectory);
-        }
-
-        /// <summary>
         /// Create an AAR from the specified directory.
         /// </summary>
         /// <param name="aarFile">AAR file to create.</param>
@@ -263,50 +250,49 @@ namespace GooglePlayServices
         }
 
         // Native library ABI subdirectories supported by Unity.
-        internal const string NATIVE_LIBRARY_ABI_DIRECTORY_ARMEABI_V7A = "armeabi-v7a";
-        internal const string NATIVE_LIBRARY_ABI_DIRECTORY_X86 = "x86";
         // Directories that contain native libraries within a Unity Android library project.
-        internal static string[] NATIVE_LIBRARY_DIRECTORIES = new string[] { "libs", "jni" };
-        // Map of Unity ABIs (see AndroidTargetDeviceAbi) to the ABI directory.
-        internal static Dictionary<string, string> UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY =
-            new Dictionary<string, string> { {"armv7", NATIVE_LIBRARY_ABI_DIRECTORY_ARMEABI_V7A},
-                                             {"x86", NATIVE_LIBRARY_ABI_DIRECTORY_X86} };
+        private static string[] NATIVE_LIBRARY_DIRECTORIES = new string[] { "libs", "jni" };
 
         /// <summary>
-        /// Gets the directory names of currently targeted ABIs.
+        /// Get the set of native library ABIs in an exploded AAR.
         /// </summary>
-        /// <returns>returns the hashset of directory names, ie. "x86".</returns>
-        internal HashSet<string> GetSelectedABIDirs(string currentAbi) {
-            var activeAbis = new HashSet<string>();
-            string abiDir;
-            if (UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY.TryGetValue(currentAbi, out abiDir)) {
-                activeAbis.Add(abiDir);
-            } else {
-                activeAbis.UnionWith(UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY.Values);
+        /// <param name="aarDirectory">Directory to search for ABIs.</param>
+        /// <returns>Set of ABI directory names in the exploded AAR or null if none are
+        /// found.</returns>
+        internal AndroidAbis AarDirectoryFindAbis(string aarDirectory) {
+            var foundAbis = new HashSet<string>();
+            foreach (var libDirectory in NATIVE_LIBRARY_DIRECTORIES) {
+                foreach (var abiDir in AndroidAbis.AllSupported) {
+                    if (Directory.Exists(Path.Combine(aarDirectory,
+                                                      Path.Combine(libDirectory, abiDir)))) {
+                        foundAbis.Add(abiDir);
+                    }
+                }
             }
-            return activeAbis;
+            return foundAbis.Count > 0 ? new AndroidAbis(foundAbis) : null;
         }
 
         /// <summary>
         /// Explodes a single aar file.  This is done by calling the
         /// JDK "jar" command, then moving the classes.jar file.
         /// </summary>
-        /// <param name="dir">the parent directory of the plugin.</param>
+        /// <param name="dir">The directory to unpack / explode the AAR to.  If antProject is true
+        /// the ant project will be located in Path.Combine(dir, Path.GetFileName(aarFile)).</param>
         /// <param name="aarFile">Aar file to explode.</param>
         /// <param name="antProject">true to explode into an Ant style project or false
         /// to repack the processed AAR as a new AAR.</param>
-        /// <param name="abi">ABI of the AAR or null if it's universal.</param>
+        /// <param name="abis">ABIs in the AAR or null if it's universal.</param>
         /// <returns>true if successful, false otherwise.</returns>
         internal virtual bool ProcessAar(string dir, string aarFile, bool antProject,
-                                         out string abi) {
+                                         out AndroidAbis abis) {
             PlayServicesResolver.Log(String.Format("ProcessAar {0} {1} antProject={2}",
                                                    dir, aarFile, antProject),
                                      level: LogLevel.Verbose);
-            abi = null;
+            abis = null;
             string workingDir = Path.Combine(dir, Path.GetFileNameWithoutExtension(aarFile));
             FileUtils.DeleteExistingFileOrDirectory(workingDir);
             Directory.CreateDirectory(workingDir);
-            if (!ExtractAar(aarFile, null, workingDir)) return false;
+            if (!PlayServicesResolver.ExtractZip(aarFile, null, workingDir)) return false;
             PlayServicesResolver.ReplaceVariablesInAndroidManifest(
                 Path.Combine(workingDir, "AndroidManifest.xml"),
                 UnityCompat.ApplicationId, new Dictionary<string, string>());
@@ -329,7 +315,7 @@ namespace GooglePlayServices
                     // Generate an empty classes.jar file.
                     string temporaryDirectory = CreateTemporaryDirectory();
                     if (temporaryDirectory == null) return false;
-                    ArchiveAar(targetClassesFile, temporaryDirectory);
+                    if (!ArchiveAar(targetClassesFile, temporaryDirectory)) return false;
                 }
             }
 
@@ -339,21 +325,38 @@ namespace GooglePlayServices
             string jniLibDir = Path.Combine(workingDir, "jni");
             nativeLibsDir = nativeLibsDir ?? jniLibDir;
             if (Directory.Exists(jniLibDir)) {
+                var abisInArchive = AarDirectoryFindAbis(workingDir);
                 if (jniLibDir != nativeLibsDir) {
                     FileUtils.CopyDirectory(jniLibDir, nativeLibsDir);
                     FileUtils.DeleteExistingFileOrDirectory(jniLibDir);
                 }
-                // Remove shared libraries for all ABIs that are not required for the selected
-                // target ABI.
-                var currentAbi = PlayServicesResolver.AndroidTargetDeviceAbi;
-                var activeAbis = GetSelectedABIDirs(currentAbi);
-                foreach (var directory in Directory.GetDirectories(nativeLibsDir)) {
-                    var abiDir = Path.GetFileName(directory);
-                    if (!activeAbis.Contains(abiDir)) {
-                        FileUtils.DeleteExistingFileOrDirectory(directory);
+                if (abisInArchive != null) {
+                    // Remove shared libraries for all ABIs that are not required for the selected
+                    // ABIs.
+                    var activeAbisSet = AndroidAbis.Current.ToSet();
+                    var abisInArchiveSet = abisInArchive.ToSet();
+                    var abisInArchiveToRemoveSet = new HashSet<string>(abisInArchiveSet);
+                    abisInArchiveToRemoveSet.ExceptWith(activeAbisSet);
+
+                    Func<IEnumerable<string>, string> setToString = (setToConvert) => {
+                        return String.Join(", ", (new List<string>(setToConvert)).ToArray());
+                    };
+                    PlayServicesResolver.Log(
+                        String.Format(
+                            "Target ABIs [{0}], ABIs [{1}] in {2}, will remove [{3}] ABIs",
+                            setToString(activeAbisSet),
+                            setToString(abisInArchiveSet),
+                            aarFile,
+                            setToString(abisInArchiveToRemoveSet)),
+                        level: LogLevel.Verbose);
+
+                    foreach (var abiToRemove in abisInArchiveToRemoveSet) {
+                        abisInArchiveSet.Remove(abiToRemove);
+                        FileUtils.DeleteExistingFileOrDirectory(Path.Combine(nativeLibsDir,
+                                                                             abiToRemove));
                     }
+                    abis = new AndroidAbis(abisInArchiveSet);
                 }
-                abi = currentAbi;
             }
 
             if (antProject) {
@@ -367,6 +370,9 @@ namespace GooglePlayServices
                         "android.library=true"
                     });
                 }
+                PlayServicesResolver.Log(String.Format("Replacing {0} with {1}",
+                                                       aarFile, workingDir),
+                                         level: LogLevel.Verbose);
                 // Clean up the aar file.
                 FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
                 // Add a tracking label to the exploded files.
@@ -374,6 +380,9 @@ namespace GooglePlayServices
             } else {
                 // Add a tracking label to the exploded files just in-case packaging fails.
                 PlayServicesResolver.LabelAssets(new [] { workingDir });
+                PlayServicesResolver.Log(String.Format("Repacking {0} from {1}",
+                                                       aarFile, workingDir),
+                                         level: LogLevel.Verbose);
                 // Create a new AAR file.
                 FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
                 if (!ArchiveAar(aarFile, workingDir)) return false;

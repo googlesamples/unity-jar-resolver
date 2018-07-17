@@ -75,7 +75,7 @@ namespace GooglePlayServices
             /// Sort a string hashset.
             /// </summary>
             /// <param name="setToSort">Set to sort and return via an enumerable.</param>
-            private IEnumerable<string> SortSet(HashSet<string> setToSort) {
+            private static IEnumerable<string> SortSet(HashSet<string> setToSort) {
                 var sorted = new SortedDictionary<string, bool>();
                 foreach (var value in setToSort) sorted[value] = true;
                 return sorted.Keys;
@@ -189,6 +189,23 @@ namespace GooglePlayServices
                 }
                 return hash;
             }
+
+            /// <summary>
+            /// Convert a hashset to a sorted comma separated string.
+            /// </summary>
+            /// <returns>Comma separated string.</returns>
+            private static string SetToString(HashSet<string> setToConvert) {
+                return String.Join(", ", (new List<string>(SortSet(setToConvert))).ToArray());
+            }
+
+            /// <summary>
+            /// Display dependencies as a string.
+            /// </summary>
+            /// <returns>Human readable string.</returns>
+            public override string ToString() {
+                return String.Format("packages=({0}), files=({1})", SetToString(Packages),
+                                     SetToString(Files));
+            }
         }
 
         /// <summary>
@@ -215,6 +232,10 @@ namespace GooglePlayServices
             private int delayTimeInSeconds;
             // Name of the property being polled.
             private string propertyName;
+            // Previous time we checked the property value for a change.
+            private DateTime previousCheckTime = DateTime.Now;
+            // Time to wait before checking a property.
+            private int checkIntervalInSeconds;
 
             /// <summary>
             /// Create the poller.
@@ -223,10 +244,15 @@ namespace GooglePlayServices
             /// <param name="propertyName">Name of the property being polled.</param>
             /// <param name="delayTimeInSeconds">Time to wait before signalling that the value
             /// has changed.</param>
-            public PropertyPoller(T initialValue, string propertyName, int delayTimeInSeconds = 3) {
+            /// <param name="checkIntervalInSeconds">Time to check the value of the property for
+            /// changes.<param>
+            public PropertyPoller(T initialValue, string propertyName,
+                                  int delayTimeInSeconds = 3,
+                                  int checkIntervalInSeconds = 1) {
                 previousValue = initialValue;
                 this.propertyName = propertyName;
                 this.delayTimeInSeconds = delayTimeInSeconds;
+                this.checkIntervalInSeconds = checkIntervalInSeconds;
             }
 
             /// <summary>
@@ -235,10 +261,15 @@ namespace GooglePlayServices
             /// <param name="currentValue">Value being polled.</param>
             /// <param name="changed">Delegate that is called if the value changes.</param>
             public void Poll(T currentValue, Changed changed) {
+                var currentTime = DateTime.Now;
+                if (currentTime.Subtract(previousCheckTime).TotalSeconds <
+                    checkIntervalInSeconds) {
+                    return;
+                }
+                previousCheckTime = currentTime;
                 if (!currentValue.Equals(previousValue)) {
-                    var currentPollTime = DateTime.Now;
                     if (currentValue.Equals(previousPollValue)) {
-                        if (currentPollTime.Subtract(previousPollTime).TotalSeconds >=
+                        if (currentTime.Subtract(previousPollTime).TotalSeconds >=
                             delayTimeInSeconds) {
                             Log(String.Format("{0} changed: {1} -> {2}", propertyName,
                                               previousValue, currentValue),
@@ -248,7 +279,7 @@ namespace GooglePlayServices
                         }
                     } else {
                         previousPollValue = currentValue;
-                        previousPollTime = currentPollTime;
+                        previousPollTime = currentTime;
                     }
                 }
             }
@@ -504,22 +535,10 @@ namespace GooglePlayServices
         public static event EventHandler<AndroidBuildSystemChangedArgs> AndroidBuildSystemChanged;
 
         /// <summary>
-        /// Name of the property on UnityEditor.PlayerSettings.Android which describes the
-        /// target ABI.
-        /// </summary>
-        private const string ANDROID_TARGET_DEVICE_ABI_PROPERTY_NAME = "targetDevice";
-
-        /// <summary>
-        /// Default target ABI for Android projects.
-        /// </summary>
-        internal const string DEFAULT_ANDROID_TARGET_DEVICE_ABI = "fat";
-
-        /// <summary>
         /// Polls for changes in the Android device ABI.
         /// </summary>
-        private static PropertyPoller<string> androidTargetDeviceAbiPoller =
-            new PropertyPoller<string>(DEFAULT_ANDROID_TARGET_DEVICE_ABI,
-                                       "Android Target Device ABI");
+        private static PropertyPoller<AndroidAbis> androidAbisPoller =
+            new PropertyPoller<AndroidAbis>(new AndroidAbis(), "Android Target Device ABI");
 
         /// <summary>
         /// Logger for this module.
@@ -527,43 +546,24 @@ namespace GooglePlayServices
         internal static Google.Logger logger = new Google.Logger();
 
         /// <summary>
-        /// Get a string representation of the target ABI.
-        /// </summary>
-        /// This uses reflection to retrieve the property as it is not present in Unity version
-        /// less than 5.x.
-        internal static string AndroidTargetDeviceAbi {
-            get {
-                var targetDeviceAbi = DEFAULT_ANDROID_TARGET_DEVICE_ABI;
-                var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty(
-                    ANDROID_TARGET_DEVICE_ABI_PROPERTY_NAME);
-                if (property != null) {
-                    var value = property.GetValue(null, null);
-                    if (value != null) targetDeviceAbi = value.ToString();
-                }
-                return targetDeviceAbi.ToLower();
-            }
-        }
-
-        /// <summary>
         /// Arguments for the Android build system changed event.
         /// </summary>
-        public class AndroidTargetDeviceAbiChangedArgs : EventArgs {
+        public class AndroidAbisChangedArgs : EventArgs {
             /// <summary>
             /// Target device ABI before it changed.
             /// </summary>
-            public string PreviousAndroidTargetDeviceAbi { get; set; }
+            public string PreviousAndroidAbis { get; set; }
 
             /// <summary>
             /// Target device ABI when this event was fired.
             /// </summary>
-            public string AndroidTargetDeviceAbi { get; set; }
+            public string AndroidAbis { get; set; }
         }
 
         /// <summary>
         /// Event which is fired when the Android target device ABI changes.
         /// </summary>
-        public static event EventHandler<AndroidTargetDeviceAbiChangedArgs>
-            AndroidTargetDeviceAbiChanged;
+        public static event EventHandler<AndroidAbisChangedArgs> AndroidAbisChanged;
 
         // Parses dependencies from XML dependency files.
         private static AndroidXmlDependencies xmlDependencies = new AndroidXmlDependencies();
@@ -623,13 +623,13 @@ namespace GooglePlayServices
 
                 BundleIdChanged += ResolveOnBundleIdChanged;
                 AndroidBuildSystemChanged += ResolveOnBuildSystemChanged;
-                AndroidTargetDeviceAbiChanged += ResolveOnTargetDeviceAbiChanged;
+                AndroidAbisChanged += ResolveOnAndroidAbisChanged;
                 AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
                 ScheduleAutoResolve();
             }
             RunOnMainThread.OnUpdate += PollBundleId;
             RunOnMainThread.OnUpdate += PollBuildSystem;
-            RunOnMainThread.OnUpdate += PollTargetDeviceAbi;
+            RunOnMainThread.OnUpdate += PollAndroidAbis;
             RunOnMainThread.OnUpdate += PollAndroidSdkRoot;
         }
 
@@ -1069,15 +1069,14 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Poll the target device ABI for changes.
+        /// Poll the Android ABIs for changes.
         /// </summary>
-        private static void PollTargetDeviceAbi() {
-            androidTargetDeviceAbiPoller.Poll(AndroidTargetDeviceAbi,
-                                              (previousValue, currentValue) => {
-                    if (AndroidTargetDeviceAbiChanged != null) {
-                        AndroidTargetDeviceAbiChanged(null, new AndroidTargetDeviceAbiChangedArgs {
-                                PreviousAndroidTargetDeviceAbi = previousValue,
-                                AndroidTargetDeviceAbi = currentValue
+        private static void PollAndroidAbis() {
+            androidAbisPoller.Poll(AndroidAbis.Current, (previousValue, currentValue) => {
+                    if (AndroidAbisChanged != null) {
+                        AndroidAbisChanged(null, new AndroidAbisChangedArgs {
+                                PreviousAndroidAbis = previousValue.ToString(),
+                                AndroidAbis = currentValue.ToString()
                             });
                     }
                 });
@@ -1087,8 +1086,8 @@ namespace GooglePlayServices
         /// Hide shared libraries from Unity's build system that do not target the currently
         /// selected ABI.
         /// </summary>
-        private static void ResolveOnTargetDeviceAbiChanged(
-                object sender, AndroidTargetDeviceAbiChangedArgs args) {
+        private static void ResolveOnAndroidAbisChanged(
+                object sender, AndroidAbisChangedArgs args) {
             Reresolve();
         }
 
@@ -1254,6 +1253,13 @@ namespace GooglePlayServices
                         if (resolutionComplete != null) resolutionComplete(true);
                         return;
                     }
+                    Log(String.Format("Android dependencies changed from:\n" +
+                                      "{0}\n\n" +
+                                      "to:\n" +
+                                      "{1}\n",
+                                      previousState.ToString(),
+                                      currentState.ToString()),
+                        level: LogLevel.Verbose);
                     // Delete all labeled assets to make sure we don't leave any stale transitive
                     // dependencies in the project.
                     DeleteLabeledAssets();
@@ -1456,6 +1462,8 @@ namespace GooglePlayServices
                 string zipPath = Path.GetFullPath(zipFile);
                 string extractFilesArg = extractFilenames != null && extractFilenames.Length > 0 ?
                     String.Format("\"{0}\"", String.Join("\" \"", extractFilenames)) : "";
+                Log(String.Format("Extracting {0} ({1}) to {2}", zipFile, extractFilesArg,
+                                  outputDirectory), level: LogLevel.Verbose);
                 CommandLine.Result result = CommandLine.Run(
                     JavaUtilities.JarBinaryPath,
                     String.Format(" xvf \"{0}\" {1}", zipPath, extractFilesArg),

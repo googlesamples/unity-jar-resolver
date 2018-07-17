@@ -43,8 +43,12 @@ namespace GooglePlayServices
             public string bundleId = "";
             // Path of the target AAR package.
             public string path = "";
-            // Target ABI when this was expanded.
-            public string targetAbi = ABI_UNIVERSAL;
+            // Comma separated string that lists the set of *available* ABIs in the source archive.
+            // This is ABI_UNIVERSAL if the archive does not contain any native libraries.
+            public string availableAbis = ABI_UNIVERSAL;
+            // Comma separated string that lists the set of ABIs in the archive.
+            // This is ABI_UNIVERSAL if the archive does not contain any native libraries.
+            public string targetAbis = ABI_UNIVERSAL;
             // Whether gradle is selected as the build system.
             public bool gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
             // Whether gradle export is enabeld.
@@ -55,6 +59,43 @@ namespace GooglePlayServices
             // NOTE: This is not considered in AarExplodeDataIsDirty() as we do not want to
             // re-explode an AAR if this changes.
             public string ignoredVersion = "";
+
+            /// <summary>
+            /// Convert a comma separated list of ABIs to an AndroidAbis instance.
+            /// </summary>
+            /// <param name="abiString">String to convert.</param>
+            /// <returns>AndroidAbis instance if native components are present,
+            /// null otherwise.</returns>
+            private static AndroidAbis AndroidAbisFromString(string abiString) {
+                return abiString == ABI_UNIVERSAL ? null : new AndroidAbis(abiString);
+            }
+
+            /// <summary>
+            /// Convert an AndroidAbis instance to a comma separated string.
+            /// </summary>
+            /// <param name="abis">Instance to convert.</param>
+            /// <returns>Comma separated string.</returns>
+            private static string AndroidAbisToString(AndroidAbis abis) {
+                return abis != null ? abis.ToString() : ABI_UNIVERSAL;
+            }
+
+            /// <summary>
+            /// Get the available native component ABIs in the archive.
+            /// If this is a universal archive it returns null.
+            /// </summary>
+            public AndroidAbis AvailableAbis {
+                get { return AndroidAbisFromString(availableAbis); }
+                set { availableAbis = AndroidAbisToString(value); }
+            }
+
+            /// <summary>
+            /// Get the current native component ABIs in the archive.
+            /// If this is a universal archive it returns null.
+            /// </summary>
+            public AndroidAbis TargetAbis {
+                get { return AndroidAbisFromString(targetAbis); }
+                set { targetAbis = AndroidAbisToString(value); }
+            }
 
             /// <summary>
             /// Default constructor.
@@ -69,7 +110,7 @@ namespace GooglePlayServices
                 explode = dataToCopy.explode;
                 bundleId = dataToCopy.bundleId;
                 path = dataToCopy.path;
-                targetAbi = dataToCopy.targetAbi;
+                targetAbis = dataToCopy.targetAbis;
                 gradleBuildSystem = dataToCopy.gradleBuildSystem;
                 gradleExport = dataToCopy.gradleExport;
                 ignoredVersion = dataToCopy.ignoredVersion;
@@ -87,7 +128,8 @@ namespace GooglePlayServices
                     explode == data.explode &&
                     bundleId == data.bundleId &&
                     path == data.path &&
-                    targetAbi == data.targetAbi &&
+                    availableAbis == data.availableAbis &&
+                    targetAbis == data.targetAbis &&
                     gradleBuildSystem == data.gradleBuildSystem &&
                     gradleExport == data.gradleExport &&
                     ignoredVersion == data.ignoredVersion;
@@ -102,7 +144,8 @@ namespace GooglePlayServices
                     explode.GetHashCode() ^
                     bundleId.GetHashCode() ^
                     path.GetHashCode() ^
-                    targetAbi.GetHashCode() ^
+                    availableAbis.GetHashCode() ^
+                    targetAbis.GetHashCode() ^
                     gradleBuildSystem.GetHashCode() ^
                     gradleExport.GetHashCode() ^
                     ignoredVersion.GetHashCode();
@@ -118,6 +161,23 @@ namespace GooglePlayServices
                     copy[item.Key] = new AarExplodeData(item.Value);
                 }
                 return copy;
+            }
+
+            /// <summary>
+            /// Convert AAR data to a string.
+            /// </summary>
+            /// <returns>String description of the instance.</returns>
+            public override string ToString() {
+                return String.Format("modificationTime={0} " +
+                                     "explode={1} " +
+                                     "bundleId={2} " +
+                                     "path={3} " +
+                                     "availableAbis={4} " +
+                                     "targetAbis={5} " +
+                                     "gradleBuildSystem={6} " +
+                                     "gradleExport={7}",
+                                     modificationTime, explode, bundleId, path, availableAbis,
+                                     targetAbis, gradleBuildSystem, gradleExport);
             }
         }
 
@@ -223,8 +283,10 @@ namespace GooglePlayServices
                                             aarData.bundleId = reader.ReadContentAsString();
                                         } else if (elementName == "path") {
                                             aarData.path = reader.ReadContentAsString();
+                                        } else if (elementName == "availableAbis") {
+                                            aarData.availableAbis = reader.ReadContentAsString();
                                         } else if (elementName == "targetAbi") {
-                                            aarData.targetAbi = reader.ReadContentAsString();
+                                            aarData.targetAbis = reader.ReadContentAsString();
                                         } else if (elementName == "gradleBuildSystem") {
                                             aarData.gradleBuildSystem =
                                                 reader.ReadContentAsBoolean();
@@ -278,8 +340,11 @@ namespace GooglePlayServices
                 writer.WriteStartElement("path");
                 writer.WriteValue(kv.Value.path);
                 writer.WriteEndElement();
+                writer.WriteStartElement("availableAbis");
+                writer.WriteValue(kv.Value.availableAbis);
+                writer.WriteEndElement();
                 writer.WriteStartElement("targetAbi");
-                writer.WriteValue(kv.Value.targetAbi);
+                writer.WriteValue(kv.Value.targetAbis);
                 writer.WriteEndElement();
                 writer.WriteStartElement("gradleBuildEnabled");
                 writer.WriteValue(kv.Value.gradleBuildSystem);
@@ -450,7 +515,7 @@ namespace GooglePlayServices
                 foreach (var resource in new [] { gradleTemplateZip, buildScript }) {
                     ExtractResource(Path.GetFileName(resource), resource);
                 }
-                if (!ExtractAar(gradleTemplateZip, new [] {
+                if (!PlayServicesResolver.ExtractZip(gradleTemplateZip, new [] {
                             "gradle/wrapper/gradle-wrapper.jar",
                             "gradle/wrapper/gradle-wrapper.properties",
                             "gradlew",
@@ -1068,8 +1133,8 @@ namespace GooglePlayServices
                                              level: LogLevel.Verbose);
                     aarsToResolve.Add(aar);
                 } else if (AarExplodeDataIsDirty(aarData)) {
-                    PlayServicesResolver.Log(String.Format("AAR {0} needs to be refreshed",
-                                                          aarData.path),
+                    PlayServicesResolver.Log(String.Format("{0} needs to be refreshed ({1})",
+                                                           aarData.path, aarData.ToString()),
                                              level: LogLevel.Verbose);
                     packagesToUpdate.Add(aarData.path);
                     aarsToResolve.Add(aar);
@@ -1079,7 +1144,13 @@ namespace GooglePlayServices
             // OnBundleId triggers another resolution process.
             foreach (string aar in aarsToResolve) aarExplodeData.Remove(aar);
             SaveAarExplodeCache();
-            return packagesToUpdate.Count > 0 ? packagesToUpdate.ToArray() : null;
+            if (packagesToUpdate.Count == 0) return null;
+            string[] packagesToUpdateArray = packagesToUpdate.ToArray();
+            PlayServicesResolver.Log(
+                String.Format("OnBuildSettings, Packages to update ({0})",
+                              String.Join(", ", packagesToUpdateArray)),
+                level: LogLevel.Verbose);
+            return packagesToUpdateArray;
         }
 
         #endregion
@@ -1124,18 +1195,69 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Whether an Ant project should be generated for an artifact.
+        /// </summary>
+        /// <param name="explode">Whether the artifact needs to be exploded so that it can be
+        /// modified.</param>
+        private static bool GenerateAntProject(bool explode) {
+            return explode && !PlayServicesResolver.GradleBuildEnabled;
+        }
+
+        /// <summary>
         /// Determine whether a package is dirty in the AAR cache.
         /// </summary>
         /// <param name="aarData">Path of the AAR to query.</param>
         /// <returns>true if the cache entry is dirty, false otherwise.</returns>
         private bool AarExplodeDataIsDirty(AarExplodeData aarData) {
-            return aarData.bundleId != UnityCompat.ApplicationId ||
-                (aarData.targetAbi != AarExplodeData.ABI_UNIVERSAL &&
-                 aarData.targetAbi != PlayServicesResolver.AndroidTargetDeviceAbi) ||
-                aarData.gradleBuildSystem != PlayServicesResolver.GradleBuildEnabled ||
-                aarData.gradleExport != PlayServicesResolver.GradleProjectExportEnabled ||
-                (aarData.explode && !PlayServicesResolver.GradleBuildEnabled ?
-                 !Directory.Exists(aarData.path) : !File.Exists(aarData.path));
+            if (aarData.bundleId != UnityCompat.ApplicationId) {
+                PlayServicesResolver.Log(
+                    String.Format("{0}: Bundle ID changed {1} --> {2}", aarData.path,
+                                  aarData.bundleId, UnityCompat.ApplicationId),
+                    level: LogLevel.Verbose);
+                return true;
+            }
+            var availableAbis = aarData.AvailableAbis;
+            var targetAbis = aarData.TargetAbis;
+            var currentAbis = AndroidAbis.Current;
+            if (targetAbis != null && availableAbis != null &&
+                !targetAbis.Equals(AndroidAbis.Current)) {
+                PlayServicesResolver.Log(
+                    String.Format("{0}: Target ABIs changed {1} --> {2}", aarData.path,
+                                  targetAbis.ToString(), currentAbis.ToString()),
+                    level: LogLevel.Verbose);
+                return true;
+            }
+            if (aarData.gradleBuildSystem != PlayServicesResolver.GradleBuildEnabled) {
+                PlayServicesResolver.Log(
+                    String.Format("{0}: Gradle build system enabled changed {0} --> {1}",
+                                  aarData.path, aarData.gradleBuildSystem,
+                                  PlayServicesResolver.GradleBuildEnabled),
+                    level: LogLevel.Verbose);
+                return true;
+            }
+            if (aarData.gradleExport != PlayServicesResolver.GradleProjectExportEnabled) {
+                PlayServicesResolver.Log(
+                    String.Format("{0}: Gradle export settings changed {0} --> {1}",
+                                  aarData.path, aarData.gradleExport,
+                                  PlayServicesResolver.GradleProjectExportEnabled),
+                    level: LogLevel.Verbose);
+                return true;
+            }
+            bool generateAntProject = GenerateAntProject(aarData.explode);
+            if (generateAntProject && !Directory.Exists(aarData.path)) {
+                PlayServicesResolver.Log(
+                    String.Format("{0}: Should be exploded but artifact directory missing.",
+                                  aarData.path),
+                    level: LogLevel.Verbose);
+                return true;
+            } else if (!generateAntProject && !File.Exists(aarData.path)) {
+                PlayServicesResolver.Log(
+                    String.Format("{0}: Should *not* be exploded but aritfact file missing.",
+                                  aarData.path),
+                    level: LogLevel.Verbose);
+                return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -1193,63 +1315,43 @@ namespace GooglePlayServices
             try {
                 foreach (string aarPath in aars) {
                     if (displayProgress) {
-                        EditorUtility.DisplayProgressBar(progressBarTitle, "",
+                        EditorUtility.DisplayProgressBar(progressBarTitle, aarPath,
                                                          (float)aarIndex / numberOfAars);
                         aarIndex++;
                     }
                     bool explode = ShouldExplode(aarPath);
                     var aarData = FindAarExplodeDataEntry(aarPath);
+                    PlayServicesResolver.Log(
+                        String.Format("Processing {0} ({1})", aarPath, aarData.ToString()),
+                        level: LogLevel.Verbose);
                     if (AarExplodeDataIsDirty(aarData) || updatedFiles.Contains(aarPath)) {
                         if (explode && File.Exists(aarPath)) {
-                            ProcessAar(Path.GetFullPath(dir), aarPath,
-                                       !PlayServicesResolver.GradleBuildEnabled,
-                                       out aarData.targetAbi);
-                            aarData.targetAbi = aarData.targetAbi ?? AarExplodeData.ABI_UNIVERSAL;
-                        } else {
+                            AndroidAbis abis = null;
+                            if (!ProcessAar(Path.GetFullPath(dir), aarPath,
+                                            GenerateAntProject(explode), out abis)) {
+                                PlayServicesResolver.Log(String.Format(
+                                    "Failed to process {0}, your Android build will fail.\n" +
+                                    "See previous error messages for failure details.\n",
+                                    aarPath));
+                            }
+                            aarData.AvailableAbis = abis;
+                        } else if (aarPath != aarData.path) {
                             // Clean up previously expanded / exploded versions of the AAR.
+                            PlayServicesResolver.Log(
+                                String.Format("Cleaning up previously exploded AAR {0}", aarPath),
+                                level: LogLevel.Verbose);
                             FileUtils.DeleteExistingFileOrDirectory(
                                 DetermineExplodedAarPath(aarPath));
                         }
                         aarData.gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
                         aarData.gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
+                        aarData.TargetAbis = AndroidAbis.Current;
                     }
                 }
                 SaveAarExplodeCache();
             } finally {
                 if (displayProgress) EditorUtility.ClearProgressBar();
             }
-        }
-
-        /// <summary>
-        /// Get the set of native library ABIs in an exploded AAR.
-        /// </summary>
-        /// <param name="aarDirectory">Directory to search for ABIs.</param>
-        /// <returns>Set of ABI directory names in the exploded AAR.</returns>
-        private HashSet<string> AarDirectoryFindAbis(string aarDirectory) {
-            var foundAbis = new HashSet<string>();
-            foreach (var libDirectory in NATIVE_LIBRARY_DIRECTORIES) {
-                foreach (var kv in UNITY_ABI_TO_NATIVE_LIBRARY_ABI_DIRECTORY) {
-                    var path = Path.Combine(libDirectory, kv.Value);
-                    if (Directory.Exists(Path.Combine(aarDirectory, path))) {
-                        foundAbis.Add(kv.Key);
-                    }
-                }
-            }
-            return foundAbis;
-        }
-
-        /// <summary>
-        /// Determine whether a Unity library project (extract AAR) contains native libraries.
-        /// </summary>
-        /// <param name="foundAbis">Set of ABI directories in the AAR.</param>
-        /// <return>ABI associated with the directory.</return>
-        private string DetermineAbiFromAarAbiDirectories(HashSet<string> foundAbis) {
-            var numberOfAbis = foundAbis.Count;
-            if (numberOfAbis > 0) {
-                if (numberOfAbis == 1) foreach (var abi in foundAbis) return abi;
-                return PlayServicesResolver.DEFAULT_ANDROID_TARGET_DEVICE_ABI;
-            }
-            return AarExplodeData.ABI_UNIVERSAL;
         }
 
         /// <summary>
@@ -1281,7 +1383,7 @@ namespace GooglePlayServices
             if (PlayServicesResolver.GradleProjectExportEnabled && !SettingsDialog.ExplodeAars) {
                 explosionEnabled = false;
             }
-            string targetAbi = AarExplodeData.ABI_UNIVERSAL;
+            AndroidAbis availableAbis = null;
             bool explode = false;
             if (explosionEnabled) {
                 explode = !SupportsAarFiles;
@@ -1305,8 +1407,7 @@ namespace GooglePlayServices
                         // If the directory contains native libraries update the target ABI.
                         if (!useCachedExplodeData) {
                             newAarData = true;
-                            targetAbi = DetermineAbiFromAarAbiDirectories(
-                                AarDirectoryFindAbis(aarDirectory));
+                            availableAbis = AarDirectoryFindAbis(aarDirectory);
                         }
                         explode = true;
                     }
@@ -1322,9 +1423,9 @@ namespace GooglePlayServices
                         string manifestFilename = "AndroidManifest.xml";
                         string classesFilename = "classes.jar";
                         if (aarPath.EndsWith(".aar") &&
-                            ExtractAar(aarPath, new string[] {manifestFilename, "jni",
-                                                              classesFilename},
-                                       temporaryDirectory)) {
+                            PlayServicesResolver.ExtractZip(
+                                aarPath, new string[] {manifestFilename, "jni", classesFilename},
+                                temporaryDirectory)) {
                             string manifestPath = Path.Combine(temporaryDirectory,
                                                                manifestFilename);
                             if (File.Exists(manifestPath)) {
@@ -1339,18 +1440,20 @@ namespace GooglePlayServices
                             // targeting a single ABI, explode it so that unused ABIs can be
                             // removed.
                             newAarData = true;
-                            var abiDirs = AarDirectoryFindAbis(temporaryDirectory);
-                            // Unity 2017's native build system does not support AARs that contain
+                            availableAbis = AarDirectoryFindAbis(temporaryDirectory);
+                            // Unity 2017's internal build system does not support AARs that contain
                             // native libraries so force explosion to pick up native libraries using
                             // Eclipse / Ant style projects.
-                            explode |= Google.VersionHandler.GetUnityVersionMajorMinor() >=
-                                2017.0f && abiDirs.Count > 0;
-                            targetAbi = DetermineAbiFromAarAbiDirectories(abiDirs);
+                            explode |= availableAbis != null &&
+                                Google.VersionHandler.GetUnityVersionMajorMinor() >= 2017.0f;
                             // NOTE: Unfortunately as of Unity 5.5 the internal Gradle build
                             // also blindly includes all ABIs from AARs included in the project
                             // so we need to explode the AARs and remove unused ABIs.
-                            explode |= targetAbi != AarExplodeData.ABI_UNIVERSAL &&
-                                targetAbi != PlayServicesResolver.AndroidTargetDeviceAbi;
+                            if (availableAbis != null) {
+                                var abisToRemove = availableAbis.ToSet();
+                                abisToRemove.ExceptWith(AndroidAbis.Current.ToSet());
+                                explode |= abisToRemove.Count > 0;
+                            }
                             aarData.modificationTime = File.GetLastWriteTime(aarPath);
                         }
                     }
@@ -1367,11 +1470,11 @@ namespace GooglePlayServices
             }
             // If this is a new cache entry populate the target ABI and bundle ID fields.
             if (newAarData) {
-                aarData.targetAbi = targetAbi;
+                aarData.AvailableAbis = availableAbis;
+                aarData.TargetAbis = AndroidAbis.Current;
                 aarData.bundleId = UnityCompat.ApplicationId;
             }
-            aarData.path = explode && !PlayServicesResolver.GradleBuildEnabled ?
-                explodeDirectory : aarPath;
+            aarData.path = GenerateAntProject(explode) ? explodeDirectory : aarPath;
             aarData.explode = explode;
             aarExplodeData[AarPathToPackageName(aarPath)] = aarData;
             SaveAarExplodeCache();

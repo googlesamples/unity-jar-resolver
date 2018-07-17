@@ -1,4 +1,4 @@
-// <copyright file="TestResolverBootstrapped.cs" company="Google Inc.">
+// <copyright file="TestResolveAsync.cs" company="Google Inc.">
 // Copyright (C) 2018 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -122,19 +122,42 @@ public class TestResolveAsync {
     private const string EXPORT_ANDROID_PROJECT = "exportAsGoogleAndroidProject";
 
     /// <summary>
-    /// PlayServicesResolver class object.
+    /// Major / minor Unity version numbers.
     /// </summary>
-    private static Type playServicesResolverClass = null;
+    private static float unityVersion;
+
+    /// <summary>
+    /// This module can be executed multiple times when the Version Handler is enabling
+    /// so this method uses a temporary file to determine whether the module has been executed
+    /// once in a Unity session.
+    /// </summary>
+    /// <returns>true if the module was previously initialized, false otherwise.</returns>
+    private static bool SetInitialized() {
+        const string INITIALIZED_PATH = "Temp/TestEnabledCallbackInitialized";
+        if (File.Exists(INITIALIZED_PATH)) return true;
+        File.WriteAllText(INITIALIZED_PATH, "Ready");
+        return false;
+    }
 
     /// <summary>
     /// Register a method to call when the Version Handler has enabled all plugins in the project.
     /// </summary>
     static TestResolveAsync() {
+        unityVersion = Google.VersionHandler.GetUnityVersionMajorMinor();
+        // Disable stack traces for more condensed logs.
+        UnityEngine.Application.stackTraceLogType = UnityEngine.StackTraceLogType.None;
+
+        UnityEngine.Debug.Log("Setting up test cases for execution.");
         testCases.AddRange(new [] {
                 // This *must* be the first test case as other test cases depend upon it.
                 new TestCase {
+                    Name = "ValidateAndroidTargetSelected",
+                    Method = ValidateAndroidTargetSelected,
+                },
+                new TestCase {
                     Name = "SetupDependencies",
                     Method = (testCase, testCaseComplete) => {
+                        ClearDependencies();
                         SetupDependencies(testCase, testCaseComplete);
                         testCaseComplete(new TestCaseResult(testCase));
                     }
@@ -142,29 +165,61 @@ public class TestResolveAsync {
                 new TestCase {
                     Name = "ResolveForGradleBuildSystem",
                     Method = (testCase, testCaseComplete) => {
+                        ClearDependencies();
+                        SetupDependencies(testCase, testCaseComplete);
                         Resolve("Gradle", false, "ExpectedArtifacts/NoExport/Gradle",
-                                testCase, testCaseComplete);
+                                null, testCase, testCaseComplete);
                     }
                 },
                 new TestCase {
                     Name = "ResolveForInternalBuildSystem",
                     Method = (testCase, testCaseComplete) => {
-                        Resolve("Internal", false, "ExpectedArtifacts/NoExport/Internal",
-                                testCase, testCaseComplete);
+                        ClearDependencies();
+                        SetupDependencies(testCase, testCaseComplete);
+                        Resolve("Internal", false,
+                                AarsWithNativeLibrariesSupported ?
+                                    "ExpectedArtifacts/NoExport/InternalNativeAars" :
+                                    "ExpectedArtifacts/NoExport/InternalNativeAarsExploded",
+                                null, testCase, testCaseComplete);
                     }
                 },
                 new TestCase {
                     Name = "ResolveForGradleBuildSystemAndExport",
                     Method = (testCase, testCaseComplete) => {
+                        ClearDependencies();
+                        SetupDependencies(testCase, testCaseComplete);
                         Resolve("Gradle", true, "ExpectedArtifacts/Export/Gradle",
-                                testCase, testCaseComplete);
+                                null, testCase, testCaseComplete);
                     }
                 },
             });
 
-        // TODO: Resolution with different ABI selection.
-        // - select each available ABI and verify it's present in the resultant AARs / projects
-        //   internal, external & export tests.
+        // Test resolution with Android ABI filtering.
+        if (unityVersion >= 2018.0f) {
+            testCases.AddRange(new [] {
+                    new TestCase {
+                        Name = "ResolverForGradleBuildSystemUsingAbisArmeabiv7aAndArm64",
+                        Method = (testCase, testCaseComplete) => {
+                            ClearDependencies();
+                            Resolve("Gradle", false,
+                                    "ExpectedArtifacts/NoExport/GradleArmeabiv7aArm64",
+                                    "armeabi-v7a, arm64-v8a", testCase, testCaseComplete);
+                        }
+                    }
+                });
+        } else if (unityVersion >= 5.0f) {
+            testCases.AddRange(new [] {
+                    new TestCase {
+                        Name = "ResolverForGradleBuildSystemUsingAbisArmeabiv7a",
+                        Method = (testCase, testCaseComplete) => {
+                            ClearDependencies();
+                            Resolve("Gradle", false,
+                                    "ExpectedArtifacts/NoExport/GradleArmeabiv7a",
+                                    "armeabi-v7a", testCase, testCaseComplete);
+                        }
+                    }
+                });
+        }
 
         UnityEngine.Debug.Log("Set up callback on Version Handler completion.");
         Google.VersionHandler.UpdateCompleteMethods = new [] {
@@ -172,6 +227,40 @@ public class TestResolveAsync {
         };
         UnityEngine.Debug.Log("Enable plugin using the Version Handler.");
         Google.VersionHandler.UpdateNow();
+    }
+
+    /// <summary>
+    /// Whether the Gradle builds are supported by the current version of Unity.
+    /// </summary>
+    private static bool GradleBuildSupported {
+        get { return unityVersion >= 5.5f; }
+    }
+
+    /// <summary>
+    /// Whether the current version of Unity requires AARs with native artifacts to be converted
+    /// to ant / eclipse projects.
+    /// </summary>
+    private static bool AarsWithNativeLibrariesSupported {
+        get { return unityVersion < 2017.0f; }
+    }
+
+    /// <summary>
+    /// Get property that gets and sets Android ABIs.
+    /// </summary>
+    private static PropertyInfo AndroidAbisCurrentStringProperty {
+        get {
+            return Google.VersionHandler.FindClass(
+                "Google.JarResolver", "GooglePlayServices.AndroidAbis").GetProperty(
+                    "CurrentString");
+        }
+    }
+
+    /// <summary>
+    /// Set Android ABIs.
+    /// </summary>
+    private static string AndroidAbisCurrentString {
+        set { AndroidAbisCurrentStringProperty.SetValue(null, value, null); }
+        get { return (string)AndroidAbisCurrentStringProperty.GetValue(null, null); }
     }
 
     /// <summary>
@@ -297,17 +386,19 @@ public class TestResolveAsync {
     /// Called when the Version Handler has enabled all managed plugins in a project.
     /// </summary>
     public static void VersionHandlerReady() {
+        Google.VersionHandler.UpdateCompleteMethods = null;
+        // If this has already been initialize this session, do not start tests again.
+        if (SetInitialized()) return;
         UnityEngine.Debug.Log("Plugin is ready.");
+        // Start executing tests.
         ExecuteNextTestCase();
     }
 
     /// <summary>
-    /// Programmatically add dependencies.
+    /// Make sure the Android platform is selected for testing.
     /// </summary>
-    /// <param name="testCase">Object executing this method.</param>
-    /// <param name="testCaseComplete">Called when the test is complete.</param>
-    private static void SetupDependencies(TestCase testCase,
-                                          Action<TestCaseResult> testCaseComplete) {
+    private static void ValidateAndroidTargetSelected(TestCase testCase,
+                                                      Action<TestCaseResult> testCaseComplete) {
         if (UnityEditor.EditorUserBuildSettings.activeBuildTarget !=
             UnityEditor.BuildTarget.Android) {
             LogTestCaseResult(new TestCaseResult(testCase) {
@@ -315,25 +406,64 @@ public class TestResolveAsync {
                 });
             LogSummaryAndExit();
         }
-        // Get the deprecated dependency management API.
-        var androidResolverSupportClass = Google.VersionHandler.FindClass(
-            "Google.JarResolver", "Google.JarResolver.PlayServicesSupport");
-        // Programmatically add a dependency.
-        var androidResolverSupport = Google.VersionHandler.InvokeStaticMethod(
-            androidResolverSupportClass, "CreateInstance",
-            new object[] { "Test", null, "ProjectSettings" });
-        Google.VersionHandler.InvokeInstanceMethod(
-            androidResolverSupport, "DependOn",
-            new object[] {
-                "com.android.support", "support-annotations", "26.1.0"
-            });
+        testCaseComplete(new TestCaseResult(testCase));
     }
 
     /// <summary>
-    /// Whether the AndroidBuildSystem property is supported by the current version of Unity.
+    /// Get the Android Resolver support instance.
+    /// NOTE: This is deprecated and only exposed for testing.
     /// </summary>
-    private static bool AndroidBuildSystemSupported {
-        get { return Google.VersionHandler.GetUnityVersionMajorMinor() >= 5.5f; }
+    private static object AndroidResolverSupport {
+        get {
+            // Get the deprecated dependency management API.
+            return Google.VersionHandler.InvokeStaticMethod(
+                    Google.VersionHandler.FindClass(
+                        "Google.JarResolver", "Google.JarResolver.PlayServicesSupport"),
+                 "CreateInstance", new object[] { "Test", null, "ProjectSettings" });
+        }
+    }
+
+    /// <summary>
+    /// Cached Android Resolver class.
+    /// </summary>
+    private static Type androidResolverClass = null;
+
+    /// <summary>
+    /// Get the Android Resolver class.
+    /// </summary>
+    private static Type AndroidResolverClass {
+        get {
+            androidResolverClass = androidResolverClass ?? Google.VersionHandler.FindClass(
+                "Google.JarResolver", "GooglePlayServices.PlayServicesResolver");
+            return androidResolverClass;
+        }
+    }
+
+    /// <summary>
+    /// Clear all dependencies.
+    /// This removes all programmatically added dependencies before running a test.
+    /// A developer typically shouldn't be doing this, instead they should be changing the
+    /// *Dependencies.xml files in the project to force the dependencies to be read again.
+    /// </summary>
+    private static void ClearDependencies() {
+        UnityEngine.Debug.Log("Clear all loaded dependencies");
+        AndroidResolverSupport.GetType().GetMethod(
+            "ResetDependencies",
+            BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+    }
+
+    /// <summary>
+    /// Programmatically add dependencies.
+    /// NOTE: This is the deprecated way of adding dependencies and will likely be removed in
+    /// future.
+    /// </summary>
+    /// <param name="testCase">Object executing this method.</param>
+    /// <param name="testCaseComplete">Called when the test is complete.</param>
+    private static void SetupDependencies(TestCase testCase,
+                                          Action<TestCaseResult> testCaseComplete) {
+        Google.VersionHandler.InvokeInstanceMethod(
+            AndroidResolverSupport, "DependOn",
+            new object[] { "com.google.firebase", "firebase-common", "16.0.0" });
     }
 
     /// <summary>
@@ -344,14 +474,17 @@ public class TestResolveAsync {
     /// <param name="exportProject">Whether Android project export should be enabled.</param>
     /// <param name="expectedAssetsDir">Directory that contains the assets expected from the
     /// resolution step.</param>
+    /// <param name="targetAbis">String of Android ABIs to target or null if the default ABIs
+    /// should be selected.</param>
     /// <param name="testCase">Object executing this method.</param>
     /// <param name="testCaseComplete">Called with the test result.</param>
     private static void Resolve(string androidBuildSystem, bool exportProject,
-                                string expectedAssetsDir,
+                                string expectedAssetsDir, string targetAbis,
                                 TestCase testCase, Action<TestCaseResult> testCaseComplete) {
-        SetupDependencies(testCase, testCaseComplete);
+        // Set the Android target ABIs.
+        AndroidAbisCurrentString = targetAbis;
         // Try setting the build system if this version of Unity supports it.
-        if (!AndroidBuildSystemSupported && androidBuildSystem == "Gradle") {
+        if (!GradleBuildSupported && androidBuildSystem == "Gradle") {
             testCaseComplete(new TestCaseResult(testCase) {
                     Skipped = true,
                     ErrorMessages = new List<string> {
@@ -394,11 +527,8 @@ public class TestResolveAsync {
                         });
                 }, true);
         };
-        playServicesResolverClass = Google.VersionHandler.FindClass(
-            "Google.JarResolver", "GooglePlayServices.PlayServicesResolver");
         Google.VersionHandler.InvokeStaticMethod(
-            playServicesResolverClass,
-            "Resolve", args: null,
+            AndroidResolverClass, "Resolve", args: null,
             namedArgs: new Dictionary<string, object>() {
                 {"resolutionCompleteWithResult", completeWithResult}
             });
@@ -441,9 +571,8 @@ public class TestResolveAsync {
         Directory.CreateDirectory(outputDir);
         // This uses reflection to access an internal method for testing purposes.
         // ExtractZip is not part of the public API.
-        bool successful = (bool)playServicesResolverClass.GetMethod("ExtractZip",
-                                            BindingFlags.Static |
-                                            BindingFlags.NonPublic).Invoke(
+        bool successful = (bool)AndroidResolverClass.GetMethod(
+            "ExtractZip", BindingFlags.Static | BindingFlags.NonPublic).Invoke(
             null, new object[]{ zipFile, null, outputDir });
         if (!successful) {
             failureMessages.Add(String.Format("Unable to extract {0} to {1}",

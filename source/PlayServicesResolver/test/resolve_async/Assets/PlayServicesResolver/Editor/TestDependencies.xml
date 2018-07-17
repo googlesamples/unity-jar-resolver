@@ -1,5 +1,12 @@
 <dependencies>
   <androidPackages>
-    <androidPackage spec="com.google.firebase:firebase-common:16.0.0"/>
+    <!-- Java package with no native shared library dependencies. -->
+    <androidPackage spec="com.android.support:support-annotations:26.1.0"/>
+    <!-- Java package with no native shared library dependencies. -->
+    <androidPackage spec="com.google.firebase:firebase-app-unity:5.1.1">
+      <repositories>
+        <repository>Assets/Firebase/m2repository</repository>
+      </repositories>
+    </androidPackage>
   </androidPackages>
 </dependencies>

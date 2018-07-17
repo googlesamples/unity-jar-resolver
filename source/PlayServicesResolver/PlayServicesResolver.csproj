@@ -53,6 +53,7 @@
     <Folder Include="Properties\" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="src\AndroidAbis.cs" />
     <Compile Include="src\AndroidSdkManager.cs" />
     <Compile Include="src\AndroidXmlDependencies.cs" />
     <Compile Include="src\CommandLine.cs" />
