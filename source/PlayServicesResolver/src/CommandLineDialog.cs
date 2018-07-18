@@ -200,7 +200,7 @@ namespace GooglePlayServices
         /// <summary>
         /// Alternative the Show() method that does not crash in batch mode.
         /// </summary>
-        public void Show() {
+        public new void Show() {
             Show(false);
         }
 
@@ -208,7 +208,7 @@ namespace GooglePlayServices
         /// Alternative Show() method that does not crash in batch mode.
         /// </summary>
         /// <param name="immediateDisplay">Display the window now.</param>
-        public void Show(bool immediateDisplay) {
+        public new void Show(bool immediateDisplay) {
             if (!ExecutionEnvironment.InBatchMode) {
                 base.Show(immediateDisplay);
             }
@@ -217,7 +217,7 @@ namespace GooglePlayServices
         /// <summary>
         /// Alternative Repaint() method that does not crash in batch mode.
         /// </summary>
-        public void Repaint() {
+        public new void Repaint() {
             if (!ExecutionEnvironment.InBatchMode) {
                 base.Repaint();
             }
@@ -226,7 +226,7 @@ namespace GooglePlayServices
         /// <summary>
         /// Alternative Close() method that does not crash in batch mode.
         /// </summary>
-        public void Close() {
+        public new void Close() {
             if (!ExecutionEnvironment.InBatchMode) {
                 base.Close();
             }
