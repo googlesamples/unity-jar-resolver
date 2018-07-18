@@ -1676,7 +1676,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
     [MenuItem("Assets/Play Services Resolver/Version Handler/Update")]
     public static void UpdateNow() {
         UpdateVersionedAssets(forceUpdate: true);
-        EditorUtility.DisplayDialog(PLUGIN_NAME, "Update complete.", "OK");
+        if (!ExecutionEnvironment.InBatchMode) {
+            EditorUtility.DisplayDialog(PLUGIN_NAME, "Update complete.", "OK");
+        }
     }
 
     /// <summary>
@@ -1764,13 +1766,15 @@ public class VersionHandlerImpl : AssetPostprocessor {
         if (obsoleteFiles.unreferenced.Count > 0) {
             if (CleanUpPromptEnabled && deleteFiles &&
                 obsoleteFiles.unreferencedExcludingManifests.Count > 0) {
-                deleteFiles = EditorUtility.DisplayDialog(
-                    PLUGIN_NAME,
-                    "Would you like to delete the following obsolete files " +
-                    "in your project?\n\n" +
-                    String.Join("\n", new List<string>(
-                                        obsoleteFiles.unreferencedExcludingManifests).ToArray()),
-                    "Yes", cancel: "No");
+                deleteFiles = ExecutionEnvironment.InBatchMode ||
+                    EditorUtility.DisplayDialog(
+                        PLUGIN_NAME,
+                        "Would you like to delete the following obsolete files " +
+                        "in your project?\n\n" +
+                        String.Join(
+                            "\n", new List<string>(
+                                      obsoleteFiles.unreferencedExcludingManifests).ToArray()),
+                        "Yes", cancel: "No");
             }
             foreach (var filename in obsoleteFiles.unreferenced) {
                 if (deleteFiles) {
@@ -1793,6 +1797,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 referencesString.Add(String.Join("\n", lines.ToArray()));
             }
             deleteFiles = obsoleteFiles.referencedExcludingManifests.Values.Count == 0 ||
+                ExecutionEnvironment.InBatchMode ||
                 EditorUtility.DisplayDialog(
                    PLUGIN_NAME,
                    "The following obsolete files are referenced by packages in " +
