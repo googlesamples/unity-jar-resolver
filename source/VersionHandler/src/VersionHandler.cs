@@ -90,6 +90,7 @@ public class VersionHandler {
                                           String.Join("\n", executionList.ToArray()));
                         InvokeImplMethod(command);
                     }
+                    UpdateCompleteMethodsInternal = null;
                     // Clean up the boot strapping file.
                     File.Delete(BOOT_STRAPPING_PATH);
                 }
