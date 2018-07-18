@@ -1082,9 +1082,9 @@ namespace GooglePlayServices
         /// <summary>
         /// Delete the specified array of files and directories.
         /// </summary>
-        /// <param name="filenames">Array of files or directories to delete.</param>
+        /// <param name="filenames">Files or directories to delete.</param>
         /// <returns>true if files are deleted, false otherwise.</returns>
-        private static bool DeleteFiles(string[] filenames)
+        private static bool DeleteFiles(IEnumerable<string> filenames)
         {
             if (filenames == null) return false;
             bool deletedFiles = false;
@@ -1360,10 +1360,7 @@ namespace GooglePlayServices
         /// set of assets.
         /// </summary>
         internal static void DeleteLabeledAssets() {
-            foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
-                FileUtils.DeleteExistingFileOrDirectory(assetPath);
-            }
-            AssetDatabase.Refresh();
+            DeleteFiles(PlayServicesResolver.FindLabeledAssets());
         }
 
         /// <summary>
