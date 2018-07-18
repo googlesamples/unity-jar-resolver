@@ -75,7 +75,7 @@ namespace Google {
         /// <param name="level">Severity of the message, if this is below the currently selected
         /// Level property the message will not be logged.</param>
         internal virtual void Log(string message, LogLevel level = LogLevel.Info) {
-            if (level >= Level) {
+            if (level >= Level || ExecutionEnvironment.InBatchMode) {
                 switch (level) {
                     case LogLevel.Debug:
                     case LogLevel.Verbose:
