@@ -273,10 +273,42 @@ namespace GooglePlayServices
         private static Dictionary<ResolverType, IResolver> _resolvers =
             new Dictionary<ResolverType, IResolver>();
 
+
+        /// <summary>
+        /// Resoluton job.
+        /// This class is used to enqueue a resolution job to execute on the main thread by
+        /// ScheduleResolve().
+        /// It keeps track of whether the job was started via auto-resolution or explicitly.
+        /// If the job was started via auto-resolution it is removed from the currently scheduled
+        /// set of jobs when a new job is started via ScheduleResolve().
+        /// </summary>
+        private class ResolutionJob {
+
+            /// <summary>
+            /// Whether this is an auto-resolution job,
+            /// </summary>
+            public bool IsAutoResolveJob { get; private set; }
+
+            /// <summary>
+            /// Action to execute to resolve.
+            /// </summary>
+            public Action Job { get; private set; }
+
+            /// <summary>
+            /// Initialize this instance.
+            /// </summary>
+            /// <param name="isAutoResolveJob">Whether this is an auto-resolution job.</param>
+            /// <param name="job">Action to execute to resolve.</param>
+            public ResolutionJob(bool isAutoResolveJob, Action job) {
+                IsAutoResolveJob = isAutoResolveJob;
+                Job = job;
+            }
+        }
+
         /// <summary>
         /// Queue of resolution jobs to execute.
         /// </summary>
-        private static Queue<Action> resolutionJobs = new Queue<Action>();
+        private static List<ResolutionJob> resolutionJobs = new List<ResolutionJob>();
 
         /// <summary>
         /// Flag used to prevent re-entrant auto-resolution.
@@ -799,7 +831,10 @@ namespace GooglePlayServices
         /// <param name="resolutionComplete">Called when resolution is complete.</param>
         private static void AutoResolve(Action resolutionComplete) {
             if (Resolver.AutomaticResolutionEnabled()) {
-                Resolve(resolutionComplete: resolutionComplete);
+                ScheduleResolve(
+                    false, (success) => {
+                        if (resolutionComplete != null) resolutionComplete();
+                    }, true);
             } else if (!ExecutionEnvironment.InBatchMode &&
                        GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning &&
                        PlayServicesSupport.GetAllDependencies().Count > 0) {
@@ -1076,7 +1111,7 @@ namespace GooglePlayServices
         /// </summary>
         private static void ResolveOnAndroidSdkRootChange(
                 object sender, AndroidSdkRootChangedArgs args) {
-            Resolve(forceResolution: true);
+            ScheduleResolve(true, null, true);
         }
 
         /// <summary>
@@ -1103,11 +1138,12 @@ namespace GooglePlayServices
             lock (resolutionJobs) {
                 while (resolutionJobs.Count > 0) {
                     // Remove any terminators from the queue.
-                    var job = resolutionJobs.Dequeue();
-                    if (job != null) {
-                        nextJob = job;
+                    var jobInfo = resolutionJobs[0];
+                    resolutionJobs.RemoveAt(0);
+                    if (jobInfo != null) {
+                        nextJob = jobInfo.Job;
                         // Keep an item in the queue to indicate resolution is in progress.
-                        resolutionJobs.Enqueue(null);
+                        resolutionJobs.Add(null);
                         break;
                     }
                 }
@@ -1128,22 +1164,55 @@ namespace GooglePlayServices
         public static void Resolve(Action resolutionComplete = null,
                                    bool forceResolution = false,
                                    Action<bool> resolutionCompleteWithResult = null) {
-            bool firstJob;
-            lock (resolutionJobs) {
-                firstJob = resolutionJobs.Count == 0;
-                resolutionJobs.Enqueue(() => {
-                        ResolveUnsafe(
-                            resolutionComplete: (success) => {
+            ScheduleResolve(forceResolution,
+                            (success) => {
                                 if (resolutionComplete != null) {
                                     resolutionComplete();
                                 }
                                 if (resolutionCompleteWithResult != null) {
                                     resolutionCompleteWithResult(success);
                                 }
-                                ExecuteNextResolveJob();
-                            },
-                            forceResolution: forceResolution);
+                            }, false);
+        }
+
+        /// <summary>
+        /// Schedule resolution of dependencies.  If resolution is currently active this queues up
+        /// the requested resolution action to execute when the current resolution is complete.
+        /// All queued auto-resolution jobs are canceled before enqueuing a new job.
+        /// </summary>
+        /// <param name="forceResolution">Whether resolution should be executed when no dependencies
+        /// have changed.  This is useful if a dependency specifies a wildcard in the version
+        /// expression.</param>
+        /// <param name="resolutionCompleteWithResult">Delegate called when resolution is complete
+        /// with a parameter that indicates whether it succeeded or failed.</param>
+        /// <param name="isAutoResolveJob">Whether this is an auto-resolution job.</param>
+        private static void ScheduleResolve(bool forceResolution,
+                                            Action<bool> resolutionCompleteWithResult,
+                                            bool isAutoResolveJob) {
+            bool firstJob;
+            lock (resolutionJobs) {
+                firstJob = resolutionJobs.Count == 0;
+
+                // Remove the scheduled action which enqueues an auto-resolve job.
+                RunOnMainThread.Cancel(autoResolveJobId);
+                autoResolveJobId = 0;
+                // Remove any enqueued auto-resolve jobs.
+                resolutionJobs.RemoveAll((jobInfo) => {
+                        return jobInfo != null && jobInfo.IsAutoResolveJob;
                     });
+
+                resolutionJobs.Add(
+                    new ResolutionJob(
+                        isAutoResolveJob,
+                        () => {
+                            ResolveUnsafe(resolutionComplete: (success) => {
+                                    if (resolutionCompleteWithResult != null) {
+                                        resolutionCompleteWithResult(success);
+                                    }
+                                    ExecuteNextResolveJob();
+                                },
+                                forceResolution: forceResolution);
+                        }));
             }
             if (firstJob) ExecuteNextResolveJob();
         }
@@ -1165,6 +1234,14 @@ namespace GooglePlayServices
 
             xmlDependencies.ReadAll(logger);
 
+            // If no dependencies are present, skip the resolution step.
+            if (PlayServicesSupport.GetAllDependencies().Count == 0) {
+                if (resolutionComplete != null) {
+                    resolutionComplete(true);
+                }
+                return;
+            }
+
             if (forceResolution) {
                 DeleteLabeledAssets();
             } else {
@@ -1184,7 +1261,10 @@ namespace GooglePlayServices
             }
 
             System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
-            Log("Resolving...", level: LogLevel.Verbose);
+            Log(String.Format("Resolving the following dependencies:\n{0}\n",
+                              String.Join("\n", (new List<string>(
+                                  PlayServicesSupport.GetAllDependencies().Keys)).ToArray())),
+                level: LogLevel.Verbose);
 
             lastError = "";
             Resolver.DoResolution(
@@ -1239,15 +1319,14 @@ namespace GooglePlayServices
                 NotAvailableDialog();
                 return;
             }
-            Resolve(
-                resolutionCompleteWithResult: (success) => {
-                        EditorUtility.DisplayDialog(
-                            "Android Dependencies",
-                            String.Format("Resolution {0}", success ? "Succeeded" :
-                                          "Failed!\n\nYour application will not run, see " +
-                                          "the log for details."), "OK");
-                },
-                forceResolution: forceResolution);
+            ScheduleResolve(
+                forceResolution, (success) => {
+                    EditorUtility.DisplayDialog(
+                        "Android Dependencies",
+                        String.Format("Resolution {0}", success ? "Succeeded" :
+                                      "Failed!\n\nYour application will not run, see " +
+                                      "the log for details."), "OK");
+                }, false);
         }
 
         /// <summary>
