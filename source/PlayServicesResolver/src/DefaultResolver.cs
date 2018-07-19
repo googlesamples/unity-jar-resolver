@@ -243,7 +243,9 @@ namespace GooglePlayServices
                 string aarPath = Path.GetFullPath(aarFile);
                 CommandLine.Result result = CommandLine.Run(
                     JavaUtilities.JarBinaryPath,
-                    String.Format("cvf \"{0}\" -C \"{1}\" .", aarPath, inputDirectory));
+                    String.Format("cvf{0} \"{1}\" -C \"{2}\" .",
+                                  aarFile.ToLower().EndsWith(".jar") ? "" : "M", aarPath,
+                                  inputDirectory));
                 if (result.exitCode != 0) {
                     Debug.LogError(String.Format("Error archiving {0}\n" +
                                                  "Exit code: {1}\n" +
