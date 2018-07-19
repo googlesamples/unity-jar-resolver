@@ -33,6 +33,8 @@ namespace GooglePlayServices
 
         /// <summary>
         /// Returns true if automatic resolution is enabled.
+        /// Auto-resolution is never enabled in batch mode.  Each build setting change must be
+        /// manually followed by DoResolution().
         /// </summary>
         /// <returns><c>true</c>, if resolution is enabled <c>false</c> otherwise.</returns>
         bool AutomaticResolutionEnabled();
