@@ -157,6 +157,9 @@ project.ext {
     cacheProperties.store(projectPropertiesFile.newWriter(), null)
   }
 
+  // Whether debug symbols should be included.
+  debugEnabled = findProperty("DEBUG") != null
+
   // Get the directory that contains this script.
   scriptDirectory = buildscript.sourceFile.getParentFile()
 
@@ -198,6 +201,8 @@ project.ext {
   unityBatchModeArguments = ["-batchmode", "-nographics"]
   // Extension for Unity asset metadata files.
   unityMetadataExtension = ".meta"
+  // Extension for debug files.
+  dllMdbExtension = ".mdb"
 }
 
 /*
@@ -362,7 +367,8 @@ void checkNUnitConsolePath() {
 List<String> splitFilenameExtension(File fileObj) {
   String filename = fileObj.name
   int extensionIndex =
-    (filename - project.ext.unityMetadataExtension).lastIndexOf(".")
+    (filename - project.ext.unityMetadataExtension -
+     project.ext.dllMdbExtension).lastIndexOf(".")
   if (extensionIndex < 0) return [filename, ""]
   String basename = filename.substring(0, extensionIndex)
   String extension = filename.substring(extensionIndex)
@@ -617,12 +623,17 @@ Task createBuildPluginDllTask(String componentName,
   File projectDir = new File(project.ext.pluginSourceDir, projectName)
   File projectBuildDir = new File(project.ext.buildDir, projectName)
 
+  List<File> buildFiles = [new File(assemblyDllBasename)]
+  if (project.ext.debugEnabled) {
+    buildFiles += [new File(assemblyDllBasename + project.ext.dllMdbExtension)]
+  }
+
   // Compile the C# project.
   Task compileTask = createXbuildTask(
     sprintf("compile%s", componentName), sprintf("Compile %s", projectName),
     project.ext.pluginSolutionFile, projectName,
     fileTree(new File(projectDir, "src")), projectBuildDir,
-    [new File(assemblyDllBasename)], dependsOn)
+    buildFiles, dependsOn)
   compileTask.ext.componentName = componentName
 
   // Template metadata for the built DLL.
