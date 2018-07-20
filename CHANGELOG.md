@@ -1,3 +1,22 @@
+# Version 1.2.77 - Jul 19, 2018
+## Changed
+* Android Resolver now supports Unity's 2018 ABI filter (i.e arm64-v8a).
+* Reduced Android Resolver build option polling frequency.
+* Disabled Android Resolver auto-resolution in batch mode.  Users now need
+  to explicitly kick off resolution through the API.
+* All Android Resolver and Version Handler dialogs are now disabled in batch
+  mode.
+* Verbose logging for all plugins is now enabled by default in batch mode.
+* Version Handler bootstrapper has been improved to no longer call
+  UpdateComplete multiple times.  However, since Unity can still reload the
+  app domain after plugins have been enabled, users still need to store their
+  plugin state to persistent storage to handle reloads.
+
+## Bug Fixes
+* Android Resolver no longer incorrectly adds MANIFEST.MF files to AARs.
+* Android Resolver auto-resolution jobs are now unscheduled when an explicit
+  resolve job is started.
+
 # Version 1.2.76 - Jul 16, 2018
 ## Bug Fixes
 * Fixed variable replacement in AndroidManifest.xml files in the Android
