@@ -262,14 +262,23 @@ List<String> sortVersionStrings(Iterable<String> versions) {
   }
 }
 
+// Type of version expression match.
+public enum VersionExpressionMatchType {
+  NONE, // No match
+  MINIMUM_OF_RANGE, // Minimum version in a range of versions.
+  ABSOLUTE, // Absolute version expression specified.
+  MINIMUM_VALUE, // Minimum version of a min-version expression.
+}
+
 /*
  * Get the minimum version from a maven / ivy version expression.
  *
  * @param versionExpression Version expression to parse.
  *
- * @returns Minimum version component from the version expression.
+ * @returns Tuple of minimum version component from the version expression
+ * and the type of match
  */
-String minimumFromVersionExpression(String versionExpression) {
+def minimumFromVersionExpression(String versionExpression) {
   // Match Maven / Ivy version range expressions like:
   // [1.2.3,4.5.6]
   // [1.2.3,4.5.6)
@@ -284,17 +293,22 @@ String minimumFromVersionExpression(String versionExpression) {
   // [ or (.
   def minVersionMatch = (versionExpression =~ /^([^\[\(]+)$/)
   def minVersion = "+"
+  VersionExpressionMatchType matchType
   if (versionRangeMatch.matches()) {
+    matchType = VersionExpressionMatchType.MINIMUM_OF_RANGE
     minVersion = versionRangeMatch.group(2)
   } else if (absoluteVersionMatch.matches()) {
+    matchType = VersionExpressionMatchType.ABSOLUTE
     minVersion = absoluteVersionMatch.group(1)
   } else if (minVersionMatch.matches()) {
+    matchType = VersionExpressionMatchType.MINIMUM_VALUE
     minVersion = minVersionMatch.group(1)
   } else {
+    matchType = VersionExpressionMatchType.NONE
     logger.error(sprintf("Invalid version expression %s, returning %s",
                          versionExpression, minVersion))
   }
-  return minVersion
+  return [minVersion, matchType]
 }
 
 /*
@@ -305,7 +319,24 @@ String minimumFromVersionExpression(String versionExpression) {
  * @return Components of a version number where index 0 is the major component.
  */
 List<String> splitMinimumVersionExpression(String versionExpression) {
-  return minimumFromVersionExpression(versionExpression).split("\\.")
+  return minimumFromVersionExpression(versionExpression)[0].split("\\.")
+}
+
+/*
+ * Get the absolute version from an artifact version.
+ *
+ * Gradle can report selected artifacts with absolute version expressions or
+ * just version numbers so normalize to a version number.
+ *
+ * @param version Version to normalize.
+ *
+ * @return Normalized version number.
+ */
+String normalizeVersion(String version) {
+  def minVersion
+  def matchType
+  (minVersion, matchType) = minimumFromVersionExpression(version)
+  return matchType == VersionExpressionMatchType.ABSOLUTE ? minVersion : version
 }
 
 /*
@@ -668,8 +699,21 @@ def loosenVersionContraintsForConflicts(ResolvedComponentResult root,
   def summaryGraph = walkResolvedComponentResultGraph(
     root, { dependency, parents ->
       def componentResult = dependency.selected
-      def isConflicting =
-        componentResult.selectionReason.isConflictResolution()
+
+      // Get the versionless name of this dependency.
+      def (dependencyGroup, dependencyArtifact,
+           dependencyVersionExpression, dependencyArtifactType) =
+        getComponentsFromPackage(
+          moduleComponentSelectorToString(
+            dependency.requested as ModuleComponentSelector))
+      def dependencyVersionlessPackageName =
+        [dependencyGroup, dependencyArtifact].join(":")
+
+      def isConflicting = componentResult.selectionReason.isConflictResolution()
+      // This is only a conflict if the user did not explicitly specify this
+      // dependency.  This allows users to resolve conflicts manually.
+      isConflicting &= !(dependencyVersionlessPackageName in
+                         versionlessPackages)
       conflictsFound |= isConflicting
       addDependencyToPackages(dependency, isConflicting)
       if (isConflicting) parents.each { addDependencyToPackages(it, true) }
@@ -746,7 +790,8 @@ Map<String, List<String>> getModifiedPackageVersions(
     getPackagesByVersionlessArtifact(newPackages)
   oldPackagesByVersionlessName.each { versionlessName, oldVersion ->
     def newVersion = newPackagesByVersionlessName[versionlessName]
-    if (newVersion != oldVersion) {
+    if (normalizeVersion(getComponentsFromPackage(newVersion)[2]) !=
+        normalizeVersion(getComponentsFromPackage(oldVersion)[2])) {
       packagesModified[versionlessName] = [oldVersion, newVersion]
     }
   }
@@ -1066,8 +1111,10 @@ def testMostRecentVersionLockedPackagesFromSet() {
 }
 
 def testGetModifiedPackageVersions() {
-  def oldPackages = ["a.b.c:e-f:1.2.3", "a.b.c:f-h:4.5.6", "e.f.g:a-b:0.1.0"]
-  def newPackages = ["a.b.c:e-f:1.3.0", "a.b.c:f-h:4.6.2", "e.f.g:a-b:0.1.0"]
+  def oldPackages = ["a.b.c:e-f:1.2.3", "a.b.c:f-h:4.5.6", "e.f.g:a-b:[0.1.0]",
+                     "e.f.g:a-b:0.1.0"]
+  def newPackages = ["a.b.c:e-f:1.3.0", "a.b.c:f-h:4.6.2", "e.f.g:a-b:0.1.0",
+                     "e.f.g:a-b:[0.1.0]"]
   def expectedModifiedPackages = [
     "a.b.c:e-f": ["a.b.c:e-f:1.2.3", "a.b.c:e-f:1.3.0"],
     "a.b.c:f-h": ["a.b.c:f-h:4.5.6", "a.b.c:f-h:4.6.2"],

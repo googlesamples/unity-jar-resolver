@@ -1,3 +1,7 @@
+# Version 1.2.78 - Jul 19, 2018
+## Changed
+* Added support for overriding conflicting dependencies.
+
 # Version 1.2.77 - Jul 19, 2018
 ## Changed
 * Android Resolver now supports Unity's 2018 ABI filter (i.e arm64-v8a).
