@@ -1,3 +1,7 @@
+# Version 1.2.79 - Jul 23, 2018
+## Bug Fixes
+* Fixed AndroidManifest.xml patching on Android Resolver load in Unity 2018.x.
+
 # Version 1.2.78 - Jul 19, 2018
 ## Changed
 * Added support for overriding conflicting dependencies.

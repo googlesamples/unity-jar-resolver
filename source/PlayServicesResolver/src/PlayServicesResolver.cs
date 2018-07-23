@@ -608,8 +608,7 @@ namespace GooglePlayServices
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver() {
-            OnSettingsChanged();
-
+            // Create the resolver.
             if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) {
                 RegisterResolver(new ResolverVer1_1());
                 // Monitor Android dependency XML files to perform auto-resolution.
@@ -620,13 +619,21 @@ namespace GooglePlayServices
                     AndroidSdkRoot,
                     "ProjectSettings",
                     logMessageWithLevel: LogDelegate);
+            }
+            // Initialize settings and resolve if required.
+            OnSettingsChanged();
 
+            // Setup events for auto resolution.
+            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) {
                 BundleIdChanged += ResolveOnBundleIdChanged;
                 AndroidBuildSystemChanged += ResolveOnBuildSystemChanged;
                 AndroidAbisChanged += ResolveOnAndroidAbisChanged;
                 AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
                 ScheduleAutoResolve();
             }
+
+            // Register events to monitor build system changes for the Android Resolver and other
+            // plugins.
             RunOnMainThread.OnUpdate += PollBundleId;
             RunOnMainThread.OnUpdate += PollBuildSystem;
             RunOnMainThread.OnUpdate += PollAndroidAbis;
