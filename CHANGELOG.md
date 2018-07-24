@@ -1,3 +1,8 @@
+# Version 1.2.80 - Jul 24, 2018
+## Bug Fixes
+* Fixed project level settings incorrectly falling back to system wide settings
+  when default property values were set.
+
 # Version 1.2.79 - Jul 23, 2018
 ## Bug Fixes
 * Fixed AndroidManifest.xml patching on Android Resolver load in Unity 2018.x.
