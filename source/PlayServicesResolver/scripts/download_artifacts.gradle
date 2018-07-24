@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
-def helpText = """
+import groovy.transform.AutoClone
+import groovy.transform.EqualsAndHashCode
+import groovy.transform.ToString
+
+String helpText = """
 This Gradle script performs the following:
 - Adds Android maven repositories to search locations for artifacts.
 - Adds user specified maven repositories to search locations for artifacts.
@@ -72,351 +76,563 @@ configurations {
   copyPackagesConfig
 }
 
-/*
- * Extract the components of a package specifier.
- *
- * @param packageSpecifier Package specification.
- *   Package specification should match agroup:apackage:version@artifacttype
- *   e.g a.b.c:d.e:1.2.3@aar
- *
- * @returns [group, artifact, version, artifactType] list with the components
- * of the package spec.  If a component is not present the entry in the list is
- * null.
- */
-List<String> getComponentsFromPackage(String packageSpecifier) {
-  def components = [null, null, null, null]
-  if (packageSpecifier) {
-    packageSpecifier.split(":").eachWithIndex() { component, index ->
-      components[index] = component
-    }
-    if (components[2]) {
-      def versionArtifact = components[2].split("@")
-      if (versionArtifact.size() == 2) {
-        components[2] = versionArtifact[0]
-        components[3] = versionArtifact[1]
-      }
-    }
+// Class which splits a version string into components.
+@ToString(includeNames=true, includeFields=true)
+public class Version implements Comparable {
+  // Version string to parse.
+  public String version
+
+  /*
+   * Construct a version class from a string.
+   */
+  public Version(String version = null) {
+    this.version = version
   }
-  return components
-}
 
-/*
- * Convert a package specifier to a versionless artifact filename.
- * Incomplete package specifiers result in this method returning null.
- *
- * @param packageSpecifier Package specification.
- * @param colonAsSeparator If true ":" is used as the group, name seperator
- * "." is used otherwise.
- *
- * @returns Versionless artifact filename.
- */
-String getVersionlessArtifactByPackage(String packageSpecifier,
-                                       boolean colonAsSeparator=false) {
-  def (group, artifact, version, artifactType) =
-    getComponentsFromPackage(packageSpecifier)
-  if (artifact == null) return null
-  return [group, artifact].join(colonAsSeparator ? ":" : ".")
-}
-
-/*
- * From a set of package specifiers generate a dictionary of versionless
- * artifact filenames (e.g com.example:my-package:1.2.3 would become
- *`ret[com.example:my-package:1.2.3] = "com.example.my-package"`).
- * Incomplete package specifications e.g "com.example" are ignored.
- *
- * @param packages List of package specifier strings.
- * @param colonAsSeparator If true ":" is used as the group, name seperator
- * "." is used otherwise.
- *
- * @returns A map of versionless artifacts by package specifier.
- */
-Map<String, String> getVersionlessArtifactsByPackage(
-    Iterable<String> packages, boolean colonAsSeparator=false) {
-  def versionlessArtifactByPackage = [:]
-  packages.each {
-    def versionlessArtifact =
-      getVersionlessArtifactByPackage(it, colonAsSeparator)
-    if (versionlessArtifact) {
-      versionlessArtifactByPackage[it] = versionlessArtifact
-    }
-  }
-  return versionlessArtifactByPackage
-}
-
-/*
- * From a set of package specifiers dictionary of package names indexed
- * by group:artifact strings (e.g, com.example:my-package:1.2.3@aar would
- * become ret[com.example:my-package] = "com.example:my-package:1.2.3@aar")
- * Package specifiers without at least a group and artifact are ignored.
- *
- * If multiple versions of the same package are specified, the highest version
- * is returned in the map.
- *
- * @param packages List of package specifier strings.
- *
- * @returns A map of package specifiers by group:name tuples.
- */
-Map<String, String> getPackagesByVersionlessArtifact(
-    Iterable<String> packages) {
-  def packagesByVersionlessArtifact = [:]
-  packages.each {
-    def versionlessArtifact =
-      getVersionlessArtifactByPackage(it, true)
-    if (versionlessArtifact) {
-      def highestVersionPackage = it
-      // If the package has already been seen, select the highest version.
-      def otherPackageSpec = packagesByVersionlessArtifact[versionlessArtifact]
-      if (otherPackageSpec) {
-        def packageSpecByVersion =
-          [it, otherPackageSpec].collectEntries { pkg ->
-            def versionExpression = getComponentsFromPackage(pkg)[2]
-            def version = maxVersionFromVersionExpression(
-              versionExpression ? versionExpression : "")
-            return [version ? version : "0", pkg]
+  /*
+   * Split a version string into components that can be compared.
+   *
+   * @returns A list of components that can be compared either as integer
+   * values or strings.
+   */
+  public List<String> getComparableComponents() {
+    // Split into groups of numeric and non-numeric strings.
+    List<String> components = []
+    if (version) {
+      boolean previousIsInteger = false
+      String component = ""
+      version.each { it ->
+        boolean currentIsInteger = it.isInteger()
+        // Determine whether the current character is the same type as the
+        // previous character.
+        boolean currentTypeSameAsPrevious =
+          (currentIsInteger == previousIsInteger)
+        if (!component.isEmpty() && !currentTypeSameAsPrevious) {
+          components.add(component)
+          component = ""
         }
-        highestVersionPackage = packageSpecByVersion[
-          sortVersionStrings(packageSpecByVersion.keySet())[-1]]
+        previousIsInteger = currentIsInteger
+        component += it
       }
-      packagesByVersionlessArtifact[versionlessArtifact] = highestVersionPackage
+      if (!component.isEmpty()) components.add(component)
     }
+    return components
   }
-  return packagesByVersionlessArtifact
-}
 
-/*
- * Convert ResolvedModuleVersion to a package specifier string.
- * overrideVersion can be used to replace the version string.
- *
- * @param resolvedModuleVersion Module version to convert to a string.
- * @param overrideVersion If specified, overrides the version in the returned
- * string.
- *
- * @returns Package specifier string.
- */
-String resolvedModuleVersionToPackage(
-    ResolvedModuleVersion resolvedModuleVersion,
-    String overrideVersion=null) {
-  def components = []
-  resolvedModuleVersion.id.with {
-    module.with {
-      components.add(group)
-      components.add(name)
-    }
-    if (overrideVersion) {
-      components.add(overrideVersion)
-    } else {
-      components.add(version)
-    }
+  /*
+   * Split a version string into period separated components.
+   *
+   * @returns List of version number components.
+   */
+  public List<String> getComponents() {
+    return version ? version.tokenize('.') : []
   }
-  return components.join(":")
-}
 
-/*
- * Convert a ResolvedArtifact object to a package specifier string.
- *
- * @param resolvedArtifact Artifact to convert to a string.
- *
- * @returns String package specifier.
- */
-String resolvedArtifactToPackage(ResolvedArtifact resolvedArtifact) {
-  def packageSpecifier = resolvedModuleVersionToPackage(
-    resolvedArtifact.moduleVersion)
-  resolvedArtifact.with { if (type) packageSpecifier += "@" + type }
-  return packageSpecifier
-}
-
-/*
- * Given a set of ResolvedArtifact objects, generate a set of versionless
- * artifact filenames.
- *
- * @param artifacts List of artifacts to query.
- * @param colonAsSeparator If true ":" is used as the group, name seperator
- * "." is used otherwise.
- *
- * @returns A set of versioned artifact filenames.
- */
-Set<String> getVersionlessArtifactFilenames(
-    Iterable<ResolvedArtifact> artifacts, boolean colonAsSeparator=false) {
-  return (artifacts.collect {
-            getVersionlessArtifactByPackage(resolvedArtifactToPackage(it),
-                                            colonAsSeparator)
-          }).toSet()
-}
-
-/*
- * Sort a list of version strings.
- *
- * @param versions Versions to sort.
- *
- * @returns A list of version strings ordered by oldest to most recent version.
- */
-List<String> sortVersionStrings(Iterable<String> versions) {
-  def versionsList = versions.collect { it }
-  // The following sorts by comparing the indices of the versions.
-  // If all common indices match, the longer of the two is more recent.
-  return versionsList.sort(false) {
-    a, b -> [a, b]*.tokenize('.')*.collect { it.tokenize('-')[0] as int }.with {
-      u, v -> [u, v].transpose().findResult {
-        x, y -> x <=> y ?: null } ?: u.size() <=> v.size()
+  /*
+   * Expand wildcards in this version number to the minimum absolute value.
+   *
+   * @returns Expanded version number.
+   */
+  public Version getMinimumValue() {
+    List<String> versionNumberComponents = []
+    for (String component in components) {
+      if (component.endsWith("+")) {
+        // Strip the + from the version number and replace with 0
+        String nonWildcardComponent =
+          component.substring(0, component.size() - 1)
+        versionNumberComponents.add(
+          nonWildcardComponent ? nonWildcardComponent : "0")
+        break
+      }
+      versionNumberComponents.add(component)
     }
+    return new Version(version: versionNumberComponents.join("."))
+  }
+
+  /*
+   * Expand wildcards in this version number to the maximum absolute value.
+   *
+   * @returns Expanded version number.
+   */
+  public Version getMaximumValue() {
+    List<String> versionNumberComponents = []
+    for (String component in components) {
+      if (component.endsWith("+")) {
+        // Strip the + from the version number and subtract the existing version
+        // number, if it can be parsed, from Integer.MAX_VALUE.  This ensures
+        // 1.2.+ is a larger number than 1.2.1+ since 1.2.+ is less restrictive
+        // than 1.2.1+.
+        String nonWildcardComponent =
+          component.substring(0, component.size() - 1)
+        int valueToSubtract = nonWildcardComponent.isInteger() ?
+          nonWildcardComponent as int : 0
+        versionNumberComponents.add((Integer.MAX_VALUE -
+                                     valueToSubtract).toString())
+        break
+      }
+      versionNumberComponents.add(component)
+    }
+    return new Version(version: versionNumberComponents.join("."))
+  }
+
+  /*
+   * Returns whether the version contains any wildcards.
+   *
+   * @returns true if the version contains wildcards, false otherwise.
+   */
+  public boolean getHasWildcards() {
+    return version.contains("+")
+  }
+
+  /*
+   * Compare with another version object.
+   *
+   * @param otherObject version object to compare with.
+   *
+   * @returns -1 if other is less than this version, 0 if they're the
+   * same, 1 if other is greater than this version.
+   */
+  public int compareTo(Object otherObject) {
+    Version other = otherObject as Version
+    List<String> thisComponents = comparableComponents
+    List<String> otherComponents = other.comparableComponents
+    int componentsToCompare = Math.min(thisComponents.size(),
+                                       otherComponents.size())
+    for (int i = 0; i < componentsToCompare; ++i) {
+      String thisComponent = thisComponents[i]
+      String otherComponent = otherComponents[i]
+      int result =
+        (thisComponent.isInteger() && otherComponent.isInteger()) ?
+        (thisComponent as BigInteger) <=> (otherComponent as BigInteger) :
+        thisComponent <=> otherComponent
+      if (result != 0) return result
+    }
+    return thisComponents.size() <=> otherComponents.size()
+  }
+
+  /*
+   * Sort a list of versions
+   *
+   * @param versions Versions to sort.
+   *
+   * @returns A list of versions ordered by oldest to most recent version.
+   */
+  public static List<Version> sort(Iterable<Version> versions) {
+    return versions.collect { it }.sort(false)
+  }
+
+  /*
+   * Modify the version expression such that it has looser requirements
+   * accepting any patch, revision then finally version starting at the
+   * current version.
+   *
+   * @returns Loosened version if possible or the version.
+   */
+  public Version loosen() {
+    List<String> loosenedComponents = components.clone()
+    int lastComponentIndex = loosenedComponents.size() - 1
+    if (lastComponentIndex >= 0) {
+      String lastComponent = loosenedComponents[lastComponentIndex]
+      if (lastComponent == "+") {
+        lastComponent =
+          (lastComponentIndex > 0 ?
+           loosenedComponents[lastComponentIndex - 1] : "") + "+"
+        lastComponentIndex--
+      } else if (lastComponent.endsWith("+")) {
+        lastComponent = "+"
+      } else {
+        lastComponent = lastComponent + "+"
+      }
+      loosenedComponents =
+        lastComponentIndex > 0 ?
+          loosenedComponents[0 .. lastComponentIndex - 1] : []
+      if (lastComponent) loosenedComponents.add(lastComponent)
+    }
+    return new Version(loosenedComponents ? loosenedComponents.join(".") : "+")
   }
 }
 
 // Type of version expression match.
 public enum VersionExpressionMatchType {
   NONE, // No match
-  MINIMUM_OF_RANGE, // Minimum version in a range of versions.
+  RANGE, // Version in a range of versions.
   ABSOLUTE, // Absolute version expression specified.
-  MINIMUM_VALUE, // Minimum version of a min-version expression.
+  MINIMUM, // Minimum version of a min-version expression.
 }
 
-/*
- * Get the minimum version from a maven / ivy version expression.
- *
- * @param versionExpression Version expression to parse.
- *
- * @returns Tuple of minimum version component from the version expression
- * and the type of match
- */
-def minimumFromVersionExpression(String versionExpression) {
-  // Match Maven / Ivy version range expressions like:
-  // [1.2.3,4.5.6]
-  // [1.2.3,4.5.6)
-  // (1.2.3,4.5.6)
-  // (1.2.3,]
-  // [,4.5.6)
-  def versionRangeMatch = (versionExpression =~
-                           /^([\[\(])([^,]*),([^\]\)]*)([\)\]])$/)
-  // Match absolute Maven / Ivy version expressions like [1.2.3].
-  def absoluteVersionMatch = (versionExpression =~ /^\[([^\]]+)\]$/)
-  // Match min value Maven version expressions (i.e which don't start with
-  // [ or (.
-  def minVersionMatch = (versionExpression =~ /^([^\[\(]+)$/)
-  def minVersion = "+"
-  VersionExpressionMatchType matchType
-  if (versionRangeMatch.matches()) {
-    matchType = VersionExpressionMatchType.MINIMUM_OF_RANGE
-    minVersion = versionRangeMatch.group(2)
-  } else if (absoluteVersionMatch.matches()) {
-    matchType = VersionExpressionMatchType.ABSOLUTE
-    minVersion = absoluteVersionMatch.group(1)
-  } else if (minVersionMatch.matches()) {
-    matchType = VersionExpressionMatchType.MINIMUM_VALUE
-    minVersion = minVersionMatch.group(1)
-  } else {
-    matchType = VersionExpressionMatchType.NONE
-    logger.error(sprintf("Invalid version expression %s, returning %s",
-                         versionExpression, minVersion))
-  }
-  return [minVersion, matchType]
-}
+// Class which holds a version range.
+@AutoClone
+@EqualsAndHashCode(includeFields=true)
+@ToString(includeNames=true, includeFields=true)
+public class VersionRange {
+  // Parsed version expression.
+  public String expression
+  // Minimum version parsed from a version expression.
+  public String minimum
+  // Maximum version parsed from a version expression.
+  public String maximum
+  // Type of version expression parsed.
+  public VersionExpressionMatchType matchType
 
-/*
- * Extract components of the minimum value of a version expression.
- *
- * @param versionExpression Version expression to split into components.
- *
- * @return Components of a version number where index 0 is the major component.
- */
-List<String> splitMinimumVersionExpression(String versionExpression) {
-  return minimumFromVersionExpression(versionExpression)[0].split("\\.")
-}
-
-/*
- * Get the absolute version from an artifact version.
- *
- * Gradle can report selected artifacts with absolute version expressions or
- * just version numbers so normalize to a version number.
- *
- * @param version Version to normalize.
- *
- * @return Normalized version number.
- */
-String normalizeVersion(String version) {
-  def minVersion
-  def matchType
-  (minVersion, matchType) = minimumFromVersionExpression(version)
-  return matchType == VersionExpressionMatchType.ABSOLUTE ? minVersion : version
-}
-
-/*
- * Given a maven / ivy version expression string, return an expression that
- * has looser requirements accepting any patch, revision then finally version
- * starting at the current version.
- *
- * @param versionExpression Version expression string to loosen.
- *
- * @returns Loosened version expression string if possible or the original
- * versionExpression.
- */
-String loosenVersionExpression(String versionExpression) {
-  def components = splitMinimumVersionExpression(versionExpression)
-  def lastComponentIndex = components.size() - 1
-  if (lastComponentIndex >= 0) {
-    def lastComponent = components[lastComponentIndex]
-    if (lastComponent == "+") {
-      lastComponent =
-        (lastComponentIndex > 0 ? components[lastComponentIndex - 1] : "") + "+"
-      lastComponentIndex--
-    } else if (lastComponent.endsWith("+")) {
-      lastComponent = "+"
+  /*
+   * Get the minimum and maximum version from a maven / ivy version expression.
+   * This does not distiguish between exclusive and inclusive version ranges.
+   * i.e [1.2.3,] is treated the same as (1.2.3,].
+   *
+   * @param versionExpression Version expression to parse.
+   *
+   * @returns VersionRange instance that contains the parsed data.
+   */
+  public static VersionRange fromExpression(String versionExpression) {
+    // Match Maven / Ivy version range expressions like:
+    // [1.2.3,4.5.6]
+    // [1.2.3,4.5.6)
+    // (1.2.3,4.5.6)
+    // (1.2.3,]
+    // [,4.5.6)
+    def versionRangeMatch = (versionExpression =~
+                             /^([\[\(])([^,]*),([^\]\)]*)([\)\]])$/)
+    // Match absolute Maven / Ivy version expressions like [1.2.3].
+    def absoluteVersionMatch = (versionExpression =~ /^\[([^\]]+)\]$/)
+    // Match min value Maven version expressions (i.e which don't start with
+    // [ or (.
+    def minVersionMatch = (versionExpression =~ /^([^\[\(]+)$/)
+    VersionRange range = new VersionRange(
+      expression: versionExpression, minimum: "0", maximum: "+",
+      matchType: VersionExpressionMatchType.NONE)
+    String minMatchedVersion = ""
+    String maxMatchedVersion = ""
+    if (versionRangeMatch.matches()) {
+      range.matchType = VersionExpressionMatchType.RANGE
+      minMatchedVersion = versionRangeMatch.group(2)
+      maxMatchedVersion = versionRangeMatch.group(3)
+    } else if (absoluteVersionMatch.matches()) {
+      range.matchType = VersionExpressionMatchType.ABSOLUTE
+      minMatchedVersion = absoluteVersionMatch.group(1)
+      maxMatchedVersion = minMatchedVersion
+    } else if (minVersionMatch.matches()) {
+      range.matchType = VersionExpressionMatchType.MINIMUM
+      minMatchedVersion = minVersionMatch.group(1)
     } else {
-      lastComponent = lastComponent + "+"
+      range.matchType = VersionExpressionMatchType.NONE
     }
-    components =
-      lastComponentIndex > 0 ? components[0 .. lastComponentIndex - 1] : []
-    if (lastComponent) components.add(lastComponent)
+    if (!minMatchedVersion.isEmpty()) range.minimum = minMatchedVersion
+    if (!maxMatchedVersion.isEmpty()) range.maximum = maxMatchedVersion
+    return range
   }
-  return components ? components.join(".") : "+"
+
+  /*
+   * Get the minimum version as a Version object.
+   *
+   * @return Version object.
+   */
+  Version getMinimumVersion() {
+    return new Version(version: minimum)
+  }
+
+  /*
+   * Get the maximum version as a Version object.
+   *
+   * @return Version object.
+   */
+  Version getMaximumVersion() {
+    return new Version(version: maximum)
+  }
+
+  /*
+   * Get the maximum absolute version number from this object replacing the
+   * wildcard character "+" from the version expression with Integer.MAX_VALUE.
+   *
+   * This facilitates sorting version expressions with wildcard values after
+   * non-wildcard card values.  For example, 1.2.+ will be ordered after 1.2.0.
+   *
+   * @return Returns a version string with the wildcard component replaced by
+   * Integer.MAX_VALUE.
+   */
+  Version getMaximumVersionOfRange() {
+    return (matchType == VersionExpressionMatchType.RANGE ?
+      maximumVersion : minimumVersion).maximumValue
+  }
+
+  /*
+   * Determine whether a version is within the range.
+   *
+   * @param version Version to check against this range.
+   *
+   * @returns true if the version is in range, false otherwise.
+   */
+  boolean inRange(Version version) {
+    switch (matchType) {
+    case VersionExpressionMatchType.NONE:
+      return false
+    case VersionExpressionMatchType.RANGE:
+      return version.maximumValue >= minimumVersion.minimumValue &&
+        version.minimumValue <= maximumVersion.maximumValue
+    case VersionExpressionMatchType.ABSOLUTE:
+      return version == minimumVersion
+    case VersionExpressionMatchType.MINIMUM:
+      return version >= minimumVersion.minimumValue
+    }
+    return false
+  }
 }
 
-/*
- * Replace the wildcard character "+" from a minimum version expression with
- * Integer.MAX_VALUE.
- *
- * This facilitates sorting version expressions with wildcard values after
- * non-wildcard card values.  For example, 1.2.+ will be ordered after 1.2.0.
- *
- * @param versionExpression Expression like 1.2.+
- *
- * @return Returns a version number with the wildcard component replaced by
- * Integer.MAX_VALUE.
- */
-String maxVersionFromVersionExpression(String versionExpression) {
-  def versionNumberComponents = []
-  for (def component in splitMinimumVersionExpression(versionExpression)) {
-    if (component.contains("+")) {
-      versionNumberComponents.add(
-        (Integer.MAX_VALUE - (component == "+" ? 0 : 1)).toString())
-      break
-    }
-    versionNumberComponents.add(component)
-  }
-  return versionNumberComponents.join(".")
-}
+// Components of a package spec.
+@AutoClone
+@EqualsAndHashCode(includeFields=true)
+@ToString(includeNames=true, includeFields=true)
+public class PackageSpecifier implements Comparable {
+  // Group component of a maven package.
+  public String group
+  // Artifact component of a maven package.
+  public String artifact
+  // Version expression of a maven package.
+  public String versionExpression
+  // Type of the artifact.
+  public String artifactType
 
-/*
- * Convert a module component selector to a string.
- *
- * @param moduleComponentSelector to convert to a string.
- *
- * @return String in the form group:name:version.
- */
-String moduleComponentSelectorToString(
-    ModuleComponentSelector moduleComponentSelector) {
-  def components = []
-  moduleComponentSelector.with {
-    components.add(group)
-    components.add(module)
-    components.add(version)
+  /*
+   * Extract the components of a package specifier string.
+   *
+   * @param packageSpecifier Package specification.
+   *   Package specification should match agroup:apackage:version@artifacttype
+   *   e.g a.b.c:d.e:1.2.3@aar
+   *
+   * @returns [group, artifact, version, artifactType] list with the components
+   * of the package spec.  If a component is not present the entry in the list
+   * is null.
+   */
+  public static PackageSpecifier fromString(String packageSpecifierString) {
+    List<String> components = packageSpecifierString ?
+      packageSpecifierString.split(/[:@]/) : []
+    // Fill the list of components with null elements.
+    components += ([null] * Math.min(4, (4 - components.size())))
+    return new PackageSpecifier(group: components[0],
+                                artifact: components[1],
+                                versionExpression: components[2],
+                                artifactType: components[3])
   }
-  return components.join(":")
+
+  /*
+   * Convert a list of package specifier strings to PackageSpecifier instances.
+   *
+   * @param packageSpecifierStrings List of strings to convert.
+   *
+   * @returns PackageSpecifier instances.
+   */
+  public static List<PackageSpecifier> fromStrings(
+      Iterable<String> packageSpecifierStrings) {
+    return packageSpecifierStrings.collect { fromString(it) }
+  }
+
+  /*
+   * Convert a Gradle ModuleComponentSelector to a PackageSpecifier.
+   *
+   * @param selector Selector to convert.
+   *
+   * @returns PackageSpecifier instance.
+   */
+  public static PackageSpecifier fromModuleComponentSelector(
+      ModuleComponentSelector selector) {
+    return selector.with {
+      return new PackageSpecifier(group: group,
+                                  artifact: module,
+                                  versionExpression: version)
+    }
+  }
+
+  /*
+   * Convert a Gradle ResolvedArtifact to a PackageSpecifier.
+   *
+   * @param resolvedArtifact ResolvedArtifact to convert.
+   *
+   * @returns PackageSpecifier instance.
+   */
+  public static PackageSpecifier fromResolvedArtifact(
+      ResolvedArtifact resolvedArtifact) {
+    return resolvedArtifact.with {
+      ModuleVersionIdentifier id = moduleVersion.id
+      return new PackageSpecifier(group: id.group,
+                                  artifact: id.name,
+                                  versionExpression: id.version,
+                                  artifactType: type)
+    }
+  }
+
+  /*
+   * Sort a list of package specifiers by version.
+   *
+   * @param packages Package specifiers to sort.
+   *
+   * @returns A list of package specifiers order by oldest to most recent
+   * version.
+   */
+  public static List<PackageSpecifier> sortByVersion(
+      Iterable<PackageSpecifier> packages) {
+    return packages.collect { it }.sort(false) { lhs, rhs ->
+      (lhs.versionRange.maximumVersionOfRange <=>
+       rhs.versionRange.maximumVersionOfRange)
+    }
+  }
+
+  /*
+   * Get the range from the version.
+   *
+   * @returns Version range parsed from version component of this class or null
+   * if no version is set.
+   */
+  public VersionRange getVersionRange() {
+    return versionExpression ?
+      VersionRange.fromExpression(versionExpression) : null
+  }
+
+  /*
+   * Compare with another PackageSpecifier object.
+   *
+   * @param otherObject PackageSpecifier  object to compare with.
+   *
+   * @returns -1 if other is less than this version, 0 if they're the
+   * same, 1 if other is greater than this version.
+   */
+  public int compareTo(Object otherObject) {
+    PackageSpecifier other = otherObject as PackageSpecifier
+    List<Integer> compareResults = [
+      group <=> other.group,
+      artifact <=> other.artifact,
+      versionRange?.minimumVersion <=> other?.versionRange?.minimumVersion,
+      versionRange?.maximumVersion <=> other?.versionRange?.maximumVersion,
+      artifactType <=> other.artifactType]
+    for (int itemComparison in compareResults) {
+      if (itemComparison != 0) return itemComparison
+    }
+    return 0
+  }
+
+  /*
+   * Convert to a list of components.
+   *
+   * @returns String list of components in the form
+   * [group, artifact, versionAndArtifactType].  Missing items are not returned
+   * in the list.
+   * For example, without a versionExpression this returns [group, artifact].
+   */
+  private List<String> getComponentStrings() {
+    List<String> components = []
+    if (group) {
+      components.add(group)
+      if (artifact) {
+        components.add(artifact)
+        if (versionExpression) {
+          if (artifactType) {
+            components.add(versionExpression + "@" + artifactType)
+          } else {
+            components.add(versionExpression)
+          }
+        }
+      }
+    }
+    return components
+  }
+
+  /*
+   * Get group and artifact components as a string list.
+   *
+   * @returns [group, artifact] if they are present, empty list otherwise.
+   */
+  private List<String> getGroupArtifact() {
+    List<String> components = componentStrings
+    return components.size() >= 2 ? components[0..1] : []
+  }
+
+  /*
+   * Convert to a colon separated string.
+   *
+   * @returns Colon separated string.
+   */
+  public String getSpecString() {
+    return componentStrings.join(":")
+  }
+
+  /*
+   * Get group / artifact tuple as a colon separated string.
+   *
+   * @returns Colon separated string.
+   */
+  public String getGroupArtifactString() {
+    return groupArtifact.join(":")
+  }
+
+  /*
+   * Get group / artifact tuple as a colon separated string.
+   *
+   * @returns Period separated string.
+   */
+  public String getGroupArtifactAsPeriodSeparatedString() {
+    return groupArtifact.join(".")
+  }
+
+  /*
+   * From a set of package specifiers create a map of lists of package
+   * specifiers indexed by group:artifact strings (e.g
+   * com.example:my-package:1.2.3@aar would
+   * become ret[com.example:my-package] = ["com.example:my-package:1.2.3.@aar"]
+   *
+   * @param packages List of package specifier strings.
+   *
+   * @returns A map of package specifier lists by group:name strings.
+   */
+  public static Map<String, List<PackageSpecifier>> byGroupArtifact(
+      Iterable<PackageSpecifier> packages) {
+    Map<String, List<PackageSpecifier>> packagesByGroupArtifact = [:]
+    packages.each {
+      String groupArtifact = it.groupArtifactString
+      if (groupArtifact) {
+        List<PackageSpecifier> packageSpecs = packagesByGroupArtifact.get(
+          groupArtifact, [])
+        packageSpecs.add(it)
+        packagesByGroupArtifact[groupArtifact] = packageSpecs
+      }
+    }
+    return packagesByGroupArtifact
+  }
+
+  /*
+   * From a set of package specifiers create a map of package names indexed
+   * by group:artifact strings (e.g, com.example:my-package:1.2.3@aar would
+   * become ret[com.example:my-package] = "com.example:my-package:1.2.3@aar")
+   * Package specifiers without at least a group and artifact are ignored.
+   *
+   * If multiple versions of the same package are specified, the highest version
+   * is returned in the map.
+   *
+   * @param packages List of package specifiers.
+   *
+   * @returns A map of package specifiers by group:name strings.
+   */
+  public static Map<String, PackageSpecifier> mostRecentByGroupArtifact(
+      Iterable<PackageSpecifier> packages) {
+    return PackageSpecifier.byGroupArtifact(packages).collectEntries {
+      String groupArtifact, List<PackageSpecifier> packageSpecs ->
+        [groupArtifact, PackageSpecifier.sortByVersion(packageSpecs)[-1]]
+    }
+  }
+
+  /*
+   * Get a list of specification strings from PackageSpecifier instances.
+   *
+   * @param packages PackageSpecifier instances.
+   *
+   * @returns List of package spec strings.
+   */
+  public static List<String> specStrings(Iterable<PackageSpecifier> packages) {
+    return packages.collect { it.specString }
+  }
 }
 
 /*
  * Get the group of a version-locked package.
  *
- * @param packageSpecifier Package spec to query.
+ * @param pkg Package spec to query.
  *
  * @returns 0 if the package isn't version locked, index value greater than 0
  * if the package is added to the lockedPackages list or an index value lesser
@@ -425,12 +641,12 @@ String moduleComponentSelectorToString(
  * is not version locked - 1.0 & 2.0 are arbitrary versions - this will return a
  * positive index value for a:b.c:1.0 and negative value for a:b.c:2.0.
  */
-Integer getVersionLockedPackageIndex(String packageSpecifier) {
+int getVersionLockedPackageIndex(PackageSpecifier pkg) {
   // Packages that should be version-locked.
   for (def indexAndRegex in [
          // * com.google.android.gms.* packages are released a single set that
-         //   typically are not compatible between revisions.  e.g If a user depends
-         //   upon play-services-games:9.8.0 they'll also require
+         //   typically are not compatible between revisions.  e.g If a user
+         //   depends upon play-services-games:9.8.0 they'll also require
          //   play-services-base:9.8.0 etc.
          // * com.google.firebase.* packages are versioned in the same way as
          //   com.google.android.gms.* with dependencies upon the gms
@@ -442,23 +658,23 @@ Integer getVersionLockedPackageIndex(String packageSpecifier) {
          ~/^com\.android\.support:.*/,
        ].withIndex()) {
     def (versionLockedRegex, index) = indexAndRegex
-    if (!(packageSpecifier ==~ versionLockedRegex)) continue
+    String specString = pkg.specString
+    if (!(specString ==~ versionLockedRegex)) continue
     // com.google.firebase.* packages that end with -unity$ are shipped
     // separately so they are *not* locked to Google Play services and
     // Firebase packages.
-    if (packageSpecifier ==~ /^com\.google\.firebase:[^:]+-unity:.*/) {
+    if (specString ==~ /^com\.google\.firebase:[^:]+-unity:.*/) {
       continue
     }
     // Version 15+ of Google Play Services components are released and
     // versioned individually.
-    def (group, artifact, version, artifactType) =
-      getComponentsFromPackage(packageSpecifier)
-    if (group && group ==~ /^com\.google\.(android\.gms|firebase)$/ &&
-        version) {
-      def majorVersion =
-        maxVersionFromVersionExpression(
-          splitMinimumVersionExpression(version)[0])
-      if (Integer.parseInt(majorVersion) >= 15) {
+    if (pkg.group && pkg.group ==~ /^com\.google\.(android\.gms|firebase)$/ &&
+        pkg.versionExpression) {
+      String majorVersion =
+        VersionRange.fromExpression(
+          (new Version(version: pkg.versionRange.minimum)).components[0]).
+        maximumVersionOfRange.version
+      if (majorVersion.isInteger() && Integer.parseInt(majorVersion) >= 15) {
         return -(index + 1)
       }
     }
@@ -487,19 +703,15 @@ Integer getVersionLockedPackageIndex(String packageSpecifier) {
  * is not version locked - 1.0 & 2.0 are arbitrary versions - this will return a
  * positive index value for a:b.c:1.0 and negative value for a:b.c:2.0.
  */
-Integer addVersionLockedPackageToSet(String packageSpecifier,
-                                     Map<Integer, Set<String>> lockedPackages,
-                                     Set<Integer> blacklist) {
-  def index = getVersionLockedPackageIndex(packageSpecifier)
+int addVersionLockedPackageToSet(
+    PackageSpecifier packageSpecifier,
+    Map<Integer, Set<PackageSpecifier>> lockedPackages,
+    Set<Integer> blacklist) {
+  int index = getVersionLockedPackageIndex(packageSpecifier)
   if (index in blacklist) index = -index
-  if (index > 0) {
-    def lockedPackageSet = lockedPackages[index]
-    if (!lockedPackageSet) {
-      lockedPackageSet = [].toSet()
-    }
-    lockedPackageSet.add(packageSpecifier)
-    lockedPackages[index] = lockedPackageSet
-  }
+  Set<String> lockedPackageSet = lockedPackages.get(index, [].toSet())
+  lockedPackageSet.add(packageSpecifier)
+  lockedPackages[index] = lockedPackageSet
   return index
 }
 
@@ -507,16 +719,17 @@ Integer addVersionLockedPackageToSet(String packageSpecifier,
  * Given a set of package specs, generate a blacklist of version locked package
  * set indexes.
  *
- * @param packageSpecifiers List of package specifications to scan for
+ * @param packages List of package specifications to scan for
  * version-locked package groups that should be blacklisted.
  *
- * @returns Set of blacklisted package set indexes that for groups of packages
+ * @returns Set of blacklisted package set indexes for groups of packages
  * that should not be version-locked.
  */
-Set<Integer> createVersionLockedSetBlacklist(List<String> packageSpecifiers) {
-  def blacklist = [].toSet()
-  packageSpecifiers.each { packageSpecifier ->
-    def index = getVersionLockedPackageIndex(packageSpecifier)
+Set<Integer> createVersionLockedSetBlacklist(
+    Iterable<PackageSpecifier> packages) {
+  Set<Integer> blacklist = [].toSet()
+  packages.each { pkg ->
+    int index = getVersionLockedPackageIndex(pkg)
     if (index < 0) blacklist.add(-index)
   }
   return blacklist
@@ -530,21 +743,21 @@ Set<Integer> createVersionLockedSetBlacklist(List<String> packageSpecifiers) {
  *
  * @returns List of packages.
  */
-List<String> mostRecentVersionLockedPackagesFromSet(
-    Map<Integer, Set<String>> lockedPackages) {
-  def versionLockedPackages = []
-  lockedPackages.values().each { packages ->
-    def versions = packages.collectEntries {
-      def version = getComponentsFromPackage(it)[2]
-      return [(maxVersionFromVersionExpression(version)): version]
-    }
-    def highestVersionExpression =
-      versions[sortVersionStrings(versions.keySet())[-1]]
-    getVersionlessArtifactsByPackage(packages, true).values().sort().each {
-      versionLockedPackages.add([it, highestVersionExpression].join(":"))
-    }
+Iterable<PackageSpecifier> mostRecentVersionLockedPackagesFromSet(
+    Map<Integer, Set<PackageSpecifier>> lockedPackages) {
+  List<PackageSpecifier> versionLockedPackages = []
+  lockedPackages.findAll({ it.key > 0 }).values().each {
+    Iterable<PackageSpecifier> packages ->
+      List<PackageSpecifier> sortedPackages =
+        PackageSpecifier.sortByVersion(packages)
+      String highestVersionExpression = sortedPackages[-1].versionExpression
+      sortedPackages.each { PackageSpecifier pkg ->
+        PackageSpecifier lockedPkg = pkg.clone()
+        lockedPkg.versionExpression = highestVersionExpression
+        versionLockedPackages.add(lockedPkg)
+      }
   }
-  return versionLockedPackages
+  return versionLockedPackages.sort()
 }
 
 /*
@@ -561,36 +774,63 @@ List<String> mostRecentVersionLockedPackagesFromSet(
  *
  * @returns List of (dependency, graph nodes) traversed.
  */
-List<List<DependencyResult, List<DependencyResult>>>
+List<Tuple2<DependencyResult, List<DependencyResult>>>
     walkResolvedComponentResultGraph(ResolvedComponentResult root, closure) {
   // List of (dependency, parentsList) tuples where dependency is a
   // DependencyResult describing a node in the graph and parentsList is the
   // list of DependencyResult nodes that are parents of the "dependency" node.
-  def graphRemaining = []
-  root.dependencies.each { graphRemaining.add([it, []]) }
+  List<Tuple2<DependencyResult, List<DependencyResult>>> graphRemaining = []
+  root.dependencies.each {
+    graphRemaining.add(
+      new Tuple2<DependencyResult, List<DependencyResult>>(it, []))
+  }
 
-  def summaryGraph = []
-  // Map of versionless package names to versioned package specification
+  List<Tuple2<DependencyResult, List<DependencyResult>>> summaryGraph = []
+  // Map of group:artifact to versioned package specification
   // strings.
   while (graphRemaining.size > 0) {
     // Process current node in the graph.
-    def (dependency, parents) = graphRemaining[0]
-    summaryGraph.add(graphRemaining[0])
+    Tuple2<DependencyResult, List<DependencyResult>> currentNode =
+      graphRemaining[0]
+    DependencyResult dependency = currentNode.first
+    List<DependencyResult> parents = currentNode.second
+    summaryGraph.add(currentNode)
     graphRemaining = graphRemaining.drop(1)
+
+    // Only walk resolved depenencies.
+    if (!(dependency instanceof ResolvedDependencyResult)) {
+      continue
+    }
 
     // Call the closure the current node and the current node's parents.
     if (closure) closure(dependency, parents)
 
-    def componentResult = dependency.selected
-    def parentsOfChildren = parents.clone()
+    ResolvedComponentResult componentResult = dependency.selected
+    List<DependencyResult> parentsOfChildren = parents.clone()
     parentsOfChildren.addAll(0, [dependency])
-    def children = []
-    componentResult.dependencies.each {
-      children.add([it, parentsOfChildren])
-    }
-    graphRemaining.addAll(0, children)
+    graphRemaining.addAll(
+      0, componentResult.dependencies.collect {
+        new Tuple2<DependencyResult, List<DependencyResult>>(
+          it, parentsOfChildren)
+      })
   }
   return summaryGraph
+}
+
+/*
+ * Add the most recent package to a map indexed by group:artifact.
+ *
+ * @param packages Map of package specification strings by group:artifact.
+ * @param pkg Package to add to the map if it's the most recent versiom.
+ *
+ * @returns Map of package specification strings.
+ */
+Map<String, PackageSpecifier> addMostRecentPackageToMap(
+    Map<String, PackageSpecifier> packages, PackageSpecifier pkg) {
+  PackageSpecifier existing = packages[pkg.groupArtifactString]
+  if (existing) pkg = PackageSpecifier.sortByVersion([existing, pkg])[-1]
+  packages[pkg.groupArtifactString] = pkg
+  return packages
 }
 
 /*
@@ -605,195 +845,245 @@ List<List<DependencyResult, List<DependencyResult>>>
  * @param root Root of the graph to traverse.
  * @param requestedPackages Set of package dependency strings that were used
  * to generate the resolved dependency graph.
- * @param applyToTransitiveDependencies Whether to loosen and override version
- * requirements of transitive dependencies.
+ * @param keepPackages Set of package dependency strings that should not have
+ * dependency expressions modified.
  *
  * @returns Tuple of [conflictsFound, packages] where
  * "conflictsFound" is a boolean that indicates whether any conflicting
  * packages were found in the graph and "packages" is a set of package
- * dependency strings from the set requestedPackages with potentially loosened
+ * specifiers from the set requestedPackages with potentially loosened
  * version constraints.
  */
-def loosenVersionContraintsForConflicts(ResolvedComponentResult root,
-                                        Set<String> requestedPackages,
-                                        boolean applyToTransitiveDependencies) {
+Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
+    ResolvedComponentResult root, Set<PackageSpecifier> requestedPackages) {
   // NOTE: The version field is ignored in the returned map, this is only used
   // to look up the type specifier for each package.
-  def requestedPackagesByVersionlessArtifacts =
-    getPackagesByVersionlessArtifact(requestedPackages)
-  def versionlessPackages =
-    requestedPackagesByVersionlessArtifacts.keySet().toSet()
+  Map<String, PackageSpecifier> requestedPackagesByGroupArtifact =
+    PackageSpecifier.mostRecentByGroupArtifact(requestedPackages)
 
   // Build a set of version locked package set indexes that should not be
   // version locked.
-  def versionLockedSetBlacklist = createVersionLockedSetBlacklist(
+  Set<Integer> versionLockedSetBlacklist = createVersionLockedSetBlacklist(
     walkResolvedComponentResultGraph(root, null).collect {
-      dependency, parents ->
-        moduleComponentSelectorToString(dependency.requested as
-                                        ModuleComponentSelector)
+      DependencyResult dependency, List<DependencyResult> parents ->
+        PackageSpecifier.fromModuleComponentSelector(
+          dependency.requested as ModuleComponentSelector)
     })
 
-  def packages = [:]
-  def versionLockedPackages = [:]
+  // Map of whether each package is conflicting by group:artifact.
+  Map<String, Boolean> conflictingByGroupArtifact = [:]
+  def trackConflictState = { PackageSpecifier pkg, Boolean isConflicting ->
+    String groupArtifact = pkg.groupArtifactString
+    conflictingByGroupArtifact[groupArtifact] =
+      conflictingByGroupArtifact.get(groupArtifact, isConflicting) |
+      isConflicting
+    return isConflicting
+  }
+
+  // Map of package specification strings indexed by group:artifact.
+  Map<String, PackageSpecifier> packages = [:]
+  Map<Integer, Set<PackageSpecifier>> versionLockedPackages = [:]
 
   // Closure which adds a dependency to the packages map if it is present in
-  // the versionlessPackages set.
-  def addDependencyToPackages = { dependency, isConflicting ->
-    def packageSpec = moduleComponentSelectorToString(
-      dependency.requested as ModuleComponentSelector)
-    def (group, artifact, versionExpression, artifactType) =
-      getComponentsFromPackage(packageSpec)
-    def versionlessPackageName = [group, artifact].join(":")
-
+  // the group:artifact set.
+  def addDependencyToPackages = { PackageSpecifier pkg, Boolean isConflicting ->
     // ModuleComponentSelector does not include the artifact type so this is
     // derived from the requested packages.
-    def requestedPackage =
-      requestedPackagesByVersionlessArtifacts[versionlessPackageName]
+    PackageSpecifier requestedPackage = requestedPackagesByGroupArtifact[
+      pkg.groupArtifactString]
     if (requestedPackage) {
-      artifactType = getComponentsFromPackage(requestedPackage)[3]
+      pkg.artifactType = requestedPackage.artifactType
     }
 
     // If the package is version-locked add it to the tracking set so it can
     // be reconciled later.
-    if (addVersionLockedPackageToSet(packageSpec, versionLockedPackages,
-                                     versionLockedSetBlacklist) > 0) {
-      return
+    int versionLockedIndex = addVersionLockedPackageToSet(
+      pkg, versionLockedPackages, versionLockedSetBlacklist)
+    if (versionLockedIndex > 0) {
+      return trackConflictState(pkg, isConflicting)
+    }
+
+    // If this package is part of a blacklisted version-locked package set but
+    // the current package version is version-locked we're going to end up with
+    // a conflict across this set so loosen the version of this package.
+    if (((-versionLockedIndex) in versionLockedSetBlacklist) &&
+        getVersionLockedPackageIndex(pkg) > 0) {
+      isConflicting = true
+    }
+
+    // If the package was specified by the user as an absolute version,
+    // keep the user specified version.
+    if (requestedPackage &&
+        requestedPackage.versionRange.matchType ==
+        VersionExpressionMatchType.ABSOLUTE &&
+        isConflicting) {
+      logger.log(LogLevel.WARN,
+                 sprintf("Keeping conflicting package %s as it's explicitly " +
+                         "specified at version %s",
+                         requestedPackage.specString,
+                         requestedPackage.versionExpression))
+      addMostRecentPackageToMap(packages, requestedPackage)
+      return trackConflictState(requestedPackage, false)
     }
 
     // If this package wasn't specified by the user, ignore it.
-    if (!(versionlessPackageName in versionlessPackages)) {
-      return
+    if (!(pkg.groupArtifactString in
+          requestedPackagesByGroupArtifact.keySet())) {
+      return trackConflictState(pkg, isConflicting)
     }
+
     // Loosen the version expression for this package if it is currently
     // conflicting.
-    def selectedVersionExpression =
-      isConflicting ? loosenVersionExpression(versionExpression) :
-        versionExpression
-
-    // If an existing version has been enumerated, pick the most recent
-    // version.
-    def existingPackageSpec = packages[versionlessPackageName]
-    if (existingPackageSpec) {
-      def existingVersionExpression =
-        getComponentsFromPackage(existingPackageSpec)[2]
-      if (existingVersionExpression) {
-        def versionsBySortingKey = [
-          existingVersionExpression,
-          selectedVersionExpression
-        ].collectEntries {
-          [(maxVersionFromVersionExpression(it)): it]
-        }
-        def maxVersionExpression =
-          versionsBySortingKey[sortVersionStrings(
-              versionsBySortingKey.keySet())[-1]]
-        selectedVersionExpression = maxVersionExpression
-      }
-    }
-    def newPackageSpec =
-      [versionlessPackageName, selectedVersionExpression].join(":") +
-        (artifactType ? "@" + artifactType : "")
-    packages[versionlessPackageName] = newPackageSpec
+    PackageSpecifier newPkg =
+      new PackageSpecifier(
+        group: pkg.group,
+        artifact: pkg.artifact,
+        versionExpression: (
+          isConflicting ? pkg.versionRange.minimumVersion.loosen().version :
+            pkg.versionRange.expression),
+        artifactType: pkg.artifactType)
+    addMostRecentPackageToMap(packages, newPkg)
+    return trackConflictState(newPkg, isConflicting)
   }
 
-  def conflictsFound = false
-  def summaryGraph = walkResolvedComponentResultGraph(
-    root, { dependency, parents ->
-      def componentResult = dependency.selected
+  // Walk the resolved graph tracking whether conflicts are present.
+  walkResolvedComponentResultGraph(
+    root, { DependencyResult dependency, List<DependencyResult> parents ->
+      addDependencyToPackages(
+        PackageSpecifier.fromModuleComponentSelector(
+          dependency.requested as ModuleComponentSelector),
+        dependency.selected.selectionReason.isConflictResolution())
+    })
 
-      // Get the versionless name of this dependency.
-      def (dependencyGroup, dependencyArtifact,
-           dependencyVersionExpression, dependencyArtifactType) =
-        getComponentsFromPackage(
-          moduleComponentSelectorToString(
-            dependency.requested as ModuleComponentSelector))
-      def dependencyVersionlessPackageName =
-        [dependencyGroup, dependencyArtifact].join(":")
-
-      def isConflicting = componentResult.selectionReason.isConflictResolution()
-      // This is only a conflict if the user did not explicitly specify this
-      // dependency.  This allows users to resolve conflicts manually.
-      isConflicting &= !(dependencyVersionlessPackageName in
-                         versionlessPackages)
-      conflictsFound |= isConflicting
-      addDependencyToPackages(dependency, isConflicting)
-      if (isConflicting) parents.each { addDependencyToPackages(it, true) }
-
-      def overrideTransitiveDependencies =
-        applyToTransitiveDependencies &&
-        (dependency.requested as ModuleComponentSelector).version == "+"
-
-      componentResult.dependencies.each {
-        // If the parent's version expression can't be loosened any further,
-        // start overriding the selected version of each transitive
-        // dependency.
-        if (overrideTransitiveDependencies) {
-          def packageSpec = moduleComponentSelectorToString(
-            it.requested as ModuleComponentSelector)
-          def versionlessName = getVersionlessArtifactByPackage(packageSpec,
-                                                                true)
-          if (!(versionlessName in versionlessPackages)) {
-            packages[versionlessName] = packageSpec
-            versionlessPackages.add(versionlessName)
-            logger.info(sprintf("Overriding transitive dependency %s",
-                                packageSpec))
+  // Walk the resolved graph again, this time applying any required changes to
+  // parents or children of conflicting dependencies.
+  boolean conflictsFound = false
+  List<Tuple2<DependencyResult, List<DependencyResult>>> summaryGraph =
+    walkResolvedComponentResultGraph(
+      root, { DependencyResult dependency, List<DependencyResult> parents ->
+        PackageSpecifier pkg = PackageSpecifier.fromModuleComponentSelector(
+          dependency.requested as ModuleComponentSelector)
+        if (conflictingByGroupArtifact[
+              pkg.groupArtifactString]) {
+          conflictsFound = true
+          parents.each {
+            addDependencyToPackages(
+              PackageSpecifier.fromModuleComponentSelector(
+                it.requested as ModuleComponentSelector), true)
           }
         }
-      }
-    })
+
+        // If the package version spec can't be loosened any further and this
+        // was requested by the caller of this method, add child packages to the
+        // set of dependencies to loosen in the next iteration.
+        def overrideTransitiveDependencies =
+          pkg.versionExpression == "+" &&
+          (pkg.groupArtifactString in requestedPackagesByGroupArtifact)
+        if (overrideTransitiveDependencies) {
+          dependency.selected.dependencies.each {
+            logger.info(sprintf("Overriding transitive dependency %s",
+                                it.toString()))
+            addMostRecentPackageToMap(
+              packages, PackageSpecifier.fromModuleComponentSelector(
+                it.requested as ModuleComponentSelector))
+          }
+        }
+      })
 
   // Select the most recent version of each version-locked package and add to
   // the set.
-  packages += mostRecentVersionLockedPackagesFromSet(
-      versionLockedPackages).collectEntries {
-    [(getVersionlessArtifactByPackage(it, true)): it]
+  mostRecentVersionLockedPackagesFromSet(versionLockedPackages).each {
+    addMostRecentPackageToMap(packages, it)
   }
 
   logger.info("=== Updated Dependencies ===")
   summaryGraph.each {
     def (dependency, parents) = it
+    String groupArtifact =
+      PackageSpecifier.fromModuleComponentSelector(
+        dependency.requested as ModuleComponentSelector).groupArtifactString
     logger.info(
       sprintf("%s* %s (new: %s, conflicting: %b (parents: %s))",
               "  ".multiply(parents.size()),
               dependency.toString(),
-              packages[getVersionlessArtifactByPackage(
-                  moduleComponentSelectorToString(
-                    dependency.requested as ModuleComponentSelector), true)],
-              dependency.selected.selectionReason.isConflictResolution(),
+              packages[groupArtifact],
+              conflictingByGroupArtifact[groupArtifact],
               parents.collect {
-                moduleComponentSelectorToString(
-                  it.requested as ModuleComponentSelector)
+                PackageSpecifier.fromModuleComponentSelector(
+                  it.requested as ModuleComponentSelector).specString
               }))
   }
 
   logger.info(sprintf("=== Selected dependencies: %s", packages.toString()))
 
-  return [conflictsFound, packages.values().toSet()]
+  return new Tuple2<Boolean, Set<PackageSpecifier>>(
+    conflictsFound, packages.values().toSet())
 }
 
 /*
  * Given two sets of package specifications that specify potentially different
  * versions, create a map that describes all versions that have changed.
+ * Only the packages in the oldPackages set are considered, all packages that
+ * exist in newPackages that are not in oldPackages are ignored and packages
+ * that are removed are ignored.
  *
  * @param oldPackages Package specifications prior to the version change.
  * @param newPackages Package specifications after the version change.
  *
- * @returns Map of [oldVersion, newVersion] tuples indexed by the versionless
- * package name for each package with a modified version.
+ * @returns Map of [oldVersion, newVersion] tuples indexed by the group:artifact
+ * of each package with a modified version.
  */
-Map<String, List<String>> getModifiedPackageVersions(
-    Iterable<String> oldPackages, Iterable<String> newPackages) {
+Map<String, List<Tuple2<PackageSpecifier,
+                        PackageSpecifier>>> getModifiedPackageVersions(
+    Iterable<PackageSpecifier> oldPackages,
+    Iterable<PackageSpecifier> newPackages) {
   // Track package specifications that were modified.
-  def packagesModified = [:]
-  def oldPackagesByVersionlessName =
-    getPackagesByVersionlessArtifact(oldPackages)
-  def newPackagesByVersionlessName =
-    getPackagesByVersionlessArtifact(newPackages)
-  oldPackagesByVersionlessName.each { versionlessName, oldVersion ->
-    def newVersion = newPackagesByVersionlessName[versionlessName]
-    if (normalizeVersion(getComponentsFromPackage(newVersion)[2]) !=
-        normalizeVersion(getComponentsFromPackage(oldVersion)[2])) {
-      packagesModified[versionlessName] = [oldVersion, newVersion]
-    }
+  Map<String, List<Tuple2<PackageSpecifier,
+                          PackageSpecifier>>> packagesModified = [:]
+  // Bucket old and new versions by group artifact name.
+  Map<String, List<PackageSpecifier>> oldPackagesByGroupArtifact =
+    PackageSpecifier.byGroupArtifact(oldPackages)
+  Map<String, List<PackageSpecifier>> newPackagesByGroupArtifact =
+    PackageSpecifier.byGroupArtifact(newPackages)
+
+  oldPackagesByGroupArtifact.each {
+    String groupArtifact, List<PackageSpecifier> oldItems ->
+      List<PackageSpecifier> newItems =
+        newPackagesByGroupArtifact.get(groupArtifact, [])
+      oldItems.each { PackageSpecifier oldPackage ->
+        // NOTE: Unlike similar languages, groovy's map.get inserts the
+        // retrieved item into the map.
+        List<Tuple2<PackageSpecifier, PackageSpecifier>> modified =
+          packagesModified[groupArtifact]
+        if (!modified) modified = []
+        if (newItems) {
+          newItems.each { PackageSpecifier newPackage ->
+            VersionRange oldRange = oldPackage.versionRange
+            VersionRange newRange = newPackage.versionRange
+            // Only take into account overlapping ranges if the previous range
+            // wasn't a minimum value without wildcards.  For example,
+            // 1.2.3 typically means that user wanted to select version 1.2.3
+            // not 1.2.3 or any subsequent version.
+            boolean checkInRange =
+              oldRange &&
+              (oldRange.minimumVersion.hasWildcards ||
+               oldRange.matchType != VersionExpressionMatchType.MINIMUM)
+            // Determines whether the new range bounds are within the previous
+            // range.
+            boolean newRangeInOldRange =
+              newRange && (
+                checkInRange ?
+                  (oldRange.inRange(newRange.minimumVersion) ||
+                   oldRange.inRange(newRange.maximumVersion)) :
+                oldRange.minimumVersion == newRange.minimumVersion)
+            if (!oldRange || !newRange || !newRangeInOldRange) {
+              modified.add(new Tuple2<PackageSpecifier, PackageSpecifier>(
+                             oldPackage, newPackage))
+            }
+          }
+        }
+        if (modified) packagesModified[groupArtifact] = modified
+      }
   }
   return packagesModified
 }
@@ -804,19 +1094,22 @@ Map<String, List<String>> getModifiedPackageVersions(
  *
  * @param packages Packages to resolve the dependencies of.
  *
- * @returns A tuple of [packages, packagesModified, configuration]
- * where:
- * - packages is a List of package specifications that were successfully resolved
- *   or the original package list if it's not possible to find a set of packages that
- *   do not conflict.
- * - packagesModified is the value returned by getModifiedPackageVersions()
- *   the change between the supplied packages.
- * - configuration is the gradle Configuration used to resolve the packages.
+ * @returns Tuple of [packages, configuration] where:
+ * packages is the set of package specifications that were successfully resolved
+ * or the original list if it's not possible to find a set of packages that do
+ * not conflict.
+ * configuration is the Gradle configuration used to resolve the packages.
  */
-def resolveConflictingPackages(Iterable<String> packages) {
-  def currentPackages = packages.clone()
-  def resolutionAttempt = 1
-  def userPackagesToQuery = null
+Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
+    Iterable<PackageSpecifier> packages) {
+  // Select the most recent package for each of the specified set of packages.
+  Set<PackageSpecifier> currentPackages =
+    PackageSpecifier.mostRecentByGroupArtifact(packages).values().toSet()
+  // Save the set of packages requested by the user.
+  Set<String> initialPackages = currentPackages.clone().toSet()
+  int resolutionAttempt = 1
+  Configuration userPackagesToQuery = null
+
   while (true) {
     // Copy the configuration to query the set of required dependencies.
     userPackagesToQuery = project.configurations.create(
@@ -824,8 +1117,9 @@ def resolveConflictingPackages(Iterable<String> packages) {
     // Add user specified packages to the userPackages configuration.
     // This allows us to resolve during the configuration phase.
     logger.info(sprintf("Resolution attempt %d: packages %s",
-                        resolutionAttempt, currentPackages.toString()))
-    currentPackages.each {
+                        resolutionAttempt,
+                        PackageSpecifier.specStrings(currentPackages)))
+    PackageSpecifier.specStrings(currentPackages).each {
       project.dependencies.add(userPackagesToQuery.name, it)
     }
     try {
@@ -833,15 +1127,15 @@ def resolveConflictingPackages(Iterable<String> packages) {
     } catch (ResolveException e) {
       // If a package is missing, don't continue searching as the overall
       // resolution process will fail anyway.
-      logger.info(sprintf("Resolution failed %s (%s) for packages %s",
+      logger.warn(sprintf("Ignoring resolution failure %s (%s) for packages %s",
                           e.toString(), e.getCauses().toString(),
-                          currentPackages.toString()))
-      break
+                          PackageSpecifier.specStrings(currentPackages)))
     }
-    def (conflictsFound, newPackages) = loosenVersionContraintsForConflicts(
-      userPackagesToQuery.incoming.resolutionResult.root, currentPackages,
-      true)
-    def packagesChanged = !newPackages.equals(currentPackages)
+    boolean conflictsFound
+    Set<PackageSpecifier> newPackages
+    (conflictsFound, newPackages) = loosenVersionContraintsForConflicts(
+      userPackagesToQuery.incoming.resolutionResult.root, currentPackages)
+    boolean packagesChanged = !newPackages.equals(currentPackages)
     currentPackages = newPackages
     logger.info(sprintf("Resolution attempt: %d, conflicts: %b, " +
                         "updated packages: %b", resolutionAttempt,
@@ -850,14 +1144,21 @@ def resolveConflictingPackages(Iterable<String> packages) {
       break
     } else if (!packagesChanged) {
       logger.warn(sprintf("Unable to find a set of non-conflicting artifacts " +
-                          "for packages %s.", packages.toString()))
+                          "for packages %s.",
+                          PackageSpecifier.specStrings(packages)))
       break
     }
     resolutionAttempt++
   }
-  return [currentPackages,
-          getModifiedPackageVersions(packages, currentPackages),
-          userPackagesToQuery]
+  // Restore any packages that were not present during the conflict resolution
+  // process.
+  Set<String> foundPackages =
+    PackageSpecifier.mostRecentByGroupArtifact(currentPackages).keySet()
+  currentPackages += packages.findAll {
+    !(it.groupArtifactString in foundPackages)
+  }.toSet()
+  return new Tuple2<Set<PackageSpecifier>, Configuration>(currentPackages,
+                                                          userPackagesToQuery)
 }
 
 /*
@@ -876,39 +1177,54 @@ def resolveConflictingPackages(Iterable<String> packages) {
  * @returns Package specifications with the @srcaar artifact specifier for each
  * artifact where a fallback package exists.
  */
-Set<String> fallbackToSrcAarArtifacts(Iterable<String> packages) {
-  def allPackages = getPackagesByVersionlessArtifact(packages)
-
+Set<PackageSpecifier> fallbackToSrcAarArtifacts(
+    Iterable<PackageSpecifier> packages) {
   // Search for all packages, excluding those with explicit artifact types and
   // find the missing set.
-  def searchPackages = allPackages.findAll { !it.value.contains("@") }
-  def findMissingConfig = project.configurations.create("findMissing")
-  packages.each { project.dependencies.add(findMissingConfig.name, it) }
-  def foundArtifacts = getVersionlessArtifactFilenames(
-    findMissingConfig.resolvedConfiguration.
-      lenientConfiguration.getArtifacts(Specs.satisfyAll()), true)
-  def missingPackages = searchPackages.keySet().minus(foundArtifacts)
-  def fallbackPackages = missingPackages.collectEntries {
-    [it, searchPackages[it] + "@srcaar"]
+  Map<String, PackageSpecifier> searchPackages =
+    PackageSpecifier.mostRecentByGroupArtifact(packages).findAll {
+      !it.value.artifactType
+    }
+
+  Configuration findMissingConfig = project.configurations.create("findMissing")
+  PackageSpecifier.specStrings(packages).each {
+    project.dependencies.add(findMissingConfig.name, it)
   }
 
+  def artifactsToGroupArtifact = { Iterable<ResolvedArtifact> artifacts ->
+    return artifacts.collect {
+      PackageSpecifier.fromResolvedArtifact(it).groupArtifactString
+    }
+  }
+
+  Set<String> foundArtifacts = artifactsToGroupArtifact(
+    findMissingConfig.resolvedConfiguration.
+      lenientConfiguration.getArtifacts(Specs.satisfyAll()))
+  Set<String> missingPackages = searchPackages.keySet().minus(foundArtifacts)
+  Map<String, PackageSpecifier> fallbackPackages =
+    missingPackages.collectEntries {
+        PackageSpecifier pkg = searchPackages[it].clone()
+        pkg.artifactType = "srcaar"
+        return [it, pkg]
+    }
+
   // Search for missing packages using the srcaar artifact type.
-  def searchForSrcAarConfig = project.configurations.create("searchForSrcAars")
-  fallbackPackages.values().each {
+  Configuration searchForSrcAarConfig =
+    project.configurations.create("searchForSrcAars")
+  PackageSpecifier.specStrings(fallbackPackages.values()).each {
     project.dependencies.add(searchForSrcAarConfig.name, it)
   }
-  foundArtifacts = getVersionlessArtifactFilenames(
+  foundArtifacts = artifactsToGroupArtifact(
     searchForSrcAarConfig.resolvedConfiguration.
-      lenientConfiguration.getArtifacts(Specs.satisfyAll()), true)
+      lenientConfiguration.getArtifacts(Specs.satisfyAll()))
 
   // Replace all user supplied packages in the output set with discovered srcaar
   // package specs.
-  def outputPackages = [].toSet()
+  Set<PackageSpecifier> outputPackages = [].toSet()
   packages.each {
-    def versionlessArtifact =
-      getVersionlessArtifactByPackage(it, true)
-    if (versionlessArtifact && versionlessArtifact in foundArtifacts) {
-      outputPackages.add(fallbackPackages[versionlessArtifact])
+    String groupArtifact = it.groupArtifactString
+    if (groupArtifact && groupArtifact in foundArtifacts) {
+      outputPackages.add(fallbackPackages[groupArtifact])
     } else {
       outputPackages.add(it)
     }
@@ -918,70 +1234,75 @@ Set<String> fallbackToSrcAarArtifacts(Iterable<String> packages) {
 
 def testGetComponentsFromPackage() {
   [["org.test.psr:something-neat:1.2.3@special",
-    ["org.test.psr", "something-neat", "1.2.3", "special"]],
+    new PackageSpecifier(group: "org.test.psr",
+                         artifact: "something-neat",
+                         versionExpression: "1.2.3",
+                         artifactType: "special")],
    ["org.test.psr:something-neat:1.2.3",
-    ["org.test.psr", "something-neat", "1.2.3", null]],
+    new PackageSpecifier(group: "org.test.psr",
+                         artifact: "something-neat",
+                         versionExpression: "1.2.3",
+                         artifactType: null)],
    ["org.test.psr:something-neat",
-    ["org.test.psr", "something-neat", null, null]],
-   ["org.test.psr", ["org.test.psr", null, null, null]],
-   ["", [null, null, null, null]]].each { packageSpecifier, expected ->
-     def result = getComponentsFromPackage(packageSpecifier)
-     if (result != expected) {
-       throw new Exception(
-         sprintf("Invalid components %s, expected %s for package '%s'",
-                 result, expected, packageSpecifier))
-     }
-  }
-}
-
-def testGetVersionlessArtifactByPackage() {
-  [["org.test.psr:something-neat:1.2.3", true,
-    "org.test.psr:something-neat"],
-   ["org.test.psr:something-neat:1.2.3", false,
-    "org.test.psr.something-neat"],
-   ["just.a.group", false, null]].each {
-    def (packageSpecifier, colonAsSeparator, expected) = it
-    def result = getVersionlessArtifactByPackage(packageSpecifier,
-                                                 colonAsSeparator)
-    if (result != expected) {
-      throw new Exception(
-        sprintf("Invalid versionless artifact %s, expected %s for [%s, %b]",
-                result, expected, packageSpecifier, colonAsSeparator))
-    }
-  }
-}
-
-def testGetVersionlessArtifactsByPackage() {
-  [[["a.b.c:d-e:1.2.3", "a.b.c:e-f:+", "a.b.c"], false,
-    ["a.b.c:d-e:1.2.3": "a.b.c.d-e",
-     "a.b.c:e-f:+": "a.b.c.e-f"]],
-   [["a.b.c:d-e:1.2.3", "a.b.c:e-f:+", "a.b.c"], true,
-    ["a.b.c:d-e:1.2.3": "a.b.c:d-e",
-     "a.b.c:e-f:+": "a.b.c:e-f"]]].each {
-    packages, colonAsSeparator, expected ->
-      def result = getVersionlessArtifactsByPackage(packages, colonAsSeparator)
+    new PackageSpecifier(group: "org.test.psr",
+                         artifact: "something-neat",
+                         versionExpression: null,
+                         artifactType: null)],
+   ["org.test.psr",
+    new PackageSpecifier(group: "org.test.psr",
+                         artifact: null,
+                         versionExpression: null,
+                         artifactType: null)],
+   ["", new PackageSpecifier()]].each {
+    String packageSpecifier, PackageSpecifier expected ->
+      PackageSpecifier result = PackageSpecifier.fromString(packageSpecifier)
       if (result != expected) {
         throw new Exception(
-          sprintf("Unexpected map %s, expected %s for %s",
-                  result.toString(), expected.toString(),
-                  [packages, colonAsSeparator].toString()))
+          sprintf("Invalid components %s, expected %s for package '%s'",
+                  result, expected, packageSpecifier))
+      }
+   }
+}
+
+def testPackageSpecifierStrings() {
+  [[PackageSpecifier.fromString("a-b:c-d:1.2.3@aar"),
+    ["a-b:c-d:1.2.3@aar", "a-b:c-d", "a-b.c-d"]],
+   [PackageSpecifier.fromString("a-b:c-d:1.2.3"),
+    ["a-b:c-d:1.2.3", "a-b:c-d", "a-b.c-d"]],
+   [PackageSpecifier.fromString("a-b:c-d"),
+    ["a-b:c-d", "a-b:c-d", "a-b.c-d"]],
+   [PackageSpecifier.fromString("a-b"), ["a-b", "", ""]],
+   [PackageSpecifier.fromString(""), ["", "", ""]]].each {
+    pkg, expected ->
+      List<String> result = [pkg.specString,
+                             pkg.groupArtifactString,
+                             pkg.groupArtifactAsPeriodSeparatedString]
+      if (result != expected) {
+        throw new Exception(
+          sprintf("Invalid strings returned %s, expected %s for %s",
+                  result, expected, pkg))
       }
   }
 }
 
-def testGetPackagesByVersionlessArtifact() {
+def testGetMostRecentPackagesByGroupArtifact() {
   [[["a.b.c:d-e:1.2.3", "a.b.c:e-f:+"],
     ["a.b.c:d-e": "a.b.c:d-e:1.2.3",
      "a.b.c:e-f": "a.b.c:e-f:+"]],
-   [["a.b.c:d-e:1.2.+", "a.b.c:d-e:2.1.+"],
-    ["a.b.c:d-e": "a.b.c:d-e:2.1.+"]]].each { packages, expected ->
-    def result = getPackagesByVersionlessArtifact(packages)
-    if (result != expected) {
-      throw new Exception(
-        sprintf("Unexpected map %s, expected %s for %s",
-                result.toString(), expected.toString(),
-                packages.toString()))
-    }
+   [["a.b.c:d-e:3.0.0", "a.b.c:d-e:1.2.+", "a.b.c:d-e:2.1.+"],
+    ["a.b.c:d-e": "a.b.c:d-e:3.0.0"]]].each {
+    List<String> packages, Map<String, String> expected ->
+      Map<String, String> result =
+        PackageSpecifier.mostRecentByGroupArtifact(
+          PackageSpecifier.fromStrings(packages)).collectEntries {
+          [it.key, it.value.specString]
+        }
+      if (result != expected) {
+        throw new Exception(
+          sprintf("Unexpected map %s, expected %s for %s",
+                  result.toString(), expected.toString(),
+                  packages.toString()))
+      }
   }
 }
 
@@ -992,16 +1313,12 @@ def testLoosenVersionExpression() {
    "1.2+": "1.+",
    "1.+": "1+",
    "1+": "+",
-   "[1.2.3,4.5.6)": "1.2.3+",
-   "[1.2.+,4.5.6]": "1.2+",
-   "[1.2.3]": "1.2.3+",
-   "[1.2.+]": "1.2+",
-   "[1.+]": "1+"].each { expression, expected ->
-     def result = loosenVersionExpression(expression)
+   "+": "+"].each { String versionString, String expected ->
+     String result = (new Version(versionString)).loosen().version
      if (result != expected) {
        throw new Exception(
          sprintf("Invalid loose version expression %s, " +
-                 "expected %s for %s", result, expected, expression))
+                 "expected %s for %s", result, expected, versionString))
      }
   }
 }
@@ -1013,9 +1330,8 @@ def testGetVersionLockedPackageIndex() {
    "com.google.firebase:firebase-app-unity:4.3.0": 0,
    "com.google.android.gms:play-services-base:15.1.2": -1].each {
     packageSpec, expectedIndex ->
-      def index = getVersionLockedPackageIndex(packageSpec)
-      logger.info(sprintf("package %s (%d vs %d)",
-                          packageSpec, index, expectedIndex))
+      int index = getVersionLockedPackageIndex(
+        PackageSpecifier.fromString(packageSpec))
       if (index != expectedIndex) {
         throw new Exception(
           sprintf("Invalid package lock %d, expected %d for %s",
@@ -1025,17 +1341,18 @@ def testGetVersionLockedPackageIndex() {
 }
 
 def testAddVersionLockedPackageToSet() {
-  def lockedPackages = [:]
+  Map<Integer, Set<PackageSpecifier>> lockedPackages = [:]
   [["com.google.android.gms:play-services-base:12.0.1", true],
    ["com.google.firebase:firebase-core:12.0.1", true],
    ["com.android.support:support-v4:23.0.+", true],
    ["com.android.support:support-vector-drawable:24+", true],
    ["com.google.firebase:firebase-app-unity:4.3.0", false],
    ["com.google.android.gms:play-services-base:15.1.2", false]].each {
-    packageSpecifier, expected ->
-      def resultIndex = addVersionLockedPackageToSet(packageSpecifier,
-                                                     lockedPackages, [].toSet())
-      def result = resultIndex > 0
+    String packageSpecifier, boolean expected ->
+      int resultIndex = addVersionLockedPackageToSet(
+        PackageSpecifier.fromString(packageSpecifier),
+        lockedPackages, [].toSet())
+      boolean result = resultIndex > 0
       if (expected != result) {
         throw new Exception(
           sprintf("%s was incorrectly added to a version-locked set, " +
@@ -1043,11 +1360,19 @@ def testAddVersionLockedPackageToSet() {
                   expected))
       }
   }
-  def expectedLockedPackages =
-    [1: ["com.google.android.gms:play-services-base:12.0.1",
-         "com.google.firebase:firebase-core:12.0.1"].toSet(),
-     2: ["com.android.support:support-v4:23.0.+",
-         "com.android.support:support-vector-drawable:24+"].toSet()]
+  Map<Integer, Set<String>> expectedLockedPackages =
+    [1: [PackageSpecifier.fromString(
+          "com.google.android.gms:play-services-base:12.0.1"),
+         PackageSpecifier.fromString(
+          "com.google.firebase:firebase-core:12.0.1")].toSet(),
+     2: [PackageSpecifier.fromString(
+          "com.android.support:support-v4:23.0.+"),
+         PackageSpecifier.fromString(
+          "com.android.support:support-vector-drawable:24+")].toSet(),
+     0: [PackageSpecifier.fromString(
+          "com.google.firebase:firebase-app-unity:4.3.0")].toSet(),
+     (-1): [PackageSpecifier.fromString(
+          "com.google.android.gms:play-services-base:15.1.2")].toSet()]
   if (lockedPackages != expectedLockedPackages) {
     throw new Exception(
       sprintf("Generated invalid set of locked packages %s, expected %s",
@@ -1056,12 +1381,14 @@ def testAddVersionLockedPackageToSet() {
 }
 
 def testCreateVersionLockedSetBlacklist() {
-  def expectedBlacklist = [1].toSet()
-  def blacklist = createVersionLockedSetBlacklist(
+  Set<Integer> expectedBlacklist = [1].toSet()
+  Set<Integer> blacklist = createVersionLockedSetBlacklist(
     ["com.google.android.gms:play-services-base:12.0.1",
      "com.google.firebase:firebase-core:12.0.1",
      "com.google.android.gms:play-services-base:15.+",
-     "com.android.support:support-v4:23.0.+"])
+     "com.android.support:support-v4:23.0.+"].collect {
+      PackageSpecifier.fromString(it)
+    })
   if (blacklist != expectedBlacklist) {
     throw new Exception(
       sprintf("Created invalid blacklist of locked package groups %s, " +
@@ -1070,15 +1397,15 @@ def testCreateVersionLockedSetBlacklist() {
 }
 
 def testAddVersionLockedPackageToSetWithBlacklist() {
-  def blacklist = [1].toSet()
-  def lockedPackages = [:]
+  Set<Integer> blacklist = [1].toSet()
+  Map<Integer, Set<PackageSpecifier>> lockedPackages = [:]
   ["com.google.android.gms:play-services-base:12.0.1": -1,
    "com.google.firebase:firebase-core:12.0.1": -1,
    "com.android.support:support-v4:23.0.+": 2].each {
-    packageSpec, expectedIndex ->
-      def resultIndex = addVersionLockedPackageToSet(packageSpec,
-                                                     lockedPackages,
-                                                     blacklist)
+    String packageSpecifier, int expectedIndex ->
+      int resultIndex = addVersionLockedPackageToSet(
+        PackageSpecifier.fromString(packageSpecifier),
+        lockedPackages, blacklist)
       if (resultIndex != expectedIndex) {
         throw new Exception(
           sprintf("%s was incorrectly added to a version-locked set, " +
@@ -1089,18 +1416,23 @@ def testAddVersionLockedPackageToSetWithBlacklist() {
 }
 
 def testMostRecentVersionLockedPackagesFromSet() {
-  def versionLockedSets = [
-    1: ["com.google.android.gms:play-services-base:12.0.1",
-        "com.google.firebase:firebase-core:12.0.+"].toSet(),
-    2: ["com.android.support:support-v4:23.0.+",
-        "com.android.support:support-vector-drawable:24.+"].toSet()]
-  def versionLockedList =
-    mostRecentVersionLockedPackagesFromSet(versionLockedSets)
-  def expectedPackageList = [
+  Map<Integer, Set<PackageSpecifier>> versionLockedSets = [
+    1: [PackageSpecifier.fromString(
+          "com.google.android.gms:play-services-base:12.0.1"),
+        PackageSpecifier.fromString(
+          "com.google.firebase:firebase-core:12.0.+")].toSet(),
+    2: [PackageSpecifier.fromString(
+          "com.android.support:support-v4:23.0.+"),
+        PackageSpecifier.fromString(
+          "com.android.support:support-vector-drawable:24.+")].toSet()]
+  Iterable<String> versionLockedList =
+    PackageSpecifier.specStrings(
+      mostRecentVersionLockedPackagesFromSet(versionLockedSets))
+  Iterable<String> expectedPackageList = [
+    "com.android.support:support-v4:24.+",
+    "com.android.support:support-vector-drawable:24.+",
     "com.google.android.gms:play-services-base:12.0.+",
     "com.google.firebase:firebase-core:12.0.+",
-    "com.android.support:support-v4:24.+",
-    "com.android.support:support-vector-drawable:24.+"
   ]
   if (versionLockedList != expectedPackageList) {
     throw new Exception(
@@ -1110,16 +1442,66 @@ def testMostRecentVersionLockedPackagesFromSet() {
   }
 }
 
-def testGetModifiedPackageVersions() {
-  def oldPackages = ["a.b.c:e-f:1.2.3", "a.b.c:f-h:4.5.6", "e.f.g:a-b:[0.1.0]",
-                     "e.f.g:a-b:0.1.0"]
-  def newPackages = ["a.b.c:e-f:1.3.0", "a.b.c:f-h:4.6.2", "e.f.g:a-b:0.1.0",
-                     "e.f.g:a-b:[0.1.0]"]
-  def expectedModifiedPackages = [
-    "a.b.c:e-f": ["a.b.c:e-f:1.2.3", "a.b.c:e-f:1.3.0"],
-    "a.b.c:f-h": ["a.b.c:f-h:4.5.6", "a.b.c:f-h:4.6.2"],
+def testSortPackagesByVersion() {
+  List<String> unsorted = [
+    "a.b.c:e-f:1.0.0",
+    "a.b.c:e-f:[0.5.2,3.2.0]",
+    "a.b.c:e-f:2.1.+",
+    "a.b.c:e-f:1.0.1",
   ]
-  def modifiedPackages = getModifiedPackageVersions(oldPackages, newPackages)
+  List<String> expectedSortedByVersion = [
+    "a.b.c:e-f:1.0.0",
+    "a.b.c:e-f:1.0.1",
+    "a.b.c:e-f:2.1.+",
+    "a.b.c:e-f:[0.5.2,3.2.0]",
+  ]
+  List<String> sortedByVersion = PackageSpecifier.specStrings(
+    PackageSpecifier.sortByVersion(
+      unsorted.collect {
+        PackageSpecifier.fromString(it)
+      }
+    ))
+  if (sortedByVersion != expectedSortedByVersion) {
+    throw new Exception(
+      sprintf("Invalid sorted package list %s, expected %s for %s",
+              sortedByVersion, expectedSortedByVersion, unsorted))
+  }
+}
+
+def testGetModifiedPackageVersions() {
+  List<String> oldPackages = [
+    "a.b.c:e-f:1.2.3",
+    "a.b.c:f-h:4.5.6",
+    "e.f.g:a-b:[0.1.0]",
+    "e.f.g:a-b:0.1.0",
+    "to.be:removed:1.0.0",
+    "z.z.z:x-y:5.0.0",
+    "z.z.z:x-y:5.0.1",
+    "z.z.z:x-y:6.0.0",
+    "com.android.support:appcompat-v7:23.0.+",
+  ]
+  List<String> newPackages = [
+    "a.b.c:e-f:1.3.0",
+    "a.b.c:f-h:4.6.2",
+    "e.f.g:a-b:0.1.0",
+    "e.f.g:a-b:[0.1.0]",
+    "z.z.z:x-y:6.0.0",
+    "com.android.support:appcompat-v7:23.0.1@aar",
+  ]
+  Map<String, List<String>> expectedModifiedPackages = [
+    "a.b.c:e-f": [[PackageSpecifier.fromString("a.b.c:e-f:1.2.3"),
+                   PackageSpecifier.fromString("a.b.c:e-f:1.3.0")]],
+    "a.b.c:f-h": [[PackageSpecifier.fromString("a.b.c:f-h:4.5.6"),
+                   PackageSpecifier.fromString("a.b.c:f-h:4.6.2")]],
+    "z.z.z:x-y": [[PackageSpecifier.fromString("z.z.z:x-y:5.0.0"),
+                   PackageSpecifier.fromString("z.z.z:x-y:6.0.0")],
+                  [PackageSpecifier.fromString("z.z.z:x-y:5.0.1"),
+                   PackageSpecifier.fromString("z.z.z:x-y:6.0.0")]],
+  ]
+  Map<String,
+      List<Tuple2<PackageSpecifier, PackageSpecifier>>> modifiedPackages =
+    getModifiedPackageVersions(PackageSpecifier.fromStrings(oldPackages),
+                               PackageSpecifier.fromStrings(newPackages))
   if (modifiedPackages != expectedModifiedPackages) {
     throw new Exception(
       sprintf("Invalid modified packages %s, expected %s for %s",
@@ -1128,10 +1510,112 @@ def testGetModifiedPackageVersions() {
   }
 }
 
+def testVersionObject() {
+  // Ensure component parsing of an empty version return no components.
+  Version version;
+  version = new Version()
+  if (version.components != [] || version.comparableComponents != []) {
+    throw new Exception("Components should be empty for an empty Version")
+  }
+
+  // Parse comparable components from the version string.
+  List<String> expectedComparableComponents =
+    ["10", ".", "128", ".", "1", ".", "1234", "-alpha", "1", ".", "3", ".", "5"]
+  version = new Version("10.128.1.1234-alpha1.3.5")
+  List<String> components = version.comparableComponents
+  if (components != expectedComparableComponents) {
+    throw new Exception(
+      sprintf("Invalid version comparable components %s, expected %s for %s",
+              components, expectedComparableComponents, version))
+  }
+
+  // Parse components from the version string.
+  List<String> expectedComponents =
+    ["10", "128", "1", "1234-alpha1", "3", "5"]
+  components = version.components
+  if (components != expectedComponents) {
+    throw new Exception(
+      sprintf("Invalid version components %s, expected %s for %s",
+              components, expectedComponents, version))
+  }
+
+  // Get maximum and minimum values.
+  [[new Version("1.2.+"), [new Version("1.2.0"),
+                           new Version("1.2.2147483647")]],
+   [new Version("1.2.2+"), [new Version("1.2.2"),
+                            new Version("1.2.2147483645")]],
+   [new Version("1.+.0"), [new Version("1.0"), new Version("1.2147483647")]]
+  ].each {
+    Version testVersion, List<Version> expectedMinAndMax ->
+      List<Version> result = [testVersion.minimumValue,
+                              testVersion.maximumValue]
+      if (result != expectedMinAndMax) {
+        throw new Exception(
+          sprintf("Version %s expected min & max %s, returned %s",
+                  testVersion, expectedMinAndMax, result))
+      }
+  }
+
+  // Comparisons test cases in the form [lhs, rhs, result].
+  [[new Version("10.128.1.1234-alpha1.3.5"),
+    new Version("10.128.1.1234-alpha1.3.5"), 0],
+   [new Version("10.128.1.1234-alpha1.3.5"),
+    new Version("10.128.1.1234-beta1.3.5"), -1],
+   [new Version("10.128.1.1234-beta1.3.5"),
+    new Version("10.128.1.1234-alpha1.3.5"), 1],
+   [new Version("01.128.1.1234-alpha1"),
+    new Version("10.128.1.1234-alpha1"), -1],
+   [new Version("10.128.1.1234-alpha1"),
+    new Version("01.128.1.1234-alpha1"), 1],
+   [new Version("1.2.+"),
+    new Version("1.2.+"), 0],
+   [new Version("1.2.3+"),
+    new Version("1.2.3"), 1],
+   [new Version("1.2.+"),
+    new Version("1.2.3+"), 1],
+   [new Version("1.2.3"),
+    new Version("1.2"), 1],
+   [new Version("1.2.3"),
+    new Version("2.2"), -1],
+  ].each { Version lhs, Version rhs, int expectedResult ->
+      int compareResult = (lhs <=> rhs)
+      if (compareResult != expectedResult) {
+        throw new Exception(
+          sprintf("Version %s compared with %s returned unexpected result %d " +
+                  "vs. %d", lhs, rhs, compareResult, expectedResult))
+      }
+  }
+}
+
 def testSortVersionStrings() {
-  def unsorted = ["1.2.3", "1.2", "3.2", "5", "0.1.2"]
-  def expected = ["0.1.2", "1.2", "1.2.3", "3.2", "5"]
-  def result = sortVersionStrings(unsorted)
+  List<String> unsorted = [
+    "0.1.2-test-za1",
+    "0.1.2-test-a2a",
+    "0.1.2-prod-ab",
+    "0.1.2-prod-12a",
+    "0.1.2b",
+    "1.2.3",
+    "0.1.2a",
+    "1.2",
+    "3.2",
+    "5",
+    "0.1.2",
+  ]
+  List<String> expected = [
+    "0.1.2",
+    "0.1.2-prod-12a",
+    "0.1.2-prod-ab",
+    "0.1.2-test-a2a",
+    "0.1.2-test-za1",
+    "0.1.2a",
+    "0.1.2b",
+    "1.2",
+    "1.2.3",
+    "3.2",
+    "5",
+  ]
+  List<String> result = Version.sort(
+    unsorted.collect { new Version(it) }).collect { it.version }
   if (result != expected) {
     throw new Exception(
       sprintf("Version sorting failed %s, expected %s for %s",
@@ -1139,21 +1623,111 @@ def testSortVersionStrings() {
   }
 }
 
+def testVersionRangeMaximumVersionOfRange() {
+  [[VersionRange.fromExpression("1.2.3+"), "1.2.2147483644"],
+   [VersionRange.fromExpression("1.2.+"), "1.2.2147483647"],
+   [VersionRange.fromExpression("+"), "2147483647"],
+   [VersionRange.fromExpression(""), "0"]].each { range, expectedString ->
+      String maxVersionString = range.maximumVersionOfRange.version
+      if (maxVersionString != expectedString) {
+        throw new Exception(
+          sprintf("Unexpected max version for range %s, returned %s, " +
+                  "expected %s", range, maxVersionString, expectedString))
+      }
+  }
+}
+
+def testVersionRangeVersionInRange() {
+  [[VersionRange.fromExpression("1.2.3+"), new Version("1.2.3"), true],
+   [VersionRange.fromExpression("1.2.3+"), new Version("1.2.4"), true],
+   [VersionRange.fromExpression("1.2.3+"), new Version("1.1.0"), false],
+   [VersionRange.fromExpression("1.2.3"), new Version("1.2.3"), true],
+   [VersionRange.fromExpression("1.2.3"), new Version("1.2.4"), true],
+   [VersionRange.fromExpression("1.2.3"), new Version("1.2.2"), false],
+   [VersionRange.fromExpression("[1.2.3]"), new Version("1.2.3"), true],
+   [VersionRange.fromExpression("[1.2.3]"), new Version("1.2.4"), false],
+   [VersionRange.fromExpression("[1.2.3]"), new Version("1.2.2"), false],
+   [VersionRange.fromExpression("[1.2.1,1.3.0]"), new Version("1.2.1"), true],
+   [VersionRange.fromExpression("[1.2.1,1.3.0]"), new Version("1.3.0"), true],
+   [VersionRange.fromExpression("[1.2.1,1.3.0]"), new Version("1.2.0"), false],
+   [VersionRange.fromExpression("[1.2.1,1.3.0]"), new Version("1.3.1"), false],
+  ].each {
+    VersionRange range, Version version, boolean expected ->
+      boolean result = range.inRange(version)
+      if (result != expected) {
+        throw new Exception(
+          sprintf("Unexpected result %b vs. %b for version %s in range of %s",
+                  result, expected, version.version, range.expression))
+      }
+  }
+}
+
+def testVersionRangeFromExpression() {
+  [[new VersionRange(expression: "invalid_version[]", minimum: "0",
+                     maximum: "+", matchType: VersionExpressionMatchType.NONE),
+    "invalid_version[]"],
+   [new VersionRange(expression: "[1.2.3]", minimum: "1.2.3", maximum: "1.2.3",
+                     matchType: VersionExpressionMatchType.ABSOLUTE),
+    "[1.2.3]"],
+   [new VersionRange(expression: "1.2.3", minimum: "1.2.3", maximum: "+",
+                     matchType: VersionExpressionMatchType.MINIMUM),
+    "1.2.3"],
+   [new VersionRange(expression: "[1.2.3,1.3.0]",
+                     minimum: "1.2.3", maximum: "1.3.0",
+                     matchType: VersionExpressionMatchType.RANGE),
+    "[1.2.3,1.3.0]"],
+   [new VersionRange(expression: "[1.2.3,1.3.0)",
+                     minimum: "1.2.3", maximum: "1.3.0",
+                     matchType: VersionExpressionMatchType.RANGE),
+    "[1.2.3,1.3.0)"],
+   [new VersionRange(expression: "(1.2.3,1.3.0]",
+                     minimum: "1.2.3", maximum: "1.3.0",
+                     matchType: VersionExpressionMatchType.RANGE),
+    "(1.2.3,1.3.0]"],
+   [new VersionRange(expression: "(1.2.3,1.3.0)",
+                     minimum: "1.2.3", maximum: "1.3.0",
+                     matchType: VersionExpressionMatchType.RANGE),
+    "(1.2.3,1.3.0)"],
+   [new VersionRange(expression: "[,1.2.3]", minimum: "0", maximum: "1.2.3",
+                     matchType: VersionExpressionMatchType.RANGE),
+    "[,1.2.3]"],
+   [new VersionRange(expression: "[,1.2.3)", minimum: "0", maximum: "1.2.3",
+                     matchType: VersionExpressionMatchType.RANGE),
+    "[,1.2.3)"],
+   [new VersionRange(expression: "(,1.2.3]", minimum: "0", maximum: "1.2.3",
+                     matchType: VersionExpressionMatchType.RANGE),
+    "(,1.2.3]"],
+   [new VersionRange(expression: "(,1.2.3)", minimum: "0", maximum: "1.2.3",
+                     matchType: VersionExpressionMatchType.RANGE),
+    "(,1.2.3)"]].each { VersionRange expected, String versionExpression ->
+    VersionRange range = VersionRange.fromExpression(versionExpression)
+    if (range != expected) {
+      throw new Exception(
+        sprintf("Invalid range (%s) vs. expected (%s) for " +
+                "expression %s", range, expected, versionExpression))
+    }
+  }
+}
+
 // Run unit tests
 // TODO(b/79267099): Factor the tests out of this script.
 def runTests() {
+  testVersionObject()
+  testSortVersionStrings()
+  testVersionRangeFromExpression()
+  testVersionRangeMaximumVersionOfRange()
+  testVersionRangeVersionInRange()
   testGetComponentsFromPackage()
-  testGetVersionlessArtifactByPackage()
-  testGetVersionlessArtifactsByPackage()
-  testGetPackagesByVersionlessArtifact()
+  testPackageSpecifierStrings()
+  testSortPackagesByVersion()
+  testMostRecentVersionLockedPackagesFromSet()
+  testGetModifiedPackageVersions()
+  testGetMostRecentPackagesByGroupArtifact()
   testLoosenVersionExpression()
   testGetVersionLockedPackageIndex()
   testAddVersionLockedPackageToSet()
   testCreateVersionLockedSetBlacklist()
   testAddVersionLockedPackageToSetWithBlacklist()
-  testMostRecentVersionLockedPackagesFromSet()
-  testGetModifiedPackageVersions()
-  testSortVersionStrings()
 }
 
 // Configure project properties.
@@ -1165,7 +1739,7 @@ project.ext {
   // Set of packages to copy, exposed to the copyPackages task.
   packagesToCopy = [].toSet()
   // Set of packages with modified versions due to conflicting dependencies.
-  // Maps the versionless package name to a tuple of (oldVersion, newVersion)
+  // Maps the group:artifact to a list of modified package tuples.
   packagesModified = [:]
 
   if (project.hasProperty("RUN_TESTS")) {
@@ -1174,7 +1748,7 @@ project.ext {
   }
 
   // Get the install location of the Android SDK.
-  def sdkRoot = null
+  String sdkRoot = null
   for (prop in [System.getProperty("ANDROID_HOME"),
                 project.hasProperty("ANDROID_HOME") ?
                   getProperty("ANDROID_HOME") : null,
@@ -1189,7 +1763,7 @@ project.ext {
   }
   androidSdkRoot = sdkRoot
 
-  def mavenUris = []
+  List<URI> mavenUris = []
   // Retrieve a list of command line specified maven repo URIs.
   if (project.hasProperty("MAVEN_REPOS")) {
     project.getProperty("MAVEN_REPOS").tokenize(";").each {
@@ -1197,11 +1771,11 @@ project.ext {
     }
   }
 
-  def useMavenLocalRepo = true
+  boolean useMavenLocalRepo = true
   if (project.hasProperty("USE_MAVEN_LOCAL_REPO")) {
     useMavenLocalRepo = project.getProperty("USE_MAVEN_LOCAL_REPO") == "1"
   }
-  def useRemoteMavenRepos = true
+  boolean useRemoteMavenRepos = true
   if (project.hasProperty("USE_REMOTE_MAVEN_REPOS")) {
     useRemoteMavenRepos = project.getProperty("USE_REMOTE_MAVEN_REPOS") == "1"
   }
@@ -1209,7 +1783,7 @@ project.ext {
   // Construct a list of local Maven URIs in the Android SDK.
   if (androidSdkRoot) {
     ["extras/android/m2repository", "extras/google/m2repository"].each {
-      def path = new File(androidSdkRoot, it)
+      File path = new File(androidSdkRoot, it)
       if (path.exists()) mavenUris.push(path.toURI())
     }
   }
@@ -1246,8 +1820,12 @@ project.ext {
     logger.error("Project property PACKAGES_TO_COPY must be specified.")
     System.exit(1)
   }
-  Set packages = project.getProperty("PACKAGES_TO_COPY").tokenize(";")
-  packages.each { logger.info("PACKAGES_TO_COPY: " + it) }
+  Set<PackageSpecifier> userSpecifiedPackages =
+    PackageSpecifier.fromStrings(
+      project.getProperty("PACKAGES_TO_COPY").tokenize(";"))
+  PackageSpecifier.specStrings(userSpecifiedPackages).each {
+    logger.info("PACKAGES_TO_COPY: " + it)
+  }
 
   // Location to copy referenced packages.
   if (!project.hasProperty("TARGET_DIR")) {
@@ -1259,98 +1837,95 @@ project.ext {
   logger.info("TARGET_DIR: " + (new File(targetDir).absolutePath).toString())
 
   // Fallback to search for srcaar artifacts when an artifact is missing.
-  packages = fallbackToSrcAarArtifacts(packages)
+  // We update the user specified package set here as this operation should be
+  // transparent to the user.
+  userSpecifiedPackages = fallbackToSrcAarArtifacts(userSpecifiedPackages)
 
   // Resolve while searching for a set of non-conflicting package
   // specifications.
-  def userPackagesToQuery
-  (packages, packagesModified, userPackagesToQuery) =
-    resolveConflictingPackages(packages)
+  Set<PackageSpecifier> resolvedConflictingPackages
+  Configuration resolveConflictConfig
+  (resolvedConflictingPackages, resolveConflictConfig) =
+    resolveConflictingPackages(userSpecifiedPackages)
+  Map<String, PackageSpecifier> resolvedConflictingPackagesByArtifactGroup =
+    PackageSpecifier.mostRecentByGroupArtifact(resolvedConflictingPackages)
 
-  def versionlessArtifactByPackage = getVersionlessArtifactsByPackage(packages)
-
-  // Resolve the current set of packages including any srcaar packages injected
-  // in packagesToCopyByUserPackages.
-  def resolvedArtifacts = userPackagesToQuery.resolvedConfiguration.
-    lenientConfiguration.getArtifacts(Specs.satisfyAll())
+  // Resolve the current set of packages to search for transitive dependencies
+  // that should be version locked.
+  Map<String, PackageSpecifier> resolvedPackages =
+    resolvedConflictingPackagesByArtifactGroup +
+    PackageSpecifier.mostRecentByGroupArtifact(
+      resolveConflictConfig.resolvedConfiguration.lenientConfiguration.
+      getArtifacts(Specs.satisfyAll()).collect {
+        PackageSpecifier.fromResolvedArtifact(it)
+      })
 
   // If we were unable to find a set of packages with versions that do not
   // conflict we may still end up with transitive references to artifacts at
   // different versions which should all point at the same version.  So,
   // if possible, iterate through all fetched artifacts and explicitly pin all
   // version-locked transitive dependencies to the same version.
-  def versionLockedPackageSets = [:]
-  def previousVersionLockedPackages = [].toSet()
-  def versionLockedSetBlacklist = createVersionLockedSetBlacklist(
-    resolvedArtifacts.collect {
-      resolvedModuleVersionToPackage(it.moduleVersion)
-    })
-  resolvedArtifacts.each {
-    def packageSpec = resolvedModuleVersionToPackage(it.moduleVersion)
-    if (addVersionLockedPackageToSet(packageSpec,
-                                     versionLockedPackageSets,
-                                     versionLockedSetBlacklist) > 0) {
-      previousVersionLockedPackages.add(packageSpec)
-      return
-    }
-    packagesToCopy.add(resolvedArtifactToPackage(it))
+  Map<Integer, Set<PackageSpecifier>> versionLockedPackageSets = [:]
+  Set<Integer> versionLockedSetBlacklist = createVersionLockedSetBlacklist(
+    resolvedPackages.values())
+  resolvedPackages.values().each {
+    addVersionLockedPackageToSet(it, versionLockedPackageSets,
+                                 versionLockedSetBlacklist)
   }
 
   // Lock each resolved packages to the most recent version.
-  def versionLockedPackages = mostRecentVersionLockedPackagesFromSet(
-    versionLockedPackageSets)
-  packagesToCopy += versionLockedPackages.toSet()
-  // Update packagesModified to track changed package version retaining the
-  // original version of each modified package.
-  getModifiedPackageVersions(previousVersionLockedPackages,
-                             versionLockedPackages).each {
-    versionlessName, versions ->
-      existingVersions = packagesModified[versionlessName]
-      packagesModified[versionlessName] =
-        existingVersions ? [existingVersions[0], versions[1]] : versions
-  }
+  Map<String, PackageSpecifier> versionLockedPackages =
+    PackageSpecifier.mostRecentByGroupArtifact(
+      mostRecentVersionLockedPackagesFromSet(versionLockedPackageSets))
+  logger.info(sprintf("version locked packages: %s",
+                      PackageSpecifier.specStrings(
+                        versionLockedPackages.values()).toString()))
 
-  // Scan for user specified artifacts that were not resolved and add them to
-  // the list of packages to copy so they can be reported as missing.
-  def foundArtifacts = getPackagesByVersionlessArtifact(packagesToCopy)
-  getPackagesByVersionlessArtifact(versionlessArtifactByPackage.keySet()).each {
-    if (!foundArtifacts.keySet().contains(it.key)) {
-      packagesToCopy.add(it.value)
+  // Build the final set of selected packages.
+  Map<String, PackageSpecifier> finalSelectedPackages =
+    resolvedConflictingPackagesByArtifactGroup.findAll {
+      !(it.key in versionLockedPackages.keySet())
     }
-  }
+  logger.info(sprintf("non-version locked packages: %s",
+                      PackageSpecifier.specStrings(
+                        finalSelectedPackages.values()).toString()))
+  finalSelectedPackages += versionLockedPackages
 
-  packagesToCopy.each {
+  // Determine which, if any, package specs were modified.
+  packagesModified = getModifiedPackageVersions(userSpecifiedPackages,
+                                                finalSelectedPackages.values())
+
+  // Add selected packages to the final copy configuration.
+  packagesToCopy = finalSelectedPackages.values()
+  PackageSpecifier.specStrings(packagesToCopy).each {
     // Add final set of packages to copy to the copyPackagesConfig
     // configuration.
     project.dependencies.copyPackagesConfig it
   }
 
-  // Resolve the final set of artifacts to copy.
-  def artifactsToCopy = project.configurations.copyPackagesConfig.
-    resolvedConfiguration.lenientConfiguration.getArtifacts(Specs.satisfyAll())
-
   // Generate tasks to copy each artifact to a unique filename in the target
   // directory.
-  artifactsToCopy.each {
-    def artifact = it
-    def packageType = artifact.type
-    def packageSpecifier = resolvedArtifactToPackage(artifact)
-    def artifactTargetFilename =
-      sprintf("%s-%s.%s",
-              getVersionlessArtifactByPackage(packageSpecifier),
-              artifact.moduleVersion.id.version,
-              packageType == "srcaar" ? "aar" : packageType)
-    artifactTargetFile = new File(targetDir,
-                                  artifactTargetFilename)
+  project.configurations.copyPackagesConfig.
+      resolvedConfiguration.lenientConfiguration.
+      getArtifacts(Specs.satisfyAll()).each { ResolvedArtifact artifact ->
+    PackageSpecifier pkg = PackageSpecifier.fromResolvedArtifact(artifact)
+    String artifactTargetFilename = sprintf(
+      "%s-%s.%s",
+      pkg.groupArtifactAsPeriodSeparatedString,
+      pkg.versionExpression,
+      pkg.artifactType == "srcaar" ? "aar" : pkg.artifactType)
+    File artifactTargetFile = new File(targetDir,
+                                       artifactTargetFilename)
     if (artifactTargetFile.exists()) {
       // If the target file already exists simply report it as copied.
-      copiedFileArtifacts.add([artifactTargetFile, artifact])
+      copiedFileArtifacts.add(
+        new Tuple2<File, PackageSpecifier>(artifactTargetFile, pkg))
     } else {
       // If the target file does not exist generate a task to copy it.
-      def copyTask = tasks.create(
+      Task copyTask = tasks.create(
         name: "copy_" + artifactTargetFilename,
           type: Copy,
-          description: sprintf("Copy %s (%s) to %s", packageSpecifier,
+          description: sprintf("Copy %s (%s) to %s", pkg.specString,
                                artifact.file, artifactTargetFilename))
       copyTask.with {
         from artifact.file
@@ -1361,8 +1936,9 @@ project.ext {
           // tasks are complete.
           {
             String filename ->
-              copiedFileArtifacts.add([new File(artifactTargetFilename),
-                                       artifact])
+              copiedFileArtifacts.add(
+                new Tuple2<File, PackageSpecifier>(
+                  new File(artifactTargetFilename), pkg))
               return artifactTargetFilename
           }
         )
@@ -1381,34 +1957,41 @@ project.ext {
 //   by the user.
 task copyPackages(dependsOn: project.ext.copyTasks) {
   doLast {
-    def copiedFileArtifacts = project.ext.copiedFileArtifacts
-    def copiedArtifacts = []
+    List<Tuple2<File, PackageSpecifier>> copiedFileArtifacts =
+      project.ext.copiedFileArtifacts
     if (copiedFileArtifacts) {
       println "Copied artifacts:"
-      copiedFileArtifacts.collect { it[0].name }.toSorted().each { println it }
-      println ""
-      copiedFileArtifacts.each { copiedArtifacts.add(it[1]) }
-    }
-    def resolvedVersionlessArtifacts = getVersionlessArtifactFilenames(
-      copiedArtifacts)
-    def versionlessArtifactByPackage = getVersionlessArtifactsByPackage(
-      project.ext.packagesToCopy)
-    def missingPackages = []
-    versionlessArtifactByPackage.each {
-      if (!resolvedVersionlessArtifacts.contains(it.value)) {
-        missingPackages.push(it.key)
+      copiedFileArtifacts.collect { it.first.name }.toSorted().each {
+        println it
       }
+      println ""
+    }
+
+    Set<String> resolvedGroupArtifacts = copiedFileArtifacts.collect {
+      it.second.groupArtifactString
+    }
+    List<String> missingPackages = project.ext.packagesToCopy.findAll {
+      !(it.groupArtifactString in resolvedGroupArtifacts)
+    }.collect {
+      it.specString
     }
     if (missingPackages) {
       println "Missing artifacts:"
       missingPackages.toSorted().each { println it }
       println ""
     }
-    def packagesModified = project.ext.packagesModified
+    Map<String, List<Tuple2<PackageSpecifier,
+                            PackageSpecifier>>> packagesModified =
+      project.ext.packagesModified
     if (packagesModified) {
       println "Modified artifacts:"
-      packagesModified.values().toSorted().each {
-        println it[0] + " --> " + it[1]
+      List<Tuple2<PackageSpecifier, PackageSpecifier>> modified = []
+      packagesModified.values().each { modified.addAll(it) }
+      modified.sort({ lhs, rhs -> lhs.first <=> rhs.first })
+      modified.each {
+        PackageSpecifier oldVersion, PackageSpecifier newVersion ->
+          println sprintf("%s --> %s", oldVersion.specString,
+                          newVersion.specString)
       }
       println ""
     }

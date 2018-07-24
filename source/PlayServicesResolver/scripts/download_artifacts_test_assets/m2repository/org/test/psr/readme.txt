@@ -13,6 +13,9 @@ Test cases:
     common C is incompatible with common-impl D
     No major version of common and common-impl exists that are compatible with
     both pull A and push B.
+  - Case 4: common A requires common-impl C, common B requires common-impl D
+    C & D are not compatible with each other.  The highest version of common needs
+    to be selected.
 
 The following section describes the set of artifacts in the form,
 group artifact version 'dependencies':
@@ -40,3 +43,9 @@ org.test.psr common-impl 5.0.0 ''
 org.test.psr common 5.0.1 'org.test.psr:common-impl:[5.0.0]'
 org.test.psr push 5.0.1 'org.test.psr:common:[3.+]'
 org.test.psr pull 6.0.1 'org.test.psr:common-impl:[4.+]'
+
+org.test.psr common-impl 3.0.1 ''
+org.test.psr common-impl 3.0.2 ''
+org.test.psr common 3.0.2 'org.test.psr:common-impl:[3.0.1]'
+org.test.psr common 3.0.3 'org.test.psr:common-impl:[3.0.2]'
+

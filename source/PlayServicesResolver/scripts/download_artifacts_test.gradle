@@ -339,7 +339,7 @@ createTestTask(
    "com.android.support.support-vector-drawable-24.0.0.aar",
    "Modified artifacts:\n" +
    "com.android.support:appcompat-v7:23.0.0 --> " +
-   "com.android.support:appcompat-v7:24.0.0"])
+   "com.android.support:appcompat-v7:24.0.0@aar"])
 
 createTestTask(
   "testDownloadSrcAar",
@@ -450,6 +450,41 @@ createTestTask(
    "org.test.psr:push:2.0.2 --> org.test.psr:push:2.0.+"])
 
 createTestTask(
+  "testDownloadLatestOfSet",
+  "Download the latest version of a set of dependencies.",
+  "org.test.psr:common:[3.0.2];org.test.psr:common:[3.0.3]",
+  ["org.test.psr.common-3.0.3.aar":
+   "org/test/psr/common/3.0.3/common-3.0.3.aar",
+   "org.test.psr.common-impl-3.0.2.aar":
+   "org/test/psr/common-impl/3.0.2/common-impl-3.0.2.aar"],
+  ["Copied artifacts:\n" +
+   "org.test.psr.common-3.0.3.aar\n" +
+   "org.test.psr.common-impl-3.0.2.aar",
+   "Modified artifacts:\n" +
+   "org.test.psr:common:[3.0.2] --> org.test.psr:common:[3.0.3]"])
+
+createTestTask(
+  "testDownloadTransitiveConflicts",
+  "Download artifacts with a conflicting transitive dependency " +
+  "(common-impl which requires either 2.4.+ via push:2.0.4 or 4.+ via " +
+  "pull:6.0.1) pinned to a specific version [4.0.0].\n",
+  "org.test.psr:push:2.0.4;org.test.psr:pull:6.0.1;" +
+  "org.test.psr:common-impl:[4.0.0]",
+  ["org.test.psr.common-2.4.0.aar":
+   "org/test/psr/common/2.4.0/common-2.4.0.aar",
+   "org.test.psr.common-impl-4.0.0.aar":
+   "org/test/psr/common-impl/4.0.0/common-impl-4.0.0.aar",
+   "org.test.psr.pull-6.0.1.aar":
+   "org/test/psr/pull/6.0.1/pull-6.0.1.aar",
+   "org.test.psr.push-2.0.4.aar":
+   "org/test/psr/push/2.0.4/push-2.0.4.aar"],
+  ["Copied artifacts:\n" +
+   "org.test.psr.common-2.4.0.aar\n" +
+   "org.test.psr.common-impl-4.0.0.aar\n" +
+   "org.test.psr.pull-6.0.1.aar\n" +
+   "org.test.psr.push-2.0.4.aar"])
+
+createTestTask(
   "testDownloadIncompatibleMajorVersions",
   "Download artifacts with incompatible major versioned dependencies.\n" +
   "This should result in a forced upgrade to the latest compatible major " +
@@ -496,7 +531,8 @@ createTestTask(
   "if a mix of version locked vs. non-version locked packages are specified.",
   "com.google.android.gms:play-services-basement:12.0.0;" +
   "com.google.android.gms:play-services-tasks:12.0.0;" +
-  "com.google.android.gms:play-services-basement:15.0.0;",
+  "com.google.android.gms:play-services-basement:15.0.0;" +
+  "a.non:existent:package:1.2.3;",
   ["android.arch.core.common-1.0.0.jar":
    "android/arch/core/common/1.0.0/common-1.0.0.jar",
    "android.arch.lifecycle.common-1.0.0.jar":
@@ -540,7 +576,11 @@ createTestTask(
    "com.android.support.support-v4-26.1.0.aar\n" +
    "com.google.android.gms.play-services-basement-15.0.0.aar\n" +
    "com.google.android.gms.play-services-tasks-15.0.0.aar",
+   "Missing artifacts:\n" +
+   "a.non:existent:package@1.2.3",
    "Modified artifacts:\n" +
+   "com.google.android.gms:play-services-basement:12.0.0 --> " +
+   "com.google.android.gms:play-services-basement:+\n" +
    "com.google.android.gms:play-services-basement:15.0.0 --> " +
    "com.google.android.gms:play-services-basement:+\n" +
    "com.google.android.gms:play-services-tasks:12.0.0 --> " +

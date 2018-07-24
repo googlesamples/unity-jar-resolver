@@ -2,7 +2,7 @@
   <groupId>org.test.psr</groupId>
   <artifactId>push</artifactId>
   <versioning>
-    <release>5.0.1</release>
+    <release>5.0.2</release>
     <versions>
       <version>1.0.3</version>
       <version>2.0.2</version>
