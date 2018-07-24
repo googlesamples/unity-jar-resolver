@@ -212,9 +212,8 @@ namespace Google {
         /// <param name="name">Name of the value.</param>
         /// <param name="defaultValue">Default value of the property if it isn't set.</param>
         public string GetString(string name, string defaultValue = "") {
-            var value = UseProjectSettings ? Get(name, defaultValue) : defaultValue;
-            return value == defaultValue ?
-                EditorPrefs.GetString(name, defaultValue: defaultValue) : value;
+            var systemValue = EditorPrefs.GetString(name, defaultValue: defaultValue);
+            return UseProjectSettings ? Get(name, systemValue) : systemValue;
         }
 
         /// <summary>
@@ -223,9 +222,8 @@ namespace Google {
         /// <param name="name">Name of the value.</param>
         /// <param name="defaultValue">Default value of the property if it isn't set.</param>
         public bool GetBool(string name, bool defaultValue = false) {
-            var value = UseProjectSettings ? Get(name, defaultValue) : defaultValue;
-            return value == defaultValue ?
-                EditorPrefs.GetBool(name, defaultValue: defaultValue) : value;
+            var systemValue = EditorPrefs.GetBool(name, defaultValue: defaultValue);
+            return UseProjectSettings ? Get(name, systemValue) : systemValue;
         }
 
         /// <summary>
@@ -234,9 +232,8 @@ namespace Google {
         /// <param name="name">Name of the value.</param>
         /// <param name="defaultValue">Default value of the property if it isn't set.</param>
         public float GetFloat(string name, float defaultValue = 0.0f) {
-            var value = UseProjectSettings ? Get(name, defaultValue) : defaultValue;
-            return value == defaultValue ?
-                EditorPrefs.GetFloat(name, defaultValue: defaultValue) : value;
+            var systemValue = EditorPrefs.GetFloat(name, defaultValue: defaultValue);
+            return UseProjectSettings ? Get(name, systemValue) : systemValue;
         }
 
         /// <summary>
@@ -245,9 +242,8 @@ namespace Google {
         /// <param name="name">Name of the value.</param>
         /// <param name="defaultValue">Default value of the property if it isn't set.</param>
         public int GetInt(string name, int defaultValue = 0) {
-            var value = UseProjectSettings ? Get(name, defaultValue) : defaultValue;
-            return value == defaultValue ?
-                EditorPrefs.GetInt(name, defaultValue: defaultValue) : value;
+            var systemValue = EditorPrefs.GetInt(name, defaultValue: defaultValue);
+            return UseProjectSettings ? Get(name, systemValue) : systemValue;
         }
 
         /// <summary>
@@ -257,7 +253,9 @@ namespace Google {
         public bool HasKey(string name) {
             if (UseProjectSettings) {
                 string ignoredValue;
-                return Settings.TryGetValue(name, out ignoredValue);
+                lock (classLock) {
+                    return Settings.TryGetValue(name, out ignoredValue);
+                }
             } else {
                 return EditorPrefs.HasKey(name);
             }
