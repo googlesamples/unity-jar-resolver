@@ -1,3 +1,9 @@
+# Version 1.2.81 - Aug 9, 2018
+## Bug Fixes
+* Fixed editor error that would occur when when
+  `PlayerSettings.Android.targetArchitectures` was set to
+  `AndroidArchitecture.All`.
+
 # Version 1.2.80 - Jul 24, 2018
 ## Bug Fixes
 * Fixed project level settings incorrectly falling back to system wide settings

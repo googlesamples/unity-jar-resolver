@@ -162,22 +162,24 @@ internal class AndroidAbis {
     }
 
     /// <summary>
-    /// Convert an enum value object to an integer.
+    /// Convert an enum value object to a ulong.
     /// </summary>
     /// <param name="enumValueObject">Enum object to convert.</param>
-    private static int EnumValueObjectToInt(object enumValueObject) {
-        /// Flags enum values can't be cast directly to an int, however it is possible to print
-        /// the value as an integer string so convert to a string and then parse as an int.
-        return Int32.Parse(String.Format("{0:D}", enumValueObject));
+    private static ulong EnumValueObjectToULong(object enumValueObject) {
+        /// Flags enum values can't be cast directly to an integral type, however it is possible to
+        /// print the value as an integer string so convert to a string and then parse as an int.
+        /// Enums are considered unsigned by the formatter, so if an enum is defined as -1 it will
+        /// be formatted as UInt32.MaxValue, i.e. 4294967295.
+        return UInt64.Parse(String.Format("{0:D}", enumValueObject));
     }
 
     /// <summary>
-    /// Convert an enum value string to an integer.
+    /// Convert an enum value string to a ulong.
     /// </summary>
     /// <param name="enumType">Enum type to use to parse the string.</param>
     /// <param name="enumValueString">Enum string to convert.</param>
-    private static int EnumValueStringToInt(Type enumType, string enumValueString) {
-        return EnumValueObjectToInt(Enum.Parse(enumType, enumValueString));
+    private static ulong EnumValueStringToULong(Type enumType, string enumValueString) {
+        return EnumValueObjectToULong(Enum.Parse(enumType, enumValueString));
     }
 
     /// <summary>
@@ -195,12 +197,12 @@ internal class AndroidAbis {
             var abiSet = value.ToSet();
             if (unityVersion >= 2018.0f) {
                 // Convert selected ABIs to a flags enum.
-                int enumValue = 0;
+                ulong enumValue = 0;
                 foreach (var abi in supportedAbis) {
                     if (abiSet.Contains(abi.Key)) {
                         // It's not possible to trivially cast a flag enum value to an int
                         // so perform the conversion via a string.
-                        int enumValueInt = EnumValueStringToInt(enumType, abi.Value);
+                        ulong enumValueInt = EnumValueStringToULong(enumType, abi.Value);
                         enumValue |= enumValueInt;
                     }
                 }
@@ -214,7 +216,7 @@ internal class AndroidAbis {
                     null,
                     Enum.ToObject(
                         enumType,
-                        EnumValueStringToInt(
+                        EnumValueStringToULong(
                             enumType,
                             abiSet.Count > 1 ? "FAT" :
                                 supportedAbis[(new List<string>(abiSet))[0]])), null);
@@ -234,9 +236,9 @@ internal class AndroidAbis {
             var selectedAbis = new HashSet<string>();
             if (unityVersion >= 2018.0f) {
                 // Convert flags enum value to a set of ABI names.
-                int enumValueInt = EnumValueObjectToInt(property.GetValue(null, null));
+                ulong enumValueInt = EnumValueObjectToULong(property.GetValue(null, null));
                 foreach (var abi in supportedAbis) {
-                    if ((enumValueInt & EnumValueStringToInt(enumType, abi.Value)) != 0) {
+                    if ((enumValueInt & EnumValueStringToULong(enumType, abi.Value)) != 0) {
                         selectedAbis.Add(abi.Key);
                     }
                 }
