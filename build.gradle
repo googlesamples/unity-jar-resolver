@@ -1079,7 +1079,7 @@ task generatePluginManifest(dependsOn: [preparePluginStagingAreaDir,
       }
     }
     manifestFile.write(filenameList.toSorted().join("\n") + "\n")
-    copyFile(manifestMetadataTemplateFile, manifestMetadataFile)
+    copyAssetMetadataFile(manifestMetadataTemplateFile, manifestMetadataFile)
   }
 }
 
