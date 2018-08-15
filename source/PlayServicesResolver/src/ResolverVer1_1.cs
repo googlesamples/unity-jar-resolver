@@ -258,51 +258,69 @@ namespace GooglePlayServices
                 return;
             }
 
-            XmlTextReader reader = new XmlTextReader(new StreamReader(aarExplodeDataFile));
-            aarExplodeData.Clear();
-            while (reader.Read()) {
-                if (reader.NodeType == XmlNodeType.Element && reader.Name == "aars") {
+            try {
+                using (XmlTextReader reader =
+                           new XmlTextReader(new StreamReader(aarExplodeDataFile))) {
+                    aarExplodeData.Clear();
                     while (reader.Read()) {
-                        if (reader.NodeType == XmlNodeType.Element &&
-                            reader.Name == "explodeData") {
-                            string aar = "";
-                            AarExplodeData aarData = new AarExplodeData();
-                            do {
-                                if (!reader.Read()) break;
-                                if (reader.NodeType == XmlNodeType.Element) {
-                                    string elementName = reader.Name;
-                                    if (reader.Read() && reader.NodeType == XmlNodeType.Text) {
-                                        if (elementName == "aar") {
-                                            aar = reader.ReadContentAsString();
-                                        } else if (elementName == "modificationTime") {
-                                            aarData.modificationTime =
-                                                reader.ReadContentAsDateTime();
-                                        } else if (elementName == "explode") {
-                                            aarData.explode = reader.ReadContentAsBoolean();
-                                        } else if (elementName == "bundleId") {
-                                            aarData.bundleId = reader.ReadContentAsString();
-                                        } else if (elementName == "path") {
-                                            aarData.path = reader.ReadContentAsString();
-                                        } else if (elementName == "availableAbis") {
-                                            aarData.availableAbis = reader.ReadContentAsString();
-                                        } else if (elementName == "targetAbi") {
-                                            aarData.targetAbis = reader.ReadContentAsString();
-                                        } else if (elementName == "gradleBuildSystem") {
-                                            aarData.gradleBuildSystem =
-                                                reader.ReadContentAsBoolean();
-                                        } else if (elementName == "gradleExport") {
-                                            aarData.gradleExport = reader.ReadContentAsBoolean();
-                                        } else if (elementName == "ignoredVersion") {
-                                            aarData.ignoredVersion = reader.ReadContentAsString();
+                        if (reader.NodeType == XmlNodeType.Element && reader.Name == "aars") {
+                            while (reader.Read()) {
+                                if (reader.NodeType == XmlNodeType.Element &&
+                                    reader.Name == "explodeData") {
+                                    string aar = "";
+                                    AarExplodeData aarData = new AarExplodeData();
+                                    do {
+                                        if (!reader.Read()) break;
+
+                                        if (reader.NodeType == XmlNodeType.Element) {
+                                            string elementName = reader.Name;
+                                            if (reader.Read() &&
+                                                reader.NodeType == XmlNodeType.Text) {
+                                                if (elementName == "aar") {
+                                                    aar = reader.ReadContentAsString();
+                                                } else if (elementName == "modificationTime") {
+                                                    aarData.modificationTime =
+                                                        reader.ReadContentAsDateTime();
+                                                } else if (elementName == "explode") {
+                                                    aarData.explode = reader.ReadContentAsBoolean();
+                                                } else if (elementName == "bundleId") {
+                                                    aarData.bundleId = reader.ReadContentAsString();
+                                                } else if (elementName == "path") {
+                                                    aarData.path = reader.ReadContentAsString();
+                                                } else if (elementName == "availableAbis") {
+                                                    aarData.availableAbis =
+                                                        reader.ReadContentAsString();
+                                                } else if (elementName == "targetAbi") {
+                                                    aarData.targetAbis =
+                                                        reader.ReadContentAsString();
+                                                } else if (elementName == "gradleBuildSystem") {
+                                                    aarData.gradleBuildSystem =
+                                                        reader.ReadContentAsBoolean();
+                                                } else if (elementName == "gradleExport") {
+                                                    aarData.gradleExport =
+                                                        reader.ReadContentAsBoolean();
+                                                } else if (elementName == "ignoredVersion") {
+                                                    aarData.ignoredVersion =
+                                                        reader.ReadContentAsString();
+                                                }
+                                            }
                                         }
+                                    } while (!(reader.Name == "explodeData" &&
+                                               reader.NodeType == XmlNodeType.EndElement));
+                                    if (aar != "" && aarData.path != "") {
+                                        aarExplodeData[aar] = aarData;
                                     }
                                 }
-                            } while (!(reader.Name == "explodeData" &&
-                                       reader.NodeType == XmlNodeType.EndElement));
-                            if (aar != "" && aarData.path != "") aarExplodeData[aar] = aarData;
+                            }
                         }
                     }
+                    reader.Close();
                 }
+            } catch (Exception e) {
+                PlayServicesResolver.Log(String.Format(
+                    "Failed to read AAR cache {0} ({1})\n" +
+                    "Auto-resolution will be slower.\n", aarExplodeDataFile, e.ToString()),
+                    level: LogLevel.Warning);
             }
             aarExplodeDataSaved = AarExplodeData.CopyDictionary(aarExplodeData);
         }
@@ -312,55 +330,64 @@ namespace GooglePlayServices
         /// </summary>
         private void SaveAarExplodeCache()
         {
-            if (File.Exists(aarExplodeDataFile))
-            {
-                // If the explode data hasn't been modified, don't save.
-                if (CompareExplodeData(aarExplodeData, aarExplodeDataSaved)) return;
-                File.Delete(aarExplodeDataFile);
+            try {
+                if (File.Exists(aarExplodeDataFile))
+                {
+                    // If the explode data hasn't been modified, don't save.
+                    if (CompareExplodeData(aarExplodeData, aarExplodeDataSaved)) return;
+                    File.Delete(aarExplodeDataFile);
+                }
+                using (XmlTextWriter writer =
+                       new XmlTextWriter(new StreamWriter(aarExplodeDataFile)) {
+                           Formatting = Formatting.Indented
+                       }) {
+                    writer.WriteStartElement("aars");
+                    foreach (KeyValuePair<string, AarExplodeData> kv in aarExplodeData)
+                    {
+                        writer.WriteStartElement("explodeData");
+                        writer.WriteStartElement("aar");
+                        writer.WriteValue(kv.Key);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("modificationTime");
+                        writer.WriteValue(kv.Value.modificationTime);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("explode");
+                        writer.WriteValue(kv.Value.explode);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("bundleId");
+                        writer.WriteValue(UnityCompat.ApplicationId);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("path");
+                        writer.WriteValue(kv.Value.path);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("availableAbis");
+                        writer.WriteValue(kv.Value.availableAbis);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("targetAbi");
+                        writer.WriteValue(kv.Value.targetAbis);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("gradleBuildEnabled");
+                        writer.WriteValue(kv.Value.gradleBuildSystem);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("gradleExport");
+                        writer.WriteValue(kv.Value.gradleExport);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("ignoredVersion");
+                        writer.WriteValue(kv.Value.ignoredVersion);
+                        writer.WriteEndElement();
+                        writer.WriteEndElement();
+                    }
+                    writer.WriteEndElement();
+                    writer.Flush();
+                    writer.Close();
+                    aarExplodeDataSaved = AarExplodeData.CopyDictionary(aarExplodeData);
+                }
+            } catch (Exception e) {
+                PlayServicesResolver.Log(String.Format(
+                    "Failed to write AAR cache {0} ({1})\n" +
+                    "Auto-resolution will be slower after recompilation.\n", aarExplodeDataFile,
+                    e.ToString()), level: LogLevel.Warning);
             }
-            XmlTextWriter writer = new XmlTextWriter(new StreamWriter(aarExplodeDataFile)) {
-                Formatting = Formatting.Indented,
-            };
-            writer.WriteStartElement("aars");
-            foreach (KeyValuePair<string, AarExplodeData> kv in aarExplodeData)
-            {
-                writer.WriteStartElement("explodeData");
-                writer.WriteStartElement("aar");
-                writer.WriteValue(kv.Key);
-                writer.WriteEndElement();
-                writer.WriteStartElement("modificationTime");
-                writer.WriteValue(kv.Value.modificationTime);
-                writer.WriteEndElement();
-                writer.WriteStartElement("explode");
-                writer.WriteValue(kv.Value.explode);
-                writer.WriteEndElement();
-                writer.WriteStartElement("bundleId");
-                writer.WriteValue(UnityCompat.ApplicationId);
-                writer.WriteEndElement();
-                writer.WriteStartElement("path");
-                writer.WriteValue(kv.Value.path);
-                writer.WriteEndElement();
-                writer.WriteStartElement("availableAbis");
-                writer.WriteValue(kv.Value.availableAbis);
-                writer.WriteEndElement();
-                writer.WriteStartElement("targetAbi");
-                writer.WriteValue(kv.Value.targetAbis);
-                writer.WriteEndElement();
-                writer.WriteStartElement("gradleBuildEnabled");
-                writer.WriteValue(kv.Value.gradleBuildSystem);
-                writer.WriteEndElement();
-                writer.WriteStartElement("gradleExport");
-                writer.WriteValue(kv.Value.gradleExport);
-                writer.WriteEndElement();
-                writer.WriteStartElement("ignoredVersion");
-                writer.WriteValue(kv.Value.ignoredVersion);
-                writer.WriteEndElement();
-                writer.WriteEndElement();
-            }
-            writer.WriteEndElement();
-            writer.Flush();
-            writer.Close();
-            aarExplodeDataSaved = AarExplodeData.CopyDictionary(aarExplodeData);
         }
 
         #region IResolver implementation
