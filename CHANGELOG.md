@@ -1,3 +1,14 @@
+# Version 1.2.82 - Aug 14, 2018
+## Changed
+* Added support for alphanumeric versions in the Android Resolver.
+
+## Bug Fixes
+* Fixed Android Resolver selection of latest duplicated library.
+* Fixed Android Resolver conflict resolution when version locked and non-version
+  locked dependencies are specified.
+* Fixed Android Resolver conflict resolution when non-existent artifacts are
+  referenced.
+
 # Version 1.2.81 - Aug 9, 2018
 ## Bug Fixes
 * Fixed editor error that would occur when when
