@@ -1,3 +1,12 @@
+# Version 1.2.83 - Aug 15, 2018
+## Bug Fixes
+* Fixed Android Resolver failures due to an in-accessible AAR / JAR explode
+  cache file.  If the cache can't be read / written the resolver now continues
+  with reduced performance following recompilation / DLL reloads.
+* Fixed incorrect version number in plugin manifest on install.
+  This was a minor issue since the version handler rewrote the metadata
+  after installation.
+
 # Version 1.2.82 - Aug 14, 2018
 ## Changed
 * Added support for alphanumeric versions in the Android Resolver.
