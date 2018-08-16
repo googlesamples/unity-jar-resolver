@@ -917,11 +917,14 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
         requestedPackage.versionRange.matchType ==
         VersionExpressionMatchType.ABSOLUTE &&
         isConflicting) {
-      logger.log(LogLevel.WARN,
-                 sprintf("Keeping conflicting package %s as it's explicitly " +
-                         "specified at version %s",
-                         requestedPackage.specString,
-                         requestedPackage.versionExpression))
+      if (!(requestedPackage.groupArtifactString in
+            conflictingByGroupArtifact.keySet())) {
+        logger.log(LogLevel.WARN,
+                   sprintf("Keeping conflicting package %s as it's " +
+                           "explicitly specified at version %s",
+                           requestedPackage.specString,
+                           requestedPackage.versionExpression))
+      }
       addMostRecentPackageToMap(packages, requestedPackage)
       return trackConflictState(requestedPackage, false)
     }
