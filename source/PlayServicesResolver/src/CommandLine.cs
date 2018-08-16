@@ -119,7 +119,8 @@ namespace GooglePlayServices
         /// </summary>
         /// <param name="toolPath">Tool to execute.</param>
         /// <param name="arguments">String to pass to the tools' command line.</param>
-        /// <param name="completionDelegate">Called when the tool completes.</param>
+        /// <param name="completionDelegate">Called when the tool completes.  This is always
+        /// called from the main thread.</param>
         /// <param name="workingDirectory">Directory to execute the tool from.</param>
         /// <param name="envVars">Additional environment variables to set for the command.</param>
         /// <param name="ioHandler">Allows a caller to provide interactive input and also handle
@@ -132,10 +133,10 @@ namespace GooglePlayServices
             Action action = () => {
                 Result result = Run(toolPath, arguments, workingDirectory, envVars: envVars,
                                     ioHandler: ioHandler);
-                completionDelegate(result);
+                RunOnMainThread.Run(() => { completionDelegate(result);});
             };
             if (ExecutionEnvironment.InBatchMode) {
-                action();
+                RunOnMainThread.Run(action);
             } else {
                 Thread thread = new Thread(new ThreadStart(action));
                 thread.Start();

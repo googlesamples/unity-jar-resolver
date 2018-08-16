@@ -20,6 +20,7 @@ namespace GooglePlayServices
     using System.Collections.Generic;
     using System.IO;
     using System.Text.RegularExpressions;
+    using System.Threading;
     using System.Xml;
     using Google;
     using Google.JarResolver;
@@ -816,6 +817,20 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// If auto-resolution is enabled, run resolution synchronously before building the
+        /// application.
+        /// </summary>
+        [UnityEditor.Callbacks.PostProcessSceneAttribute(0)]
+        private static void OnPostProcessScene() {
+            if (Resolver.AutomaticResolutionEnabled()) {
+                Log("Starting auto-resolution before scene build...");
+                bool success = ResolveSync(false);
+                Log(String.Format("Android resolution {0}.", success ? "succeeded" : "failed"),
+                    level: LogLevel.Verbose);
+            }
+        }
+
+        /// <summary>
         /// Schedule auto-resolution.
         /// </summary>
         /// <param name="delayInMilliseconds">Time to wait until running AutoResolve().
@@ -1146,6 +1161,16 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Signal completion of a resolve job.
+        /// </summary>
+        /// <param name="completion">Action to call.</param>
+        private static void SignalResolveJobComplete(Action completion) {
+            resolutionJobs.RemoveAll((jobInfo) => { return jobInfo == null; });
+            completion();
+            ExecuteNextResolveJob();
+        }
+
+        /// <summary>
         /// Execute the next resolve job on the queue.
         /// </summary>
         private static void ExecuteNextResolveJob() {
@@ -1191,6 +1216,31 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Resolve dependencies synchronously.
+        /// </summary>
+        /// <param name="forceResolution">Whether resolution should be executed when no dependencies
+        /// have changed.  This is useful if a dependency specifies a wildcard in the version
+        /// expression.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        public static bool ResolveSync(bool forceResolution) {
+            bool successful = false;
+            var completeEvent = new ManualResetEvent(false);
+            ScheduleResolve(forceResolution, (success) => {
+                    successful = success;
+                    completeEvent.Set();
+                }, false);
+            // We poll from this thread to pump the update queue if the scheduled job isn't
+            // executed immediately.
+            while (true) {
+                RunOnMainThread.TryExecuteAll();
+                if (completeEvent.WaitOne(100 /* 100ms poll interval */)) {
+                    break;
+                }
+            }
+            return successful;
+        }
+
+        /// <summary>
         /// Schedule resolution of dependencies.  If resolution is currently active this queues up
         /// the requested resolution action to execute when the current resolution is complete.
         /// All queued auto-resolution jobs are canceled before enqueuing a new job.
@@ -1206,8 +1256,6 @@ namespace GooglePlayServices
                                             bool isAutoResolveJob) {
             bool firstJob;
             lock (resolutionJobs) {
-                firstJob = resolutionJobs.Count == 0;
-
                 // Remove the scheduled action which enqueues an auto-resolve job.
                 RunOnMainThread.Cancel(autoResolveJobId);
                 autoResolveJobId = 0;
@@ -1215,16 +1263,18 @@ namespace GooglePlayServices
                 resolutionJobs.RemoveAll((jobInfo) => {
                         return jobInfo != null && jobInfo.IsAutoResolveJob;
                     });
+                firstJob = resolutionJobs.Count == 0;
 
                 resolutionJobs.Add(
                     new ResolutionJob(
                         isAutoResolveJob,
                         () => {
                             ResolveUnsafe(resolutionComplete: (success) => {
-                                    if (resolutionCompleteWithResult != null) {
-                                        resolutionCompleteWithResult(success);
-                                    }
-                                    ExecuteNextResolveJob();
+                                    SignalResolveJobComplete(() => {
+                                            if (resolutionCompleteWithResult != null) {
+                                                resolutionCompleteWithResult(success);
+                                            }
+                                        });
                                 },
                                 forceResolution: forceResolution);
                         }));
@@ -1300,7 +1350,7 @@ namespace GooglePlayServices
                                               succeeded ? "Succeeded" : "Failed",
                                               lastError), level: LogLevel.Verbose);
                             if (resolutionComplete != null) {
-                                resolutionComplete(succeeded);
+                                RunOnMainThread.Run(() => { resolutionComplete(succeeded); });
                             }
                         });
                 });
@@ -1377,7 +1427,9 @@ namespace GooglePlayServices
             }
             previousInstallAndroidPackages =
                 GooglePlayServices.SettingsDialog.InstallAndroidPackages;
-            PlayServicesSupport.verboseLogging = GooglePlayServices.SettingsDialog.VerboseLogging;
+            PlayServicesSupport.verboseLogging =
+                GooglePlayServices.SettingsDialog.VerboseLogging ||
+                ExecutionEnvironment.InBatchMode;
             logger.Verbose = GooglePlayServices.SettingsDialog.VerboseLogging;
             if (Resolver != null) {
                 PatchAndroidManifest(UnityCompat.ApplicationId, null);

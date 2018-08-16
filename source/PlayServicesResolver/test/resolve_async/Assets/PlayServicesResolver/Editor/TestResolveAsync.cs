@@ -172,6 +172,15 @@ public class TestResolveAsync {
                     }
                 },
                 new TestCase {
+                    Name = "ResolveForGradleBuildSystemSync",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearDependencies();
+                        SetupDependencies(testCase, testCaseComplete);
+                        Resolve("Gradle", false, "ExpectedArtifacts/NoExport/Gradle",
+                                null, testCase, testCaseComplete, synchronous: true);
+                    }
+                },
+                new TestCase {
                     Name = "ResolveForInternalBuildSystem",
                     Method = (testCase, testCaseComplete) => {
                         ClearDependencies();
@@ -386,10 +395,10 @@ public class TestResolveAsync {
     /// Called when the Version Handler has enabled all managed plugins in a project.
     /// </summary>
     public static void VersionHandlerReady() {
+        UnityEngine.Debug.Log("VersionHandler is ready.");
         Google.VersionHandler.UpdateCompleteMethods = null;
         // If this has already been initialize this session, do not start tests again.
         if (SetInitialized()) return;
-        UnityEngine.Debug.Log("Plugin is ready.");
         // Start executing tests.
         ExecuteNextTestCase();
     }
@@ -478,9 +487,11 @@ public class TestResolveAsync {
     /// should be selected.</param>
     /// <param name="testCase">Object executing this method.</param>
     /// <param name="testCaseComplete">Called with the test result.</param>
+    /// <param name="synchronous">Whether the resolution should be executed synchronously.</param>
     private static void Resolve(string androidBuildSystem, bool exportProject,
                                 string expectedAssetsDir, string targetAbis,
-                                TestCase testCase, Action<TestCaseResult> testCaseComplete) {
+                                TestCase testCase, Action<TestCaseResult> testCaseComplete,
+                                bool synchronous = false) {
         // Set the Android target ABIs.
         AndroidAbisCurrentString = targetAbis;
         // Try setting the build system if this version of Unity supports it.
@@ -527,11 +538,18 @@ public class TestResolveAsync {
                         });
                 }, true);
         };
-        Google.VersionHandler.InvokeStaticMethod(
-            AndroidResolverClass, "Resolve", args: null,
-            namedArgs: new Dictionary<string, object>() {
-                {"resolutionCompleteWithResult", completeWithResult}
-            });
+        if (synchronous) {
+            bool success = (bool)Google.VersionHandler.InvokeStaticMethod(
+                AndroidResolverClass, "ResolveSync", args: new object[] { true },
+                namedArgs: null);
+            completeWithResult(success);
+        } else {
+            Google.VersionHandler.InvokeStaticMethod(
+                AndroidResolverClass, "Resolve", args: null,
+                namedArgs: new Dictionary<string, object>() {
+                    {"resolutionCompleteWithResult", completeWithResult}
+                });
+        }
     }
 
     /// <summary>

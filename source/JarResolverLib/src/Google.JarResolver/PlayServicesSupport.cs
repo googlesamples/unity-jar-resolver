@@ -99,26 +99,6 @@ namespace Google.JarResolver
              "or the \"Unity > Preferences > External Tools\" menu option on OSX. " +
              "Alternatively, set the ANDROID_HOME environment variable");
 
-        /// <summary>
-        /// Delegate used to determine whether an AAR should be exploded.
-        /// </summary>
-        /// <param name="aarPath">Path to the AAR file to examine.</param>
-        /// <returns>True if the AAR should be exploded, false otherwise.</returns>
-        public delegate bool ExplodeAar(string aarPath);
-
-        /// <summary>
-        /// Whether the editor was launched in batch mode.
-        /// </summary>
-        internal static bool InBatchMode {
-            get {
-#if UNITY_EDITOR
-                return System.Environment.CommandLine.Contains("-batchmode");
-#else
-                return true;
-#endif  // UNITY_EDITOR
-            }
-        }
-
         // Map of common dependencies to Android SDK packages.
         private static List<KeyValuePair<Regex, string>> CommonPackages =
             new List<KeyValuePair<Regex, string>> {
@@ -226,7 +206,7 @@ namespace Google.JarResolver
         /// logging enabled.</param>
         internal static void Log(string message, LogLevel level = LogLevel.Info,
                                  bool verbose = false) {
-            if (logger != null && (!verbose || verboseLogging || InBatchMode)) {
+            if (logger != null && (!verbose || verboseLogging)) {
                 logger(message, level);
             }
         }

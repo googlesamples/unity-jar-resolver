@@ -159,6 +159,20 @@ internal class RunOnMainThread {
     }
 
     /// <summary>
+    /// Flag which indicates whether any jobs are running on the main thread.
+    /// This is set and cleared by RunAction().
+    /// </summary>
+    private static bool runningJobs = false;
+
+    /// <summary>
+    /// Whether to execute a scheduled jobs immediately if the scheduling thread is the main thread.
+    /// This property is reset to its' default value after each set of jobs is dispatched.
+    /// </summary>
+    public static bool ExecuteNow {
+        get { return ExecutionEnvironment.InBatchMode && !runningJobs; }
+    }
+
+    /// <summary>
     /// Initialize the ID of the main thread.  This class *must* be called on the main thread
     /// before use.
     /// </summary>
@@ -210,6 +224,20 @@ internal class RunOnMainThread {
     }
 
     /// <summary>
+    /// Run an action setting runningJobs to true before running it and clearing the flag when it's
+    /// complete.
+    /// </summary>
+    /// <param name="action">Action to run.</param>
+    private static void RunAction(Action action) {
+        runningJobs = true;
+        try {
+            action();
+        } finally {
+            runningJobs = false;
+        }
+    }
+
+    /// <summary>
     /// Poll until a condition is met.
     /// In batch mode this will block and poll until "condition" is met, in non-batch mode the
     /// condition is polled from the main thread.
@@ -220,15 +248,17 @@ internal class RunOnMainThread {
         lock (pollingJobs) {
             pollingJobs.Add(condition);
         }
-        if (ExecutionEnvironment.InBatchMode && OnMainThread) {
-            while (true) {
-                ExecutePollingJobs();
-                lock (pollingJobs) {
-                    if (pollingJobs.IndexOf(condition) < 0) break;
-                }
-                // Wait 100ms.
-                Thread.Sleep(100);
-            }
+        if (ExecuteNow && OnMainThread) {
+            RunAction(() => {
+                    while (true) {
+                        ExecuteAll();
+                        lock (pollingJobs) {
+                            if (pollingJobs.IndexOf(condition) < 0) break;
+                        }
+                        // Wait 100ms.
+                        Thread.Sleep(100);
+                    }
+                });
         }
     }
 
@@ -304,10 +334,18 @@ internal class RunOnMainThread {
     /// may want to defer execution if this is being executed by InitializeOnLoad where operations
     /// on the asset database may cause Unity to crash.</param>
     public static void Run(Action job, bool runNow = true) {
+        bool firstJob;
         lock (jobs) {
+            firstJob = jobs.Count == 0;
             jobs.Enqueue(job);
         }
-        if (runNow && OnMainThread) {
+        // If we've just added the first job to the queue, we're on the main thread and the job
+        // has been requested to run now, we'll start job execution right now.
+        // While pumping the job queue in ExecuteAll(), additional scheduled jobs will be executed
+        // as part of the process until the queue is empty.
+        // If we're not executing the job right now, the job queue is pumped from the UnityEditor
+        // update event.
+        if ((firstJob || ExecuteNow) && runNow && OnMainThread) {
             ExecuteAll();
         }
     }
@@ -331,6 +369,18 @@ internal class RunOnMainThread {
     }
 
     /// <summary>
+    /// Try executing all scheduled jobs if the caller is on the main thread.
+    /// </summary>
+    /// <returns>true if the caller is on the main thread, false otherwise.</returns>
+    public static bool TryExecuteAll() {
+        if (OnMainThread) {
+            ExecuteAll();
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Execute all scheduled jobs and remove from the update loop if no jobs are remaining.
     /// </summary>
     private static void ExecuteAll() {
@@ -339,12 +389,14 @@ internal class RunOnMainThread {
             return;
         }
 
-        // Execute jobs.
-        while (ExecuteNext()) {
-        }
+        RunAction(() => {
+                // Execute jobs.
+                while (ExecuteNext()) {
+                }
 
-        // Execute polling jobs.
-        ExecutePollingJobs();
+                // Execute polling jobs.
+                ExecutePollingJobs();
+            });
     }
 }
 

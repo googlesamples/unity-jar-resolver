@@ -104,9 +104,7 @@ namespace GooglePlayServices
                     String.Format("Command completed: {0}", result.message),
                     level: LogLevel.Verbose);
                 this.result = result;
-                if (ExecutionEnvironment.InBatchMode) {
-                    RunOnMainThread.Run(() => { SignalComplete(); });
-                }
+                SignalComplete();
             }
 
             /// <summary>

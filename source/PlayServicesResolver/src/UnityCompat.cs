@@ -119,6 +119,7 @@ public class UnityCompat {
     /// <summary>
     /// Returns whether the editor is running in batch mode.
     /// </summary>
+    [ObsoleteAttribute("InBatchMode is obsolete, use ExecutionEnvironment.InBatchMode instead")]
     public static bool InBatchMode { get { return ExecutionEnvironment.InBatchMode; } }
 
     private static Type AndroidSDKToolsClass {
