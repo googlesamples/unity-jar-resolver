@@ -1,3 +1,10 @@
+# Version 1.2.84 - Aug 16, 2018
+## Bug Fixes
+* Fixed Android Resolver crash when the AndroidResolverDependencies.xml
+  file can't be written.
+* Reduced log spam when a conflicting Android library is pinned to a
+  specific version.
+
 # Version 1.2.83 - Aug 15, 2018
 ## Bug Fixes
 * Fixed Android Resolver failures due to an in-accessible AAR / JAR explode
