@@ -85,28 +85,37 @@ namespace GooglePlayServices
             /// Write this object to DEPENDENCY_STATE_FILE.
             /// </summary>
             public void WriteToFile() {
-                Directory.CreateDirectory(Path.GetDirectoryName(DEPENDENCY_STATE_FILE));
-                using (var writer = new XmlTextWriter(new StreamWriter(DEPENDENCY_STATE_FILE)) {
-                        Formatting = Formatting.Indented,
-                    }) {
-                    writer.WriteStartElement("dependencies");
-                    writer.WriteStartElement("packages");
-                    foreach (var dependencyKey in SortSet(Packages)) {
-                        writer.WriteStartElement("package");
-                        writer.WriteValue(dependencyKey);
+                try {
+                    Directory.CreateDirectory(Path.GetDirectoryName(DEPENDENCY_STATE_FILE));
+                    using (var writer = new XmlTextWriter(new StreamWriter(DEPENDENCY_STATE_FILE)) {
+                            Formatting = Formatting.Indented,
+                        }) {
+                        writer.WriteStartElement("dependencies");
+                        writer.WriteStartElement("packages");
+                        foreach (var dependencyKey in SortSet(Packages)) {
+                            writer.WriteStartElement("package");
+                            writer.WriteValue(dependencyKey);
+                            writer.WriteEndElement();
+                        }
                         writer.WriteEndElement();
-                    }
-                    writer.WriteEndElement();
-                    writer.WriteStartElement("files");
-                    foreach (var assetPath in SortSet(Files)) {
-                        writer.WriteStartElement("file");
-                        writer.WriteValue(assetPath);
+                        writer.WriteStartElement("files");
+                        foreach (var assetPath in SortSet(Files)) {
+                            writer.WriteStartElement("file");
+                            writer.WriteValue(assetPath);
+                            writer.WriteEndElement();
+                        }
                         writer.WriteEndElement();
+                        writer.WriteEndElement();
+                        writer.Flush();
+                        writer.Close();
                     }
-                    writer.WriteEndElement();
-                    writer.WriteEndElement();
-                    writer.Flush();
-                    writer.Close();
+
+                } catch (Exception e) {
+                    Log(String.Format(
+                        "Unable to update dependency file {0} ({1})\n" +
+                        "If auto-resolution is enabled, it is likely to be retriggered " +
+                        "when any operation triggers resolution.", DEPENDENCY_STATE_FILE, e),
+                        level: LogLevel.Warning);
                 }
             }
 
