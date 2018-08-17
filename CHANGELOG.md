@@ -1,3 +1,11 @@
+# Version 1.2.85 - Aug 17, 2018
+## Changes
+* Added support for synchronous resolution in the Android Resolver.
+  PlayServicesResolver.ResolveSync() now performs resolution synchronously.
+* Auto-resolution in the Android Resolver now results in synchronous resolution
+  of Android dependencies before the Android application build starts via
+  UnityEditor.Callbacks.PostProcessSceneAttribute.
+
 # Version 1.2.84 - Aug 16, 2018
 ## Bug Fixes
 * Fixed Android Resolver crash when the AndroidResolverDependencies.xml
