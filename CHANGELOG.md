@@ -1,3 +1,8 @@
+# Version 1.2.86 - Aug 22, 2018
+## Bug Fixes
+* Fixed Android Resolver exception in OnPostProcessScene() when the Android
+  platform isn't selected.
+
 # Version 1.2.85 - Aug 17, 2018
 ## Changes
 * Added support for synchronous resolution in the Android Resolver.

@@ -822,7 +822,7 @@ namespace GooglePlayServices
         /// </summary>
         [UnityEditor.Callbacks.PostProcessSceneAttribute(0)]
         private static void OnPostProcessScene() {
-            if (Resolver.AutomaticResolutionEnabled()) {
+            if (Resolver != null && Resolver.AutomaticResolutionEnabled()) {
                 Log("Starting auto-resolution before scene build...");
                 bool success = ResolveSync(false);
                 Log(String.Format("Android resolution {0}.", success ? "succeeded" : "failed"),
