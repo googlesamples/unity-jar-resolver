@@ -253,7 +253,7 @@ internal class RunOnMainThread {
                     while (true) {
                         ExecuteAll();
                         lock (pollingJobs) {
-                            if (pollingJobs.IndexOf(condition) < 0) break;
+                            if (pollingJobs.Count == 0) break;
                         }
                         // Wait 100ms.
                         Thread.Sleep(100);
@@ -395,7 +395,10 @@ internal class RunOnMainThread {
                 }
 
                 // Execute polling jobs.
-                ExecutePollingJobs();
+                int remainingJobs;
+                do {
+                    remainingJobs = ExecutePollingJobs();
+                } while (remainingJobs > 0 && ExecutionEnvironment.InBatchMode);
             });
     }
 }

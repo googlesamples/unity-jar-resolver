@@ -667,35 +667,40 @@ namespace GooglePlayServices
 
                 }
                 // Process / explode copied AARs.
-                ProcessAars(destinationDirectory, new HashSet<string>(copiedArtifacts));
-
-                // Look up the original Dependency structure for each missing artifact.
-                var missingArtifactsAsDependencies = new List<Dependency>();
-                foreach (var artifact in missingArtifacts) {
-                    Dependency dep;
-                    if (!allDependencies.TryGetValue(artifact, out dep)) {
-                        // If this fails, something may have gone wrong with the Gradle script.
-                        // Rather than failing hard, fallback to recreating the Dependency
-                        // class with the partial data we have now.
-                        var components = new List<string>(artifact.Split(new char[] { ':' }));
-                        if (components.Count < 2) {
-                            PlayServicesResolver.Log(
-                                String.Format(
-                                    "Found invalid missing artifact {0}\n" +
-                                    "Something went wrong with the gradle artifact download " +
-                                    "script\n." +
-                                    "Please report a bug", artifact),
-                                level: LogLevel.Warning);
-                            continue;
-                        } else if (components.Count < 3 || components[2] == "+") {
-                            components.Add("LATEST");
+                ProcessAars(
+                    destinationDirectory, new HashSet<string>(copiedArtifacts),
+                    () => {
+                        // Look up the original Dependency structure for each missing artifact.
+                        var missingArtifactsAsDependencies = new List<Dependency>();
+                        foreach (var artifact in missingArtifacts) {
+                            Dependency dep;
+                            if (!allDependencies.TryGetValue(artifact, out dep)) {
+                                // If this fails, something may have gone wrong with the Gradle
+                                // script.  Rather than failing hard, fallback to recreating the
+                                // Dependency class with the partial data we have now.
+                                var components = new List<string>(
+                                    artifact.Split(new char[] { ':' }));
+                                if (components.Count < 2) {
+                                    PlayServicesResolver.Log(
+                                        String.Format(
+                                            "Found invalid missing artifact {0}\n" +
+                                            "Something went wrong with the gradle artifact " +
+                                            "download script\n." +
+                                            "Please report a bug", artifact),
+                                        level: LogLevel.Warning);
+                                    continue;
+                                } else if (components.Count < 3 || components[2] == "+") {
+                                    components.Add("LATEST");
+                                }
+                                dep = new Dependency(components[0], components[1], components[2]);
+                            }
+                            missingArtifactsAsDependencies.Add(dep);
                         }
-                        dep = new Dependency(components[0], components[1], components[2]);
-                    }
-                    missingArtifactsAsDependencies.Add(dep);
-                }
-                if (logErrorOnMissingArtifacts) LogMissingDependenciesError(missingArtifacts);
-                resolutionComplete(missingArtifactsAsDependencies);
+                        if (logErrorOnMissingArtifacts) {
+                            LogMissingDependenciesError(missingArtifacts);
+                        }
+                        resolutionComplete(missingArtifactsAsDependencies);
+                    });
             };
 
             // Executes gradleComplete on the main thread.
@@ -1328,23 +1333,37 @@ namespace GooglePlayServices
         /// <param name="dir">The directory to process.</param>
         /// <param name="updatedFiles">Set of files that were recently updated and should be
         /// processed.</param>
-        /// <param name="displayProgress">Display a progress bar while processing.</param>
-        private void ProcessAars(string dir, HashSet<string> updatedFiles,
-                                 bool displayProgress = true) {
+        /// <param name="complete">Executed when this process is complete.</param>
+        private void ProcessAars(string dir, HashSet<string> updatedFiles, Action complete) {
             // Get set of AAR files and directories we're managing.
-            var aars = new HashSet<string>(PlayServicesResolver.FindLabeledAssets());
-            foreach (var aarData in aarExplodeData.Values) aars.Add(aarData.path);
+            var uniqueAars = new HashSet<string>(PlayServicesResolver.FindLabeledAssets());
+            foreach (var aarData in aarExplodeData.Values) uniqueAars.Add(aarData.path);
+            var aars = new Queue<string>(uniqueAars);
 
             const string progressBarTitle = "Processing AARs...";
-            float numberOfAars = (float)aars.Count;
-            int aarIndex = 0;
-            displayProgress &= (numberOfAars > 0 && !ExecutionEnvironment.InBatchMode);
-            try {
-                foreach (string aarPath in aars) {
+            int numberOfAars = aars.Count;
+            bool displayProgress = (numberOfAars > 0 && !ExecutionEnvironment.InBatchMode);
+
+            if (numberOfAars == 0) {
+                complete();
+                return;
+            }
+            // EditorUtility.DisplayProgressBar can't be called multiple times per UI thread tick
+            // in some versions of Unity so perform increment processing on each UI thread tick.
+            RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                int remainingAars = aars.Count;
+                bool allAarsProcessed = remainingAars == 0;
+                // Since the completion callback can trigger an update, remove this closure from
+                // the polling job list if complete.
+                if (allAarsProcessed) return true;
+                int processedAars = numberOfAars - remainingAars;
+                string aarPath = aars.Dequeue();
+                remainingAars--;
+                allAarsProcessed = remainingAars == 0;
+                float progress = (float)processedAars / (float)numberOfAars;
+                try {
                     if (displayProgress) {
-                        EditorUtility.DisplayProgressBar(progressBarTitle, aarPath,
-                                                         (float)aarIndex / numberOfAars);
-                        aarIndex++;
+                        EditorUtility.DisplayProgressBar(progressBarTitle, aarPath, progress);
                     }
                     bool explode = ShouldExplode(aarPath);
                     var aarData = FindAarExplodeDataEntry(aarPath);
@@ -1365,7 +1384,8 @@ namespace GooglePlayServices
                         } else if (aarPath != aarData.path) {
                             // Clean up previously expanded / exploded versions of the AAR.
                             PlayServicesResolver.Log(
-                                String.Format("Cleaning up previously exploded AAR {0}", aarPath),
+                                String.Format("Cleaning up previously exploded AAR {0}",
+                                              aarPath),
                                 level: LogLevel.Verbose);
                             FileUtils.DeleteExistingFileOrDirectory(
                                 DetermineExplodedAarPath(aarPath));
@@ -1374,11 +1394,15 @@ namespace GooglePlayServices
                         aarData.gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
                         aarData.TargetAbis = AndroidAbis.Current;
                     }
+                    SaveAarExplodeCache();
+                } finally {
+                    if (allAarsProcessed) {
+                        if (displayProgress) EditorUtility.ClearProgressBar();
+                        complete();
+                    }
                 }
-                SaveAarExplodeCache();
-            } finally {
-                if (displayProgress) EditorUtility.ClearProgressBar();
-            }
+                return allAarsProcessed;
+            });
         }
 
         /// <summary>
