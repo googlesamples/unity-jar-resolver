@@ -1,3 +1,7 @@
+# Version 1.2.87 - Aug 23, 2018
+## Bug Fixes
+* Fixed Android Resolver "Processing AARs" dialog getting stuck in Unity 5.6.
+
 # Version 1.2.86 - Aug 22, 2018
 ## Bug Fixes
 * Fixed Android Resolver exception in OnPostProcessScene() when the Android
