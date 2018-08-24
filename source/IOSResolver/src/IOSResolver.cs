@@ -2188,19 +2188,43 @@ public class IOSResolver : AssetPostprocessor {
             podPathToProjectPaths[filename.Substring(podsDir.Length + 1)] =
                 filename.Substring(pathToBuiltProject.Length + 1);
         }
+
+        var podsProjectPath = GetProjectPath(podsDir, PODS_PROJECT_NAME);
+        UnityEditor.iOS.Xcode.PBXProject podsProject = null;
+
+        if (File.Exists(podsProjectPath)) {
+            podsProject = new UnityEditor.iOS.Xcode.PBXProject();
+            podsProject.ReadFromString(File.ReadAllText(podsProjectPath));
+        }
+
         // Add a reference to each source file in the target project.
         foreach (var podPathProjectPath in podPathToProjectPaths) {
-            project.AddFileToBuild(
-                target,
-                project.AddFile(podPathProjectPath.Value,
-                                podPathProjectPath.Value,
-                                UnityEditor.iOS.Xcode.PBXSourceTree.Source));
-            // Some source pods (e.g Protobuf) can include files relative to the Pod root,
-            // add include paths relative to the Pod's source files for this use case.
-            project.UpdateBuildProperty(
-                    new [] { target }, "USER_HEADER_SEARCH_PATHS",
-                    new [] { "$(SRCROOT)/" + Path.GetDirectoryName(podPathProjectPath.Value) },
-                    new string[] {});
+            // Get the relative path inside 'Pods/'.
+            var sourceFilePathInPod = podPathProjectPath.Value.Substring(PODS_DIR.Length + 1);
+
+            // Only add source files that are included in the Pod project, this way we
+            // can avoid adding source files that are not part of the Pod dependencies.
+            if(podsProject != null && podsProject.ContainsFileByRealPath(sourceFilePathInPod, 
+               UnityEditor.iOS.Xcode.PBXSourceTree.Source))
+            {
+                Log("Adding source file " + sourceFilePathInPod + " to Xcode project.", true);
+                project.AddFileToBuild(
+                    target,
+                    project.AddFile(podPathProjectPath.Value,
+                                    podPathProjectPath.Value,
+                                    UnityEditor.iOS.Xcode.PBXSourceTree.Source));
+                // Some source pods (e.g Protobuf) can include files relative to the Pod root,
+                // add include paths relative to the Pod's source files for this use case.
+                project.UpdateBuildProperty(
+                        new [] { target }, "USER_HEADER_SEARCH_PATHS",
+                        new [] { "$(SRCROOT)/" + Path.GetDirectoryName(podPathProjectPath.Value) },
+                        new string[] {});
+            } 
+            else
+            {
+                Log("Skipping adding source file " + sourceFilePathInPod + 
+                    " to Xcode project due to it is not part of the pod project", true);
+            }
         }
 
         // Each source pod library target name shares the name of the directory containing
@@ -2348,11 +2372,9 @@ public class IOSResolver : AssetPostprocessor {
         }
 
         // Attempt to read per-file compile / build settings from the Pods
-        // project.
-        var podsProjectPath = GetProjectPath(podsDir, PODS_PROJECT_NAME);
-        if (File.Exists(podsProjectPath)) {
-            var podsProject = new UnityEditor.iOS.Xcode.PBXProject();
-            podsProject.ReadFromString(File.ReadAllText(podsProjectPath));
+        // project. Note that we have a valid podsProject if Pod pbxproj exists.
+        // We have a valid podsProject if Pod pbxproj exists.
+        if (podsProject != null) {
             foreach (var directory in Directory.GetDirectories(podsDir)) {
                 // Each pod will have a top level directory under the pods dir
                 // named after the pod.  Also, some pods have build targets in
