@@ -976,6 +976,17 @@ task testDownloadArtifacts(type: GradleBuild) {
   buildFile "source/PlayServicesResolver/scripts/download_artifacts_test.gradle"
 }
 
+task updateEmbeddedGradleWrapper(type: Zip) {
+  description "Update the gradle wrapper in gradle-template.zip"
+  from project.ext.scriptDirectory
+  include "gradlew"
+  include "gradlew.bat"
+  include "gradle/**"
+  archiveName "gradle-template.zip"
+  destinationDir (new File(project.ext.scriptDirectory,
+                           "source/PlayServicesResolver/scripts"))
+}
+
 Task buildVersionHandler = createBuildPluginDllTask(
   "VersionHandler", "VersionHandler", "Google.VersionHandler.dll", false)
 Task buildVersionHandlerImpl = createBuildPluginDllTask(
@@ -983,7 +994,7 @@ Task buildVersionHandlerImpl = createBuildPluginDllTask(
   true, [buildVersionHandler])
 Task buildAndroidResolver = createBuildPluginDllTask(
   "AndroidResolver", "PlayServicesResolver", "Google.JarResolver.dll", true,
-  [buildVersionHandlerImpl])
+  [updateEmbeddedGradleWrapper, buildVersionHandlerImpl])
 Task buildIosResolver = createBuildPluginDllTask(
   "IosResolver", "IOSResolver", "Google.IOSResolver.dll", true,
   [buildAndroidResolver])
