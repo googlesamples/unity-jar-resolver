@@ -87,7 +87,7 @@ project.ext {
 // Generate a task to create the specified directory File.
 def createDirectoryTask(directoryFile) {
   def createDirectory = tasks.create(
-    name: "create_" + directoryFile.path,
+    name: "create_" + directoryFile.path.replaceAll(/[\/\\:]/, "-"),
     description: "Creates the directory " + directoryFile.path)
   createDirectory.with {
     outputs.dir directoryFile
@@ -217,10 +217,10 @@ def downloadScriptOutputToSectionsList(output) {
 //   script.
 // * Validates the expected artifacts are downloaded and match the specified
 //   set of source files specified by outputInputFileMap.
-// * Validates the script output matches scriptOutput (list of strings where
+// * Validates the script output matches expectedScriptOutput (list of strings where
 //   each element is a section of the script's parsed output).
 def createTestTask(taskName, taskDescription, packageSpecification,
-                   outputInputFileMap, scriptOutput, iterations=1) {
+                   outputInputFileMap, expectedScriptOutput, iterations=1) {
   // Create a target directory relative to the output directory.
   def targetDirFile = new File(project.ext.outputDir, taskName)
   // Move output file paths relative to the target directory and input paths
@@ -250,9 +250,10 @@ def createTestTask(taskName, taskDescription, packageSpecification,
         project.ext.standardOutputErrorLogger.uninstall(it)
         validateOutputFilesExist(it)
         validateFilesMatch(it, movedOutputInputFileMap)
-        if (scriptOutput != null) {
+        if (expectedScriptOutput != null) {
           assert downloadScriptOutputToSectionsList(
-            project.ext.standardOutputErrorLogger.output) == scriptOutput
+            project.ext.standardOutputErrorLogger.output) ==
+            expectedScriptOutput
         }
       }
     }
@@ -310,7 +311,9 @@ createTestTask(
   "apackage.thatdoes:notexist:9.9.9",
   [],
   ["Missing artifacts:\n" +
-   "apackage.thatdoes:notexist:9.9.9"])
+   "apackage.thatdoes:notexist:+",
+   "Modified artifacts:\n" +
+   "apackage.thatdoes:notexist:9.9.9 --> apackage.thatdoes:notexist:+"])
 
 createTestTask(
   "testDownloadConflictingVersions",
@@ -339,7 +342,7 @@ createTestTask(
    "com.android.support.support-vector-drawable-24.0.0.aar",
    "Modified artifacts:\n" +
    "com.android.support:appcompat-v7:23.0.0 --> " +
-   "com.android.support:appcompat-v7:24.0.0@aar"])
+   "com.android.support:appcompat-v7:24.0.0"])
 
 createTestTask(
   "testDownloadSrcAar",
@@ -532,7 +535,7 @@ createTestTask(
   "com.google.android.gms:play-services-basement:12.0.0;" +
   "com.google.android.gms:play-services-tasks:12.0.0;" +
   "com.google.android.gms:play-services-basement:15.0.0;" +
-  "a.non:existent:package:1.2.3;",
+  "a.non:existent-package:1.2.3;",
   ["android.arch.core.common-1.0.0.jar":
    "android/arch/core/common/1.0.0/common-1.0.0.jar",
    "android.arch.lifecycle.common-1.0.0.jar":
@@ -577,12 +580,11 @@ createTestTask(
    "com.google.android.gms.play-services-basement-15.0.0.aar\n" +
    "com.google.android.gms.play-services-tasks-15.0.0.aar",
    "Missing artifacts:\n" +
-   "a.non:existent:package@1.2.3",
+   "a.non:existent-package:+",
    "Modified artifacts:\n" +
+   "a.non:existent-package:1.2.3 --> a.non:existent-package:+\n" +
    "com.google.android.gms:play-services-basement:12.0.0 --> " +
-   "com.google.android.gms:play-services-basement:+\n" +
-   "com.google.android.gms:play-services-basement:15.0.0 --> " +
-   "com.google.android.gms:play-services-basement:+\n" +
+   "com.google.android.gms:play-services-basement:15.0.0\n" +
    "com.google.android.gms:play-services-tasks:12.0.0 --> " +
    "com.google.android.gms:play-services-tasks:+"])
 

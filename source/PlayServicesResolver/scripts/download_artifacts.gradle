@@ -72,6 +72,8 @@ buildscript {
 }
 
 configurations {
+  // Configuration used to resolve the final set of transitive dependencies.
+  transitivePackagesConfig
   // Configuration used to aggregate the set of packages we'll copy.
   copyPackagesConfig
 }
@@ -165,7 +167,7 @@ public class Version implements Comparable {
         String nonWildcardComponent =
           component.substring(0, component.size() - 1)
         int valueToSubtract = nonWildcardComponent.isInteger() ?
-          nonWildcardComponent as int : 0
+          (nonWildcardComponent as int) + 1 : 0
         versionNumberComponents.add((Integer.MAX_VALUE -
                                      valueToSubtract).toString())
         break
@@ -266,7 +268,7 @@ public enum VersionExpressionMatchType {
 @ToString(includeNames=true, includeFields=true)
 public class VersionRange {
   // Parsed version expression.
-  public String expression
+  public String versionExpression
   // Minimum version parsed from a version expression.
   public String minimum
   // Maximum version parsed from a version expression.
@@ -298,17 +300,29 @@ public class VersionRange {
     // [ or (.
     def minVersionMatch = (versionExpression =~ /^([^\[\(]+)$/)
     VersionRange range = new VersionRange(
-      expression: versionExpression, minimum: "0", maximum: "+",
+      versionExpression: versionExpression, minimum: "0", maximum: "+",
       matchType: VersionExpressionMatchType.NONE)
     String minMatchedVersion = ""
     String maxMatchedVersion = ""
     if (versionRangeMatch.matches()) {
       range.matchType = VersionExpressionMatchType.RANGE
       minMatchedVersion = versionRangeMatch.group(2)
+      if (minMatchedVersion) {
+        minMatchedVersion =
+          (new Version(minMatchedVersion)).minimumValue.version
+      }
       maxMatchedVersion = versionRangeMatch.group(3)
+      if (maxMatchedVersion) {
+        maxMatchedVersion =
+          (new Version(maxMatchedVersion)).maximumValue.version
+      }
     } else if (absoluteVersionMatch.matches()) {
       range.matchType = VersionExpressionMatchType.ABSOLUTE
       minMatchedVersion = absoluteVersionMatch.group(1)
+      if (minMatchedVersion) {
+        minMatchedVersion =
+          (new Version(minMatchedVersion)).minimumValue.version
+      }
       maxMatchedVersion = minMatchedVersion
     } else if (minVersionMatch.matches()) {
       range.matchType = VersionExpressionMatchType.MINIMUM
@@ -319,6 +333,24 @@ public class VersionRange {
     if (!minMatchedVersion.isEmpty()) range.minimum = minMatchedVersion
     if (!maxMatchedVersion.isEmpty()) range.maximum = maxMatchedVersion
     return range
+  }
+
+  /*
+   * Get the version range expression.
+   *
+   * @returns Version expression.
+   */
+  String getExpression() {
+    switch (matchType) {
+    case VersionExpressionMatchType.NONE:
+      return versionExpression
+    case VersionExpressionMatchType.RANGE:
+      return sprintf("[%s,%s]", minimum, maximum)
+    case VersionExpressionMatchType.ABSOLUTE:
+      return sprintf("[%s]", minimum)
+    case VersionExpressionMatchType.MINIMUM:
+      return sprintf("%s", minimum)
+    }
   }
 
   /*
@@ -407,10 +439,12 @@ public class PackageSpecifier implements Comparable {
       packageSpecifierString.split(/[:@]/) : []
     // Fill the list of components with null elements.
     components += ([null] * Math.min(4, (4 - components.size())))
-    return new PackageSpecifier(group: components[0],
-                                artifact: components[1],
-                                versionExpression: components[2],
-                                artifactType: components[3])
+    return new PackageSpecifier(
+      group: components[0],
+      artifact: components[1],
+      versionExpression: components[2] ? (VersionRange.fromExpression(
+                                            components[2])).expression : null,
+      artifactType: components[3])
   }
 
   /*
@@ -435,9 +469,11 @@ public class PackageSpecifier implements Comparable {
   public static PackageSpecifier fromModuleComponentSelector(
       ModuleComponentSelector selector) {
     return selector.with {
-      return new PackageSpecifier(group: group,
-                                  artifact: module,
-                                  versionExpression: version)
+      return new PackageSpecifier(
+        group: group,
+        artifact: module,
+        versionExpression: (version ?
+          (VersionRange.fromExpression(version)).expression : null))
     }
   }
 
@@ -451,11 +487,27 @@ public class PackageSpecifier implements Comparable {
   public static PackageSpecifier fromResolvedArtifact(
       ResolvedArtifact resolvedArtifact) {
     return resolvedArtifact.with {
-      ModuleVersionIdentifier id = moduleVersion.id
-      return new PackageSpecifier(group: id.group,
-                                  artifact: id.name,
-                                  versionExpression: id.version,
-                                  artifactType: type)
+      PackageSpecifier pkg = fromModuleVersionIdentifier(moduleVersion.id)
+      pkg.artifactType = type
+      return pkg
+    }
+  }
+
+  /*
+   * Convert a Gradle ModuleVersionIdentifier to a PackageSpecifier.
+   *
+   * @param moduleVersionIdentifier ModuleVersionIdentifier to convert.
+   *
+   * @returns PackageSpecifier instance.
+   */
+  public static PackageSpecifier fromModuleVersionIdentifier(
+      ModuleVersionIdentifier moduleVersionIdentifier) {
+    return moduleVersionIdentifier.with {
+      return new PackageSpecifier(
+        group: group,
+        artifact: name,
+        versionExpression: (version ?
+          (VersionRange.fromExpression(version)).expression : null))
     }
   }
 
@@ -550,7 +602,11 @@ public class PackageSpecifier implements Comparable {
    * @returns Colon separated string.
    */
   public String getSpecString() {
-    return componentStrings.join(":")
+    List<String> components = componentStrings
+    if (artifactType && artifactType != "srcaar") {
+      components = components.dropRight(1) + [versionExpression]
+    }
+    return components.join(":")
   }
 
   /*
@@ -563,12 +619,24 @@ public class PackageSpecifier implements Comparable {
   }
 
   /*
-   * Get group / artifact tuple as a colon separated string.
+   * Convert to a valid filename.
    *
-   * @returns Period separated string.
+   * @returns Filename string.
    */
-  public String getGroupArtifactAsPeriodSeparatedString() {
-    return groupArtifact.join(".")
+  public String getFilename() {
+    List<String> hypenSeparatedComponents = []
+    String dotSeparatedGroupArtifact = groupArtifact.join(".")
+    if (dotSeparatedGroupArtifact) {
+      hypenSeparatedComponents += [dotSeparatedGroupArtifact]
+    }
+    if (versionExpression) {
+      hypenSeparatedComponents += [versionExpression]
+    }
+    String filename = hypenSeparatedComponents.join("-")
+    if (artifactType) {
+      filename += "." + (artifactType == "srcaar" ? "aar" : artifactType)
+    }
+    return filename
   }
 
   /*
@@ -797,22 +865,19 @@ List<Tuple2<DependencyResult, List<DependencyResult>>>
     summaryGraph.add(currentNode)
     graphRemaining = graphRemaining.drop(1)
 
-    // Only walk resolved depenencies.
-    if (!(dependency instanceof ResolvedDependencyResult)) {
-      continue
-    }
-
     // Call the closure the current node and the current node's parents.
     if (closure) closure(dependency, parents)
 
-    ResolvedComponentResult componentResult = dependency.selected
-    List<DependencyResult> parentsOfChildren = parents.clone()
-    parentsOfChildren.addAll(0, [dependency])
-    graphRemaining.addAll(
-      0, componentResult.dependencies.collect {
-        new Tuple2<DependencyResult, List<DependencyResult>>(
-          it, parentsOfChildren)
-      })
+    if (dependency instanceof ResolvedDependencyResult) {
+      ResolvedComponentResult componentResult = dependency.selected
+      List<DependencyResult> parentsOfChildren = parents.clone()
+      parentsOfChildren.addAll(0, [dependency])
+      graphRemaining.addAll(
+        0, componentResult.dependencies.collect {
+          new Tuple2<DependencyResult, List<DependencyResult>>(
+            it, parentsOfChildren)
+        })
+    }
   }
   return summaryGraph
 }
@@ -887,13 +952,11 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
   // Closure which adds a dependency to the packages map if it is present in
   // the group:artifact set.
   def addDependencyToPackages = { PackageSpecifier pkg, Boolean isConflicting ->
-    // ModuleComponentSelector does not include the artifact type so this is
-    // derived from the requested packages.
+    // Look up the requested package so that the search continues from the user
+    // requested packages.
     PackageSpecifier requestedPackage = requestedPackagesByGroupArtifact[
       pkg.groupArtifactString]
-    if (requestedPackage) {
-      pkg.artifactType = requestedPackage.artifactType
-    }
+    if (requestedPackage) pkg = requestedPackage
 
     // If the package is version-locked add it to the tracking set so it can
     // be reconciled later.
@@ -916,14 +979,15 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
     if (requestedPackage &&
         requestedPackage.versionRange.matchType ==
         VersionExpressionMatchType.ABSOLUTE &&
+        requestedPackage.versionRange.minimumVersion.minimumValue ==
+        requestedPackage.versionRange.maximumVersion.maximumValue &&
         isConflicting) {
       if (!(requestedPackage.groupArtifactString in
             conflictingByGroupArtifact.keySet())) {
-        logger.log(LogLevel.WARN,
-                   sprintf("Keeping conflicting package %s as it's " +
-                           "explicitly specified at version %s",
-                           requestedPackage.specString,
-                           requestedPackage.versionExpression))
+        logger.info(sprintf("Keeping conflicting package %s as it's " +
+                            "explicitly specified at version %s",
+                            requestedPackage.specString,
+                            requestedPackage.versionExpression))
       }
       addMostRecentPackageToMap(packages, requestedPackage)
       return trackConflictState(requestedPackage, false)
@@ -942,8 +1006,11 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
         group: pkg.group,
         artifact: pkg.artifact,
         versionExpression: (
-          isConflicting ? pkg.versionRange.minimumVersion.loosen().version :
-            pkg.versionRange.expression),
+          isConflicting ?
+            pkg.versionRange.matchType == VersionExpressionMatchType.RANGE ?
+              pkg.versionRange.maximumVersion.loosen().version :
+              pkg.versionRange.minimumVersion.loosen().version :
+          pkg.versionRange.expression),
         artifactType: pkg.artifactType)
     addMostRecentPackageToMap(packages, newPkg)
     return trackConflictState(newPkg, isConflicting)
@@ -952,10 +1019,28 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
   // Walk the resolved graph tracking whether conflicts are present.
   walkResolvedComponentResultGraph(
     root, { DependencyResult dependency, List<DependencyResult> parents ->
-      addDependencyToPackages(
+      // Wrap the selector with a PackageSpecifier keeping setting the version
+      // expression to the selected package version.
+      PackageSpecifier requestedPackage =
         PackageSpecifier.fromModuleComponentSelector(
-          dependency.requested as ModuleComponentSelector),
-        dependency.selected.selectionReason.isConflictResolution())
+          dependency.requested as ModuleComponentSelector)
+      ResolvedComponentResult resolved =
+        (dependency instanceof ResolvedDependencyResult) ?
+          (dependency as ResolvedDependencyResult).selected : null
+      boolean conflicting = resolved == null ||
+        resolved.selectionReason.isConflictResolution()
+      // Gradle has resolved the conflict but it still may not satisfy the
+      // dependency specification, so check the selected version with the
+      // requested version of the dependency.
+      if (resolved && conflicting) {
+        PackageSpecifier resolvedPackage =
+          PackageSpecifier.fromModuleVersionIdentifier(resolved.moduleVersion)
+        if (requestedPackage.versionRange.inRange(
+              resolvedPackage.versionRange.minimumVersion)) {
+          conflicting = false
+        }
+      }
+      addDependencyToPackages(requestedPackage, conflicting)
     })
 
   // Walk the resolved graph again, this time applying any required changes to
@@ -979,16 +1064,36 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
         // If the package version spec can't be loosened any further and this
         // was requested by the caller of this method, add child packages to the
         // set of dependencies to loosen in the next iteration.
-        def overrideTransitiveDependencies =
+        boolean overrideTransitiveDependencies =
           pkg.versionExpression == "+" &&
           (pkg.groupArtifactString in requestedPackagesByGroupArtifact)
-        if (overrideTransitiveDependencies) {
-          dependency.selected.dependencies.each {
-            logger.info(sprintf("Overriding transitive dependency %s",
-                                it.toString()))
-            addMostRecentPackageToMap(
-              packages, PackageSpecifier.fromModuleComponentSelector(
-                it.requested as ModuleComponentSelector))
+        if (overrideTransitiveDependencies &&
+            (dependency instanceof ResolvedDependencyResult)) {
+          // Find the set of packages, if any, to override.
+          List<Tuple2<PackageSpecifier,
+                      ModuleComponentSelector>> packagesToOverride =
+              dependency.selected.dependencies.findResults {
+                PackageSpecifier dependencyPkg =
+                  PackageSpecifier.fromModuleComponentSelector(
+                    it.requested as ModuleComponentSelector)
+                  if (dependencyPkg.groupArtifactString in packages) {
+                    return null
+                  }
+                  return new Tuple2<PackageSpecifier, ModuleComponentSelector>(
+                    dependencyPkg, it.requested as ModuleComponentSelector)
+              }
+          // Add packages to set to override on the next resolution attempt.
+          if (packagesToOverride) {
+            logger.quiet(
+              sprintf("Overriding transitive dependencies of %s: %s",
+                      pkg.specString, packagesToOverride.collect {
+                        PackageSpecifier unused,
+                        ModuleComponentSelector requested ->
+                          requested.toString() }.toString()))
+            packagesToOverride.each {
+              PackageSpecifier dependencyPkg, ModuleComponentSelector unused ->
+                addMostRecentPackageToMap(packages, dependencyPkg)
+            }
           }
         }
       })
@@ -999,25 +1104,70 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
     addMostRecentPackageToMap(packages, it)
   }
 
-  logger.info("=== Updated Dependencies ===")
+  // Collate the set of conflicts after resolution.
+  // This data structure maps groupArtifact of a conflicting package to a
+  // list of paths through the dependency tree in the form root/child/leaf to
+  // each conflict.
+  Map<String, Set<String>> conflictingDependencies = [:]
   summaryGraph.each {
-    def (dependency, parents) = it
-    String groupArtifact =
-      PackageSpecifier.fromModuleComponentSelector(
-        dependency.requested as ModuleComponentSelector).groupArtifactString
-    logger.info(
-      sprintf("%s* %s (new: %s, conflicting: %b (parents: %s))",
-              "  ".multiply(parents.size()),
-              dependency.toString(),
-              packages[groupArtifact],
-              conflictingByGroupArtifact[groupArtifact],
-              parents.collect {
-                PackageSpecifier.fromModuleComponentSelector(
-                  it.requested as ModuleComponentSelector).specString
-              }))
+    DependencyResult dependency, List<DependencyResult> parents ->
+      if (!(dependency instanceof ResolvedDependencyResult)) return
+      PackageSpecifier conflictPkg =
+        PackageSpecifier.fromModuleComponentSelector(
+          dependency.requested as ModuleComponentSelector)
+      String groupArtifact = conflictPkg.groupArtifactString
+      if (!conflictingByGroupArtifact[groupArtifact]) return
+
+      List<PackageSpecifier> parentPkgs = parents.collect {
+        PackageSpecifier.fromModuleComponentSelector(
+          it.requested as ModuleComponentSelector)
+      }
+      String pathToConflict = PackageSpecifier.specStrings(
+        ([conflictPkg] + parentPkgs).reverse()).join("/")
+      Set<String> conflictPaths =
+        conflictingDependencies.get(groupArtifact, [].toSet())
+      conflictPaths.add(pathToConflict)
+      conflictingDependencies[groupArtifact] = conflictPaths
   }
 
-  logger.info(sprintf("=== Selected dependencies: %s", packages.toString()))
+  logger.info("=== Updated Dependencies ===")
+  conflictingDependencies.keySet().sort().each { String conflictGroupArtifact ->
+    List<String> conflictPaths =
+      conflictingDependencies[conflictGroupArtifact].sort()
+    // If only one package is reported as a conflict, it's a parent node in the
+    // graph of the conflict so ignore it.
+    if (conflictPaths.size() > 1) {
+      logger.quiet(sprintf("%s conflicting due to package(s):",
+                           conflictGroupArtifact))
+      conflictPaths.each { logger.quiet(sprintf("- %s", it)) }
+    }
+  }
+  // Dump the current dependency graph and the conflict state of each node.
+  summaryGraph.each {
+    DependencyResult dependency, List<DependencyResult> parents ->
+      String groupArtifact =
+        PackageSpecifier.fromModuleComponentSelector(
+          dependency.requested as ModuleComponentSelector).groupArtifactString
+      logger.info(
+        sprintf(
+          "%s* %s (new: %s, conflicting: %b (parents: %s))",
+          "  ".multiply(parents.size()),
+          (dependency instanceof ResolvedDependencyResult) &&
+          dependency.selected.toString() != dependency.requested.toString() ?
+          sprintf("%s --> %s", dependency.requested.toString(),
+                  dependency.selected.toString()) :
+          dependency.requested.toString(),
+          packages[groupArtifact]?.specString,
+          conflictingByGroupArtifact[groupArtifact],
+          parents.collect {
+            PackageSpecifier.fromModuleComponentSelector(
+              it.requested as ModuleComponentSelector).specString
+          }))
+  }
+
+  logger.info(sprintf("=== Selected dependencies: %s",
+                      PackageSpecifier.specStrings(
+                        packages.values()).toString()))
 
   return new Tuple2<Boolean, Set<PackageSpecifier>>(
     conflictsFound, packages.values().toSet())
@@ -1119,36 +1269,40 @@ Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
       "userPackagesToQuery" + resolutionAttempt.toString())
     // Add user specified packages to the userPackages configuration.
     // This allows us to resolve during the configuration phase.
-    logger.info(sprintf("Resolution attempt %d: packages %s",
-                        resolutionAttempt,
-                        PackageSpecifier.specStrings(currentPackages)))
+    logger.quiet(sprintf("Resolution attempt %d: packages %s",
+                         resolutionAttempt,
+                         PackageSpecifier.specStrings(
+                           currentPackages).toString()))
     PackageSpecifier.specStrings(currentPackages).each {
       project.dependencies.add(userPackagesToQuery.name, it)
     }
-    try {
-      userPackagesToQuery.resolve()
-    } catch (ResolveException e) {
-      // If a package is missing, don't continue searching as the overall
-      // resolution process will fail anyway.
-      logger.warn(sprintf("Ignoring resolution failure %s (%s) for packages %s",
-                          e.toString(), e.getCauses().toString(),
-                          PackageSpecifier.specStrings(currentPackages)))
+    Set<PackageSpecifier> newPackages = currentPackages
+    boolean conflictsFound = false
+    ResolutionResult resolutionResult =
+      userPackagesToQuery.incoming.resolutionResult
+    // Warn the user of missing dependencies.
+    resolutionResult.allDependencies.findAll {
+      it instanceof UnresolvedDependencyResult
+    }.each {
+      logger.quiet(
+        sprintf("Resolve failed due to %s missing for %s, attempted " +
+                "to use %s, failed due to %s", it.requested, it.from,
+                it.attempted, it.failure))
     }
-    boolean conflictsFound
-    Set<PackageSpecifier> newPackages
     (conflictsFound, newPackages) = loosenVersionContraintsForConflicts(
-      userPackagesToQuery.incoming.resolutionResult.root, currentPackages)
+      resolutionResult.root, currentPackages)
     boolean packagesChanged = !newPackages.equals(currentPackages)
     currentPackages = newPackages
-    logger.info(sprintf("Resolution attempt: %d, conflicts: %b, " +
-                        "updated packages: %b", resolutionAttempt,
-                        conflictsFound, packagesChanged))
+    logger.quiet(sprintf("Resolution attempt: %d, conflicts detected: %b, " +
+                         "updated packages: %b", resolutionAttempt,
+                         conflictsFound, packagesChanged))
     if (!conflictsFound) {
       break
     } else if (!packagesChanged) {
       logger.warn(sprintf("Unable to find a set of non-conflicting artifacts " +
                           "for packages %s.",
-                          PackageSpecifier.specStrings(packages)))
+                          PackageSpecifier.specStrings(
+                            currentPackages).toString()))
       break
     }
     resolutionAttempt++
@@ -1268,10 +1422,12 @@ def testGetComponentsFromPackage() {
 }
 
 def testPackageSpecifierStrings() {
-  [[PackageSpecifier.fromString("a-b:c-d:1.2.3@aar"),
-    ["a-b:c-d:1.2.3@aar", "a-b:c-d", "a-b.c-d"]],
+  [[PackageSpecifier.fromString("a-b:c-d:1.2.3@srcaar"),
+    ["a-b:c-d:1.2.3@srcaar", "a-b:c-d", "a-b.c-d-1.2.3.aar"]],
+   [PackageSpecifier.fromString("a-b:c-d:1.2.3@aar"),
+    ["a-b:c-d:1.2.3", "a-b:c-d", "a-b.c-d-1.2.3.aar"]],
    [PackageSpecifier.fromString("a-b:c-d:1.2.3"),
-    ["a-b:c-d:1.2.3", "a-b:c-d", "a-b.c-d"]],
+    ["a-b:c-d:1.2.3", "a-b:c-d", "a-b.c-d-1.2.3"]],
    [PackageSpecifier.fromString("a-b:c-d"),
     ["a-b:c-d", "a-b:c-d", "a-b.c-d"]],
    [PackageSpecifier.fromString("a-b"), ["a-b", "", ""]],
@@ -1279,7 +1435,7 @@ def testPackageSpecifierStrings() {
     pkg, expected ->
       List<String> result = [pkg.specString,
                              pkg.groupArtifactString,
-                             pkg.groupArtifactAsPeriodSeparatedString]
+                             pkg.filename]
       if (result != expected) {
         throw new Exception(
           sprintf("Invalid strings returned %s, expected %s for %s",
@@ -1546,7 +1702,7 @@ def testVersionObject() {
   [[new Version("1.2.+"), [new Version("1.2.0"),
                            new Version("1.2.2147483647")]],
    [new Version("1.2.2+"), [new Version("1.2.2"),
-                            new Version("1.2.2147483645")]],
+                            new Version("1.2.2147483644")]],
    [new Version("1.+.0"), [new Version("1.0"), new Version("1.2147483647")]]
   ].each {
     Version testVersion, List<Version> expectedMinAndMax ->
@@ -1596,13 +1752,16 @@ def testSortVersionStrings() {
     "0.1.2-test-a2a",
     "0.1.2-prod-ab",
     "0.1.2-prod-12a",
+    "4.0.+",
     "0.1.2b",
     "1.2.3",
     "0.1.2a",
+    "4.0.0+",
     "1.2",
     "3.2",
     "5",
     "0.1.2",
+    "4.+",
   ]
   List<String> expected = [
     "0.1.2",
@@ -1615,6 +1774,9 @@ def testSortVersionStrings() {
     "1.2",
     "1.2.3",
     "3.2",
+    "4.0.0+",
+    "4.0.+",
+    "4.+",
     "5",
   ]
   List<String> result = Version.sort(
@@ -1627,7 +1789,8 @@ def testSortVersionStrings() {
 }
 
 def testVersionRangeMaximumVersionOfRange() {
-  [[VersionRange.fromExpression("1.2.3+"), "1.2.2147483644"],
+  [[VersionRange.fromExpression("[1.2.3,2.0.0]"), "2.0.0"],
+   [VersionRange.fromExpression("1.2.3+"), "1.2.2147483643"],
    [VersionRange.fromExpression("1.2.+"), "1.2.2147483647"],
    [VersionRange.fromExpression("+"), "2147483647"],
    [VersionRange.fromExpression(""), "0"]].each { range, expectedString ->
@@ -1666,43 +1829,54 @@ def testVersionRangeVersionInRange() {
 }
 
 def testVersionRangeFromExpression() {
-  [[new VersionRange(expression: "invalid_version[]", minimum: "0",
-                     maximum: "+", matchType: VersionExpressionMatchType.NONE),
+  [[new VersionRange(versionExpression: "invalid_version[]",
+                     minimum: "0", maximum: "+",
+                     matchType: VersionExpressionMatchType.NONE),
     "invalid_version[]"],
-   [new VersionRange(expression: "[1.2.3]", minimum: "1.2.3", maximum: "1.2.3",
+   [new VersionRange(versionExpression: "[1.2.3]",
+                     minimum: "1.2.3", maximum: "1.2.3",
                      matchType: VersionExpressionMatchType.ABSOLUTE),
     "[1.2.3]"],
-   [new VersionRange(expression: "1.2.3", minimum: "1.2.3", maximum: "+",
+   [new VersionRange(versionExpression: "1.2.3",
+                     minimum: "1.2.3", maximum: "+",
                      matchType: VersionExpressionMatchType.MINIMUM),
     "1.2.3"],
-   [new VersionRange(expression: "[1.2.3,1.3.0]",
+   [new VersionRange(versionExpression: "[1.2.3,1.3.0]",
                      minimum: "1.2.3", maximum: "1.3.0",
                      matchType: VersionExpressionMatchType.RANGE),
     "[1.2.3,1.3.0]"],
-   [new VersionRange(expression: "[1.2.3,1.3.0)",
+   [new VersionRange(versionExpression: "[1.2.3,1.3.0)",
                      minimum: "1.2.3", maximum: "1.3.0",
                      matchType: VersionExpressionMatchType.RANGE),
     "[1.2.3,1.3.0)"],
-   [new VersionRange(expression: "(1.2.3,1.3.0]",
+   [new VersionRange(versionExpression: "(1.2.3,1.3.0]",
                      minimum: "1.2.3", maximum: "1.3.0",
                      matchType: VersionExpressionMatchType.RANGE),
     "(1.2.3,1.3.0]"],
-   [new VersionRange(expression: "(1.2.3,1.3.0)",
+   [new VersionRange(versionExpression: "(1.2.3,1.3.0)",
                      minimum: "1.2.3", maximum: "1.3.0",
                      matchType: VersionExpressionMatchType.RANGE),
     "(1.2.3,1.3.0)"],
-   [new VersionRange(expression: "[,1.2.3]", minimum: "0", maximum: "1.2.3",
+   [new VersionRange(versionExpression: "[,1.2.3]",
+                     minimum: "0", maximum: "1.2.3",
                      matchType: VersionExpressionMatchType.RANGE),
     "[,1.2.3]"],
-   [new VersionRange(expression: "[,1.2.3)", minimum: "0", maximum: "1.2.3",
+   [new VersionRange(versionExpression: "[,1.2.3)",
+                     minimum: "0", maximum: "1.2.3",
                      matchType: VersionExpressionMatchType.RANGE),
     "[,1.2.3)"],
-   [new VersionRange(expression: "(,1.2.3]", minimum: "0", maximum: "1.2.3",
+   [new VersionRange(versionExpression: "(,1.2.3]",
+                     minimum: "0", maximum: "1.2.3",
                      matchType: VersionExpressionMatchType.RANGE),
     "(,1.2.3]"],
-   [new VersionRange(expression: "(,1.2.3)", minimum: "0", maximum: "1.2.3",
+   [new VersionRange(versionExpression: "(,1.2.3)",
+                     minimum: "0", maximum: "1.2.3",
                      matchType: VersionExpressionMatchType.RANGE),
-    "(,1.2.3)"]].each { VersionRange expected, String versionExpression ->
+    "(,1.2.3)"],
+   [new VersionRange(versionExpression: "[1.2.+,1.2.5]",
+                     minimum: "1.2.0", maximum: "1.2.5",
+                     matchType: VersionExpressionMatchType.RANGE),
+    "[1.2.+,1.2.5]"]].each { VersionRange expected, String versionExpression ->
     VersionRange range = VersionRange.fromExpression(versionExpression)
     if (range != expected) {
       throw new Exception(
@@ -1762,7 +1936,7 @@ project.ext {
     }
   }
   if (sdkRoot) {
-    logger.info("ANDROID_HOME: " + sdkRoot)
+    logger.quiet("ANDROID_HOME: " + sdkRoot)
   }
   androidSdkRoot = sdkRoot
 
@@ -1814,12 +1988,12 @@ project.ext {
   }
 
   project.repositories.each {
-    logger.info(sprintf("MAVEN_REPOS: name=%s url=%s", it.name, it.url))
+    logger.quiet(sprintf("MAVEN_REPOS: name=%s url=%s", it.name, it.url))
   }
 
   // Set of packages to copy to the target directory.
   if (!project.hasProperty("PACKAGES_TO_COPY")) {
-    print helpText
+    println helpText
     logger.error("Project property PACKAGES_TO_COPY must be specified.")
     System.exit(1)
   }
@@ -1827,17 +2001,21 @@ project.ext {
     PackageSpecifier.fromStrings(
       project.getProperty("PACKAGES_TO_COPY").tokenize(";"))
   PackageSpecifier.specStrings(userSpecifiedPackages).each {
-    logger.info("PACKAGES_TO_COPY: " + it)
+    logger.quiet("PACKAGES_TO_COPY: " + it)
   }
 
   // Location to copy referenced packages.
   if (!project.hasProperty("TARGET_DIR")) {
-    print helpText
+    println helpText
     logger.error("Project property TARGET_DIR must be specified.")
     System.exit(1)
   }
   targetDir = project.getProperty("TARGET_DIR")
-  logger.info("TARGET_DIR: " + (new File(targetDir).absolutePath).toString())
+  if (targetDir && !(new File(targetDir)).isAbsolute()) {
+    targetDir = (new File(System.getProperty("user.dir"),
+                          targetDir)).absolutePath
+  }
+  logger.quiet(sprintf("TARGET_DIR: %s", targetDir))
 
   // Fallback to search for srcaar artifacts when an artifact is missing.
   // We update the user specified package set here as this operation should be
@@ -1880,26 +2058,52 @@ project.ext {
   Map<String, PackageSpecifier> versionLockedPackages =
     PackageSpecifier.mostRecentByGroupArtifact(
       mostRecentVersionLockedPackagesFromSet(versionLockedPackageSets))
-  logger.info(sprintf("version locked packages: %s",
-                      PackageSpecifier.specStrings(
-                        versionLockedPackages.values()).toString()))
+  logger.quiet(sprintf("version locked packages: %s",
+                       PackageSpecifier.specStrings(
+                         versionLockedPackages.values()).toString()))
 
   // Build the final set of selected packages.
   Map<String, PackageSpecifier> finalSelectedPackages =
     resolvedConflictingPackagesByArtifactGroup.findAll {
       !(it.key in versionLockedPackages.keySet())
     }
-  logger.info(sprintf("non-version locked packages: %s",
-                      PackageSpecifier.specStrings(
-                        finalSelectedPackages.values()).toString()))
+  logger.quiet(sprintf("non-version locked packages: %s",
+                       PackageSpecifier.specStrings(
+                         finalSelectedPackages.values()).toString()))
   finalSelectedPackages += versionLockedPackages
 
   // Determine which, if any, package specs were modified.
   packagesModified = getModifiedPackageVersions(userSpecifiedPackages,
                                                 finalSelectedPackages.values())
 
-  // Add selected packages to the final copy configuration.
-  packagesToCopy = finalSelectedPackages.values()
+  // Gather transitive dependencies of all selected packages.
+  PackageSpecifier.specStrings(finalSelectedPackages.values()).each {
+    project.dependencies.transitivePackagesConfig it
+  }
+
+  packagesToCopy = (project.configurations.transitivePackagesConfig.
+    resolvedConfiguration.lenientConfiguration.
+      getArtifacts(Specs.satisfyAll()).findResults {
+        ResolvedArtifact artifact ->
+          PackageSpecifier pkg = PackageSpecifier.fromResolvedArtifact(artifact)
+          File artifactTargetFile = new File(targetDir, pkg.filename)
+          if (artifactTargetFile.exists()) {
+            // If the target file already exists simply report it as copied.
+            copiedFileArtifacts.add(
+              new Tuple2<File, PackageSpecifier>(artifactTargetFile, pkg))
+            return null
+          }
+          return pkg
+      }.toSet())
+
+  // Packages that are not found will not be added via the above config so add
+  // them here.
+  packagesToCopy = (
+    finalSelectedPackages +
+    PackageSpecifier.mostRecentByGroupArtifact(packagesToCopy)).values().toSet()
+
+  // Add all selected packages and their transitive dependencies to the final
+  // copy configuration.
   PackageSpecifier.specStrings(packagesToCopy).each {
     // Add final set of packages to copy to the copyPackagesConfig
     // configuration.
@@ -1912,43 +2116,31 @@ project.ext {
       resolvedConfiguration.lenientConfiguration.
       getArtifacts(Specs.satisfyAll()).each { ResolvedArtifact artifact ->
     PackageSpecifier pkg = PackageSpecifier.fromResolvedArtifact(artifact)
-    String artifactTargetFilename = sprintf(
-      "%s-%s.%s",
-      pkg.groupArtifactAsPeriodSeparatedString,
-      pkg.versionExpression,
-      pkg.artifactType == "srcaar" ? "aar" : pkg.artifactType)
-    File artifactTargetFile = new File(targetDir,
-                                       artifactTargetFilename)
-    if (artifactTargetFile.exists()) {
-      // If the target file already exists simply report it as copied.
-      copiedFileArtifacts.add(
-        new Tuple2<File, PackageSpecifier>(artifactTargetFile, pkg))
-    } else {
-      // If the target file does not exist generate a task to copy it.
-      Task copyTask = tasks.create(
-        name: "copy_" + artifactTargetFilename,
-          type: Copy,
-          description: sprintf("Copy %s (%s) to %s", pkg.specString,
-                               artifact.file, artifactTargetFilename))
-      copyTask.with {
-        from artifact.file
-        into targetDir
-        rename(
-          // Rename the file to the target filename and log the copied file &
-          // artifact so that they can be summarized when all copy artifact
-          // tasks are complete.
-          {
-            String filename ->
-              copiedFileArtifacts.add(
-                new Tuple2<File, PackageSpecifier>(
-                  new File(artifactTargetFilename), pkg))
-              return artifactTargetFilename
-          }
-        )
-        doFirst { logger.info(description) }
-      }
-      copyTasks.add(copyTask)
+    String artifactTargetFilename = pkg.filename
+    // If the target file does not exist generate a task to copy it.
+    Task copyTask = tasks.create(
+      name: "copy_" + artifactTargetFilename,
+        type: Copy,
+        description: sprintf("Copy %s (%s) to %s", pkg.specString,
+                             artifact.file, artifactTargetFilename))
+    copyTask.with {
+      from artifact.file
+      into targetDir
+      rename(
+        // Rename the file to the target filename and log the copied file &
+        // artifact so that they can be summarized when all copy artifact
+        // tasks are complete.
+        {
+          String filename ->
+            copiedFileArtifacts.add(
+              new Tuple2<File, PackageSpecifier>(
+                new File(artifactTargetFilename), pkg))
+            return artifactTargetFilename
+        }
+      )
+      doFirst { logger.info(description) }
     }
+    copyTasks.add(copyTask)
   }
 }
 
@@ -1973,7 +2165,7 @@ task copyPackages(dependsOn: project.ext.copyTasks) {
     Set<String> resolvedGroupArtifacts = copiedFileArtifacts.collect {
       it.second.groupArtifactString
     }
-    List<String> missingPackages = project.ext.packagesToCopy.findAll {
+    List<PackageSpecifier> missingPackages = project.ext.packagesToCopy.findAll {
       !(it.groupArtifactString in resolvedGroupArtifacts)
     }.collect {
       it.specString
