@@ -433,11 +433,24 @@ public class IOSResolver : AssetPostprocessor {
     private static Assembly ResolveUnityEditoriOSXcodeExtension(
             object sender, ResolveEventArgs args)
     {
+        // Ignore null assembly references.
+        if (String.IsNullOrEmpty(args.Name)) return null;
         // The UnityEditor.iOS.Extensions.Xcode.dll has the wrong name baked
         // into the assembly so references end up resolving as
         // Unity.iOS.Extensions.Xcode.  Catch this and redirect the load to
         // the UnityEditor.iOS.Extensions.Xcode.
-        string assemblyName = (new AssemblyName(args.Name)).Name;
+        string assemblyName;
+        try {
+            assemblyName = (new AssemblyName(args.Name)).Name;
+        } catch (Exception exception) {
+            // AssemblyName can throw if the DLL isn't found so try falling back to parsing the
+            // assembly name manually from the fully qualified name.
+            if (!(exception is FileLoadException ||
+                  exception is IOException)) {
+                throw exception;
+            }
+            assemblyName = args.Name.Split(new [] {','})[0];
+        }
         if (!(assemblyName.Equals("Unity.iOS.Extensions.Xcode") ||
               assemblyName.Equals("UnityEditor.iOS.Extensions.Xcode"))) {
             return null;
