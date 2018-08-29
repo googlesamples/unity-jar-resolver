@@ -1,3 +1,15 @@
+# Version 1.2.88 - Aug 29, 2018
+## Changed
+* Improved reporting of resolution attempts and conflicts found in the Android
+  Resolver.
+## Bug Fixes
+* iOS Resolver now correctly handles sample code in CocoaPods.  Previously it
+  would add all sample code to the project when using project level
+  integration.
+* Android Resolver now correctly handles Gradle conflict resolution when the
+  resolution results in a package that is compatible with all requested
+  dependencies.
+
 # Version 1.2.87 - Aug 23, 2018
 ## Bug Fixes
 * Fixed Android Resolver "Processing AARs" dialog getting stuck in Unity 5.6.
