@@ -14,282 +14,61 @@
 //    limitations under the License.
 // </copyright>
 
-namespace Google.JarResolvers.Test
-{
+namespace Google.JarResolvers.Test {
     using Google.JarResolver;
     using NUnit.Framework;
+    using System.Collections.Generic;
 
     /// <summary>
     /// Dependency tests.
     /// </summary>
     [TestFixture]
-    public class DependencyTests
-    {
+    public class DependencyTests {
         /// <summary>
-        /// Tests the constructor.
+        /// Tests an initialized dependency.
         /// </summary>
         [Test]
-        public void TestConstructor()
-        {
-            Dependency dep = new Dependency("test", "artifact1", "1.0");
-            Assert.NotNull(dep);
+        public void TestConstructor() {
+            Dependency dep = new Dependency("test", "artifact1", "1.0",
+                                            packageIds: new [] { "tools" },
+                                            repositories: new [] { "a/repo/path" },
+                                            createdBy: "someone");
+            Assert.That(dep.CreatedBy, Is.EqualTo("someone"));
+            Assert.That(dep.Group, Is.EqualTo("test"));
+            Assert.That(dep.Artifact, Is.EqualTo("artifact1"));
+            Assert.That(dep.PackageIds, Is.EqualTo(new [] { "tools" }));
+            Assert.That(dep.Repositories, Is.EqualTo(new [] { "a/repo/path" }));
+            Assert.That(dep.VersionlessKey, Is.EqualTo("test:artifact1"));
+            Assert.That(dep.Key, Is.EqualTo("test:artifact1:1.0"));
+            Assert.That(dep.ToString(), Is.EqualTo("test:artifact1:1.0"));
         }
 
         /// <summary>
-        /// Tests an unitialized dependency.
+        /// Test version string comparison by sorting a list of versions.
         /// </summary>
         [Test]
-        public void TestUninitialized()
-        {
-            Dependency dep = new Dependency("test", "artifact1", "1.0");
-
-            // No metadata loaded - so best version should be empty.
-            string ver = dep.BestVersion;
-            Assert.That(ver, Is.Null.Or.Empty);
-            Assert.That(dep.BestVersionPath, Is.Null.Or.Empty);
-            Assert.That(dep.RepoPath, Is.Null.Or.Empty);
-
-            // the key is based on the spec, so it should be set.
-            string key = dep.Key;
-            Assert.That(key, Is.Not.Null.Or.Empty);
-
-            // package need to be the prefix
-            Assert.True(key.StartsWith("test"));
-
-            // Versionless key should be set. and be the prefix of the key
-            Assert.That(dep.VersionlessKey, Is.Not.Null.Or.Empty);
-            Assert.True(key.StartsWith(dep.VersionlessKey));
-
-            Assert.False(dep.HasPossibleVersions);
-        }
-
-        /// <summary>
-        /// Tests the is newer method.
-        /// </summary>
-        [Test]
-        public void TestIsNewer()
-        {
-            Dependency dep09 = new Dependency("test", "artifact1", "0.9");
-            Dependency dep = new Dependency("test", "artifact1", "1.0");
-            Dependency dep2 = new Dependency("test", "artifact1", "2.0");
-            Dependency dep11 = new Dependency("test", "artifact1", "1.1");
-            Dependency dep101 = new Dependency("test", "artifact1", "1.0.1");
-            Dependency dep31 = new Dependency("test", "artifact1", "3.1");
-            Dependency dep32alpha = new Dependency("test", "artifact1", "3.2-alpha");
-            Dependency dep32beta = new Dependency("test", "artifact1", "3.2-beta");
-            Assert.False(dep09.IsNewer(dep));
-            Assert.False(dep.IsNewer(dep));
-            Assert.True(dep2.IsNewer(dep));
-            Assert.True(dep11.IsNewer(dep));
-            Assert.True(dep101.IsNewer(dep));
-            Assert.True(dep31.IsNewer(dep));
-            Assert.True(dep32alpha.IsNewer(dep31));
-            Assert.True(dep32alpha.IsNewer(dep));
-            Assert.True(dep32beta.IsNewer(dep32alpha));
-        }
-
-        /// <summary>
-        /// Tests the is acceptable version method
-        /// </summary>
-        [Test]
-        public void TestIsAcceptableVersion()
-        {
-            // concrete version. only one should be acceptable.
-            Dependency dep = new Dependency("test", "artifact1", "1.0");
-
-            Assert.True(dep.IsAcceptableVersion("1.0"));
-
-            // trailing 0 is acceptable.
-            Assert.True(dep.IsAcceptableVersion("1.0.0"));
-
-            // 2 trailing 0s is ok too.
-            Assert.True(dep.IsAcceptableVersion("1"));
-
-            // greater major, or minor is not acceptable.
-            Assert.False(dep.IsAcceptableVersion("2.0"));
-            Assert.False(dep.IsAcceptableVersion("1.1"));
-            Assert.False(dep.IsAcceptableVersion("1.0.1"));
-
-            // Check the LATEST meta-version
-            Dependency latest = new Dependency("test", "artifact1", "LATEST");
-
-            // Any version is acceptable until one has been added
-            Assert.True(latest.IsAcceptableVersion("0.1"));
-            Assert.True(latest.IsAcceptableVersion("1.0"));
-            Assert.True(latest.IsAcceptableVersion("1.1"));
-
-            // Check the + on the minor
-            Dependency greaterminor = new Dependency("test", "artifact1", "1.0+");
-            Dependency greaterDot = new Dependency("test", "artifact1", "1.+");
-            Assert.True(greaterminor.IsAcceptableVersion("1.0"));
-            Assert.True(greaterminor.IsAcceptableVersion("1.0.0"));
-            Assert.True(greaterminor.IsAcceptableVersion("1.0.1"));
-            Assert.True(greaterminor.IsAcceptableVersion("1.1"));
-            Assert.True(greaterminor.IsAcceptableVersion("1.1.1"));
-            Assert.True(greaterminor.IsAcceptableVersion("1.12"));
-            Assert.False(greaterminor.IsAcceptableVersion("0.1"));
-            Assert.False(greaterminor.IsAcceptableVersion("0.0.4"));
-            Assert.False(greaterminor.IsAcceptableVersion("LATEST"));
-            Assert.False(greaterminor.IsAcceptableVersion("2.0"));
-            Assert.False(greaterminor.IsAcceptableVersion("2.1"));
-
-            Assert.True(greaterDot.IsAcceptableVersion("1.0"));
-            Assert.True(greaterDot.IsAcceptableVersion("1.0.0"));
-            Assert.True(greaterDot.IsAcceptableVersion("1.0.1"));
-            Assert.True(greaterDot.IsAcceptableVersion("1.1"));
-            Assert.True(greaterDot.IsAcceptableVersion("1.1.1"));
-            Assert.True(greaterDot.IsAcceptableVersion("1.12"));
-            Assert.False(greaterDot.IsAcceptableVersion("2.0"));
-            Assert.False(greaterDot.IsAcceptableVersion("2.1"));
-
-            // Check the + on the minor
-            Dependency majorGreater = new Dependency("test", "artifact1", "1+");
-            Assert.True(majorGreater.IsAcceptableVersion("1.0"));
-            Assert.True(majorGreater.IsAcceptableVersion("1.0.0"));
-            Assert.True(majorGreater.IsAcceptableVersion("1.0.1"));
-            Assert.True(majorGreater.IsAcceptableVersion("1.1"));
-            Assert.True(majorGreater.IsAcceptableVersion("1.1.1"));
-            Assert.True(majorGreater.IsAcceptableVersion("2.0"));
-            Assert.True(majorGreater.IsAcceptableVersion("2.1.0"));
-        }
-
-        /// <summary>
-        /// Tests the possible versions management.
-        /// </summary>
-        [Test]
-        public void TestPossibleVersions()
-        {
-            Dependency dep = new Dependency("test", "artifact1", "2.0");
-
-            // adding multiple versions to a concrete version results in only that one.
-           dep.AddVersion("0.1");
-
-            Assert.False(dep.HasPossibleVersions);
-
-            dep.AddVersion("1.0");
-            dep.AddVersion("2.0.0");
-            dep.AddVersion("3.0");
-
-            Assert.True(dep.HasPossibleVersions);
-
-            Assert.True(dep.BestVersion == "2.0.0");
-
-            dep.RemovePossibleVersion(dep.BestVersion);
-
-            Assert.False(dep.HasPossibleVersions);
-
-            dep = new Dependency("test", "artifact1", "2.0+");
-
-            // check plus
-            dep.AddVersion("1.0");
-            dep.AddVersion("2.0.0");
-            dep.AddVersion("2.0.1");
-            dep.AddVersion("2.1");
-            dep.AddVersion("3.0");
-
-            Assert.True(dep.HasPossibleVersions);
-            Assert.True(dep.BestVersion == "2.1");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.True(dep.BestVersion == "2.0.1");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.True(dep.BestVersion == "2.0.0");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.That(dep.BestVersion,Is.Null.Or.Empty);
-            Assert.False(dep.HasPossibleVersions);
-
-            dep = new Dependency("test", "artifact1", "2.0+");
-
-            // check plus
-            dep.AddVersion("3.0");
-            dep.AddVersion("2.2.0");
-            dep.AddVersion("2.0.1");
-            dep.AddVersion("2.1");
-            dep.AddVersion("1.0");
-
-            Assert.True(dep.HasPossibleVersions);
-            Assert.True(dep.BestVersion == "2.2.0");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.True(dep.BestVersion == "2.1");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.True(dep.BestVersion == "2.0.1");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.That(dep.BestVersion, Is.Null.Or.Empty);
-            Assert.False(dep.HasPossibleVersions);
-        }
-
-        /// <summary>
-        /// Tests the refine version range method.
-        /// </summary>
-        [Test]
-        public void TestRefineVersionRange()
-        {
-            Dependency dep = new Dependency("test", "artifact1", "2.0+");
-
-            dep.AddVersion("3.0");
-            dep.AddVersion("2.2.0");
-            dep.AddVersion("2.0.1");
-            dep.AddVersion("2.1");
-            dep.AddVersion("1.0");
-
-            // refinement with the same object should have no effect.
-            Assert.True(dep.RefineVersionRange(dep));
-            Assert.True(dep.HasPossibleVersions);
-            Assert.True(dep.BestVersion == "2.2.0");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.True(dep.BestVersion == "2.1");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.True(dep.BestVersion == "2.0.1");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.That(dep.BestVersion, Is.Null.Or.Empty);
-            Assert.False(dep.HasPossibleVersions);
-
-            // refinement with a concrete version not compatible should fail.
-            dep = new Dependency("test", "artifact1", "2.0+");
-
-            dep.AddVersion("3.0");
-            dep.AddVersion("2.2.0");
-            dep.AddVersion("2.0.1");
-            dep.AddVersion("2.1");
-            dep.AddVersion("1.0");
-
-            Dependency dep1 = new Dependency("test", "artifact1", "3.0");
-
-            Assert.False(dep.RefineVersionRange(dep1));
-            Assert.False(dep.HasPossibleVersions);
-
-            // concrete included
-            dep = new Dependency("test", "artifact1", "2.0+");
-
-            dep.AddVersion("3.0");
-            dep.AddVersion("2.2.0");
-            dep.AddVersion("2.0.1");
-            dep.AddVersion("2.1");
-            dep.AddVersion("1.0");
-
-            Dependency dep2 = new Dependency("test", "artifact1", "2.1.0");
-
-            Assert.True(dep.RefineVersionRange(dep2));
-            Assert.True(dep.BestVersion == "2.1");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.False(dep.HasPossibleVersions);
-
-            // check overlapping ranges
-            dep = new Dependency("test", "artifact1", "2.0+");
-
-            dep.AddVersion("3.0");
-            dep.AddVersion("2.2.0");
-            dep.AddVersion("2.0.1");
-            dep.AddVersion("2.1");
-            dep.AddVersion("1.0");
-
-            Dependency dep1plus = new Dependency("test", "artifact1", "2.1+");
-
-            Assert.True(dep.RefineVersionRange(dep1plus));
-            Assert.True(dep.BestVersion == "2.2.0");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.True(dep.BestVersion == "2.1");
-            dep.RemovePossibleVersion(dep.BestVersion);
-            Assert.False(dep.HasPossibleVersions);
+        public void TestSortVersionStrings() {
+            List<string> sorted = new List<string> {
+                "3.2.1",
+                "1.1",
+                "1.0.0+",
+                "1.2.0",
+                "1.3.a+",
+                "10",
+                "1.1.0",
+                "3.2.2",
+                "1.3.b",
+            };
+            sorted.Sort(Dependency.versionComparer);
+            Assert.That(sorted[0], Is.EqualTo("10"));
+            Assert.That(sorted[1], Is.EqualTo("3.2.2"));
+            Assert.That(sorted[2], Is.EqualTo("3.2.1"));
+            Assert.That(sorted[3], Is.EqualTo("1.3.b"));
+            Assert.That(sorted[4], Is.EqualTo("1.3.a+"));
+            Assert.That(sorted[5], Is.EqualTo("1.2.0"));
+            Assert.That(sorted[6], Is.EqualTo("1.1.0"));
+            Assert.That(sorted[7], Is.EqualTo("1.1"));
+            Assert.That(sorted[8], Is.EqualTo("1.0.0+"));
         }
     }
 }

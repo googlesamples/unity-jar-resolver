@@ -14,25 +14,19 @@
 //    limitations under the License.
 // </copyright>
 
-namespace Google.JarResolver
-{
+namespace Google.JarResolver {
     using System.Collections.Generic;
     using System.Collections.ObjectModel;
-    using System.IO;
+    using System;
 
     /// <summary>
     /// Represents a dependency.  A dependency is defined by a groupId,
     /// artifactId and version constraint.  This information is used to search
     /// the repositories of artifacts to find a version that meets the version
     /// contraints (as well as be compatible with other dependencies' constraints).
-    /// <para>
-    /// Once the version is identified, the BestVersion property is used to get
-    /// the concrete version number that should be used.
-    /// </para>
     /// </summary>
-    public class Dependency
-    {
-        // TODO(wilkinsonclay): get the extension from the pom file.
+    public class Dependency {
+        // Extensions of files managed by the resolver.
         internal static string[] Packaging = {
             ".aar",
             ".jar",
@@ -49,12 +43,6 @@ namespace Google.JarResolver
         internal static readonly VersionComparer versionComparer = new VersionComparer();
 
         /// <summary>
-        /// The possible versions found in the repository.  This list is mutable
-        /// and will change as the constraints are applied.
-        /// </summary>
-        private List<string> possibleVersions = new List<string>();
-
-        /// <summary>
         /// Initializes a new instance of the
         ///  <see cref="Google.JarResolver.Dependency"/> class.
         /// </summary>
@@ -68,8 +56,7 @@ namespace Google.JarResolver
         /// <param name="createdBy">Human readable string that describes where this dependency
         /// originated.</param>
         public Dependency(string group, string artifact, string version, string[] packageIds=null,
-                          string[] repositories=null, string createdBy=null)
-        {
+                          string[] repositories=null, string createdBy=null) {
             Group = group;
             Artifact = artifact;
             Version = version;
@@ -89,12 +76,10 @@ namespace Google.JarResolver
             if (dependency.PackageIds != null) {
                 PackageIds = (string[])dependency.PackageIds.Clone();
             }
-            possibleVersions = new List<string>(dependency.possibleVersions);
             if (dependency.Repositories != null) {
                 Repositories = (string[])dependency.Repositories.Clone();
             }
             CreatedBy = dependency.CreatedBy;
-            RepoPath = dependency.RepoPath;
         }
 
         /// <summary>
@@ -114,26 +99,11 @@ namespace Google.JarResolver
         /// <value>The artifact.</value>
         public string Artifact { get; private set; }
 
-
-        /// <summary>
-        /// Backing store for Version.
-        /// </summary>
-        private string versionInternal;
-
         /// <summary>
         /// Gets the version constraint.
         /// </summary>
         /// <value>The version.</value>
-        public string Version {
-            get { return versionInternal; }
-
-            internal set {
-                // Filter the possible versions by the new version constraint.  If this results
-                // in an empty list of available versions the depenency POM will be re-evaluated.
-                possibleVersions = FilterAcceptableVersions(value, possibleVersions);
-                versionInternal = value;
-            }
-        }
+        public string Version { get; set; }
 
         /// <summary>
         /// Array of Android SDK identifiers for packages that are required for this
@@ -149,236 +119,18 @@ namespace Google.JarResolver
         public string[] Repositories { get; private set; }
 
         /// <summary>
-        /// Gets the best version based on the version contraint, other
-        /// dependencies (if resolve has been run), and the availability of the
-        /// artifacts in the repository.  If this value is null or empty, either
-        /// it has not been initialized by calling
-        /// PlayServicesSupport.AddDependency()
-        /// or there are no versions that meet all the constraints.
-        /// </summary>
-        /// <value>The best version.</value>
-        public string BestVersion
-        {
-            get
-            {
-                if (possibleVersions.Count > 0)
-                {
-                    return possibleVersions[0];
-                }
-                else
-                {
-                    return string.Empty;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Returns the available versions of this dependency.
-        /// </summary>
-        public ReadOnlyCollection<string> PossibleVersions
-        {
-            get
-            {
-                return possibleVersions.AsReadOnly();
-            }
-        }
-
-        /// <summary>
-        /// Gets the best version path relative to the SDK.
-        /// </summary>
-        /// <value>The best version path.</value>
-        public string BestVersionPath
-        {
-            get
-            {
-                if (!string.IsNullOrEmpty(BestVersion))
-                {
-                    string path = Group + Path.DirectorySeparatorChar +
-                                  Artifact;
-                    path = path.Replace('.', Path.DirectorySeparatorChar);
-                    return RepoPath + Path.DirectorySeparatorChar + path +
-                    Path.DirectorySeparatorChar + BestVersion;
-                }
-
-                return string.Empty;
-            }
-        }
-
-        /// <summary>
-        /// Get the path to the artifact without the artifact extension.
-        /// </summary>
-        public string BestVersionArtifactPath {
-            get { return Path.Combine(BestVersionPath, Artifact + "-" + BestVersion); }
-        }
-
-        /// <summary>
-        /// Get the path to the artifact if it exists.
-        /// </summary>
-        public string BestVersionArtifact
-        {
-            get
-            {
-                // TODO(wilkinsonclay): get the extension from the pom file.
-                string filenameWithoutExtension = BestVersionArtifactPath;
-                foreach (string extension in Packaging)
-                {
-                    string filename = filenameWithoutExtension + extension;
-                    if (File.Exists(filename)) return filename;
-                }
-                return null;
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the repository path for this dependency.  This is
-        /// relative to the SDK.
-        /// </summary>
-        /// <value>The repo path.</value>
-        public string RepoPath { get; set; }
-
-        /// <summary>
         /// Gets the versionless key.  This key is used to manage collections
         /// of dependencies, regardless of the version constraint.
         /// </summary>
         /// <value>The versionless key.</value>
-        public string VersionlessKey
-        {
-            get
-            {
-                return Group + ":" + Artifact;
-            }
-        }
+        public string VersionlessKey { get { return Group + ":" + Artifact; } }
 
         /// <summary>
         /// Gets the key for this dependency.  The key is a tuple of the
         /// group, artifact and version constraint.
         /// </summary>
         /// <value>The key.</value>
-        public string Key
-        {
-            get
-            {
-                return Group + ":" + Artifact + ":" + Version;
-            }
-        }
-
-        /// <summary>
-        /// Gets a value indicating whether this instance has possible versions.
-        /// </summary>
-        /// <value><c>true</c> if this instance has possible versions.</value>
-        public bool HasPossibleVersions
-        {
-            get
-            {
-                return possibleVersions.Count > 0;
-            }
-        }
-
-        /// <summary>
-        /// Determines whether this instance is newer the specified candidate.
-        /// </summary>
-        /// <returns><c>true</c>
-        /// if this instance is newer the specified candidate.</returns>
-        /// <param name="candidate">Candidate to test</param>
-        public bool IsNewer(Dependency candidate)
-        {
-            if (candidate.Group == Group && candidate.Artifact == Artifact)
-            {
-                return IsGreater(Version, candidate.Version);
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Determines whether the specified version matches the Dependency.Version constraint.
-        /// </summary>
-        /// <param name="version">Version to check.</param>
-        /// <returns>true if the specified version matches the Dependency.Version constraint,
-        /// false otherwise.</returns>
-        public bool IsAcceptableVersion(string versionToCheck) {
-            return IsAcceptableVersion(Version, versionToCheck, bestVersion: BestVersion);
-        }
-
-        /// <summary>
-        /// Determines whether the specified version matches a constraint.
-        /// </summary>
-        /// <param name="versionConstraint">Version constraint to test with.</param>
-        /// <param name="bestVersion">If the constraint specifies the latest revision, determine
-        /// whether the current version is greater than or equal to the specified best
-        /// version.</param>
-        /// <param name="versionToCheck">Version to check.</param>
-        /// <returns>true if the specified version matches the constraint,
-        /// false otherwise.</returns>
-        private static bool IsAcceptableVersion(string versionConstraint, string versionToCheck,
-                                                string bestVersion = null) {
-            if (versionConstraint.ToUpper().Equals("LATEST")) {
-                return string.IsNullOrEmpty(bestVersion) ||
-                    versionToCheck.Equals(bestVersion) ||
-                    IsGreater(versionToCheck, bestVersion);
-            }
-            // Strip the artifact type specifier from the constraint.
-            var artifactTypeIndex = versionConstraint.LastIndexOf("@");
-            if (artifactTypeIndex >= 0) {
-                versionConstraint = versionConstraint.Substring(0, artifactTypeIndex);
-            }
-            var versionConstraintComponents = versionConstraint.Split('.');
-            var versionToCheckComponents = versionToCheck.Split('.');
-            if (!versionConstraint.Contains("+")) {
-                if (versionToCheck.Equals(versionConstraint)) return true;
-                return AreEquivalent(versionConstraintComponents, versionToCheckComponents);
-            }
-            return IsAcceptable(versionConstraintComponents, versionToCheckComponents);
-        }
-
-        /// <summary>
-        /// Get the set of versions that match the version constraint.
-        /// </summary>
-        private static List<string> FilterAcceptableVersions(string versionConstraint,
-                                                             IEnumerable<string> versionsToCheck) {
-            var acceptableVersions = new List<string>();
-            foreach (var versionToCheck in versionsToCheck) {
-                if (IsAcceptableVersion(versionConstraint, versionToCheck)) {
-                    acceptableVersions.Add(versionToCheck);
-                }
-            }
-            return acceptableVersions;
-        }
-
-        /// <summary>
-        /// Refines the possible version range  based on the given candidate.
-        /// This is done by removing possible versions that are not acceptable
-        /// to the candidate.
-        /// </summary>
-        /// <returns><c>true</c>, if there are still possible versions.</returns>
-        /// <param name="candidate">Candidate to test versions with.</param>
-        public bool RefineVersionRange(Dependency candidate)
-        {
-            possibleVersions = FilterAcceptableVersions(candidate.Version, possibleVersions);
-            return HasPossibleVersions;
-        }
-
-        /// <summary>
-        /// Removes the possible version.
-        /// </summary>
-        /// <param name="ver">Ver to remove.</param>
-        public void RemovePossibleVersion(string ver)
-        {
-            possibleVersions.Remove(ver);
-        }
-
-        /// <summary>
-        /// Adds the version as possible version if acceptable.
-        /// Acceptable versions meet the version constraint and are not already in
-        /// the list.
-        /// </summary>
-        /// <param name="version">Version to add.</param>
-        public void AddVersion(string version) {
-            if (!possibleVersions.Contains(version) && IsAcceptableVersion(version)) {
-                possibleVersions.Add(version);
-                possibleVersions.Sort(versionComparer);
-            }
-        }
+        public string Key { get { return Group + ":" + Artifact + ":" + Version; } }
 
         /// <summary>
         /// Returns a <see cref="System.String"/> that represents
@@ -386,10 +138,7 @@ namespace Google.JarResolver
         /// </summary>
         /// <returns>A <see cref="System.String"/> that represents the
         /// current <see cref="Google.JarResolver.Dependency"/>.</returns>
-        public override string ToString()
-        {
-            return Key + "(" + BestVersion + ")";
-        }
+        public override string ToString() { return Key; }
 
         /// <summary>
         /// Determines if version1 is greater than version2
@@ -397,251 +146,43 @@ namespace Google.JarResolver
         /// <returns><c>true</c> if version1  is greater than version2.</returns>
         /// <param name="version1">Version1 to test.</param>
         /// <param name="version2">Version2 to test.</param>
-        internal static bool IsGreater(string version1, string version2)
-        {
-            // only works for concrete versions so remove "+"
-            string[] parts1;
-            string[] parts2;
-            if (version1.EndsWith("+"))
-            {
-                parts1 = version1.Substring(0, version1.Length - 1).Split('.');
+        private static bool IsGreater(string version1, string version2) {
+            version1 = version1.EndsWith("+") ?
+                version1.Substring(0, version1.Length - 1) : version1;
+            version2 = version1.EndsWith("+") ?
+                version2.Substring(0, version2.Length - 1) : version2;
+            string[] version1Components = version1.Split('.');
+            string[] version2Components = version2.Split('.');
+            int componentsToCompare = Math.Min(version1Components.Length,
+                                               version2Components.Length);
+            for (int i = 0; i < componentsToCompare; ++i) {
+                string version1Component = version1Components[i];
+                int version1ComponentInt;
+                string version2Component = version2Components[i];
+                int version2ComponentInt;
+                if (Int32.TryParse(version1Component, out version1ComponentInt) &&
+                    Int32.TryParse(version2Component, out version2ComponentInt)) {
+                    if (version1ComponentInt > version2ComponentInt) {
+                        return true;
+                    } else if (version1ComponentInt < version2ComponentInt) {
+                        return false;
+                    }
+                } else {
+                    int stringCompareResult = version1Component.CompareTo(version2Component);
+                    if (stringCompareResult > 0) {
+                        return true;
+                    } else if (stringCompareResult < 0) {
+                        return false;
+                    }
+                }
             }
-            else
-            {
-                parts1 = version1.Split('.');
-            }
-
-            if (version2.EndsWith("+"))
-            {
-                parts2 = version2.Substring(0, version2.Length - 1).Split('.');
-            }
-            else
-            {
-                parts2 = version2.Split('.');
-            }
-
-            int i1 = 0;
-            int i2 = 0;
-
-            while (i1 < parts1.Length || i2 < parts2.Length)
-            {
-                int val1 = -1;
-                int val2 = -1;
-                if (i1 < parts1.Length)
-                {
-                    if (!int.TryParse(parts1[i1], out val1))
-                    {
-                        // -1 means use string compare
-                        val1 = -1;
-                    }
-                }
-                else
-                {
-                    val1 = -2;
-                }
-
-                if (i2 < parts2.Length)
-                {
-                    if (!int.TryParse(parts2[i2], out val2))
-                    {
-                        // -1 means use string compare
-                        val2 = -1;
-                    }
-                }
-                else
-                {
-                    val2 = -3;
-                }
-
-                if (val1 != val2 || val1 < 0)
-                {
-                    if (val1 == -1)
-                    {
-                        if (val2 >= -1)
-                        {
-                            return parts1[i1].CompareTo(parts2[i2]) > 0;
-                        }
-                        else
-                        {
-                            // parts2 is shorter, so parts1 wins.
-                            return true;
-                        }
-                    }
-                    else if (val2 == -1)
-                    {
-                        if (val1 >= -1)
-                        {
-                            return parts1[i1].CompareTo(parts2[i2]) > 0;
-                        }
-                        else
-                        {
-                            // parts1 is shorter, so parts2 wins.
-                            return false;
-                        }
-                    }
-                    else
-                    {
-                        return val1 > val2;
-                    }
-                }
-
-                i1++;
-                i2++;
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Determines whether version 2 meets the constraints of version 1
-        /// </summary>
-        /// <returns><c>true</c> if ver2 is acceptable to ver1.</returns>
-        /// <param name="ver1">Version 1</param>
-        /// <param name="ver2">Version 2</param>
-        internal static bool IsAcceptable(string[] ver1, string[] ver2)
-        {
-            int i1 = 0;
-            int i2 = 0;
-            bool sawPlus = false;
-            while (i1 < ver1.Length || i2 < ver2.Length)
-            {
-                int val1 = -1;
-                int val2 = -1;
-
-                // check if v1 has the + at this index.
-                if (i1 >= ver1.Length)
-                {
-                    // use the wildcard to extend?
-                    throw new System.NotImplementedException();
-                }
-                else if (ver1[i1].Contains("+"))
-                {
-                    sawPlus = true;
-                    string v = ver1[i1].Substring(0, ver1[i1].IndexOf('+'));
-                    if (!int.TryParse(v, out val1))
-                    {
-                        if (string.IsNullOrEmpty(v))
-                        {
-                            val1 = 0;
-                        }
-                        else
-                        {
-                            // -1 means use string compare
-                            val1 = -1;
-                        }
-                    }
-                }
-                else
-                {
-                    // straight comparison
-                    if (!int.TryParse(ver1[i1], out val1))
-                    {
-                        // -1 means use string compare
-                        val1 = -1;
-                    }
-                }
-
-                if (i2 >= ver2.Length)
-                {
-                    return false;
-                }
-                else
-                {
-                    // straight comparison
-                    if (!int.TryParse(ver2[i2], out val2))
-                    {
-                        // -1 means use string compare
-                        val2 = -1;
-                    }
-                }
-
-                if ((val1 == -1 || val2 == -1) &&
-                    !ver1[i1].ToLower().Equals(ver2[i2].ToLower()))
-                {
-                    return false;
-                }
-                else if (val1 != val2 && !sawPlus)
-                {
-                    return false;
-                }
-                else if (sawPlus)
-                {
-                    return val1 <= val2;
-                }
-
-                i1++;
-                i2++;
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Checks if ours version (stored as an array) is equivalent to theirs.
-        /// Equivalency handles identifying version constraints (ours) that
-        /// do not have the same number of trailing zeros as a version (theirs).
-        /// </summary>
-        /// <returns><c>true</c>, if equivalent <c>false</c> otherwise.</returns>
-        /// <param name="ours">our version parsed into an array.</param>
-        /// <param name="theirs">Theirs parsed into an array.</param>
-        internal static bool AreEquivalent(string[] ours, string[] theirs)
-        {
-            int ourIndex = 0;
-            int theirIndex = 0;
-            while (ourIndex < ours.Length || theirIndex < theirs.Length)
-            {
-                int us = -1;
-                int them = -1;
-                if (ourIndex < ours.Length)
-                {
-                    if (!int.TryParse(ours[ourIndex], out us))
-                    {
-                        // -1 means use string compare
-                        us = -1;
-                    }
-                }
-                else
-                {
-                    us = 0;
-                }
-
-                if (theirIndex < theirs.Length)
-                {
-                    if (!int.TryParse(theirs[theirIndex], out them))
-                    {
-                        // -1 means use string compare
-                        them = -1;
-                    }
-                }
-                else
-                {
-                    them = 0;
-                }
-
-                if (us >= 0 && them >= 0 && us != them)
-                {
-                    return false;
-                }
-                else if ((us < 0 || them < 0) &&
-                    !ours[ourIndex].ToLower().Equals(theirs[theirIndex].ToLower()))
-                {
-                    return false;
-                }
-
-                ourIndex++;
-                theirIndex++;
-            }
-
-            return true;
+            return version1Components.Length > version2Components.Length;
         }
 
         /// <summary>
         /// Version comparer. Resulting in a descending list of versions.
         /// </summary>
-        public class VersionComparer : IComparer<string>
-        {
-            #region IComparer implementation
-
+        public class VersionComparer : IComparer<string> {
             /// <summary>
             /// Compare the specified x and y.
             /// </summary>
@@ -649,23 +190,14 @@ namespace Google.JarResolver
             /// <param name="y">The y coordinate.</param>
             /// <returns>negative if x is greater than y,
             /// positive if y is greater than x, 0 if equal.</returns>
-            public int Compare(string x, string y)
-            {
-                if (IsGreater(x, y))
-                {
+            public int Compare(string x, string y) {
+                if (IsGreater(x, y)) {
                     return -1;
-                }
-                else if (IsGreater(y, x))
-                {
+                } else if (IsGreater(y, x)) {
                     return 1;
                 }
-                else
-                {
-                    return 0;
-                }
+                return 0;
             }
-
-            #endregion
         }
     }
 }

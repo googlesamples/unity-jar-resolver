@@ -1019,13 +1019,10 @@ namespace GooglePlayServices
                             }
                             dependencySet.Add(dependency.Key);
                             requiredPackages[packageId] = dependencySet;
-                            // If the dependency is missing, add it to the set that needs to be
-                            // installed.
-                            if (System.String.IsNullOrEmpty(dependency.BestVersionPath)) {
-                                installPackages.Add(new AndroidSdkPackageNameVersion {
-                                        LegacyName = packageId
-                                    });
-                            }
+                            // Install / update the Android SDK package that hosts this dependency.
+                            installPackages.Add(new AndroidSdkPackageNameVersion {
+                                    LegacyName = packageId
+                                });
                         }
                     }
                 }
