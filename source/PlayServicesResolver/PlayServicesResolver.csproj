@@ -73,9 +73,6 @@
     <Compile Include="..\JarResolverLib\src\Google.JarResolver\PlayServicesSupport.cs">
       <Link>Google.JarResolver\PlayServicesSupport.cs</Link>
     </Compile>
-    <Compile Include="..\JarResolverLib\src\Google.JarResolver\ResolutionException.cs">
-      <Link>Google.JarResolver\ResolutionException.cs</Link>
-    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
