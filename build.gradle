@@ -189,6 +189,8 @@ project.ext {
   pluginSolutionFile = new File(pluginSourceDir, "JarResolver.sln")
   // Version of the plugin (update this with CHANGELOG.md on each release).
   pluginVersion = "1.2.88.0"
+  // Semantic version of the plugin.
+  pluginVersionSemVer = pluginVersion.tokenize(".")[0..2].join(".")
   // Base filename of the released plugin.
   currentPluginBasename = "play-services-resolver"
   // Versioned release plugin file.
@@ -203,6 +205,8 @@ project.ext {
   unityMetadataExtension = ".meta"
   // Extension for debug files.
   dllMdbExtension = ".mdb"
+  // Changelog file.
+  changelog = new File(scriptDirectory, "CHANGELOG.md")
 }
 
 /*
@@ -500,7 +504,7 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
 
   // Parse the existing version from the asset metadata.
   def folderAssetRegEx = /^folderAsset:\s+yes\s*$/
-  def versionRegEx = /^(-\s+gvh_v)([a-zA-Z0-9.]+)\s*$/
+  def versionRegEx = /^(-\s+gvh_version-)([a-zA-Z0-9.]+)\s*$/
   Boolean isFolder = false
   String currentVersion = ""
   lines.each { String line ->
@@ -539,7 +543,7 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
     outputLines.add(line)
     // If the metadata file does not contain a version label, inject it.
     if (currentVersion.isEmpty() && line.startsWith("labels:")) {
-      outputLines.add(sprintf("- gvh_v%s", project.ext.pluginVersion))
+      outputLines.add(sprintf("- gvh_version-%s", project.ext.pluginVersion))
     }
   }
   targetFile.write(outputLines.join("\n") + "\n")
@@ -1094,8 +1098,8 @@ task generatePluginManifest(dependsOn: [preparePluginStagingAreaDir,
   }
 }
 
-Task exportPlugin = createUnityTask(
-    "exportPlugin", "export_plugin", [generatePluginManifest],
+Task buildPlugin = createUnityTask(
+    "buildPlugin", "build_plugin", [generatePluginManifest],
     project.ext.pluginStagingAreaDir.name,
     project.ext.buildDir,
     ["-g.building",
@@ -1104,14 +1108,14 @@ Task exportPlugin = createUnityTask(
      project.ext.pluginExportFile.absolutePath,
      "-gvh_disable",
      "-quit"], true)
-exportPlugin.with {
+buildPlugin.with {
   description "Exports the plugin staging area directory as a Unity package."
   inputs.files files(copyPluginTemplateToStagingArea.outputs.files,
                      copyPluginComponentsToStagingArea.outputs.files)
   outputs.files files(project.ext.pluginExportFile)
 }
 
-task releasePlugin(dependsOn: exportPlugin) {
+task releasePlugin(dependsOn: buildPlugin) {
   Map<File, File> pluginTemplateFilesMap = files(
       copyPluginTemplateToStagingArea.outputs.files,
       copyPluginComponentsToStagingArea.outputs.files).collectEntries {
@@ -1155,6 +1159,46 @@ task releasePlugin(dependsOn: exportPlugin) {
   }
 }
 
+task gitAddReleaseFilesToStaging(type: Exec, dependsOn: releasePlugin) {
+  description "Run git to add release to the staging area."
+  commandLine "git", "add", "-A"
+}
+
+task gitCreateReleaseCommit(dependsOn: gitAddReleaseFilesToStaging) {
+  description "Run git to create a release commit."
+
+  doLast {
+    String versionSummary = ""
+    for (String line in project.ext.changelog.text.split("\n")) {
+      String trimmedLine = line.trim()
+      if (line.isEmpty()) break
+      versionSummary += line + "\n"
+    }
+    def stdout = new ByteArrayOutputStream()
+    exec {
+      commandLine "git", "status", "-s"
+      ignoreExitValue true
+      standardOutput = stdout
+    }
+    if (!stdout.toString().isEmpty()) {
+      exec {
+        commandLine "git", "commit", "-a", "-m",
+                    sprintf("Version %s\n\n%s",
+                            project.ext.pluginVersionSemVer,
+                            versionSummary)
+      }
+    }
+  }
+}
+
+task gitTagRelease(type: Exec, dependsOn: gitCreateReleaseCommit) {
+  description ("Run git to tag a release.  This should be performed " +
+               "*after* a release commit has been be created.")
+  commandLine "git", "tag", "-a",
+              sprintf("v%s", pluginVersionSemVer), "-m",
+              sprintf("release %s", pluginVersionSemVer)
+}
+
 // TODO: Version Handler tests to implement in both batch and interactive modes
 // - Per platform targeting (iOS, Android, Editor, desktop)
 // - Version enablement, import newer plugin on top of older plugin and validate
@@ -1182,7 +1226,7 @@ createUnityTestBatchAndNonBatch(
   "testVersionHandlerActivation",
   ("Imports the plugin into a Unity project and verifies all " +
    "components can be activated by the Version Handler."),
-  [exportPlugin],
+  [buildPlugin],
   new File("source/VersionHandlerImpl/test/activation"), [])
 
 createUnityTestBatchAndNonBatch(
@@ -1190,7 +1234,7 @@ createUnityTestBatchAndNonBatch(
   ("Imports the plugin into a Unity project, runs Android resolution with " +
    "a combination of dependencies added via the programmatic API and via " +
    "XML files, verifying all dependencies resolve successfully."),
-  [exportPlugin],
+  [buildPlugin],
   new File("source/PlayServicesResolver/test/resolve_async"),
   ["-buildTarget", "android"])  // TODO: Move this into the test!?
 

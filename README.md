@@ -379,20 +379,14 @@ You can build the plugin by running the following from your shell
 (Linux / OSX):
 
 ```
-./gradlew build && ./gradlew release
+./gradlew build
 ```
 
 or Windows:
 
 ```
-./gradlew.bat build && ./gradlew.bat release
+./gradlew.bat build
 ```
-
-The `release` target packages the plugin for redistribution:
-
-   * Updates `play-services-resolver-*.unitypackage`
-   * Copies the unpacked plugin to the `exploded` directory.
-   * Updates template metadata files in the `plugin` directory.
 
 ### Releasing
 
@@ -402,8 +396,18 @@ need to do the following:
    * Bump the plugin version variable `pluginVersion` in `build.gradle`
    * Update `CHANGELOG.md` with the new version number and changes included in
      the release.
-   * `git commit --amend -a` to pick up all modified files in the tree.
-     The GUID of all asset metadata is modified due to the version number change.
-     Each file within the plugin is versioned to allow multiple versions of the
-     plugin to be imported into a Unity project which allows the most recent
-     version to be activated by the Version Handler component.
+   * Build the release using `./gradle release` which performs the following:
+      * Updates `play-services-resolver-*.unitypackage`
+      * Copies the unpacked plugin to the `exploded` directory.
+      * Updates template metadata files in the `plugin` directory.
+        The GUIDs of all asset metadata is modified due to the version number
+        change. Each file within the plugin is versioned to allow multiple
+        versions of the plugin to be imported into a Unity project which allows
+        the most recent version to be activated by the Version Handler
+        component.
+   * Create the release commit and tag the release using
+     `./gradle gitTagRelease` which performs the following:
+     * `git add -A` to pick up all modified, new and deleted files in the tree.
+     * `git commit --amend -a` to create a release commit with the release notes
+       in the change log.
+     * `git tag -a RELEASE -m "version RELEASE"` to tag the release.
