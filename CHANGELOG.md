@@ -1,3 +1,8 @@
+# Version 1.2.89 - Aug 31, 2018
+## Bug Fixes
+* Fixed FileLoadException in ResolveUnityEditoriOSXcodeExtension an assembly
+  can't be loaded.
+
 # Version 1.2.88 - Aug 29, 2018
 ## Changed
 * Improved reporting of resolution attempts and conflicts found in the Android
