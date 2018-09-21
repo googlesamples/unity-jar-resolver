@@ -529,6 +529,25 @@ createTestTask(
    "com.android.support.support-annotations-24.0.0.jar"])
 
 createTestTask(
+  "testVersionLockedObsoleteTransitiveDependency",
+  "Packages are upgraded to the most recent version locked package " +
+  "where a transitive dependency of an initially selected package is removed.",
+  "org.test.psr.locked:input:1.2.3;" +
+  "org.test.psr.locked:output:1.5.0;",
+  ["org.test.psr.locked.input-1.5.0.aar":
+   "org/test/psr/locked/input/1.5.0/input-1.5.0.aar",
+   "org.test.psr.locked.output-1.5.0.aar":
+   "org/test/psr/locked/output/1.5.0/output-1.5.0.aar",
+   "org.test.psr.locked.new-common-1.5.0.aar":
+   "org/test/psr/locked/new-common/1.5.0/new-common-1.5.0.aar"],
+  ["Copied artifacts:\n" +
+   "org.test.psr.locked.input-1.5.0.aar\n" +
+   "org.test.psr.locked.new-common-1.5.0.aar\n" +
+   "org.test.psr.locked.output-1.5.0.aar",
+   "Modified artifacts:\n" +
+   "org.test.psr.locked:input:1.2.3 --> org.test.psr.locked:input:1.5.0"])
+
+createTestTask(
   "testVersionLockedAndNonVersionLocked",
   "Packages are upgraded to the most recent non-version locked package " +
   "if a mix of version locked vs. non-version locked packages are specified.",

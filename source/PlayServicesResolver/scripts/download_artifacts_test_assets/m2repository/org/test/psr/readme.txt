@@ -49,3 +49,8 @@ org.test.psr common-impl 3.0.2 ''
 org.test.psr common 3.0.2 'org.test.psr:common-impl:[3.0.1]'
 org.test.psr common 3.0.3 'org.test.psr:common-impl:[3.0.2]'
 
+org.test.psr.locked common 1.2.3 ''
+org.test.psr.locked input 1.2.3 'org.test.psr.locked:common:[1.2.3]'
+org.test.psr.locked new-common 1.5.0 ''
+org.test.psr.locked input 1.5.0 'org.test.psr.locked:new-common:[1.5.0]'
+org.test.psr.locked output 1.5.0 'org.test.psr.locked:new-common:[1.5.0]'

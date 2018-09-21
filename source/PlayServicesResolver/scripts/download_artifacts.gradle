@@ -724,6 +724,8 @@ int getVersionLockedPackageIndex(PackageSpecifier pkg) {
          // com.android.support packages all need to be included at the same
          // revision.
          ~/^com\.android\.support:.*/,
+         // Package group used to test this script.
+         ~/^org\.test\.psr\.locked:.*/,
        ].withIndex()) {
     def (versionLockedRegex, index) = indexAndRegex
     String specString = pkg.specString
@@ -826,6 +828,29 @@ Iterable<PackageSpecifier> mostRecentVersionLockedPackagesFromSet(
       }
   }
   return versionLockedPackages.sort()
+}
+
+/*
+ * Lock all packages in the specified set to the same version if they should
+ * be version-locked.
+ *
+ * @param packages Packages to search for version locked packages.
+ *
+ * @returns Potentially a subset of `packages` with version locking applied.
+ */
+Iterable<PackageSpecifier> versionLockPackages(
+    Iterable<PackageSpecifier> packages) {
+  // Build a sets of packages that should be version locked and bucket into
+  // version locked groups.
+  Map<Integer, Set<PackageSpecifier>> versionLockedPackageSets = [:]
+  Set<Integer> versionLockedSetBlacklist =
+    createVersionLockedSetBlacklist(packages)
+  packages.each {
+    addVersionLockedPackageToSet(it, versionLockedPackageSets,
+                                 versionLockedSetBlacklist)
+  }
+  // Lock each group of version locked packages to the most recent version.
+  return mostRecentVersionLockedPackagesFromSet(versionLockedPackageSets)
 }
 
 /*
@@ -994,8 +1019,7 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
     }
 
     // If this package wasn't specified by the user, ignore it.
-    if (!(pkg.groupArtifactString in
-          requestedPackagesByGroupArtifact.keySet())) {
+    if (!requestedPackage) {
       return trackConflictState(pkg, isConflicting)
     }
 
@@ -1101,7 +1125,9 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
   // Select the most recent version of each version-locked package and add to
   // the set.
   mostRecentVersionLockedPackagesFromSet(versionLockedPackages).each {
-    addMostRecentPackageToMap(packages, it)
+    if (it.groupArtifactString in requestedPackagesByGroupArtifact) {
+      addMostRecentPackageToMap(packages, it)
+    }
   }
 
   // Collate the set of conflicts after resolution.
@@ -1262,6 +1288,7 @@ Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
   Set<String> initialPackages = currentPackages.clone().toSet()
   int resolutionAttempt = 1
   Configuration userPackagesToQuery = null
+  boolean resolutionComplete = false
 
   while (true) {
     // Copy the configuration to query the set of required dependencies.
@@ -1276,8 +1303,7 @@ Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
     PackageSpecifier.specStrings(currentPackages).each {
       project.dependencies.add(userPackagesToQuery.name, it)
     }
-    Set<PackageSpecifier> newPackages = currentPackages
-    boolean conflictsFound = false
+    if (resolutionComplete) break
     ResolutionResult resolutionResult =
       userPackagesToQuery.incoming.resolutionResult
     // Warn the user of missing dependencies.
@@ -1289,6 +1315,8 @@ Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
                 "to use %s, failed due to %s", it.requested, it.from,
                 it.attempted, it.failure))
     }
+    Set<PackageSpecifier> newPackages = currentPackages
+    boolean conflictsFound = false
     (conflictsFound, newPackages) = loosenVersionContraintsForConflicts(
       resolutionResult.root, currentPackages)
     boolean packagesChanged = !newPackages.equals(currentPackages)
@@ -1296,8 +1324,11 @@ Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
     logger.quiet(sprintf("Resolution attempt: %d, conflicts detected: %b, " +
                          "updated packages: %b", resolutionAttempt,
                          conflictsFound, packagesChanged))
+    resolutionAttempt++
     if (!conflictsFound) {
-      break
+      // Create a new configuration for resolution with the selected packages.
+      resolutionComplete = true
+      continue
     } else if (!packagesChanged) {
       logger.warn(sprintf("Unable to find a set of non-conflicting artifacts " +
                           "for packages %s.",
@@ -1305,7 +1336,6 @@ Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
                             currentPackages).toString()))
       break
     }
-    resolutionAttempt++
   }
   // Restore any packages that were not present during the conflict resolution
   // process.
@@ -1598,6 +1628,32 @@ def testMostRecentVersionLockedPackagesFromSet() {
       sprintf("Invalid version-locked packages %s, expected %s " +
               "given %s", versionLockedList, expectedPackageList,
               versionLockedSets))
+  }
+}
+
+def testVersionLockPackages() {
+  List<PackageSpecifier> packages = [
+    "com.google.android.gms:play-services-base:12.0.1",
+    "com.google.android.gms:play-services-core:12.0.+",
+    "com.android.support:support-v4:23.0.+",
+    "com.android.support:support-vector-drawable:24.+",
+    "com.foo.bar:do-not-include-this:1.2.3",
+  ].collect { PackageSpecifier.fromString(it) }
+
+  Iterable<String> expectedPackageList = [
+    "com.android.support:support-v4:24.+",
+    "com.android.support:support-vector-drawable:24.+",
+    "com.google.android.gms:play-services-base:12.0.+",
+    "com.google.android.gms:play-services-core:12.0.+",
+  ]
+
+  Iterable<String> versionLockedList =
+    PackageSpecifier.specStrings(versionLockPackages(packages))
+  if (versionLockedList != expectedPackageList) {
+    throw new Exception(
+      sprintf("Invalid version-locked packages %s, expected %s given %s",
+              versionLockedList, expectedPackageList,
+              PackageSpecifier.specStrings(packages)))
   }
 }
 
@@ -1898,6 +1954,7 @@ def runTests() {
   testPackageSpecifierStrings()
   testSortPackagesByVersion()
   testMostRecentVersionLockedPackagesFromSet()
+  testVersionLockPackages()
   testGetModifiedPackageVersions()
   testGetMostRecentPackagesByGroupArtifact()
   testLoosenVersionExpression()
@@ -2046,18 +2103,9 @@ project.ext {
   // different versions which should all point at the same version.  So,
   // if possible, iterate through all fetched artifacts and explicitly pin all
   // version-locked transitive dependencies to the same version.
-  Map<Integer, Set<PackageSpecifier>> versionLockedPackageSets = [:]
-  Set<Integer> versionLockedSetBlacklist = createVersionLockedSetBlacklist(
-    resolvedPackages.values())
-  resolvedPackages.values().each {
-    addVersionLockedPackageToSet(it, versionLockedPackageSets,
-                                 versionLockedSetBlacklist)
-  }
-
-  // Lock each resolved packages to the most recent version.
   Map<String, PackageSpecifier> versionLockedPackages =
     PackageSpecifier.mostRecentByGroupArtifact(
-      mostRecentVersionLockedPackagesFromSet(versionLockedPackageSets))
+      versionLockPackages(resolvedPackages.values()))
   logger.quiet(sprintf("version locked packages: %s",
                        PackageSpecifier.specStrings(
                          versionLockedPackages.values()).toString()))
