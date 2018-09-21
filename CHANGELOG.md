@@ -1,3 +1,8 @@
+# Version 1.2.90 - Sep 21, 2018
+## Bug Fixes
+* Android Resolver: Fixed transitive dependency selection of version locked
+  packages.
+
 # Version 1.2.89 - Aug 31, 2018
 ## Bug Fixes
 * Fixed FileLoadException in ResolveUnityEditoriOSXcodeExtension an assembly
