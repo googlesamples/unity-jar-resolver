@@ -158,7 +158,7 @@ project.ext {
   }
 
   // Whether debug symbols should be included.
-  debugEnabled = findProperty("DEBUG") != null
+  debugEnabled = findProperty("NDEBUG") == null
 
   // Get the directory that contains this script.
   scriptDirectory = buildscript.sourceFile.getParentFile()
