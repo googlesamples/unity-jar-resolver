@@ -641,13 +641,14 @@ Task createBuildPluginDllTask(String componentName,
   compileTask.ext.componentName = componentName
 
   // Template metadata for the built DLL.
-  File assemblyDllMetaFile =
+  Iterable<File> assemblyDllMetaFiles = buildFiles.collect {
     new File(new File(project.ext.pluginTemplateDir,
                       project.ext.pluginEditorDllDir.path),
-             assemblyDllBasename + project.ext.unityMetadataExtension)
+             it.name + project.ext.unityMetadataExtension)
+  }
   // Optionally map unversioned to versioned filenames.
   Iterable<File> unversionedFiles = files(compileTask.outputs.files,
-                                          assemblyDllMetaFile)
+                                          assemblyDllMetaFiles)
 
   File stagingDir = new File(new File(projectBuildDir,
                                       project.ext.pluginStagingAreaDir.name),
