@@ -295,7 +295,7 @@ namespace GooglePlayServices
             if (!PlayServicesResolver.ExtractZip(aarFile, null, workingDir)) return false;
             PlayServicesResolver.ReplaceVariablesInAndroidManifest(
                 Path.Combine(workingDir, "AndroidManifest.xml"),
-                UnityCompat.ApplicationId, new Dictionary<string, string>());
+                PlayServicesResolver.GetAndroidApplicationId(), new Dictionary<string, string>());
 
             string nativeLibsDir = null;
             if (antProject) {
