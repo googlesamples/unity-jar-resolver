@@ -281,33 +281,36 @@ public class UnityCompat {
     /// Get the bundle identifier for the active build target group *not* the selected build
     /// target group using Unity 5.6 and above's API.
     ///
-    /// Unity 5.6 and above have the concept of an active build target and the selected build
-    /// target.  The active build target is the target that is built when the user presses the
-    /// build button.  The selected build target is the target that is currently selected in
-    /// the build settings dialog but not active to build (i.e no Unity icon is visible next to
-    /// the build target).
     /// </summary>
-    private static string Unity56AndAboveApplicationIdentifier {
-        get {
-            var getApplicationIdentifierMethod =
-                typeof(UnityEditor.PlayerSettings).GetMethod("GetApplicationIdentifier");
-            if (getApplicationIdentifierMethod == null) return null;
-            var activeBuildTargetGroup = ConvertBuildTargetToBuildTargetGroup(
-                EditorUserBuildSettings.activeBuildTarget);
-            if (activeBuildTargetGroup == BuildTargetGroup.Unknown) return null;
-            return getApplicationIdentifierMethod.Invoke(
-                null, new object [] { activeBuildTargetGroup } ) as string;
-        }
-        set {
-            var setApplicationIdentifierMethod =
-                typeof(UnityEditor.PlayerSettings).GetMethod("SetApplicationIdentifier");
-            if (setApplicationIdentifierMethod == null) return;
-            var activeBuildTargetGroup = ConvertBuildTargetToBuildTargetGroup(
-                EditorUserBuildSettings.activeBuildTarget);
-            if (activeBuildTargetGroup == BuildTargetGroup.Unknown) return;
-            setApplicationIdentifierMethod.Invoke(
-                null, new object [] { activeBuildTargetGroup, value } );
-        }
+    /// <param name="buildTarget">Build target to query.</param>
+    /// <returns>Application identifier if it can be retrieved, null otherwise.</returns>
+    private static string GetUnity56AndAboveApplicationIdentifier(BuildTarget buildTarget) {
+        var getApplicationIdentifierMethod =
+            typeof(UnityEditor.PlayerSettings).GetMethod("GetApplicationIdentifier");
+        if (getApplicationIdentifierMethod == null) return null;
+        var buildTargetGroup = ConvertBuildTargetToBuildTargetGroup(buildTarget);
+        if (buildTargetGroup == BuildTargetGroup.Unknown) return null;
+        return getApplicationIdentifierMethod.Invoke(
+            null, new object [] { buildTargetGroup } ) as string;
+    }
+
+    /// <summary>
+    /// Set the bundle identifier for the specified build target group in Unity 5.6 and above.
+    ///
+    /// </summary>
+    /// <param name="buildTarget">Build target to query.</param>
+    /// <param name="applicationIdentifier">Application ID to set.</param>
+    /// <returns>true if successful, false otherwise.</returns>
+    private static bool SetUnity56AndAboveApplicationIdentifier(BuildTarget buildTarget,
+                                                                string applicationIdentifier) {
+        var setApplicationIdentifierMethod =
+            typeof(UnityEditor.PlayerSettings).GetMethod("SetApplicationIdentifier");
+        if (setApplicationIdentifierMethod == null) return false;
+        var buildTargetGroup = ConvertBuildTargetToBuildTargetGroup(buildTarget);
+        if (buildTargetGroup == BuildTargetGroup.Unknown) return false;
+        setApplicationIdentifierMethod.Invoke(
+            null, new object [] { buildTargetGroup, applicationIdentifier } );
+        return true;
     }
 
     /// <summary>
@@ -329,24 +332,44 @@ public class UnityCompat {
     }
 
     /// <summary>
+    /// Get the bundle / application ID for a build target.
+    /// </summary>
+    /// <param name="buildTarget">Build target to query.
+    /// This is ignored in Unity 5.5 and below as all build targets share the same ID.
+    /// </param>
+    /// <returns>Bundle / application ID for the build target.</returns>
+    public static string GetApplicationId(BuildTarget buildTarget) {
+        var identifier = GetUnity56AndAboveApplicationIdentifier(buildTarget);
+        if (identifier != null) return identifier;
+        return Unity55AndBelowBundleIdentifier;
+    }
+
+    /// <summary>
+    /// Set the bundle / application ID for a build target.
+    /// </summary>
+    /// <param name="buildTarget">Build target to select.
+    /// This is ignored in Unity 5.5 and below as all build targets share the same ID.
+    /// </param>
+    /// <param name="applicationIdentifier">Bundle / application ID to set.</param>
+    public static void SetApplicationId(BuildTarget buildTarget, string applicationIdentifier) {
+        if (!SetUnity56AndAboveApplicationIdentifier(buildTarget, applicationIdentifier)) {
+            Unity55AndBelowBundleIdentifier = applicationIdentifier;
+        }
+    }
+
+    /// <summary>
     /// Get / set the bundle / application ID.
+    ///
+    /// Unity 5.6 and above have the concept of an active build target and the selected build
+    /// target.  The active build target is the target that is built when the user presses the
+    /// build button.  The selected build target is the target that is currently selected in
+    /// the build settings dialog but not active to build (i.e no Unity icon is visible next to
+    /// the build target).
     /// </summary>
     /// This uses reflection to retrieve the property as it was renamed in Unity 5.6.
     public static string ApplicationId {
-        get {
-            var identifier = Unity56AndAboveApplicationIdentifier;
-            if (identifier != null) return identifier;
-            return Unity55AndBelowBundleIdentifier;
-        }
-
-        set {
-            var identifier = Unity56AndAboveApplicationIdentifier;
-            if (identifier != null) {
-                Unity56AndAboveApplicationIdentifier = value;
-                return;
-            }
-            Unity55AndBelowBundleIdentifier  = value;
-        }
+        get { return GetApplicationId(EditorUserBuildSettings.activeBuildTarget); }
+        set { SetApplicationId(EditorUserBuildSettings.activeBuildTarget, value); }
     }
 }
 }

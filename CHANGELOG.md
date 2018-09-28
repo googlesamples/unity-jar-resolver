@@ -1,3 +1,9 @@
+# Version 1.2.91 - Sep 27, 2018
+## Bug Fixes
+* Android Resolver: Fixed Android Resolution when the selected build target
+  isn't Android.
+* Added C# assembly symbols the plugin to simplify debugging bug reports.
+
 # Version 1.2.90 - Sep 21, 2018
 ## Bug Fixes
 * Android Resolver: Fixed transitive dependency selection of version locked

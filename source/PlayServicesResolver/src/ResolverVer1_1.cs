@@ -355,7 +355,7 @@ namespace GooglePlayServices
                         writer.WriteValue(kv.Value.explode);
                         writer.WriteEndElement();
                         writer.WriteStartElement("bundleId");
-                        writer.WriteValue(UnityCompat.ApplicationId);
+                        writer.WriteValue(PlayServicesResolver.GetAndroidApplicationId());
                         writer.WriteEndElement();
                         writer.WriteStartElement("path");
                         writer.WriteValue(kv.Value.path);
@@ -1238,10 +1238,11 @@ namespace GooglePlayServices
         /// <param name="aarData">Path of the AAR to query.</param>
         /// <returns>true if the cache entry is dirty, false otherwise.</returns>
         private bool AarExplodeDataIsDirty(AarExplodeData aarData) {
-            if (aarData.bundleId != UnityCompat.ApplicationId) {
+            if (aarData.bundleId != PlayServicesResolver.GetAndroidApplicationId()) {
                 PlayServicesResolver.Log(
                     String.Format("{0}: Bundle ID changed {1} --> {2}", aarData.path,
-                                  aarData.bundleId, UnityCompat.ApplicationId),
+                                  aarData.bundleId,
+                                  PlayServicesResolver.GetAndroidApplicationId()),
                     level: LogLevel.Verbose);
                 return true;
             }
@@ -1520,7 +1521,7 @@ namespace GooglePlayServices
             if (newAarData) {
                 aarData.AvailableAbis = availableAbis;
                 aarData.TargetAbis = AndroidAbis.Current;
-                aarData.bundleId = UnityCompat.ApplicationId;
+                aarData.bundleId = PlayServicesResolver.GetAndroidApplicationId();
             }
             aarData.path = GenerateAntProject(explode) ? explodeDirectory : aarPath;
             aarData.explode = explode;

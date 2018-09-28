@@ -365,7 +365,7 @@ namespace GooglePlayServices
         /// Polls for changes in the bundle ID.
         /// </summary>
         private static PropertyPoller<string> bundleIdPoller = new PropertyPoller<string>(
-            UnityCompat.ApplicationId, "Bundle ID");
+            GetAndroidApplicationId(), "Bundle ID");
 
         /// <summary>
         /// Arguments for the bundle ID update event.
@@ -672,6 +672,14 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Get the application ID for the Android build target.
+        /// </summary>
+        /// <returns>Application / bundle ID for the Android build target.</returns>
+        internal static string GetAndroidApplicationId() {
+            return UnityCompat.GetApplicationId(BuildTarget.Android);
+        }
+
+        /// <summary>
         /// Log a filtered message to Unity log, error messages are stored in
         /// PlayServicesSupport.lastError.
         /// </summary>
@@ -792,7 +800,7 @@ namespace GooglePlayServices
                     GooglePlayServices.SettingsDialog.AndroidManifestPath);
                 foreach (var importedAsset in importedAssets) {
                     if (FileUtils.NormalizePathSeparators(importedAsset) == manifestPath) {
-                        PatchAndroidManifest(UnityCompat.ApplicationId, null);
+                        PatchAndroidManifest(GetAndroidApplicationId(), null);
                         break;
                     }
                 }
@@ -1063,7 +1071,7 @@ namespace GooglePlayServices
         /// If the user changes the bundle ID, perform resolution again.
         /// </summary>
         private static void PollBundleId() {
-            bundleIdPoller.Poll(UnityCompat.ApplicationId, (previousValue, currentValue) => {
+            bundleIdPoller.Poll(GetAndroidApplicationId(), (previousValue, currentValue) => {
                     if (BundleIdChanged != null) {
                         BundleIdChanged(null, new BundleIdChangedEventArgs {
                                 PreviousBundleId = previousValue,
@@ -1432,7 +1440,7 @@ namespace GooglePlayServices
                 ExecutionEnvironment.InBatchMode;
             logger.Verbose = GooglePlayServices.SettingsDialog.VerboseLogging;
             if (Resolver != null) {
-                PatchAndroidManifest(UnityCompat.ApplicationId, null);
+                PatchAndroidManifest(GetAndroidApplicationId(), null);
                 ScheduleAutoResolve(delayInMilliseconds: 0);
             }
         }

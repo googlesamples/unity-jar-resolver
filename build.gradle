@@ -158,7 +158,7 @@ project.ext {
   }
 
   // Whether debug symbols should be included.
-  debugEnabled = findProperty("DEBUG") != null
+  debugEnabled = findProperty("NDEBUG") == null
 
   // Get the directory that contains this script.
   scriptDirectory = buildscript.sourceFile.getParentFile()
@@ -188,7 +188,7 @@ project.ext {
   // Solution which references all projects used by the plugin.
   pluginSolutionFile = new File(pluginSourceDir, "JarResolver.sln")
   // Version of the plugin (update this with CHANGELOG.md on each release).
-  pluginVersion = "1.2.90.0"
+  pluginVersion = "1.2.91.0"
   // Semantic version of the plugin.
   pluginVersionSemVer = pluginVersion.tokenize(".")[0..2].join(".")
   // Base filename of the released plugin.
@@ -641,13 +641,14 @@ Task createBuildPluginDllTask(String componentName,
   compileTask.ext.componentName = componentName
 
   // Template metadata for the built DLL.
-  File assemblyDllMetaFile =
+  Iterable<File> assemblyDllMetaFiles = buildFiles.collect {
     new File(new File(project.ext.pluginTemplateDir,
                       project.ext.pluginEditorDllDir.path),
-             assemblyDllBasename + project.ext.unityMetadataExtension)
+             it.name + project.ext.unityMetadataExtension)
+  }
   // Optionally map unversioned to versioned filenames.
   Iterable<File> unversionedFiles = files(compileTask.outputs.files,
-                                          assemblyDllMetaFile)
+                                          assemblyDllMetaFiles)
 
   File stagingDir = new File(new File(projectBuildDir,
                                       project.ext.pluginStagingAreaDir.name),
