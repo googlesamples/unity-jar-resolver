@@ -1,3 +1,8 @@
+# Version 1.2.92 - Oct 2, 2018
+## Bug Fixes
+* Android Resolver: Worked around auto-resolution hang on Windows if
+  resolution starts before compilation is finished.
+
 # Version 1.2.91 - Sep 27, 2018
 ## Bug Fixes
 * Android Resolver: Fixed Android Resolution when the selected build target
