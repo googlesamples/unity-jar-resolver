@@ -852,11 +852,15 @@ namespace GooglePlayServices
                             lock (typeof(PlayServicesResolver)) {
                                 autoResolving = true;
                             }
-                            AutoResolve(() => {
-                                    lock (typeof(PlayServicesResolver)) {
-                                        autoResolving = false;
-                                        autoResolveJobId = 0;
-                                    }
+                            RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                                    if (EditorApplication.isCompiling) return false;
+                                    AutoResolve(() => {
+                                            lock (typeof(PlayServicesResolver)) {
+                                                autoResolving = false;
+                                                autoResolveJobId = 0;
+                                            }
+                                        });
+                                    return true;
                                 });
                         },
                         delayInMilliseconds);
