@@ -746,11 +746,6 @@ namespace GooglePlayServices
         private static HashSet<Regex> autoResolveFilePatterns = new HashSet<Regex>();
 
         /// <summary>
-        /// Assets that have been imported since the last auto resolution.
-        /// </summary>
-        private static HashSet<string> importedAssetsSinceLastResolve = new HashSet<string>();
-
-        /// <summary>
         /// Add file patterns to monitor to trigger auto resolution.
         /// </summary>
         /// <param name="patterns">Set of file patterns to monitor to trigger auto
@@ -760,12 +755,11 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Check the set of recently imported assets to see whether resolution should be
+        /// Utility function to check a set of files to see whether resolution should be
         /// triggered.
         /// </summary>
-        private static void CheckImportedAssets() {
-            var filesToCheck = new HashSet<string>(importedAssetsSinceLastResolve);
-            importedAssetsSinceLastResolve.Clear();
+        /// <value>True if auto-resolve was triggered.</value>
+        private static bool CheckFilesForAutoResolution(HashSet<string> filesToCheck) {
             bool resolve = false;
             foreach (var asset in filesToCheck) {
                 foreach (var pattern in autoResolveFilePatterns) {
@@ -780,6 +774,8 @@ namespace GooglePlayServices
                 }
             }
             if (resolve) ScheduleAutoResolve();
+
+            return resolve;
         }
 
         /// <summary>
@@ -816,9 +812,15 @@ namespace GooglePlayServices
                     }
                     // Schedule a check of imported assets.
                     if (importedAssets.Length > 0 && autoResolveFilePatterns.Count > 0) {
-                        importedAssetsSinceLastResolve = new HashSet<string>(importedAssets);
-                        CheckImportedAssets();
-                        return;
+                        if (CheckFilesForAutoResolution(new HashSet<string>(importedAssets))) {
+                            return;
+                        }
+                    }
+                    // Check deleted assets to see if we need to trigger an auto-resolve.
+                    if (deletedAssets.Length > 0 && autoResolveFilePatterns.Count > 0) {
+                        if (CheckFilesForAutoResolution(new HashSet<string>(deletedAssets))) {
+                            return;
+                        }
                     }
                 }
             }
@@ -1313,6 +1315,12 @@ namespace GooglePlayServices
 
             // If no dependencies are present, skip the resolution step.
             if (PlayServicesSupport.GetAllDependencies().Count == 0) {
+                Log("No dependencies found.", level: LogLevel.Verbose);
+                if (PlayServicesResolver.FindLabeledAssets() != null) {
+                    Log("Stale dependencies exist. Deleting assets...", level: LogLevel.Verbose);
+                    DeleteLabeledAssets();
+                }
+
                 if (resolutionComplete != null) {
                     resolutionComplete(true);
                 }

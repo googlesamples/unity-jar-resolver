@@ -1,0 +1,5 @@
+<dependencies>
+  <androidPackages>
+    <androidPackage spec="com.google.android.gms:play-services-base:15.0.1" />
+  </androidPackages>
+</dependencies>

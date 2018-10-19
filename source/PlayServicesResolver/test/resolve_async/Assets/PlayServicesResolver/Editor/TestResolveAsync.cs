@@ -122,6 +122,12 @@ public class TestResolveAsync {
     private const string EXPORT_ANDROID_PROJECT = "exportAsGoogleAndroidProject";
 
     /// <summary>
+    /// The name of the file, without extension, that will serve as a template for dynamically
+    /// adding additional dependencies.
+    /// </summary>
+    private const string ADDITIONAL_DEPENDENCIES_FILENAME = "TestAdditionalDependencies";
+
+    /// <summary>
     /// Major / minor Unity version numbers.
     /// </summary>
     private static float unityVersion;
@@ -157,7 +163,7 @@ public class TestResolveAsync {
                 new TestCase {
                     Name = "SetupDependencies",
                     Method = (testCase, testCaseComplete) => {
-                        ClearDependencies();
+                        ClearAllDependencies();
                         SetupDependencies(testCase, testCaseComplete);
                         testCaseComplete(new TestCaseResult(testCase));
                     }
@@ -165,7 +171,7 @@ public class TestResolveAsync {
                 new TestCase {
                     Name = "ResolveForGradleBuildSystem",
                     Method = (testCase, testCaseComplete) => {
-                        ClearDependencies();
+                        ClearAllDependencies();
                         SetupDependencies(testCase, testCaseComplete);
                         Resolve("Gradle", false, "ExpectedArtifacts/NoExport/Gradle",
                                 null, testCase, testCaseComplete);
@@ -174,7 +180,7 @@ public class TestResolveAsync {
                 new TestCase {
                     Name = "ResolveForGradleBuildSystemSync",
                     Method = (testCase, testCaseComplete) => {
-                        ClearDependencies();
+                        ClearAllDependencies();
                         SetupDependencies(testCase, testCaseComplete);
                         Resolve("Gradle", false, "ExpectedArtifacts/NoExport/Gradle",
                                 null, testCase, testCaseComplete, synchronous: true);
@@ -183,7 +189,7 @@ public class TestResolveAsync {
                 new TestCase {
                     Name = "ResolveForInternalBuildSystem",
                     Method = (testCase, testCaseComplete) => {
-                        ClearDependencies();
+                        ClearAllDependencies();
                         SetupDependencies(testCase, testCaseComplete);
                         Resolve("Internal", false,
                                 AarsWithNativeLibrariesSupported ?
@@ -195,8 +201,30 @@ public class TestResolveAsync {
                 new TestCase {
                     Name = "ResolveForGradleBuildSystemAndExport",
                     Method = (testCase, testCaseComplete) => {
-                        ClearDependencies();
+                        ClearAllDependencies();
                         SetupDependencies(testCase, testCaseComplete);
+                        Resolve("Gradle", true, "ExpectedArtifacts/Export/Gradle",
+                                null, testCase, testCaseComplete);
+                    }
+                },
+                new TestCase {
+                    Name = "ResolveAddedDependencies",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies(testCase, testCaseComplete);
+                        UpdateAdditionalDependenciesFile(true);
+                        Resolve("Gradle", true, "ExpectedArtifacts/Export/GradleAddedDeps",
+                                null, testCase, testCaseComplete);
+                    }
+                },
+                new TestCase {
+                    Name = "ResolveRemovedDependencies",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies(testCase, testCaseComplete);
+                        // Add the additional dependencies file then immediately remove it.
+                        UpdateAdditionalDependenciesFile(true);
+                        UpdateAdditionalDependenciesFile(false);
                         Resolve("Gradle", true, "ExpectedArtifacts/Export/Gradle",
                                 null, testCase, testCaseComplete);
                     }
@@ -209,7 +237,7 @@ public class TestResolveAsync {
                     new TestCase {
                         Name = "ResolverForGradleBuildSystemUsingAbisArmeabiv7aAndArm64",
                         Method = (testCase, testCaseComplete) => {
-                            ClearDependencies();
+                            ClearAllDependencies();
                             Resolve("Gradle", false,
                                     "ExpectedArtifacts/NoExport/GradleArmeabiv7aArm64",
                                     "armeabi-v7a, arm64-v8a", testCase, testCaseComplete);
@@ -221,7 +249,7 @@ public class TestResolveAsync {
                     new TestCase {
                         Name = "ResolverForGradleBuildSystemUsingAbisArmeabiv7a",
                         Method = (testCase, testCaseComplete) => {
-                            ClearDependencies();
+                            ClearAllDependencies();
                             Resolve("Gradle", false,
                                     "ExpectedArtifacts/NoExport/GradleArmeabiv7a",
                                     "armeabi-v7a", testCase, testCaseComplete);
@@ -449,16 +477,19 @@ public class TestResolveAsync {
     }
 
     /// <summary>
-    /// Clear all dependencies.
+    /// Clear *all* dependencies.
     /// This removes all programmatically added dependencies before running a test.
     /// A developer typically shouldn't be doing this, instead they should be changing the
     /// *Dependencies.xml files in the project to force the dependencies to be read again.
+    /// This also removes the additional dependencies file.
     /// </summary>
-    private static void ClearDependencies() {
+    private static void ClearAllDependencies() {
         UnityEngine.Debug.Log("Clear all loaded dependencies");
         AndroidResolverSupport.GetType().GetMethod(
             "ResetDependencies",
             BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+
+        UpdateAdditionalDependenciesFile(false);
     }
 
     /// <summary>
@@ -473,6 +504,37 @@ public class TestResolveAsync {
         Google.VersionHandler.InvokeInstanceMethod(
             AndroidResolverSupport, "DependOn",
             new object[] { "com.google.firebase", "firebase-common", "16.0.0" });
+    }
+
+    /// <summary>
+    /// Programmatically add/remove dependencies by copying/deleting a template file.
+    /// The change will be processed by the plugin after the UnityEditor.AssetDatabase.Refresh()
+    /// call.
+    /// </summary>
+    /// <param name="addDependencyFile">If true, will copy the template file to an XML file if it
+    /// doesn't exist. If false, delete the XML file if it exists.</param>
+    private static void UpdateAdditionalDependenciesFile(bool addDependencyFile) {
+        string currentDirectory = Directory.GetCurrentDirectory();
+        string editorPath = Path.Combine(currentDirectory, "Assets/PlayServicesResolver/Editor/");
+
+        string templateFilePath = Path.Combine(editorPath, ADDITIONAL_DEPENDENCIES_FILENAME +
+            ".template");
+        string xmlFilePath = Path.Combine(editorPath, ADDITIONAL_DEPENDENCIES_FILENAME + ".xml");
+        if (addDependencyFile && !File.Exists(xmlFilePath)) {
+            if (!File.Exists(templateFilePath)) {
+                UnityEngine.Debug.LogError("Could not find file: " + templateFilePath);
+                return;
+            }
+
+            UnityEngine.Debug.Log("Adding Dependencies file: " + xmlFilePath);
+            File.Copy(templateFilePath, xmlFilePath);
+            UnityEditor.AssetDatabase.Refresh();
+        } else if (!addDependencyFile && File.Exists(xmlFilePath)) {
+            UnityEngine.Debug.Log("Removing Dependencies file: " + xmlFilePath);
+            File.Delete(xmlFilePath);
+            File.Delete(xmlFilePath + ".meta");
+            UnityEditor.AssetDatabase.Refresh();
+        }
     }
 
     /// <summary>
