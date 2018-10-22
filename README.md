@@ -332,7 +332,7 @@ The `CocoaPods` are either:
      CocoaPods.  We call this `Xcode workspace` integration.
 
 The resolution strategy can be changed via the
-`Assets > Play Services Resolver > Android Resolver > Settings` menu.
+`Assets > Play Services Resolver > iOS Resolver > Settings` menu.
 
 # Version Handler Usage
 
