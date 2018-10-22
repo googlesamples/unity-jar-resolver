@@ -1,3 +1,8 @@
+# Version 1.2.93 - Oct 22, 2018
+## Bug Fixes
+* Android Resolver: Fixed removal of Android libraries on auto-resolution when
+  `*Dependencies.xml` files are deleted.
+
 # Version 1.2.92 - Oct 2, 2018
 ## Bug Fixes
 * Android Resolver: Worked around auto-resolution hang on Windows if
