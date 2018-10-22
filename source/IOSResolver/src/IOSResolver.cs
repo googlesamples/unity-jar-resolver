@@ -378,6 +378,9 @@ public class IOSResolver : AssetPostprocessor {
     private const string LIBRARY_FILENAME_PREFIX = "lib";
     // Extension for static library filenames.
     private const string LIBRARY_FILENAME_EXTENSION = ".a";
+    // Pod variable that references the a source pod's root directory which is analogous to the
+    // Xcode $(SRCROOT) variable.
+    private const string PODS_VAR_TARGET_SRCROOT = "${PODS_TARGET_SRCROOT}";
 
     // Version of the CocoaPods installation.
     private static string podsVersion = "";
@@ -2047,6 +2050,19 @@ public class IOSResolver : AssetPostprocessor {
         UpdateProjectDeps(buildTarget, pathToBuiltProject);
     }
 
+    // <summary>
+    // Expand any per pod "PODS_" variables in the specified value.
+    // </summary>
+    // <param name="value">String which will have variable references expanding.</param>
+    // <param name="sourcePodPath">Path to the pod's source if any.</param>
+    // <returns>"value" with variables expanded.</returns>
+    public static string ExpandPodsVariables(string value, string sourcePodPath) {
+        if (!String.IsNullOrEmpty(sourcePodPath)) {
+          value = value.Replace(PODS_VAR_TARGET_SRCROOT, sourcePodPath);
+        }
+        return value;
+    }
+
     // Handles the Xcode project level integration injection of scanned dependencies.
     // Implementation of OnPostProcessUpdateProjectDeps().
     // NOTE: This is separate from the post-processing method to prevent the
@@ -2217,7 +2233,7 @@ public class IOSResolver : AssetPostprocessor {
 
             // Only add source files that are included in the Pod project, this way we
             // can avoid adding source files that are not part of the Pod dependencies.
-            if(podsProject != null && podsProject.ContainsFileByRealPath(sourceFilePathInPod, 
+            if(podsProject != null && podsProject.ContainsFileByRealPath(sourceFilePathInPod,
                UnityEditor.iOS.Xcode.PBXSourceTree.Source))
             {
                 Log("Adding source file " + sourceFilePathInPod + " to Xcode project.", true);
@@ -2232,11 +2248,11 @@ public class IOSResolver : AssetPostprocessor {
                         new [] { target }, "USER_HEADER_SEARCH_PATHS",
                         new [] { "$(SRCROOT)/" + Path.GetDirectoryName(podPathProjectPath.Value) },
                         new string[] {});
-            } 
+            }
             else
             {
-                Log("Skipping adding source file " + sourceFilePathInPod + 
-                    " to Xcode project due to it is not part of the pod project", true);
+                Log("Skipping adding source file " + sourceFilePathInPod +
+                    " to Xcode project as it is not part of the pod project", true);
             }
         }
 
@@ -2294,7 +2310,7 @@ public class IOSResolver : AssetPostprocessor {
                 continue;
             }
 
-            // Retrieve the build config GUIDs this xcconfig should be appied to.
+            // Retrieve the build config GUIDs this xcconfig should be applied to.
             var configGuidsByName = new Dictionary<string, string>();
             foreach (var configName in configNames) {
                 if (configName.ToLower().StartsWith(buildConfigPrefix.ToLower())) {
@@ -2365,6 +2381,12 @@ public class IOSResolver : AssetPostprocessor {
                                                                  filteredLinkOptions.ToArray());
                 }
 
+                // Get the Pod directory - if any - that is the source of this config file.
+                string podDir = buildTargetXcconfig == filename ? null :
+                                    String.Format("$(PODS_ROOT)/{0}",
+                                        Path.GetFileNameWithoutExtension(
+                                            Path.GetFileName(buildTargetXcconfig)));
+
                 // Add the build properties parsed from the xcconfig file to each configuration.
                 foreach (var guidAndName in configGuidsByName) {
                     foreach (var buildVariableAndValue in buildSettings) {
@@ -2372,13 +2394,18 @@ public class IOSResolver : AssetPostprocessor {
                         // options that impact the compile.
                         if (buildTargetXcconfig != filename &&
                             !validCompileOptions.Contains(buildVariableAndValue.Key)) continue;
+
+                        string expandedValue = ExpandPodsVariables(
+                            buildVariableAndValue.Value, podDir);
                         Log(String.Format(
-                            "Applying build setting '{0} = {1}' to build config {2} ({3})",
-                            buildVariableAndValue.Key, buildVariableAndValue.Value,
-                            guidAndName.Value, guidAndName.Key), verbose: true);
+                                "From {0} applying build setting '{1} = {2} (expanded as '{3}')' " +
+                                "to build config {4} ({5})",
+                                buildTargetXcconfig.Substring(pathToBuiltProject.Length + 1),
+                                buildVariableAndValue.Key,
+                                buildVariableAndValue.Value, expandedValue, guidAndName.Value,
+                                guidAndName.Key), verbose: true);
                         project.AddBuildPropertyForConfig(guidAndName.Key,
-                                                          buildVariableAndValue.Key,
-                                                          buildVariableAndValue.Value);
+                                                          buildVariableAndValue.Key, expandedValue);
                     }
                 }
             }
