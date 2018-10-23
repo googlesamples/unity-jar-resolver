@@ -1,3 +1,7 @@
+# Version 1.2.94 - Oct 22, 2018
+## Bug Fixes
+* iOS Resolver: Added support for PODS_TARGET_SRCROOT in source Cocoapods.
+
 # Version 1.2.93 - Oct 22, 2018
 ## Bug Fixes
 * Android Resolver: Fixed removal of Android libraries on auto-resolution when
