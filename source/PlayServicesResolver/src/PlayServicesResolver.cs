@@ -855,15 +855,21 @@ namespace GooglePlayServices
                                 autoResolving = true;
                             }
                             RunOnMainThread.PollOnUpdateUntilComplete(() => {
-                                    if (EditorApplication.isCompiling) return false;
+                                if (EditorApplication.isCompiling) return false;
+                                // Only run AutoResolve() if we have a valid autoResolveJobId.
+                                // If autoResolveJobId is 0, ScheduleResolve()
+                                // has already been run and we should not run AutoResolve()
+                                // again.
+                                if (autoResolveJobId != 0) {
                                     AutoResolve(() => {
-                                            lock (typeof(PlayServicesResolver)) {
-                                                autoResolving = false;
-                                                autoResolveJobId = 0;
-                                            }
-                                        });
-                                    return true;
-                                });
+                                        lock (typeof(PlayServicesResolver)) {
+                                            autoResolving = false;
+                                            autoResolveJobId = 0;
+                                        }
+                                    });
+                                }
+                                return true;
+                            });
                         },
                         delayInMilliseconds);
                 }
