@@ -1,3 +1,7 @@
+# Version 1.2.95 - Oct 23, 2018
+## Bug Fixes:
+* Android Resolver: Fixed auto-resolution running in a loop in some scenarios.
+
 # Version 1.2.94 - Oct 22, 2018
 ## Bug Fixes
 * iOS Resolver: Added support for PODS_TARGET_SRCROOT in source Cocoapods.
