@@ -1282,7 +1282,7 @@ namespace GooglePlayServices
                 return true;
             } else if (!generateAntProject && !File.Exists(aarData.path)) {
                 PlayServicesResolver.Log(
-                    String.Format("{0}: Should *not* be exploded but aritfact file missing.",
+                    String.Format("{0}: Should *not* be exploded but artifact file missing.",
                                   aarData.path),
                     level: LogLevel.Verbose);
                 return true;
