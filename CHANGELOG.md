@@ -198,38 +198,38 @@
 ## Bug Fixes
 * Fixed escaping of local repository paths in Android Resolver.
 
-# Version 1.2.68 - May 3, 2017
+# Version 1.2.68 - May 3, 2018
 ## Changes
 * Added support for granular builds of Google Play Services.
 
-# Version 1.2.67 - May 1, 2017
+# Version 1.2.67 - May 1, 2018
 ## Changes
 * Improved support for iOS source-only pods in Unity 5.5 and below.
 
-# Version 1.2.66 - April 27, 2017
+# Version 1.2.66 - April 27, 2018
 ## Bug Fixes
 * Fixed Version Handler renaming of Linux libraries with hypens in filenames.
   Previously, libraries named Foo-1.2.3.so were not being renamed to
   libFoo-1.2.3.so on Linux which could break native library loading on some
   versions of Unity.
 
-# Version 1.2.65 - April 26, 2017
+# Version 1.2.65 - April 26, 2018
 ## Bug Fixes
 * Fix CocoaPods casing in logs and comments.
 
-# Version 1.2.64 - Mar 16, 2017
+# Version 1.2.64 - Mar 16, 2018
 ## Bug Fixes
 * Fixed bug in download_artifacts.gradle (used by Android Resolver) which
   reported a failure if required artifacts already exist.
 
-# Version 1.2.63 - Feb 15, 2018
+# Version 1.2.63 - Mar 15, 2018
 ## Bug Fixes
 * Fixed iOS Resolver include search paths taking precedence over system headers
   when using project level resolution.
 * Fixed iOS Resolver includes relative to library root, when using project level
   resolution.
 
-# Version 1.2.62 - Mar 12, 2017
+# Version 1.2.62 - Mar 12, 2018
 ## Changes
 * Improved error reporting when a file can't be moved to trash by the
   Version Handler.
@@ -239,7 +239,7 @@
 * Fixed Version Handler renaming files with underscores if the
   "Rename to Canonical Filenames" setting is enabled.
 
-# Version 1.2.61 - Jan 22, 2017
+# Version 1.2.61 - Jan 22, 2018
 ## Bug Fixes
 * Fixed Android Resolver reporting non-existent conflicting dependencies when
   Gradle build system is enabled.
