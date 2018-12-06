@@ -39,6 +39,8 @@
     <!-- iosPod supports the following attributes:
          * "name" (required)
            Name of the Cocoapod.
+         * "path" (optional)
+           Path to the local Cocoapod.
          * "version" (optional)
            Cocoapod version specification for the named pod.
            If this is not specified the latest version is used.
@@ -47,7 +49,7 @@
            generated Xcode project.  This is "true" by default.
          * "minTargetSdk" (optional)
            The minimum iOS SDK required by this Cocoapod. -->
-    <iosPod name="Google-Mobile-Ads-SDK" version="~> 7.0" bitcodeEnabled="true"
+    <iosPod name="Google-Mobile-Ads-SDK" path="../google-mobile-ads-sdk" version="~> 7.0" bitcodeEnabled="true"
             minTargetSdk="6.0">
       <!-- Set of source URIs to search for this Cocoapod spec.
            By default Cocoapods will attempt to fetch the pod specs from:

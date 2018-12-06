@@ -44,6 +44,11 @@ public class IOSResolver : AssetPostprocessor {
         public string name = null;
 
         /// <summary>
+        /// Path to pod on local file system relative to project directory (for development pods)
+        /// </summary>
+        public string path = null;
+
+        /// <summary>
         /// This is a preformatted version expression for pod declarations.
         ///
         /// See: https://guides.cocoapods.org/syntax/podfile.html#pod
@@ -89,15 +94,27 @@ public class IOSResolver : AssetPostprocessor {
         public bool fromXmlFile = false;
 
         /// <summary>
+        /// Returns the absolute path to the local pod
+        /// </summary>
+        /// <value></value>
+        public string absPath {
+            get {
+                return Path.GetFullPath(path);
+            }
+        }
+
+        /// <summary>
         /// Format a "pod" line for a Podfile.
         /// </summary>
         public string PodFilePodLine {
             get {
-                string versionString = "";
-                if (!String.IsNullOrEmpty(version)) {
-                    versionString = String.Format(", '{0}'", version);
+                string versionOrPathString = "";
+                if (!String.IsNullOrEmpty(path)) {
+                    versionOrPathString = String.Format(", :path => '{0}'", absPath);
+                } else if (!String.IsNullOrEmpty(version)) {
+                    versionOrPathString = String.Format(", '{0}'", version);
                 }
-                return String.Format("pod '{0}'{1}", name, versionString);
+                return String.Format("pod '{0}'{1}", name, versionOrPathString);
             }
         }
 
@@ -114,9 +131,10 @@ public class IOSResolver : AssetPostprocessor {
         /// Each source is a URL that is injected in the source section of a Podfile
         /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
         /// a source.</param>
-        public Pod(string name, string version, bool bitcodeEnabled,
+        public Pod(string name, string path, string version, bool bitcodeEnabled,
                    string minTargetSdk, IEnumerable<string> sources) {
             this.name = name;
+            this.path = path;
             this.version = version;
             this.bitcodeEnabled = bitcodeEnabled;
             this.minTargetSdk = minTargetSdk;
@@ -185,6 +203,7 @@ public class IOSResolver : AssetPostprocessor {
         /// <dependencies>
         ///   <iosPods>
         ///     <iosPod name="name"
+        ///             path="pathToLocal"
         ///             version="versionSpec"
         ///             bitcodeEnabled="enabled"
         ///             minTargetSdk="sdk">
@@ -201,6 +220,7 @@ public class IOSResolver : AssetPostprocessor {
             var trueStrings = new HashSet<string> { "true", "1" };
             var falseStrings = new HashSet<string> { "false", "0" };
             string podName = null;
+            string localPath = null;
             string versionSpec = null;
             bool bitcodeEnabled = true;
             string minTargetSdk = null;
@@ -217,6 +237,7 @@ public class IOSResolver : AssetPostprocessor {
                                parentElementName == "iosPods") {
                         if (isStart) {
                             podName = reader.GetAttribute("name");
+                            localPath = reader.GetAttribute("path");
                             versionSpec = reader.GetAttribute("version");
                             var bitcodeEnabledString =
                                 (reader.GetAttribute("bitcode") ?? "").ToLower();
@@ -232,7 +253,7 @@ public class IOSResolver : AssetPostprocessor {
                                 return false;
                             }
                         } else {
-                            AddPodInternal(podName, preformattedVersion: versionSpec,
+                            AddPodInternal(podName, localPath, preformattedVersion: versionSpec,
                                            bitcodeEnabled: bitcodeEnabled,
                                            minTargetSdk: minTargetSdk,
                                            sources: sources,
@@ -398,7 +419,7 @@ public class IOSResolver : AssetPostprocessor {
     private static System.Object commandLineDialogLock = new System.Object();
 
     // Regex for parsing comma separated values, as used in the pod dependency specification.
-    private static Regex CSV_SPLIT_REGEX = new Regex(@"(?:^|,\s*)'([^']*)'", RegexOptions.Compiled);
+    private static Regex CSV_SPLIT_REGEX = new Regex(@"(?:^|,\s*|, :(.*) => )'([^']*)'", RegexOptions.Compiled);
 
     // Parses a source URL from a Podfile.
     private static Regex PODFILE_SOURCE_REGEX = new Regex(@"^\s*source\s+'([^']*)'");
@@ -876,11 +897,11 @@ public class IOSResolver : AssetPostprocessor {
     /// Each source is a URL that is injected in the source section of a Podfile
     /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
     /// a source.</param>
-    public static void AddPod(string podName, string version = null,
+    public static void AddPod(string podName, string localPath = null, string version = null,
                               bool bitcodeEnabled = true,
                               string minTargetSdk = null,
                               IEnumerable<string> sources = null) {
-        AddPodInternal(podName, preformattedVersion: PodVersionExpressionFromVersionDep(version),
+        AddPodInternal(podName, localPath, preformattedVersion: PodVersionExpressionFromVersionDep(version),
                        bitcodeEnabled: bitcodeEnabled, minTargetSdk: minTargetSdk,
                        sources: sources);
     }
@@ -905,7 +926,9 @@ public class IOSResolver : AssetPostprocessor {
     /// <param name="overwriteExistingPod">Overwrite an existing pod.</param>
     /// <param name="createdBy">Tag of the object that added this pod.</param>
     /// <param name="fromXmlFile">Whether this was added via an XML dependency.</param>
-    private static void AddPodInternal(string podName, string preformattedVersion = null,
+    private static void AddPodInternal(string podName,
+                                       string localPath = null,
+                                       string preformattedVersion = null,
                                        bool bitcodeEnabled = true,
                                        string minTargetSdk = null,
                                        IEnumerable<string> sources = null,
@@ -920,7 +943,7 @@ public class IOSResolver : AssetPostprocessor {
                 level: LogLevel.Warning);
             return;
         }
-        var pod = new Pod(podName, preformattedVersion, bitcodeEnabled, minTargetSdk, sources);
+        var pod = new Pod(podName, localPath, preformattedVersion, bitcodeEnabled, minTargetSdk, sources);
         pod.createdBy = createdBy ?? pod.createdBy;
         pod.fromXmlFile = fromXmlFile;
         pods[podName] = pod;
@@ -1515,19 +1538,30 @@ public class IOSResolver : AssetPostprocessor {
 
                     // Add the version as is, if it was present in the original podfile.
                     if (matches.Count > 1) {
-                        string matchedName = matches[0].Groups[1].Captures[0].Value;
-                        string matchedVersion = matches[1].Groups[1].Captures[0].Value;
-                        Log(String.Format("Preserving Unity Pod: {0}\nat version: {1}", matchedName,
-                                          matchedVersion), verbose: true);
+                        if (matches[1].Groups.Count > 2) {
+                            string matchedName = matches[0].Groups[1].Captures[0].Value;
+                            string matchedPath = matches[1].Groups[2].Captures[0].Value;
+                            Log(String.Format("Preserving Unity Pod: {0}\nat path: {1}", matchedName,
+                                            matchedPath), verbose: true);
 
-                        AddPodInternal(matchedName, preformattedVersion: matchedVersion,
-                                       bitcodeEnabled: true, sources: sources,
-                                       overwriteExistingPod: false);
+                            AddPodInternal(matchedName, matchedPath, preformattedVersion: null,
+                                        bitcodeEnabled: true, sources: sources,
+                                        overwriteExistingPod: false);
+                        } else {
+                            string matchedName = matches[0].Groups[1].Captures[0].Value;
+                            string matchedVersion = matches[1].Groups[1].Captures[0].Value;
+                            Log(String.Format("Preserving Unity Pod: {0}\nat version: {1}", matchedName,
+                                            matchedVersion), verbose: true);
+
+                            AddPodInternal(matchedName, null, preformattedVersion: matchedVersion,
+                                        bitcodeEnabled: true, sources: sources,
+                                        overwriteExistingPod: false);
+                        }
                     } else {
                         string matchedName = matches[0].Groups[1].Captures[0].Value;
                         Log(String.Format("Preserving Unity Pod: {0}", matchedName), verbose: true);
 
-                        AddPodInternal(matchedName, sources: sources,
+                        AddPodInternal(matchedName, null, sources: sources,
                                        overwriteExistingPod: false);
                     }
                 }
