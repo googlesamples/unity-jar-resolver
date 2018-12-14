@@ -641,19 +641,34 @@ namespace GooglePlayServices
                 AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
                 ScheduleAutoResolve();
             }
-
-            // Register events to monitor build system changes for the Android Resolver and other
-            // plugins.
-            RunOnMainThread.OnUpdate += PollBundleId;
-            RunOnMainThread.OnUpdate += PollBuildSystem;
-            RunOnMainThread.OnUpdate += PollAndroidAbis;
-            RunOnMainThread.OnUpdate += PollAndroidSdkRoot;
+			
+			if (GooglePlayServices.SettingsDialog.EnableAutoResolution)
+				LinkAutoResolution();
         }
 
-        /// <summary>
-        /// Called from PlayServicesSupport to log a message.
-        /// </summary>
-        internal static void LogDelegate(string message, PlayServicesSupport.LogLevel level) {
+		public static void UnlinkAutoResolution() {
+			// Unregister events to monitor build system changes for the Android Resolver and other
+			// plugins.
+			RunOnMainThread.OnUpdate -= PollBundleId;
+			RunOnMainThread.OnUpdate -= PollBuildSystem;
+			RunOnMainThread.OnUpdate -= PollAndroidAbis;
+			RunOnMainThread.OnUpdate -= PollAndroidSdkRoot;
+		}
+
+		public static void LinkAutoResolution() {
+			// Register events to monitor build system changes for the Android Resolver and other
+			// plugins.
+			UnlinkAutoResolution();
+			RunOnMainThread.OnUpdate += PollBundleId;
+			RunOnMainThread.OnUpdate += PollBuildSystem;
+			RunOnMainThread.OnUpdate += PollAndroidAbis;
+			RunOnMainThread.OnUpdate += PollAndroidSdkRoot;
+		}
+
+		/// <summary>
+		/// Called from PlayServicesSupport to log a message.
+		/// </summary>
+		internal static void LogDelegate(string message, PlayServicesSupport.LogLevel level) {
             Google.LogLevel loggerLogLevel = Google.LogLevel.Info;
             switch (level) {
                 case PlayServicesSupport.LogLevel.Info:

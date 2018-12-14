@@ -117,9 +117,17 @@ namespace GooglePlayServices
         }
 
         internal static bool EnableAutoResolution {
-            set { projectSettings.SetBool(AutoResolveKey, value); }
-            get { return projectSettings.GetBool(AutoResolveKey, true); }
-        }
+			set
+			{
+				projectSettings.SetBool(AutoResolveKey, value);
+
+				if (value)
+					PlayServicesResolver.LinkAutoResolution();
+				else
+					PlayServicesResolver.UnlinkAutoResolution();
+			}
+			get { return projectSettings.GetBool(AutoResolveKey, true); }
+		}
 
         internal static bool UseGradleDaemon {
             private set { projectSettings.SetBool(UseGradleDaemonKey, value); }
