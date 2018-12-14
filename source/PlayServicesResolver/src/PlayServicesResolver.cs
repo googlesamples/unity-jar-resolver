@@ -630,6 +630,9 @@ namespace GooglePlayServices
                     "ProjectSettings",
                     logMessageWithLevel: LogDelegate);
             }
+            RunOnMainThread.OnUpdate -= PollBundleId;
+            RunOnMainThread.OnUpdate += PollBundleId;
+
             // Initialize settings and resolve if required.
             OnSettingsChanged();
 
@@ -642,9 +645,21 @@ namespace GooglePlayServices
                 ScheduleAutoResolve();
             }
 
-            // Register events to monitor build system changes for the Android Resolver and other
-            // plugins.
-            RunOnMainThread.OnUpdate += PollBundleId;
+            if (GooglePlayServices.SettingsDialog.EnableAutoResolution) LinkAutoResolution();
+        }
+
+       // Unregister events to monitor build system changes for the Android Resolver and other
+       // plugins.
+        public static void UnlinkAutoResolution() {
+            RunOnMainThread.OnUpdate -= PollBuildSystem;
+            RunOnMainThread.OnUpdate -= PollAndroidAbis;
+            RunOnMainThread.OnUpdate -= PollAndroidSdkRoot;
+        }
+
+        // Register events to monitor build system changes for the Android Resolver and other
+        // plugins.
+        public static void LinkAutoResolution() {
+            UnlinkAutoResolution();
             RunOnMainThread.OnUpdate += PollBuildSystem;
             RunOnMainThread.OnUpdate += PollAndroidAbis;
             RunOnMainThread.OnUpdate += PollAndroidSdkRoot;
