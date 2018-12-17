@@ -282,8 +282,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// </summary>
         /// <param name="filename">Name of the file to parse.</param>
         public FileMetadata(string filename) {
-            this.filename = filename;
-            filenameCanonical = filename;
+            this.filename = FileUtils.NormalizePathSeparators(filename);
+            filenameCanonical = this.filename;
 
             var filenameComponents = new FilenameComponents(filename);
             // Parse metadata from the filename.
@@ -314,10 +314,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
             // in the asset database.  So we convert the output of Path.Combine
             // here to use *nix style paths so that it's possible to perform
             // simple string comparisons to check for path equality.
-            filenameCanonical = Path.Combine(
+            filenameCanonical = FileUtils.NormalizePathSeparators(Path.Combine(
                 filenameComponents.directory,
                 filenameComponents.basenameNoExtension +
-                filenameComponents.extension).Replace('\\', '/');
+                filenameComponents.extension));
             UpdateAssetLabels();
         }
 
@@ -553,6 +553,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="newFilename">New name of the file.</param>
         /// <returns>true if successful, false otherwise.</returns>
         public bool RenameAsset(string newFilename) {
+            // If the source and target filenames are the same, there is nothing to do.
+            newFilename = FileUtils.NormalizePathSeparators(newFilename);
+            if (FileUtils.NormalizePathSeparators(filename) == newFilename) {
+                return true;
+            }
             var filenameComponents = new FilenameComponents(newFilename);
             Debug.Assert(filenameComponents.directory ==
                          Path.GetDirectoryName(filename));
@@ -1396,12 +1401,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public void RenameLibraries() {
             foreach (var library in Libraries) {
                 var filename = library.filename;
-                var newFilename = Path.Combine(Path.GetDirectoryName(filename),
-                                               LibraryPrefix + library.linuxLibraryBasename +
-                                               LIBRARY_EXTENSION);
-                if (filename != newFilename) {
-                    library.RenameAsset(newFilename);
-                }
+                var newFilename = FileUtils.NormalizePathSeparators(
+                    Path.Combine(Path.GetDirectoryName(filename),
+                                 LibraryPrefix + library.linuxLibraryBasename + LIBRARY_EXTENSION));
+                library.RenameAsset(newFilename);
             }
         }
 
