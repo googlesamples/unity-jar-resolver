@@ -1,3 +1,12 @@
+# Version 1.2.96 - Dec 17, 2018
+## Bug Fixes
+* Android Resolver: Fixed repacking of AARs to exclude .meta files.
+* Android Resolver: Only perform auto-resolution on the first scene while
+  building.
+* Android Resolver: Fixed parsing of version ranges that include whitespace.
+* iOS Resolver: Added support for local development pods.
+* Version Handler: Fixed Version Handler failing to rename some files.
+
 # Version 1.2.95 - Oct 23, 2018
 ## Bug Fixes:
 * Android Resolver: Fixed auto-resolution running in a loop in some scenarios.
