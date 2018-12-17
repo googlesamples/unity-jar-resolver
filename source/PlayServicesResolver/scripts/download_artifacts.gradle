@@ -293,7 +293,7 @@ public class VersionRange {
     // (1.2.3,]
     // [,4.5.6)
     def versionRangeMatch = (versionExpression =~
-                             /^([\[\(])([^,]*),([^\]\)]*)([\)\]])$/)
+                             /^([\[\(])([^,]*),\s*([^\]\)]*)([\)\]])$/)
     // Match absolute Maven / Ivy version expressions like [1.2.3].
     def absoluteVersionMatch = (versionExpression =~ /^\[([^\]]+)\]$/)
     // Match min value Maven version expressions (i.e which don't start with
@@ -306,19 +306,19 @@ public class VersionRange {
     String maxMatchedVersion = ""
     if (versionRangeMatch.matches()) {
       range.matchType = VersionExpressionMatchType.RANGE
-      minMatchedVersion = versionRangeMatch.group(2)
+      minMatchedVersion = versionRangeMatch.group(2).trim()
       if (minMatchedVersion) {
         minMatchedVersion =
           (new Version(minMatchedVersion)).minimumValue.version
       }
-      maxMatchedVersion = versionRangeMatch.group(3)
+      maxMatchedVersion = versionRangeMatch.group(3).trim()
       if (maxMatchedVersion) {
         maxMatchedVersion =
           (new Version(maxMatchedVersion)).maximumValue.version
       }
     } else if (absoluteVersionMatch.matches()) {
       range.matchType = VersionExpressionMatchType.ABSOLUTE
-      minMatchedVersion = absoluteVersionMatch.group(1)
+      minMatchedVersion = absoluteVersionMatch.group(1).trim()
       if (minMatchedVersion) {
         minMatchedVersion =
           (new Version(minMatchedVersion)).minimumValue.version
@@ -326,7 +326,7 @@ public class VersionRange {
       maxMatchedVersion = minMatchedVersion
     } else if (minVersionMatch.matches()) {
       range.matchType = VersionExpressionMatchType.MINIMUM
-      minMatchedVersion = minVersionMatch.group(1)
+      minMatchedVersion = minVersionMatch.group(1).trim()
     } else {
       range.matchType = VersionExpressionMatchType.NONE
     }
@@ -1846,6 +1846,8 @@ def testSortVersionStrings() {
 
 def testVersionRangeMaximumVersionOfRange() {
   [[VersionRange.fromExpression("[1.2.3,2.0.0]"), "2.0.0"],
+   [VersionRange.fromExpression("[ 1.2.3 , 2.0.0 ]"), "2.0.0"],
+   [VersionRange.fromExpression(" 1.2.3 "), "1.2.3"],
    [VersionRange.fromExpression("1.2.3+"), "1.2.2147483643"],
    [VersionRange.fromExpression("1.2.+"), "1.2.2147483647"],
    [VersionRange.fromExpression("+"), "2147483647"],
