@@ -827,17 +827,37 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Number of scenes processed by OnPostProcessScene() since this DLL was loaded into the
+        /// app domain.
+        /// This is present so that it's possible to easily log the number of times
+        /// OnPostProcessScene() is called when building for the selected target platform.
+        /// If this value ends up larger than the total number of scenes included in the build
+        /// then the behavior of PostProcessSceneAttribute has changed and should be investigated.
+        /// If this value continues to increase between each build for a target platform then
+        /// Unity's behavior has changed such that this module is no longer being reloaded in the
+        /// app domain so we can't rely upon this method of detecting the first scene in the build.
+        /// </summary>
+        private static int scenesProcessed = 0;
+
+        /// <summary>
         /// If auto-resolution is enabled, run resolution synchronously before building the
         /// application.
         /// </summary>
         [UnityEditor.Callbacks.PostProcessSceneAttribute(0)]
         private static void OnPostProcessScene() {
-            if (Resolver != null && Resolver.AutomaticResolutionEnabled()) {
-                Log("Starting auto-resolution before scene build...");
-                bool success = ResolveSync(false);
-                Log(String.Format("Android resolution {0}.", success ? "succeeded" : "failed"),
+            // If we're in the editor play mode, do nothing.
+            if (UnityEngine.Application.isPlaying) return;
+            // If the Android resolver isn't enabled or automatic resolution is disabled,
+            // do nothing.
+            if (Resolver == null || !Resolver.AutomaticResolutionEnabled()) return;
+            // If post-processing has already been executed since this module was loaded, don't
+            // do so again.
+            scenesProcessed++;
+            if (scenesProcessed > 1) return;
+            Log("Starting auto-resolution before scene build...", level: LogLevel.Verbose);
+            bool success = ResolveSync(false);
+            Log(String.Format("Android resolution {0}.", success ? "succeeded" : "failed"),
                     level: LogLevel.Verbose);
-            }
         }
 
         /// <summary>
