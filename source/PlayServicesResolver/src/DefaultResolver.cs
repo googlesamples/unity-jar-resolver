@@ -289,105 +289,126 @@ namespace GooglePlayServices
                                                    dir, aarFile, antProject),
                                      level: LogLevel.Verbose);
             abis = null;
-            string workingDir = Path.Combine(dir, Path.GetFileNameWithoutExtension(aarFile));
-            FileUtils.DeleteExistingFileOrDirectory(workingDir);
-            Directory.CreateDirectory(workingDir);
-            if (!PlayServicesResolver.ExtractZip(aarFile, null, workingDir)) return false;
-            PlayServicesResolver.ReplaceVariablesInAndroidManifest(
-                Path.Combine(workingDir, "AndroidManifest.xml"),
-                PlayServicesResolver.GetAndroidApplicationId(), new Dictionary<string, string>());
-
-            string nativeLibsDir = null;
-            if (antProject) {
-                // Create the libs directory to store the classes.jar and non-Java shared
-                // libraries.
-                string libDir = Path.Combine(workingDir, "libs");
-                nativeLibsDir = libDir;
-                Directory.CreateDirectory(libDir);
-
-                // Move the classes.jar file to libs.
-                string classesFile = Path.Combine(workingDir, "classes.jar");
-                string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
-                if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
-                if (File.Exists(classesFile)) {
-                    File.Move(classesFile, targetClassesFile);
-                } else {
-                    // Generate an empty classes.jar file.
-                    string temporaryDirectory = CreateTemporaryDirectory();
-                    if (temporaryDirectory == null) return false;
-                    if (!ArchiveAar(targetClassesFile, temporaryDirectory)) return false;
-                }
+            string aarDirName = Path.GetFileNameWithoutExtension(aarFile);
+            // Output directory for the contents of the AAR / JAR.
+            string outputDir = Path.Combine(dir, aarDirName);
+            string stagingDir = CreateTemporaryDirectory();
+            if (stagingDir == null) {
+                PlayServicesResolver.Log(String.Format(
+                        "Unable to create temporary directory to process AAR {0}", aarFile),
+                    level: LogLevel.Error);
+                return false;
             }
-
-            // Copy non-Java shared libraries (.so) files from the "jni" directory into the
-            // lib directory so that Unity's legacy (Ant-like) build system includes them in the
-            // built APK.
-            string jniLibDir = Path.Combine(workingDir, "jni");
-            nativeLibsDir = nativeLibsDir ?? jniLibDir;
-            if (Directory.Exists(jniLibDir)) {
-                var abisInArchive = AarDirectoryFindAbis(workingDir);
-                if (jniLibDir != nativeLibsDir) {
-                    FileUtils.CopyDirectory(jniLibDir, nativeLibsDir);
-                    FileUtils.DeleteExistingFileOrDirectory(jniLibDir);
-                }
-                if (abisInArchive != null) {
-                    // Remove shared libraries for all ABIs that are not required for the selected
-                    // ABIs.
-                    var activeAbisSet = AndroidAbis.Current.ToSet();
-                    var abisInArchiveSet = abisInArchive.ToSet();
-                    var abisInArchiveToRemoveSet = new HashSet<string>(abisInArchiveSet);
-                    abisInArchiveToRemoveSet.ExceptWith(activeAbisSet);
-
-                    Func<IEnumerable<string>, string> setToString = (setToConvert) => {
-                        return String.Join(", ", (new List<string>(setToConvert)).ToArray());
-                    };
-                    PlayServicesResolver.Log(
-                        String.Format(
-                            "Target ABIs [{0}], ABIs [{1}] in {2}, will remove [{3}] ABIs",
-                            setToString(activeAbisSet),
-                            setToString(abisInArchiveSet),
-                            aarFile,
-                            setToString(abisInArchiveToRemoveSet)),
-                        level: LogLevel.Verbose);
-
-                    foreach (var abiToRemove in abisInArchiveToRemoveSet) {
-                        abisInArchiveSet.Remove(abiToRemove);
-                        FileUtils.DeleteExistingFileOrDirectory(Path.Combine(nativeLibsDir,
-                                                                             abiToRemove));
-                    }
-                    abis = new AndroidAbis(abisInArchiveSet);
-                }
-            }
-
-            if (antProject) {
-                // Create the project.properties file which indicates to
-                // Unity that this directory is a plugin.
-                string projectProperties = Path.Combine(workingDir, "project.properties");
-                if (!File.Exists(projectProperties)) {
-                    File.WriteAllLines(projectProperties, new [] {
-                        "# Project target.",
-                        "target=android-9",
-                        "android.library=true"
-                    });
-                }
-                PlayServicesResolver.Log(String.Format("Replacing {0} with {1}",
-                                                       aarFile, workingDir),
-                                         level: LogLevel.Verbose);
-                // Clean up the aar file.
-                FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
-                // Add a tracking label to the exploded files.
-                PlayServicesResolver.LabelAssets(new [] { workingDir });
-            } else {
-                // Add a tracking label to the exploded files just in-case packaging fails.
-                PlayServicesResolver.LabelAssets(new [] { workingDir });
-                PlayServicesResolver.Log(String.Format("Repacking {0} from {1}",
-                                                       aarFile, workingDir),
-                                         level: LogLevel.Verbose);
-                // Create a new AAR file.
-                FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
-                if (!ArchiveAar(aarFile, workingDir)) return false;
-                // Clean up the exploded directory.
+            try {
+                string workingDir = Path.Combine(stagingDir, aarDirName);
                 FileUtils.DeleteExistingFileOrDirectory(workingDir);
+                Directory.CreateDirectory(workingDir);
+                if (!PlayServicesResolver.ExtractZip(aarFile, null, workingDir)) return false;
+                PlayServicesResolver.ReplaceVariablesInAndroidManifest(
+                    Path.Combine(workingDir, "AndroidManifest.xml"),
+                    PlayServicesResolver.GetAndroidApplicationId(),
+                    new Dictionary<string, string>());
+
+                string nativeLibsDir = null;
+                if (antProject) {
+                    // Create the libs directory to store the classes.jar and non-Java shared
+                    // libraries.
+                    string libDir = Path.Combine(workingDir, "libs");
+                    nativeLibsDir = libDir;
+                    Directory.CreateDirectory(libDir);
+
+                    // Move the classes.jar file to libs.
+                    string classesFile = Path.Combine(workingDir, "classes.jar");
+                    string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
+                    if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
+                    if (File.Exists(classesFile)) {
+                        File.Move(classesFile, targetClassesFile);
+                    } else {
+                        // Some libraries publish AARs that are poorly formatted (e.g missing
+                        // a classes.jar file).  Firebase's license AARs at certain versions are
+                        // examples of this.  When Unity's internal build system detects an Ant
+                        // project or AAR without a classes.jar, the build is aborted.  This
+                        // generates an empty classes.jar file to workaround the issue.
+                        string emptyClassesDir = Path.Combine(stagingDir, "empty_classes_jar");
+                        if (!ArchiveAar(targetClassesFile, emptyClassesDir)) return false;
+                    }
+                }
+
+                // Copy non-Java shared libraries (.so) files from the "jni" directory into the
+                // lib directory so that Unity's legacy (Ant-like) build system includes them in the
+                // built APK.
+                string jniLibDir = Path.Combine(workingDir, "jni");
+                nativeLibsDir = nativeLibsDir ?? jniLibDir;
+                if (Directory.Exists(jniLibDir)) {
+                    var abisInArchive = AarDirectoryFindAbis(workingDir);
+                    if (jniLibDir != nativeLibsDir) {
+                        FileUtils.CopyDirectory(jniLibDir, nativeLibsDir);
+                        FileUtils.DeleteExistingFileOrDirectory(jniLibDir);
+                    }
+                    if (abisInArchive != null) {
+                        // Remove shared libraries for all ABIs that are not required for the
+                        // selected ABIs.
+                        var activeAbisSet = AndroidAbis.Current.ToSet();
+                        var abisInArchiveSet = abisInArchive.ToSet();
+                        var abisInArchiveToRemoveSet = new HashSet<string>(abisInArchiveSet);
+                        abisInArchiveToRemoveSet.ExceptWith(activeAbisSet);
+
+                        Func<IEnumerable<string>, string> setToString = (setToConvert) => {
+                            return String.Join(", ", (new List<string>(setToConvert)).ToArray());
+                        };
+                        PlayServicesResolver.Log(
+                            String.Format(
+                                "Target ABIs [{0}], ABIs [{1}] in {2}, will remove [{3}] ABIs",
+                                setToString(activeAbisSet),
+                                setToString(abisInArchiveSet),
+                                aarFile,
+                                setToString(abisInArchiveToRemoveSet)),
+                            level: LogLevel.Verbose);
+
+                        foreach (var abiToRemove in abisInArchiveToRemoveSet) {
+                            abisInArchiveSet.Remove(abiToRemove);
+                            FileUtils.DeleteExistingFileOrDirectory(Path.Combine(nativeLibsDir,
+                                                                                 abiToRemove));
+                        }
+                        abis = new AndroidAbis(abisInArchiveSet);
+                    }
+                }
+
+                if (antProject) {
+                    // Create the project.properties file which indicates to Unity that this
+                    // directory is a plugin.
+                    string projectProperties = Path.Combine(workingDir, "project.properties");
+                    if (!File.Exists(projectProperties)) {
+                        File.WriteAllLines(projectProperties, new [] {
+                            "# Project target.",
+                            "target=android-9",
+                            "android.library=true"
+                        });
+                    }
+                    PlayServicesResolver.Log(String.Format("Replacing {0} with {1}",
+                                                           aarFile, outputDir),
+                                             level: LogLevel.Verbose);
+                    // Clean up the aar file.
+                    FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
+                    // Create the output directory.
+                    FileUtils.DeleteExistingFileOrDirectory(outputDir);
+                    Directory.Move(workingDir, outputDir);
+                    // Add a tracking label to the exploded files.
+                    PlayServicesResolver.LabelAssets(new [] { outputDir });
+                } else {
+                    // Add a tracking label to the exploded files just in-case packaging fails.
+                    PlayServicesResolver.Log(String.Format("Repacking {0} from {1}",
+                                                           aarFile, workingDir),
+                                             level: LogLevel.Verbose);
+                    // Create a new AAR file.
+                    FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
+                    if (!ArchiveAar(aarFile, workingDir)) return false;
+                    PlayServicesResolver.LabelAssets(new [] { aarFile });
+                }
+
+            } finally {
+                // Clean up the temporary directory.
+                FileUtils.DeleteExistingFileOrDirectory(stagingDir);
             }
             return true;
         }
@@ -424,4 +445,3 @@ namespace GooglePlayServices
         }
     }
 }
-
