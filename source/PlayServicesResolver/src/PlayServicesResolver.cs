@@ -268,15 +268,16 @@ namespace GooglePlayServices
             /// <summary>
             /// Poll the specified value for changes.
             /// </summary>
-            /// <param name="currentValue">Value being polled.</param>
+            /// <param name="getCurrentValue">Delegate that returns the value being polled.</param>
             /// <param name="changed">Delegate that is called if the value changes.</param>
-            public void Poll(T currentValue, Changed changed) {
+            public void Poll(Func<T> getCurrentValue, Changed changed) {
                 var currentTime = DateTime.Now;
                 if (currentTime.Subtract(previousCheckTime).TotalSeconds <
                     checkIntervalInSeconds) {
                     return;
                 }
                 previousCheckTime = currentTime;
+                T currentValue = getCurrentValue();
                 if (!currentValue.Equals(previousValue)) {
                     if (currentValue.Equals(previousPollValue)) {
                         if (currentTime.Subtract(previousPollTime).TotalSeconds >=
@@ -1118,7 +1119,7 @@ namespace GooglePlayServices
         /// If the user changes the bundle ID, perform resolution again.
         /// </summary>
         private static void PollBundleId() {
-            bundleIdPoller.Poll(GetAndroidApplicationId(), (previousValue, currentValue) => {
+            bundleIdPoller.Poll(() => GetAndroidApplicationId(), (previousValue, currentValue) => {
                     if (BundleIdChanged != null) {
                         BundleIdChanged(null, new BundleIdChangedEventArgs {
                                 PreviousBundleId = previousValue,
@@ -1141,7 +1142,7 @@ namespace GooglePlayServices
         /// </summary>
         private static void PollBuildSystem() {
             androidBuildSystemPoller.Poll(
-                AndroidBuildSystemSettings.Current,
+                () => AndroidBuildSystemSettings.Current,
                 (previousValue, currentValue) => {
                     if (AndroidBuildSystemChanged != null) {
                         AndroidBuildSystemChanged(null, new AndroidBuildSystemChangedArgs {
@@ -1158,7 +1159,7 @@ namespace GooglePlayServices
         /// Poll the Android ABIs for changes.
         /// </summary>
         private static void PollAndroidAbis() {
-            androidAbisPoller.Poll(AndroidAbis.Current, (previousValue, currentValue) => {
+            androidAbisPoller.Poll(() => AndroidAbis.Current, (previousValue, currentValue) => {
                     if (AndroidAbisChanged != null) {
                         AndroidAbisChanged(null, new AndroidAbisChangedArgs {
                                 PreviousAndroidAbis = previousValue.ToString(),
@@ -1181,7 +1182,7 @@ namespace GooglePlayServices
         /// Poll the Android SDK path for changes.
         /// </summary>
         private static void PollAndroidSdkRoot() {
-            androidSdkRootPoller.Poll(AndroidSdkRoot, (previousValue, currentValue) => {
+            androidSdkRootPoller.Poll(() => AndroidSdkRoot, (previousValue, currentValue) => {
                     if (AndroidSdkRootChanged != null) {
                         AndroidSdkRootChanged(null, new AndroidSdkRootChangedArgs {
                                 PreviousAndroidSdkRoot = previousValue,
