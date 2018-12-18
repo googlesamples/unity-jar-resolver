@@ -45,6 +45,13 @@ public class VersionHandler {
     // File which contains the set of methods to call when an update operation is complete.
     const string CALLBACKS_PATH = "Temp/VersionHandlerCallbacks";
 
+    // Enumerating over loaded assemblies and retrieving each name is pretty expensive (allocates
+    // ~2Kb per call multiplied by number of assemblies (i.e > 50)).  This leads to memory being
+    // allocated that needs to be garbage collected which can reduce performance of the editor.
+    // This caches any found types for each combined assembly name + class name.  Once a class
+    // is found this dictionary retains a reference to the type.
+    private static Dictionary<string, Type> typeCache = new Dictionary<string, Type>();
+
     // Get the VersionHandler implementation class.
     private static Type Impl {
         get { return FindClass(VERSION_HANDLER_ASSEMBLY_NAME, VERSION_HANDLER_IMPL_CLASS); }
@@ -410,21 +417,35 @@ public class VersionHandler {
     /// <param name="className">Name of the class to find.</param>
     /// <returns>The Type of the class if found, null otherwise.</returns>
     public static Type FindClass(string assemblyName, string className) {
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
-            if (!String.IsNullOrEmpty(assemblyName)) {
-                if (assembly.GetName().Name == assemblyName) {
-                    return Type.GetType(className + ", " + assembly.FullName);
-                }
-            } else {
-                // Search for the first instance of a class matching this name in all assemblies.
-                foreach (var type in assembly.GetTypes()) {
-                    if (type.FullName == className) {
-                        return type;
+        Type type;
+        bool hasAssemblyName = !String.IsNullOrEmpty(assemblyName);
+        string fullName = hasAssemblyName ? className + ", " + assemblyName : className;
+        if (typeCache.TryGetValue(fullName, out type)) {
+            return type;
+        }
+        type = Type.GetType(fullName);
+        if (type == null) {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+                if (hasAssemblyName) {
+                    if (assembly.GetName().Name == assemblyName) {
+                        type = Type.GetType(className + ", " + assembly.FullName);
+                        break;
                     }
+                } else {
+                    // Search for the first instance of a class matching this name in all
+                    // assemblies.
+                    foreach (var currentType in assembly.GetTypes()) {
+                        if (type.FullName == className) {
+                            type = currentType;
+                        }
+                    }
+                    if (type != null) break;
                 }
             }
+
         }
-        return null;
+        if (type != null) typeCache[fullName] = type;
+        return type;
     }
 
     /// <summary>
