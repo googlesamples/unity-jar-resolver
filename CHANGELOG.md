@@ -1,3 +1,9 @@
+# Version 1.2.97 - Dec 17, 2018
+## Bug Fixes
+* Android Resolver: Reduced memory allocation for logic that monitors build
+  settings when auto-resolution is enabled.  If auto-resolution is disabled,
+  almost all build settings are no longer polled for changes.
+
 # Version 1.2.96 - Dec 17, 2018
 ## Bug Fixes
 * Android Resolver: Fixed repacking of AARs to exclude .meta files.
