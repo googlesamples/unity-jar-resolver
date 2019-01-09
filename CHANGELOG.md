@@ -1,3 +1,12 @@
+# Version 1.2.98 - Jan 9, 2019
+## New Features
+* iOS Resolver: Pod declaration properties can now be set via XML pod
+  references.  For example, this can enable pods for a subset of build
+  configurations.
+## Bug Fixes
+* iOS Resolver: Fixed incremental builds after local pods support caused
+  regression in 1.2.96.
+
 # Version 1.2.97 - Dec 17, 2018
 ## Bug Fixes
 * Android Resolver: Reduced memory allocation for logic that monitors build
