@@ -22,6 +22,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -44,16 +45,18 @@ public class IOSResolver : AssetPostprocessor {
         public string name = null;
 
         /// <summary>
-        /// Path to pod on local file system relative to project directory (for development pods)
-        /// </summary>
-        public string path = null;
-
-        /// <summary>
         /// This is a preformatted version expression for pod declarations.
         ///
         /// See: https://guides.cocoapods.org/syntax/podfile.html#pod
         /// </summary>
         public string version = null;
+
+        /// <summary>
+        /// Properties applied to the pod declaration.
+        ///
+        /// See:
+        /// </summary>
+        public Dictionary<string, string> propertiesByName = new Dictionary<string, string>();
 
         /// <summary>
         /// Whether this pod has been compiled with bitcode enabled.
@@ -94,27 +97,53 @@ public class IOSResolver : AssetPostprocessor {
         public bool fromXmlFile = false;
 
         /// <summary>
-        /// Returns the absolute path to the local pod
+        /// Convert a dictionary of property key / value pairs to a string that can be appended
+        /// to a Podfile pod declaration.
         /// </summary>
-        /// <value></value>
-        public string absPath {
+        public static string PropertyDictionaryToString(
+                Dictionary<string, string> propertiesByName) {
+            if (propertiesByName == null) return "";
+            var propertyNamesAndValues = new List<string>();
+            foreach (var propertyItem in propertiesByName) {
+                propertyNamesAndValues.Add(String.Format(":{0} => {1}", propertyItem.Key,
+                                           propertyItem.Value));
+            }
+            return String.Join(", ", propertyNamesAndValues.ToArray());
+        }
+
+        /// <summary>
+        /// Get the path of a pod without quotes.  If the path isn't present, returns an empty
+        /// string.
+        /// </summary>
+        public string LocalPath {
             get {
-                return Path.GetFullPath(path);
+                string path;
+                if (!propertiesByName.TryGetValue("path", out path)) return "";
+                if (path.StartsWith("'") && path.EndsWith("'")) {
+                    path = path.Substring(1, path.Length - 2);
+                }
+                return path;
             }
         }
+
 
         /// <summary>
         /// Format a "pod" line for a Podfile.
         /// </summary>
         public string PodFilePodLine {
             get {
-                string versionOrPathString = "";
+                string podLine = String.Format("pod '{0}'", name);
+                if (!String.IsNullOrEmpty(version)) podLine += String.Format(", '{0}'", version);
+
+                var outputPropertiesByName = new Dictionary<string, string>(propertiesByName);
+                var path = LocalPath;
                 if (!String.IsNullOrEmpty(path)) {
-                    versionOrPathString = String.Format(", :path => '{0}'", absPath);
-                } else if (!String.IsNullOrEmpty(version)) {
-                    versionOrPathString = String.Format(", '{0}'", version);
+                    outputPropertiesByName["path"] = String.Format("'{0}'", Path.GetFullPath(path));
                 }
-                return String.Format("pod '{0}'{1}", name, versionOrPathString);
+                var propertiesString = PropertyDictionaryToString(outputPropertiesByName);
+                if (!String.IsNullOrEmpty(propertiesString)) podLine += ", " + propertiesString;
+
+                return podLine;
             }
         }
 
@@ -131,11 +160,15 @@ public class IOSResolver : AssetPostprocessor {
         /// Each source is a URL that is injected in the source section of a Podfile
         /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
         /// a source.</param>
-        public Pod(string name, string path, string version, bool bitcodeEnabled,
-                   string minTargetSdk, IEnumerable<string> sources) {
+        /// <param name="propertiesByName">Dictionary of additional properties for the pod
+        /// reference.</param>
+        public Pod(string name, string version, bool bitcodeEnabled, string minTargetSdk,
+                   IEnumerable<string> sources, Dictionary<string, string> propertiesByName) {
             this.name = name;
-            this.path = path;
             this.version = version;
+            if (propertiesByName != null) {
+                this.propertiesByName = new Dictionary<string, string>(propertiesByName);
+            }
             this.bitcodeEnabled = bitcodeEnabled;
             this.minTargetSdk = minTargetSdk;
             if (sources != null) {
@@ -157,6 +190,35 @@ public class IOSResolver : AssetPostprocessor {
                 sdkString = sdkString + ".0";
             }
             return IOSResolver.TargetSdkStringToVersion(sdkString);
+        }
+
+        /// <summary>
+        /// Compare with this object.
+        /// This only compares values that can be encoded into a pod line in a Podfile.
+        /// </summary>
+        /// <param name="obj">Object to compare with.</param>
+        /// <returns>true if both objects have the same contents, false otherwise.</returns>
+        public override bool Equals(System.Object obj) {
+            var pod = obj as Pod;
+            return pod != null &&
+                   name == pod.name &&
+                   version == pod.version &&
+                   propertiesByName.Count == pod.propertiesByName.Count &&
+                   propertiesByName.Keys.All(key =>
+                       pod.propertiesByName.ContainsKey(key) &&
+                       propertiesByName[key] == pod.propertiesByName[key]);
+        }
+
+        /// <summary>
+        /// Generate a hash of this object.
+        /// </summary>
+        /// <returns>Hash of this object.</returns>
+        public override int GetHashCode() {
+            int hash = 0;
+            if (name != null) hash ^= name.GetHashCode();
+            if (version != null) hash ^= version.GetHashCode();
+            foreach (var item in propertiesByName) hash ^= item.GetHashCode();
+            return hash;
         }
 
         /// <summary>
@@ -187,6 +249,20 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     private class IOSXmlDependencies : XmlDependencies {
+
+        // Properties to parse from a XML pod specification and store in the propert1iesByName
+        // dictionary of the Pod class. These are eventually expanded to the named arguments of the
+        // pod declaration in a Podfile.
+        // The value of each attribute with the exception of "path" is included as-is.
+        // "path" is converted to a full path on the local filesystem when the Podfile is generated.
+        private static string[] PODFILE_POD_PROPERTIES = new string[] {
+            "configurations",
+            "configuration",
+            "modular_headers",
+            "source",
+            "subspecs",
+            "path"
+        };
 
         public IOSXmlDependencies() {
             dependencyType = "iOS dependencies";
@@ -220,10 +296,10 @@ public class IOSResolver : AssetPostprocessor {
             var trueStrings = new HashSet<string> { "true", "1" };
             var falseStrings = new HashSet<string> { "false", "0" };
             string podName = null;
-            string localPath = null;
             string versionSpec = null;
             bool bitcodeEnabled = true;
             string minTargetSdk = null;
+            var propertiesByName = new Dictionary<string, string>();
             if (!XmlUtilities.ParseXmlTextFileElements(
                 filename, logger,
                 (reader, elementName, isStart, parentElementName, elementNameStack) => {
@@ -237,7 +313,13 @@ public class IOSResolver : AssetPostprocessor {
                                parentElementName == "iosPods") {
                         if (isStart) {
                             podName = reader.GetAttribute("name");
-                            localPath = reader.GetAttribute("path");
+                            propertiesByName = new Dictionary<string, string>();
+                            foreach (var propertyName in PODFILE_POD_PROPERTIES) {
+                                string propertyValue = reader.GetAttribute(propertyName);
+                                if (!String.IsNullOrEmpty(propertyValue)) {
+                                    propertiesByName[propertyName] = propertyValue;
+                                }
+                            }
                             versionSpec = reader.GetAttribute("version");
                             var bitcodeEnabledString =
                                 (reader.GetAttribute("bitcode") ?? "").ToLower();
@@ -253,14 +335,15 @@ public class IOSResolver : AssetPostprocessor {
                                 return false;
                             }
                         } else {
-                            AddPodInternal(podName, localPath, preformattedVersion: versionSpec,
+                            AddPodInternal(podName, preformattedVersion: versionSpec,
                                            bitcodeEnabled: bitcodeEnabled,
                                            minTargetSdk: minTargetSdk,
                                            sources: sources,
                                            overwriteExistingPod: false,
                                            createdBy: String.Format("{0}:{1}",
                                                                     filename, reader.LineNumber),
-                                           fromXmlFile: true);
+                                           fromXmlFile: true,
+                                           propertiesByName: propertiesByName);
                         }
                         return true;
                     } else if (elementName == "sources" &&
@@ -418,8 +501,33 @@ public class IOSResolver : AssetPostprocessor {
     // Mutex for access to commandLineDialog.
     private static System.Object commandLineDialogLock = new System.Object();
 
-    // Regex for parsing comma separated values, as used in the pod dependency specification.
-    private static Regex CSV_SPLIT_REGEX = new Regex(@"(?:^|,\s*|, :(.*) => )'([^']*)'", RegexOptions.Compiled);
+    // Regex that matches a "pod" specification line in a pod file.
+    // This matches the syntax...
+    // pod POD_NAME, OPTIONAL_VERSION, :PROPERTY0 => VALUE0 ... , :PROPERTYN => VALUE0
+    private static Regex PODFILE_POD_REGEX =
+        new Regex(
+            // Extract the Cocoapod name and store in the podname group.
+            @"^\s*pod\s+'(?<podname>[^']+)'\s*" +
+            // Extract the version field and store in the podversion group.
+            @"(,\s*'(?<podversion>[^']+)')?" +
+            // Match the end of the line or a list of property & value pairs.
+            // Property & value pairs are stored in propertyname / propertyvalue groups.
+            // Subsequent values are stored in the Captures property of each Group in the order
+            // they're matched.  For example...
+            // 1 => 2, 3 => 4
+            // associates Capture objects with values 1, 3 with group "propertyname" and
+            // Capture objects with values 2, 4 with group "propertyvalue".
+            @"(|" +
+                @"(,\s*:(?<propertyname>[^\s]+)\s*=>\s*(" +
+                    // Unquoted property values.
+                    @"(?<propertyvalue>[^\s,]+)\s*|" +
+                    // Quoted string of the form 'foo'.
+                    @"(?<propertyvalue>'[^']+')\s*|" +
+                    // List of the form [1, 2, 3].
+                    @"(?<propertyvalue>\[[^\]]+\])\s*" +
+                @"))+" +
+            @")" +
+            @"$");
 
     // Parses a source URL from a Podfile.
     private static Regex PODFILE_SOURCE_REGEX = new Regex(@"^\s*source\s+'([^']*)'");
@@ -897,11 +1005,12 @@ public class IOSResolver : AssetPostprocessor {
     /// Each source is a URL that is injected in the source section of a Podfile
     /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
     /// a source.</param>
-    public static void AddPod(string podName, string localPath = null, string version = null,
+    public static void AddPod(string podName, string version = null,
                               bool bitcodeEnabled = true,
                               string minTargetSdk = null,
                               IEnumerable<string> sources = null) {
-        AddPodInternal(podName, localPath, preformattedVersion: PodVersionExpressionFromVersionDep(version),
+        AddPodInternal(podName,
+                       preformattedVersion: PodVersionExpressionFromVersionDep(version),
                        bitcodeEnabled: bitcodeEnabled, minTargetSdk: minTargetSdk,
                        sources: sources);
     }
@@ -926,35 +1035,46 @@ public class IOSResolver : AssetPostprocessor {
     /// <param name="overwriteExistingPod">Overwrite an existing pod.</param>
     /// <param name="createdBy">Tag of the object that added this pod.</param>
     /// <param name="fromXmlFile">Whether this was added via an XML dependency.</param>
+    /// <param name="propertiesByName">Dictionary of additional properties for the pod
+    /// reference.</param>
     private static void AddPodInternal(string podName,
-                                       string localPath = null,
                                        string preformattedVersion = null,
                                        bool bitcodeEnabled = true,
                                        string minTargetSdk = null,
                                        IEnumerable<string> sources = null,
                                        bool overwriteExistingPod = true,
                                        string createdBy = null,
-                                       bool fromXmlFile = false) {
-        if (!overwriteExistingPod && pods.ContainsKey(podName)) {
-            Log(String.Format("Pod {0} already present, ignoring.\n" +
-                              "Original declaration {1}\n" +
-                              "Ignored declarion {2}\n", podName,
-                              pods[podName].createdBy, createdBy ?? "(unknown)"),
-                level: LogLevel.Warning);
-            return;
-        }
-        var pod = new Pod(podName, localPath, preformattedVersion, bitcodeEnabled, minTargetSdk, sources);
+                                       bool fromXmlFile = false,
+                                       Dictionary<string, string> propertiesByName = null) {
+        var pod = new Pod(podName, preformattedVersion, bitcodeEnabled, minTargetSdk,
+                          sources, propertiesByName);
         pod.createdBy = createdBy ?? pod.createdBy;
         pod.fromXmlFile = fromXmlFile;
-        pods[podName] = pod;
+
         Log(String.Format(
-            "AddPod - name: {0} version: {1} bitcode: {2} sdk: {3} sources: {4}\n" +
-            "createdBy: {5}\n\n",
+            "AddPod - name: {0} version: {1} bitcode: {2} sdk: {3} sources: {4}, " +
+            "properties: {5}\n" +
+            "createdBy: {6}\n\n",
             podName, preformattedVersion ?? "null", bitcodeEnabled.ToString(),
             minTargetSdk ?? "null",
             sources != null ? String.Join(", ", (new List<string>(sources)).ToArray()) : "(null)",
+            Pod.PropertyDictionaryToString(pod.propertiesByName),
             createdBy ?? pod.createdBy),
             verbose: true);
+
+        Pod existingPod = null;
+        if (!overwriteExistingPod && pods.TryGetValue(podName, out existingPod)) {
+            // Only warn if the existing pod differs to the newly added pod.
+            if (!pod.Equals(existingPod)) {
+                Log(String.Format("Pod {0} already present, ignoring.\n" +
+                                  "Original declaration {1}\n" +
+                                  "Ignored declarion {2}\n", podName,
+                                  pods[podName].createdBy, createdBy ?? "(unknown)"),
+                    level: LogLevel.Warning);
+            }
+            return;
+        }
+        pods[podName] = pod;
 
         UpdateTargetSdk(pod);
     }
@@ -1500,7 +1620,6 @@ public class IOSResolver : AssetPostprocessor {
         Log("Parse Unity deps from: " + unityPodfilePath, verbose: true);
 
         System.IO.StreamReader unityPodfile = new System.IO.StreamReader(unityPodfilePath);
-        const string POD_TAG = "pod ";
         string line;
 
         // We are only interested in capturing the dependencies "Pod depName, depVersion", inside
@@ -1532,39 +1651,25 @@ public class IOSResolver : AssetPostprocessor {
 
             if (capturingPodsDepth != 1) continue;
 
-            if (line.StartsWith(POD_TAG)) {
-                var matches = CSV_SPLIT_REGEX.Matches(line.Substring(POD_TAG.Length));
-                if (matches.Count > 0) {
-
-                    // Add the version as is, if it was present in the original podfile.
-                    if (matches.Count > 1) {
-                        if (matches[1].Groups.Count > 2) {
-                            string matchedName = matches[0].Groups[1].Captures[0].Value;
-                            string matchedPath = matches[1].Groups[2].Captures[0].Value;
-                            Log(String.Format("Preserving Unity Pod: {0}\nat path: {1}", matchedName,
-                                            matchedPath), verbose: true);
-
-                            AddPodInternal(matchedName, matchedPath, preformattedVersion: null,
-                                        bitcodeEnabled: true, sources: sources,
-                                        overwriteExistingPod: false);
-                        } else {
-                            string matchedName = matches[0].Groups[1].Captures[0].Value;
-                            string matchedVersion = matches[1].Groups[1].Captures[0].Value;
-                            Log(String.Format("Preserving Unity Pod: {0}\nat version: {1}", matchedName,
-                                            matchedVersion), verbose: true);
-
-                            AddPodInternal(matchedName, null, preformattedVersion: matchedVersion,
-                                        bitcodeEnabled: true, sources: sources,
-                                        overwriteExistingPod: false);
-                        }
-                    } else {
-                        string matchedName = matches[0].Groups[1].Captures[0].Value;
-                        Log(String.Format("Preserving Unity Pod: {0}", matchedName), verbose: true);
-
-                        AddPodInternal(matchedName, null, sources: sources,
-                                       overwriteExistingPod: false);
-                    }
+            // Parse "pod" lines from the default target in the file.
+            var podLineMatch = PODFILE_POD_REGEX.Match(line);
+            var podGroups = podLineMatch.Groups;
+            if (podGroups.Count > 1) {
+                var podName = podGroups["podname"].ToString();
+                var podVersion = podGroups["podversion"].ToString();
+                var propertyNameCaptures = podGroups["propertyname"].Captures;
+                var propertyValueCaptures = podGroups["propertyvalue"].Captures;
+                var numberOfProperties = propertyNameCaptures.Count;
+                var propertiesByName = new Dictionary<string, string>();
+                for (int i = 0; i < numberOfProperties; ++i) {
+                    propertiesByName[propertyNameCaptures[i].Value] =
+                        propertyValueCaptures[i].Value;
                 }
+                AddPodInternal(
+                    podName,
+                    preformattedVersion: String.IsNullOrEmpty(podVersion) ? null : podVersion,
+                    sources: sources, createdBy: unityPodfilePath, overwriteExistingPod: false,
+                    propertiesByName: propertiesByName);
             }
         }
         unityPodfile.Close();

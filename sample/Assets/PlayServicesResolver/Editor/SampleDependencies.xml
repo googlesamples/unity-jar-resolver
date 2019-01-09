@@ -41,14 +41,28 @@
            Name of the Cocoapod.
          * "path" (optional)
            Path to the local Cocoapod.
+           NOTE: This is expanded to a local path when the Podfile is generated.
+           For example, if a Unity project has the root path "/my/game" and the
+           pod the path is "foo/bar", this will be will be expanded to
+           "/my/game/foo/bar" when the Podfile is generated.
          * "version" (optional)
            Cocoapod version specification for the named pod.
            If this is not specified the latest version is used.
+           NOTE: This can't be used when "path" is set.
          * "bitcodeEnabled" (optional)
            Whether this Cocoapod requires bitcode to be enabled in Unity's
            generated Xcode project.  This is "true" by default.
          * "minTargetSdk" (optional)
-           The minimum iOS SDK required by this Cocoapod. -->
+           The minimum iOS SDK required by this Cocoapod.
+         * "configurations" (optional)
+           Podfile formatted list of configurations to include this pod in.
+         * "modular_headers" (optional)
+           Set to true to enable modular headers, false to disable.
+         * "source" (optional)
+           Source repo to fetch the pod from.
+         * "subspecs" (optional)
+           Subspecs to include for the pod.
+     -->
     <iosPod name="Google-Mobile-Ads-SDK" path="../google-mobile-ads-sdk" version="~> 7.0" bitcodeEnabled="true"
             minTargetSdk="6.0">
       <!-- Set of source URIs to search for this Cocoapod spec.
