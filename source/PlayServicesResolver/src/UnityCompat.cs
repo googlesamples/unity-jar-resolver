@@ -25,7 +25,7 @@ using UnityEngine;
 namespace GooglePlayServices {
 // TODO(butterfield): Move to a new assembly, for common use between plugins.
 
-// Provides an API for accessing Unity APIs that work accross various verisons of Unity.
+// Provides an API for accessing Unity APIs that work across various verisons of Unity.
 public class UnityCompat {
     private const string Namespace = "GooglePlayServices.";
     private const string ANDROID_MIN_SDK_FALLBACK_KEY = Namespace + "MinSDKVersionFallback";
@@ -107,7 +107,7 @@ public class UnityCompat {
     /// from internal Unity APIs. This enum isn't guaranteed to return a value; it may return auto
     /// which means the implementation will have to decide what version to use.
     /// </remarks>
-    /// <returns>The sdk value (ie. 24 for Android 7.0 Nouget). -1 means auto select.</returns>
+    /// <returns>The sdk value (ie. 24 for Android 7.0 Nougat). -1 means auto select.</returns>
     public static int GetAndroidTargetSDKVersion() {
         var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetSdkVersion");
         return property == null ? -1 :
@@ -227,7 +227,7 @@ public class UnityCompat {
     [Obsolete]
     public static string GetAndroidBuildToolsVersion() {
         // TODO: We're using reflection to access Unity's SDK helpers to get at this info
-        // but since this is likely fragile, and may not even be consistent accross versions
+        // but since this is likely fragile, and may not even be consistent across versions
         // of Unity, we'll need to replace it with our own.
         MethodInfo buildToolsVersionMethod = null;
         Type sdkClass = AndroidSDKToolsClass;

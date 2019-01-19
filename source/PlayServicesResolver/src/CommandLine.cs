@@ -655,7 +655,7 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Format a command excecution error message.
+        /// Format a command execution error message.
         /// </summary>
         /// <param name="toolPath">Tool executed.</param>
         /// <param name="arguments">Arguments used to execute the tool.</param>

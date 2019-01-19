@@ -253,7 +253,7 @@ namespace Google.JarResolver
         /// LATEST means the only the latest version.
         /// </para>
         /// </remarks>
-        /// <param name="group">Group - the Group Id of the artiface</param>
+        /// <param name="group">Group - the Group Id of the artifact</param>
         /// <param name="artifact">Artifact - Artifact Id</param>
         /// <param name="version">Version - the version constraint</param>
         /// <param name="packageIds">Optional list of Android SDK package identifiers.</param>

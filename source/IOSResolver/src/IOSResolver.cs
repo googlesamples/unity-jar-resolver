@@ -648,7 +648,7 @@ public class IOSResolver : AssetPostprocessor {
         RemapXcodeExtension();
         // NOTE: It's not possible to catch exceptions a missing reference
         // to the UnityEditor.iOS.Xcode assembly in this method as the runtime
-        // will attempt to load the assemebly before the method is executed so
+        // will attempt to load the assembly before the method is executed so
         // we handle exceptions here.
         try {
             InitializeTargetName();
@@ -1068,7 +1068,7 @@ public class IOSResolver : AssetPostprocessor {
             if (!pod.Equals(existingPod)) {
                 Log(String.Format("Pod {0} already present, ignoring.\n" +
                                   "Original declaration {1}\n" +
-                                  "Ignored declarion {2}\n", podName,
+                                  "Ignored declaration {2}\n", podName,
                                   pods[podName].createdBy, createdBy ?? "(unknown)"),
                     level: LogLevel.Warning);
             }
@@ -1146,7 +1146,7 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     /// <returns>Key value pair of minimum SDK version (key) and
     /// a list of pod names that require it (value) if the currently
-    /// selected target SDK version does not satify pod requirements, the list
+    /// selected target SDK version does not satisfy pod requirements, the list
     /// (value) is null otherwise.</returns>
     private static KeyValuePair<int, List<string>> TargetSdkNeedsUpdate() {
         var kvpair = new KeyValuePair<int, List<string>>(0, null);
@@ -1839,7 +1839,7 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     private class CommandItem {
         /// <summary>
-        /// Command to excecute.
+        /// Command to execute.
         /// </summary>
         public string Command { get; set; }
         /// <summary>

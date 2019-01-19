@@ -639,7 +639,7 @@ public class TestResolveAsync {
     }
 
     /// <summary>
-    /// Extract a zip flie.
+    /// Extract a zip file.
     /// </summary>
     /// <param name="zipFile">File to extract.</param>
     /// <param name="failureMessages">List to add any failure messages to.</param>

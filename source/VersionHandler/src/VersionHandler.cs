@@ -57,7 +57,7 @@ public class VersionHandler {
         get { return FindClass(VERSION_HANDLER_ASSEMBLY_NAME, VERSION_HANDLER_IMPL_CLASS); }
     }
 
-    // Get the VersionHandler implmentation class, attempting to bootstrap the module first.
+    // Get the VersionHandler implementation class, attempting to bootstrap the module first.
     private static Type BootStrappedImpl {
         get {
             if (Impl == null) BootStrap();
@@ -401,7 +401,7 @@ public class VersionHandler {
         var type = BootStrappedImpl;
         if (type == null) {
             if (BootStrapping && schedule) {
-                // Try scheduling excecution until the implementation is loaded.
+                // Try scheduling execution until the implementation is loaded.
                 AddToBootStrappingFile(new List<string> { methodName });
             }
             return null;

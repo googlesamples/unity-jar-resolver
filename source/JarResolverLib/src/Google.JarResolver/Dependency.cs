@@ -23,7 +23,7 @@ namespace Google.JarResolver {
     /// Represents a dependency.  A dependency is defined by a groupId,
     /// artifactId and version constraint.  This information is used to search
     /// the repositories of artifacts to find a version that meets the version
-    /// contraints (as well as be compatible with other dependencies' constraints).
+    /// constraints (as well as be compatible with other dependencies' constraints).
     /// </summary>
     public class Dependency {
         // Extensions of files managed by the resolver.

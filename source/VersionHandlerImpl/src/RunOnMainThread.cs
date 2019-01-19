@@ -47,7 +47,7 @@ internal class RunOnMainThread {
         private static int nextJobId = 1;
 
         /// <summary>
-        /// Action to exeute.
+        /// Action to execute.
         /// </summary>
         private Action Job;
 
@@ -89,7 +89,7 @@ internal class RunOnMainThread {
         }
 
         /// <summary>
-        /// Cancel a schedued job.
+        /// Cancel a scheduled job.
         /// </summary>
         /// <param name="jobId">ID of previously scheduled job to cancel.</param>
         public static void Cancel(int jobId) {
@@ -311,7 +311,7 @@ internal class RunOnMainThread {
     /// Schedule a job for execution.
     /// </summary>
     /// <param name="job">Job to execute.</param>
-    /// <param name="delayInMilliseonds">Delay before executing the job in milliseconds.</param>
+    /// <param name="delayInMilliseconds">Delay before executing the job in milliseconds.</param>
     /// <returns>ID of scheduled job (always non-zero).</returns>
     public static int Schedule(Action job, double delayInMilliseconds) {
         return ScheduledJob.Schedule(job, delayInMilliseconds);

@@ -124,7 +124,7 @@ namespace Google.PackageManager {
         }
 
         /// <summary>
-        /// Generates the unique key basd on the current groupId, artifactId and version.
+        /// Generates the unique key based on the current groupId, artifactId and version.
         /// </summary>
         /// <returns>The unique key.</returns>
         public string GenerateUniqueKey() {
@@ -132,7 +132,7 @@ namespace Google.PackageManager {
                 throw new Exception(string.Format("Attempted to generate unique " +
                                                   "key on object {0} without setting " +
                                                   "object state. [groupId = {1}, artifactId = " +
-                                                  "{2}, verison = {3}]", this, ""+groupId,
+                                                  "{2}, version = {3}]", this, ""+groupId,
                                                   ""+artifactId, ""+version));
             }
             return string.Join(Constants.STRING_KEY_BINDER,
@@ -151,7 +151,7 @@ namespace Google.PackageManager {
     [XmlRoot("registry")]
     public class Registry : PackageManagerLabeledModel<Registry> {
         /// <summary>
-        /// When was this registry last updated in epoc time.
+        /// When was this registry last updated in epoch time.
         /// </summary>
         [XmlElement("lastUpdated")]
         public long lastUpdated;
@@ -174,7 +174,7 @@ namespace Google.PackageManager {
         /// 2) An absolute Uri to a location of a packaged plugin's package-manifest.xml
         ///
         /// Note: It is permitted to mix representations in a registry model. Meaning you can have
-        /// a mix of groupId representations and absolute Uri repesentations in the same registry.
+        /// a mix of groupId representations and absolute Uri representations in the same registry.
         /// </summary>
         [XmlElement("module")]
         public List<string> module = new List<string>();
@@ -264,7 +264,7 @@ namespace Google.PackageManager {
         public string name;
 
         /// <summary>
-        /// A short description of the plugin. Usually a single marketing sentance.
+        /// A short description of the plugin. Usually a single marketing sentence.
         /// </summary>
         [XmlElement("short")]
         public string shortDesc;

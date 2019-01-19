@@ -73,7 +73,7 @@ namespace Google.PackageManager {
         /// </summary>
         public const double FETCH_TIMOUT_THRESHOLD = 10.0d;
         /// <summary>
-        /// The gpm deps xml postfix used to check for pacakge deps.
+        /// The gpm deps xml postfix used to check for package deps.
         /// </summary>
         public const string GPM_DEPS_XML_POSTFIX = "gpm.dep.xml";
         /// <summary>

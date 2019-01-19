@@ -246,7 +246,7 @@ Manual resolution can be performed using the following menu options:
 Some AAR files (for example play-services-measurement) contain variables that
 are processed by the Android Gradle plugin.  Unfortunately, Unity does not
 perform the same processing when using Unity's Internal Build System, so the
-Android Resolver plugin handles known cases of this variable substition
+Android Resolver plugin handles known cases of this variable substitution
 by exploding the AAR into a folder and replacing `${applicationId}` with the
 `bundleID`.
 

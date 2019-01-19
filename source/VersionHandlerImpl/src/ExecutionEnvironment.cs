@@ -21,7 +21,7 @@ using UnityEngine;
 namespace Google {
 
 /// <summary>
-/// Class that describes Unity's excecution state.
+/// Class that describes Unity's execution state.
 /// </summary>
 internal class ExecutionEnvironment {
 
