@@ -1,3 +1,9 @@
+# Version 1.2.99 - Jan 23, 2019
+## Bug Fixes
+* Android Resolver: Improved performance of project property polling.
+* Version Handler: Fixed callback of VersionHandler.UpdateCompleteMethods
+  when the update process is complete.
+
 # Version 1.2.98 - Jan 9, 2019
 ## New Features
 * iOS Resolver: Pod declaration properties can now be set via XML pod
