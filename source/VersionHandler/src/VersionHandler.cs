@@ -438,7 +438,7 @@ public class VersionHandler {
                     // Search for the first instance of a class matching this name in all
                     // assemblies.
                     foreach (var currentType in assembly.GetTypes()) {
-                        if (type.FullName == className) {
+                        if (currentType.FullName == className) {
                             type = currentType;
                         }
                     }
