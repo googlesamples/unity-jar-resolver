@@ -383,12 +383,15 @@ public class VersionHandler {
                          schedule: true);
     }
 
+    private static float unityVersionMajorMinor = -1.0f;
     // Returns the major/minor version of the unity environment we are running in
     // as a float so it can be compared numerically.
     public static float GetUnityVersionMajorMinor() {
+        if (unityVersionMajorMinor > 0.0f) return unityVersionMajorMinor;
         try {
             var version = InvokeImplMethod("GetUnityVersionMajorMinor");
-            return (float)version;
+            unityVersionMajorMinor = (float)version;
+            return unityVersionMajorMinor;
         } catch (Exception) {
             return 0.0f;
         }

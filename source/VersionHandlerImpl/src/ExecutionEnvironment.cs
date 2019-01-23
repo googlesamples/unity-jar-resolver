@@ -37,6 +37,9 @@ internal class ExecutionEnvironment {
     /// </summary>
     private const float DEFAULT_UNITY_VERSION_MAJOR_MINOR = 5.4f;
 
+    // Cached Unity version.
+    private static float unityVersionMajorMinor = -1.0f;
+
     /// <summary>
     /// Returns the major/minor version of the unity environment we are running in
     /// as a float so it can be compared numerically.
@@ -44,6 +47,7 @@ internal class ExecutionEnvironment {
     /// </summary>
     public static float VersionMajorMinor {
         get {
+            if (unityVersionMajorMinor >= 0.0f) return unityVersionMajorMinor;
             float result = DEFAULT_UNITY_VERSION_MAJOR_MINOR;
             string version = Application.unityVersion;
             if (!string.IsNullOrEmpty(version)) {
@@ -55,6 +59,7 @@ internal class ExecutionEnvironment {
                     }
                 }
             }
+            unityVersionMajorMinor = result;
             return result;
         }
     }
