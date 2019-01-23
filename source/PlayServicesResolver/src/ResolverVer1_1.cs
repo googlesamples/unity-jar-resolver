@@ -51,7 +51,7 @@ namespace GooglePlayServices
             public string targetAbis = ABI_UNIVERSAL;
             // Whether gradle is selected as the build system.
             public bool gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
-            // Whether gradle export is enabeld.
+            // Whether gradle export is enabled.
             public bool gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
             // AAR version that should be ignored when attempting to overwrite an existing
             // dependency.  This is reset when the dependency is updated to a version different
@@ -396,7 +396,7 @@ namespace GooglePlayServices
         /// Version of the resolver. - 1.1.0
         /// </summary>
         /// <remarks>The resolver with the greatest version is used when resolving.
-        /// The value of the verison is calcuated using MakeVersion in DefaultResolver</remarks>
+        /// The value of the version is calculated using MakeVersion in DefaultResolver</remarks>
         /// <seealso cref="DefaultResolver.MakeVersionNumber"></seealso>
         public override int Version()
         {

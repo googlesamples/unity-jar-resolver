@@ -65,7 +65,7 @@ namespace Google.JarResolver
 			/// LATEST means the only the latest version.
 			/// </para>
 			/// </remarks>
-			/// <param name="group">Group - the Group Id of the artiface</param>
+			/// <param name="group">Group - the Group Id of the artifact</param>
 			/// <param name="artifact">Artifact - Artifact Id</param>
 			/// <param name="version">Version - the version constraint</param>
 			/// <param name="packageIds">Optional list of Android SDK package identifiers.</param>
@@ -101,11 +101,11 @@ namespace Google.JarResolver
 		/// class should be loaded from.</param>
 		public static ResolverImpl CreateSupportInstance(string clientName, string assemblyName = "Google.JarResolver")
 		{
-			// if we arent on Android default to an empty shim
+			// if we aren't on Android default to an empty shim
 			if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
 				return new ResolverImpl(null);
 
-			// bail out with an empty instance if the PlayServicesSupport class isnt available
+			// bail out with an empty instance if the PlayServicesSupport class isn't available
 			var playServicesSupport = Google.VersionHandler.FindClass(assemblyName, "Google.JarResolver.PlayServicesSupport");
 			if (playServicesSupport == null)
 				return new ResolverImpl(null);

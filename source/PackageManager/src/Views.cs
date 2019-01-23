@@ -62,7 +62,7 @@ namespace Google.PackageManager {
                         EditorUtility.DisplayDialog("Registry Location Not Valid",
                                                     string.Format(
                                                         "The registry cannot be added. An " +
-                                                        "error has occured using the provided " +
+                                                        "error has occurred using the provided " +
                                                         "location.\n\n{0}", rc),
                                                     "Ok");
                     }

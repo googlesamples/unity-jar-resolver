@@ -182,7 +182,7 @@ namespace GooglePlayServices
 
         internal static string ValidatePackageDir(string directory) {
             // Make sure the package directory starts with the same name.
-            // This is case insentitive to handle cases where developers rename Unity
+            // This is case insensitive to handle cases where developers rename Unity
             // project directories on Windows (which has a case insensitive file system by
             // default) then they use the project on OSX / Linux.
             if (!directory.ToLowerInvariant().StartsWith(AndroidPluginsDir.ToLower())) {

@@ -192,7 +192,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
 
         // Returns a hashset containing blacklisted build targets for the current
         // unity environment.
-        // We need to maintain a seperate blacklist as Unity occasionally
+        // We need to maintain a separate blacklist as Unity occasionally
         // removes BuildTarget display names but does not remove the enumeration
         // values associated with the names.  This causes a fatal error in
         // PluginImporter.GetCompatibleWithPlatform() when provided with a
@@ -329,7 +329,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="prefixes">Set of prefixes to compare with the token.</param>
         /// <param name="prefix">Added to each item in prefixes before comparing with the token.
         /// </param>
-        /// <returns>Array of values if the token matches the prefxies, null otherwise.</returns>
+        /// <returns>Array of values if the token matches the prefixes, null otherwise.</returns>
         private string[] MatchPrefixesGetValues(string token, string[] prefixes, string prefix) {
             var tokenLower = token.ToLower();
             foreach (var item in prefixes) {
@@ -1265,7 +1265,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public HashSet<string> unreferenced;
 
         /// <summary>
-        /// Same as the "unreferenced" member exluding manifest files.
+        /// Same as the "unreferenced" member excluding manifest files.
         /// </summary>
         public HashSet<string> unreferencedExcludingManifests;
 
@@ -1276,7 +1276,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public Dictionary<string, List<string>> referenced;
 
         /// <summary>
-        /// Same as the "referenced" member exluding manifest files.
+        /// Same as the "referenced" member excluding manifest files.
         /// </summary>
         public Dictionary<string, List<string>> referencedExcludingManifests;
 

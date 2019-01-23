@@ -180,7 +180,7 @@ namespace Google.PackageManager.Tests {
     }
 
     /// <summary>
-    /// Test case set that excercises the PackageManagerController.
+    /// Test case set that exercises the PackageManagerController.
     /// </summary>
     [TestFixture]
     public class ControllerTests {

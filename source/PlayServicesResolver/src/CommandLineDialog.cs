@@ -75,7 +75,7 @@ namespace GooglePlayServices
 
             /// <summary>
             /// Called from RunCommandLine() tool to report the output of the currently
-            /// executing commmand.
+            /// executing command.
             /// </summary>
             /// <param name="process">Executing process.</param>
             /// <param name="stdin">Standard input stream.</param>

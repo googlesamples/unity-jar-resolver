@@ -238,7 +238,7 @@
 
 # Version 1.2.66 - April 27, 2018
 ## Bug Fixes
-* Fixed Version Handler renaming of Linux libraries with hypens in filenames.
+* Fixed Version Handler renaming of Linux libraries with hyphens in filenames.
   Previously, libraries named Foo-1.2.3.so were not being renamed to
   libFoo-1.2.3.so on Linux which could break native library loading on some
   versions of Unity.
@@ -298,7 +298,7 @@
 # Version 1.2.57 - Oct 18, 2017
 ## Bug Fixes
 * Updated Gradle wrapper to 4.2.1 to fix issues using Gradle with the
-  latest openjdk.
+  latest Openjdk.
 * Android Gradle resolution now also uses gradle.properties to pass
   parameters to Gradle in an attempt to workaround problems with
   command line argument parsing on Windows 10.
@@ -329,7 +329,7 @@
 ## Bug Fixes
 * Improved Android Resolver auto-resolution speed.
 * Fixed bug in the Gradle Android Resolver which would result in resolution
-  succeding when some dependencies are not found.
+  succeeding when some dependencies are not found.
 
 # Version 1.2.52 - Sep 25, 2017
 ## New Features
@@ -363,7 +363,7 @@
 ## Bug Fixes
 * Removed modulemap parsing in iOS Resolver.
   The framework *.modulemap did not need to be parsed by the iOS Resolver
-  when injecting Cocaopods into a Xcode project.  Simply adding a modular
+  when injecting Cocoapods into a Xcode project.  Simply adding a modular
   framework to a Xcode project results in Xcode's Clang parsing the associated
   modulemap and injecting any compile and link flags into the build process.
 
@@ -493,7 +493,7 @@
 ## New Features
 * Added support for build target selection based upon .NET framework
   version in the VersionHandler.
-  When appling either gvh\_dotnet-3.5 or gvh\_dotnet-4.5 labels to
+  When applying either gvh\_dotnet-3.5 or gvh\_dotnet-4.5 labels to
   assets, the VersionHandler will only enable the asset for the
   specified set of build targets when the matching .NET framework version
   is selected in Unity 2017's project settings.  This allows assets
@@ -680,7 +680,7 @@
 
 # Version 1.2.3 - Oct 25, 2016
 ## Bug Fixes
-* Fixed exception when reporting conflicting depedencies.
+* Fixed exception when reporting conflicting dependencies.
 
 # Version 1.2.2 - Oct 17, 2016
 ## Bug Fixes

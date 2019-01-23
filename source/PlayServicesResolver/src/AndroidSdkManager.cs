@@ -75,7 +75,7 @@ namespace GooglePlayServices {
                 if (match.Success) {
                     var prefix = packageName.Substring(0, match.Index);
                     var postfix = packageName.Substring(match.Index + match.Length);
-                    // Exclaimation marks are guaranteed - at the moment - to not be
+                    // Exclamation marks are guaranteed - at the moment - to not be
                     // part of a package name / path.
                     packageName = prefix + match.Value.Replace("-", "!") + postfix;
                 }

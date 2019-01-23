@@ -26,7 +26,7 @@ namespace GooglePlayServices
         /// </summary>
         /// <remarks>
         /// The resolver with the greatest version is used when resolving.
-        /// The value of the verison is calcuated using MakeVersion in DefaultResolver
+        /// The value of the version is calculated using MakeVersion in DefaultResolver
         /// </remarks>
         /// <seealso cref="DefaultResolver.MakeVersionNumber"/>
         int Version();

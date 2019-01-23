@@ -205,7 +205,7 @@ namespace Google.PackageManager {
             }
         }
         /// <summary>
-        /// Verbose logging propery flag.
+        /// Verbose logging property flag.
         /// </summary>
         public static bool VerboseLogging {
             get {
@@ -276,7 +276,7 @@ namespace Google.PackageManager {
         /// </summary>
         PLUGIN_INSTALLED,
         /// <summary>
-        /// Plugin resolution (getting its data from source) succeded
+        /// Plugin resolution (getting its data from source) succeeded
         /// </summary>
         PLUGIN_RESOLVED,
         /// <summary>
@@ -333,7 +333,7 @@ namespace Google.PackageManager {
         /// <param name="result">Result string.</param>
         ResponseCode BlockingFetchAsString(Uri uri, out string result);
         /// <summary>
-        /// Thead blocking fetch for a byte[] result.
+        /// Thread blocking fetch for a byte[] result.
         /// </summary>
         /// <returns>The fetch as bytes.</returns>
         /// <param name="uri">URI.</param>
@@ -417,7 +417,7 @@ namespace Google.PackageManager {
     }
 
     /// <summary>
-    /// Some constants are inconvenent for testing purposes. This class wraps the constants that
+    /// Some constants are inconvenient for testing purposes. This class wraps the constants that
     /// may be changed during test execution.
     /// </summary>
     public static class TestableConstants {
@@ -554,7 +554,7 @@ namespace Google.PackageManager {
         }
 
         /// <summary>
-        /// Refreshs the registry cache for the provided RegistryWrapper.
+        /// Refreshes the registry cache for the provided RegistryWrapper.
         /// </summary>
         /// <param name="wrapper">Wrapper.</param>
         public static void RefreshRegistryCache(RegistryWrapper wrapper = null) {
@@ -721,7 +721,7 @@ namespace Google.PackageManager {
     /// </summary>
     public static class PluginManagerController {
         /// <summary>
-        /// The plugin cache assiciates RegistryWrapper keys to lists of PackagedPlugins that are
+        /// The plugin cache associates RegistryWrapper keys to lists of PackagedPlugins that are
         /// part of the set of plugins defined by the Registry.
         /// </summary>
         static Dictionary<RegistryWrapper, List<PackagedPlugin>> pluginCache =
@@ -775,7 +775,7 @@ namespace Google.PackageManager {
 
         /// <summary>
         /// Gets the list of all plugins across all registered registries. If
-        /// refresh is true then the plugin data returned is gaurenteed to be
+        /// refresh is true then the plugin data returned is guaranteed to be
         /// up to date since each plugin source data is fetched prior to this
         /// method returning.
         /// </summary>
@@ -1138,7 +1138,7 @@ namespace Google.PackageManager {
             }
 
             if (projectDirty) {
-                // check project for re-resolve on target if ditry
+                // check project for re-resolve on target if dirty
                 RefreshProject();
             }
         }
@@ -1190,7 +1190,7 @@ namespace Google.PackageManager {
         }
 
         /// <summary>
-        /// Refreshs the client, resolves it's dependencies if needed.
+        /// Refreshes the client, resolves it's dependencies if needed.
         /// </summary>
         /// <param name="client">Client.</param>
         static void RefreshClient(ProjectClient client) {
@@ -1485,7 +1485,7 @@ namespace Google.PackageManager {
         }
 
         /// <summary>
-        /// Refreshs the list of asset labels that are present in the current project.
+        /// Refreshes the list of asset labels that are present in the current project.
         /// This method does NOT modify the asset labels on assets, it just reads them all.
         /// </summary>
         public static void RefreshListOfAssetLabels() {

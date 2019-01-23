@@ -796,7 +796,7 @@ namespace GooglePlayServices
 
         /// <summary>
         /// Called by Unity when all assets have been updated. This
-        /// is used to kick off resolving the dependendencies declared.
+        /// is used to kick off resolving the dependencies declared.
         /// </summary>
         /// <param name="importedAssets">Imported assets. (unused)</param>
         /// <param name="deletedAssets">Deleted assets. (unused)</param>
@@ -970,7 +970,7 @@ namespace GooglePlayServices
         /// * com.my.app.service --> com.another.app.service
         /// * foo.com.my.app.service --> foo.com.my.app.service (unchanged)
         /// </param>
-        /// <param name="path">Path of this node in the hierachy of nodes. For example:
+        /// <param name="path">Path of this node in the hierarchy of nodes. For example:
         /// given node is "<c>" in "<a><b><c>" this should be "a/b/c".  If this
         /// value is null the name of the current node is used.</param>
         /// <returns>true if any replacements are applied, false otherwise.</returns>
