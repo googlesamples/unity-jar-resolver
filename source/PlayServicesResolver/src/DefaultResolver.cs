@@ -198,27 +198,6 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Create a temporary directory.
-        /// </summary>
-        /// <returns>If temporary directory creation fails, return null.</returns>
-        public static string CreateTemporaryDirectory()
-        {
-            int retry = 100;
-            while (retry-- > 0)
-            {
-                string temporaryDirectory = Path.Combine(Path.GetTempPath(),
-                                                         Path.GetRandomFileName());
-                if (File.Exists(temporaryDirectory))
-                {
-                    continue;
-                }
-                Directory.CreateDirectory(temporaryDirectory);
-                return temporaryDirectory;
-            }
-            return null;
-        }
-
-        /// <summary>
         /// Create an AAR from the specified directory.
         /// </summary>
         /// <param name="aarFile">AAR file to create.</param>
@@ -292,7 +271,7 @@ namespace GooglePlayServices
             string aarDirName = Path.GetFileNameWithoutExtension(aarFile);
             // Output directory for the contents of the AAR / JAR.
             string outputDir = Path.Combine(dir, aarDirName);
-            string stagingDir = CreateTemporaryDirectory();
+            string stagingDir = FileUtils.CreateTemporaryDirectory();
             if (stagingDir == null) {
                 PlayServicesResolver.Log(String.Format(
                         "Unable to create temporary directory to process AAR {0}", aarFile),
@@ -322,7 +301,7 @@ namespace GooglePlayServices
                     string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
                     if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
                     if (File.Exists(classesFile)) {
-                        File.Move(classesFile, targetClassesFile);
+                        FileUtils.MoveFile(classesFile, targetClassesFile);
                     } else {
                         // Some libraries publish AARs that are poorly formatted (e.g missing
                         // a classes.jar file).  Firebase's license AARs at certain versions are
@@ -385,14 +364,13 @@ namespace GooglePlayServices
                             "android.library=true"
                         });
                     }
-                    PlayServicesResolver.Log(String.Format("Replacing {0} with {1}",
-                                                           aarFile, outputDir),
-                                             level: LogLevel.Verbose);
+                    PlayServicesResolver.Log(
+                        String.Format("Creating Ant project: Replacing {0} with {1}", aarFile,
+                                      outputDir), level: LogLevel.Verbose);
                     // Clean up the aar file.
                     FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
                     // Create the output directory.
-                    FileUtils.DeleteExistingFileOrDirectory(outputDir);
-                    Directory.Move(workingDir, outputDir);
+                    FileUtils.MoveDirectory(workingDir, outputDir);
                     // Add a tracking label to the exploded files.
                     PlayServicesResolver.LabelAssets(new [] { outputDir });
                 } else {
@@ -405,7 +383,10 @@ namespace GooglePlayServices
                     if (!ArchiveAar(aarFile, workingDir)) return false;
                     PlayServicesResolver.LabelAssets(new [] { aarFile });
                 }
-
+            } catch (Exception e) {
+                PlayServicesResolver.Log(String.Format("Failed to process AAR {0} ({1}",
+                                                       aarFile, e),
+                                         level: LogLevel.Error);
             } finally {
                 // Clean up the temporary directory.
                 FileUtils.DeleteExistingFileOrDirectory(stagingDir);

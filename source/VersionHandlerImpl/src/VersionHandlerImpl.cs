@@ -986,7 +986,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 // We need to store this in a file as this DLL can be reloaded while the
                 // editor is open resetting any state in memory.
                 string warningFile = Path.Combine(
-                    "Temp", "VersionHandlerEnableMostRecentPlugins.txt");
+                    FileUtils.ProjectTemporaryDirectory,
+                    "VersionHandlerEnableMostRecentPlugins.txt");
                 string warning =
                     "UnityEditor.PluginImporter is not supported in this version of Unity.\n\n" +
                     "Plugins managed by VersionHandler will not be enabled.\n" +

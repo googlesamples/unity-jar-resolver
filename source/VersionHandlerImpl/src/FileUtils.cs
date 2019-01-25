@@ -29,6 +29,26 @@ namespace Google {
         internal const string META_EXTENSION = ".meta";
 
         /// <summary>
+        /// Returns the project directory (e.g contains the Assets folder).
+        /// </summary>
+        /// <returns>Full path to the project directory.</returns>
+        public static string ProjectDirectory {
+            get {
+                return Directory.GetParent(
+                    Path.GetFullPath(
+                        UnityEngine.Application.dataPath)).FullName;
+            }
+        }
+
+        /// <summary>
+        /// Get the project's temporary directory.
+        /// </summary>
+        /// <returns>Full path to the project's temporary directory.</returns>
+        public static string ProjectTemporaryDirectory {
+            get { return Path.Combine(ProjectDirectory, "Temp"); }
+        }
+
+        /// <summary>
         /// Delete a file or directory if it exists.
         /// </summary>
         /// <param name="path">Path to the file or directory to delete if it exists.</param>
@@ -77,6 +97,72 @@ namespace Google {
                 if (!sourcePath.EndsWith(META_EXTENSION)) {
                     File.Copy(sourcePath, sourceToTargetPath(sourcePath));
                 }
+            }
+        }
+
+        /// <summary>
+        /// Create a temporary directory.
+        /// </summary>
+        /// <param name="useSystemTempPath">If true, uses the system wide temporary directory
+        /// otherwise uses the Unity project's temporary directory.</param>
+        /// <param name="retry">Number of times to attempt to create a temporary directory.</param>
+        /// <returns>If temporary directory creation fails, return null.</returns>
+        public static string CreateTemporaryDirectory(bool useSystemTempPath = false,
+                                                      int retry = 100) {
+            string tempPath = useSystemTempPath ? Path.GetTempPath() : ProjectTemporaryDirectory;
+            while (retry-- > 0) {
+                string temporaryDirectory = Path.Combine(tempPath, Path.GetRandomFileName());
+                if (File.Exists(temporaryDirectory)) continue;
+                Directory.CreateDirectory(temporaryDirectory);
+                return temporaryDirectory;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Move a directory preserving permissions on Windows.
+        /// </summary>
+        /// <param name="sourceDir">Source directory.</param>
+        /// <param name="targetDir">Target directory.  If this directory exists, it is
+        /// deleted.</param>
+        public static void MoveDirectory(string sourceDir, string targetDir) {
+            sourceDir = Path.GetFullPath(sourceDir);
+            targetDir = Path.GetFullPath(targetDir);
+            DeleteExistingFileOrDirectory(targetDir);
+            if (UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform) {
+                // On Windows permissions may not be propagated correctly to the target path when
+                // using Directory.Move().
+                // Since old versions of Unity use old versions of Mono that don't implement
+                // Directory.GetAccessControl(), we copy the files to create file entries with the
+                // correct permissions in the target folder.
+                Directory.CreateDirectory(targetDir);
+                CopyDirectory(sourceDir, targetDir);
+                DeleteExistingFileOrDirectory(sourceDir);
+            } else {
+                Directory.Move(sourceDir, targetDir);
+            }
+        }
+
+        /// <summary>
+        /// Move a file.
+        /// </summary>
+        /// <param name="sourceFile">Source file.</param>
+        /// <param name="targetFile">Target file.  If this directory exists, it is
+        /// deleted.</param>
+        public static void MoveFile(string sourceFile, string targetFile) {
+            sourceFile = Path.GetFullPath(sourceFile);
+            targetFile = Path.GetFullPath(targetFile);
+            DeleteExistingFileOrDirectory(targetFile);
+            if (UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform) {
+                // On Windows permissions may not be propagated correctly to the target path when
+                // using File.Move().
+                // Since old versions of Unity use old versions of Mono that don't implement
+                // File.GetAccessControl(), we copy the files to create file entries with the
+                // correct permissions in the target folder.
+                File.Copy(sourceFile, targetFile);
+                DeleteExistingFileOrDirectory(sourceFile);
+            } else {
+                File.Move(sourceFile, targetFile);
             }
         }
 

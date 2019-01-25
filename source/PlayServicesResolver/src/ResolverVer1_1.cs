@@ -189,10 +189,12 @@ namespace GooglePlayServices
             new Dictionary<string, AarExplodeData>();
         // File used to to serialize aarExplodeData.  This is required as Unity will reload classes
         // in the editor when C# files are modified.
-        private string aarExplodeDataFile = Path.Combine("Temp", "GoogleAarExplodeCache.xml");
+        private string aarExplodeDataFile = Path.Combine(FileUtils.ProjectTemporaryDirectory,
+                                                         "GoogleAarExplodeCache.xml");
 
         // Directory used to execute Gradle.
-        private string gradleBuildDirectory = Path.Combine("Temp", "PlayServicesResolverGradle");
+        private string gradleBuildDirectory = Path.Combine(FileUtils.ProjectTemporaryDirectory,
+                                                           "PlayServicesResolverGradle");
 
         private const int MajorVersion = 1;
         private const int MinorVersion = 1;
@@ -1466,7 +1468,7 @@ namespace GooglePlayServices
                     // doesn't need to be exploded.
                     if (!aarFile) return false;
 
-                    string temporaryDirectory = CreateTemporaryDirectory();
+                    string temporaryDirectory = FileUtils.CreateTemporaryDirectory();
                     if (temporaryDirectory == null) return false;
                     try {
                         string manifestFilename = "AndroidManifest.xml";
