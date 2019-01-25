@@ -1,3 +1,8 @@
+# Version 1.2.100 - Jan 25, 2019
+## Bug Fixes
+* Android Resolver: Fixed AAR processing sometimes failing on Windows
+  due to file permissions.
+
 # Version 1.2.99 - Jan 23, 2019
 ## Bug Fixes
 * Android Resolver: Improved performance of project property polling.
