@@ -14,8 +14,7 @@
 //    limitations under the License.
 // </copyright>
 
-namespace GooglePlayServices
-{
+namespace GooglePlayServices {
     using System;
     using System.Collections.Generic;
     using System.IO;
@@ -36,8 +35,7 @@ namespace GooglePlayServices
     /// files are removed in favor of the .aar files.
     /// </summary>
     [InitializeOnLoad]
-    public class PlayServicesResolver : AssetPostprocessor
-    {
+    public class PlayServicesResolver : AssetPostprocessor {
         /// <summary>
         /// Saves the current state of dependencies in the project and allows the caller to
         /// compare the current state vs. the previous state of dependencies in the project.
@@ -405,12 +403,10 @@ namespace GooglePlayServices
         /// Properties are introduced over successive versions of Unity so use reflection to
         /// retrieve them.
         private static object GetEditorUserBuildSettingsProperty(string name,
-                                                                 object defaultValue)
-        {
+                                                                 object defaultValue) {
             var editorUserBuildSettingsType = typeof(UnityEditor.EditorUserBuildSettings);
             var property = editorUserBuildSettingsType.GetProperty(name);
-            if (property != null)
-            {
+            if (property != null) {
                 var value = property.GetValue(null, null);
                 if (value != null) return value;
             }
@@ -420,10 +416,8 @@ namespace GooglePlayServices
         /// <summary>
         /// Whether the Gradle build system is enabled.
         /// </summary>
-        public static bool GradleBuildEnabled
-        {
-            get
-            {
+        public static bool GradleBuildEnabled {
+            get {
                 return GetEditorUserBuildSettingsProperty(
                     "androidBuildSystem", "").ToString().Equals("Gradle");
             }
@@ -432,13 +426,11 @@ namespace GooglePlayServices
         /// <summary>
         /// Whether project export is enabled.
         /// </summary>
-        public static bool ProjectExportEnabled
-        {
-            get
-            {
+        public static bool ProjectExportEnabled {
+            get {
                 var value = GetEditorUserBuildSettingsProperty("exportAsGoogleAndroidProject",
-                                                               null);
-                return value == null ? false : (bool)value;
+                    null);
+                return value == null ? false : (bool) value;
             }
         }
 
@@ -649,8 +641,8 @@ namespace GooglePlayServices
             if (GooglePlayServices.SettingsDialog.EnableAutoResolution) LinkAutoResolution();
         }
 
-       // Unregister events to monitor build system changes for the Android Resolver and other
-       // plugins.
+        // Unregister events to monitor build system changes for the Android Resolver and other
+        // plugins.
         public static void UnlinkAutoResolution() {
             RunOnMainThread.OnUpdate -= PollBuildSystem;
             RunOnMainThread.OnUpdate -= PollAndroidAbis;
@@ -716,41 +708,34 @@ namespace GooglePlayServices
         /// <returns>The resolver.</returns>
         /// <param name="resolverImpl">Resolver impl.</param>
         public static IResolver RegisterResolver(IResolver resolverImpl,
-                                                 ResolverType resolverType=ResolverType.Default)
-        {
-            if (resolverImpl == null)
-            {
+                                                 ResolverType resolverType = ResolverType.Default) {
+            if (resolverImpl == null) {
                 return Resolver;
             }
 
             IResolver destResolver;
             if (!_resolvers.TryGetValue(resolverType, out destResolver) ||
-                destResolver.Version() < resolverImpl.Version())
-            {
+                destResolver.Version() < resolverImpl.Version()) {
                 _resolvers[resolverType] = resolverImpl;
             }
             return resolverImpl;
         }
 
-        private static ResolverType CurrentResolverType
-        {
-            get {
-                return ResolverType.Default;
-            }
+        private static ResolverType CurrentResolverType {
+            get { return ResolverType.Default; }
         }
 
         /// <summary>
         /// Gets the resolver.
         /// </summary>
         /// <value>The resolver.</value>
-        public static IResolver Resolver
-        {
-            get
-            {
+        public static IResolver Resolver {
+            get {
                 IResolver resolver = null;
                 if (resolver == null) {
                     _resolvers.TryGetValue(ResolverType.Default, out resolver);
                 }
+
                 return resolver;
             }
         }
@@ -922,28 +907,20 @@ namespace GooglePlayServices
                     false, (success) => {
                         if (resolutionComplete != null) resolutionComplete();
                     }, true);
-            } else if (!ExecutionEnvironment.InBatchMode &&
-                       GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning &&
-                       PlayServicesSupport.GetAllDependencies().Count > 0) {
-                switch (EditorUtility.DisplayDialogComplex(
-                    "Warning: Auto-resolution of Android dependencies is disabled!",
-                    "Would you like to enable auto-resolution of Android dependencies?\n\n" +
-                    "With auto-resolution of Android dependencies disabled you must " +
-                    "manually resolve dependencies using the " +
-                    "\"Assets > Play Services Resolver > Android Resolver > " +
-                    "Resolve\" menu item.\n\nFailure to resolve Android " +
-                    "dependencies will result in an non-functional application.",
-                    "Yes", "Not Now", "Silence Warning")) {
-                    case 0:  // Yes
-                        GooglePlayServices.SettingsDialog.EnableAutoResolution = true;
-                        break;
-                    case 1:  // Not now
-                        break;
-                    case 2:  // Ignore
-                        GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning =
-                            false;
-                        break;
-                }
+            }
+            else if (!ExecutionEnvironment.InBatchMode &&
+                     GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning &&
+                     PlayServicesSupport.GetAllDependencies().Count > 0) {
+                Debug.LogWarning("Warning: Auto-resolution of Android dependencies is disabled! " +
+                                 "Ensure you have manually run the resolver before building." +
+                                 "\n\nWith auto-resolution of Android dependencies disabled you " +
+                                 "must manually resolve dependencies using the " +
+                                 "\"Assets > Play Services Resolver > Android Resolver > " +
+                                 "Resolve\" menu item.\n\nFailure to resolve Android " +
+                                 "dependencies will result in an non-functional " +
+                                 "application.\n\nTo enable auto-resolution, navigate to " +
+                                 "\"Assets > Play Services Resolver > Android Resolver > " +
+                                 "Settings\" and check \"Enable Auto-resolution\"");
                 resolutionComplete();
             }
         }
@@ -1332,7 +1309,8 @@ namespace GooglePlayServices
                                             }
                                         });
                                 },
-                                forceResolution: forceResolution);
+                                forceResolution: forceResolution,
+                                isAutoResolveJob: isAutoResolveJob);
                         }));
             }
             if (firstJob) ExecuteNextResolveJob();
@@ -1347,8 +1325,8 @@ namespace GooglePlayServices
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
         private static void ResolveUnsafe(Action<bool> resolutionComplete = null,
-                                          bool forceResolution = false)
-        {
+                                          bool forceResolution = false,
+                                          bool isAutoResolveJob = false) {
             JavaUtilities.CheckJdkForApiLevel();
 
             DeleteFiles(Resolver.OnBuildSettings());
@@ -1367,6 +1345,53 @@ namespace GooglePlayServices
                     resolutionComplete(true);
                 }
                 return;
+            }
+
+            // If we are not in auto-resolution mode and not in batch mode
+            // prompt the user to see if they want to resolve dependencies
+            // now or later.
+            if (GooglePlayServices.SettingsDialog.PromptBeforeAutoResolution &&
+                isAutoResolveJob &&
+                !ExecutionEnvironment.InBatchMode) {
+                bool shouldResolve = false;
+                AlertModal alert = new AlertModal {
+                    Title = "Enable Android Auto-resolution?",
+                    Message = "The Play Services Resolver has detected a change " +
+                              " and would to resolve conflicts and download Android dependencies." +
+                              "\n\n\"Disable Auto-Resolution\" will require manually " +
+                              "running resolution using \"Assets > Play Services Resolver " +
+                              "> Android Resolver > Resolve\" menu item. Failure to " +
+                              "resolve Android dependencies will result " +
+                              "in an non-functional application." +
+                              "\n\nEnable auto-resolution again via " +
+                              "\"Assets > Play Services Resolver " +
+                              "> Android Resolver > Settings.",
+                    Ok = new AlertModal.LabeledAction {
+                        Label = "Enable Auto-resolution",
+                        DelegateAction = () => {
+                            shouldResolve = true;
+                            GooglePlayServices.SettingsDialog.PromptBeforeAutoResolution = false;
+                        }
+                    },
+                    Cancel = new AlertModal.LabeledAction {
+                        Label = "Disable Auto-Resolution",
+                        DelegateAction = () => {
+                            GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
+                            GooglePlayServices.SettingsDialog.PromptBeforeAutoResolution = false;
+                            shouldResolve = false;
+                        }
+                    }
+                };
+
+                alert.Display();
+
+                if (!shouldResolve) {
+                    if (resolutionComplete != null) {
+                        resolutionComplete(false);
+                    }
+
+                    return;
+                }
             }
 
             if (forceResolution) {

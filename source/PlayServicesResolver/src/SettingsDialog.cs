@@ -14,8 +14,7 @@
 //    limitations under the License.
 // </copyright>
 
-namespace GooglePlayServices
-{
+namespace GooglePlayServices {
     using System;
     using System.IO;
     using UnityEditor;
@@ -25,8 +24,7 @@ namespace GooglePlayServices
     /// <summary>
     /// Settings dialog for PlayServices Resolver.
     /// </summary>
-    public class SettingsDialog : EditorWindow
-    {
+    public class SettingsDialog : EditorWindow {
         /// <summary>
         /// Loads / saves settings for this dialog.
         /// </summary>
@@ -39,6 +37,7 @@ namespace GooglePlayServices
             internal bool patchAndroidManifest;
             internal bool verboseLogging;
             internal bool autoResolutionDisabledWarning;
+            internal bool promptBeforeAutoResolution;
             internal bool useProjectSettings;
 
             /// <summary>
@@ -53,6 +52,7 @@ namespace GooglePlayServices
                 patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
                 verboseLogging = SettingsDialog.VerboseLogging;
                 autoResolutionDisabledWarning = SettingsDialog.AutoResolutionDisabledWarning;
+                promptBeforeAutoResolution = SettingsDialog.PromptBeforeAutoResolution;
                 useProjectSettings = SettingsDialog.UseProjectSettings;
             }
 
@@ -68,6 +68,7 @@ namespace GooglePlayServices
                 SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
                 SettingsDialog.VerboseLogging = verboseLogging;
                 SettingsDialog.AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
+                SettingsDialog.PromptBeforeAutoResolution = promptBeforeAutoResolution;
                 SettingsDialog.UseProjectSettings = useProjectSettings;
             }
         }
@@ -81,9 +82,12 @@ namespace GooglePlayServices
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
         private const string AutoResolutionDisabledWarningKey =
             Namespace + "AutoResolutionDisabledWarning";
+        private const string PromptBeforeAutoResolutionKey =
+            Namespace + "PromptBeforeAutoResolution";
         private const string UseGradleDaemonKey = Namespace + "UseGradleDaemon";
+
         // List of preference keys, used to restore default settings.
-        private static string[] PreferenceKeys = new [] {
+        private static string[] PreferenceKeys = new[] {
             AutoResolveKey,
             PackageInstallKey,
             PackageDirKey,
@@ -91,6 +95,7 @@ namespace GooglePlayServices
             PatchAndroidManifestKey,
             VerboseLoggingKey,
             AutoResolutionDisabledWarningKey,
+            PromptBeforeAutoResolutionKey,
             UseGradleDaemonKey
         };
 
@@ -152,6 +157,19 @@ namespace GooglePlayServices
         internal static bool AutoResolutionDisabledWarning {
             set { projectSettings.SetBool(AutoResolutionDisabledWarningKey, value); }
             get { return projectSettings.GetBool(AutoResolutionDisabledWarningKey, true); }
+        }
+
+        /// <summary>
+        /// This setting is not exposed in the Settings menu but is
+        /// leveraged by the PlayServicesResolver to determine whether to
+        /// display a prompt.
+        /// </summary>
+        internal static bool PromptBeforeAutoResolution {
+            set {
+                projectSettings.SetBool(PromptBeforeAutoResolutionKey, value,
+                    ProjectSettings.SettingsSave.ProjectOnly);
+            }
+            get { return projectSettings.GetBool(PromptBeforeAutoResolutionKey, true); }
         }
 
         internal static bool UseProjectSettings {
@@ -289,11 +307,23 @@ namespace GooglePlayServices
                                 "build.gradle to generate a functional APK.");
             }
 
+            // Disable the ability to toggle the auto-resolution disabled warning
+            // when auto resolution is enabled.
             EditorGUI.BeginDisabledGroup(settings.enableAutoResolution);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Auto-Resolution Disabled Warning", EditorStyles.boldLabel);
             settings.autoResolutionDisabledWarning =
                 EditorGUILayout.Toggle(settings.autoResolutionDisabledWarning);
+            GUILayout.EndHorizontal();
+            EditorGUI.EndDisabledGroup();
+
+            // Disable the ability to toggle the auto-resolution disabled warning
+            // when auto resolution is enabled.
+            EditorGUI.BeginDisabledGroup(!settings.enableAutoResolution);
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Prompt Before Auto-Resolution", EditorStyles.boldLabel);
+            settings.promptBeforeAutoResolution =
+                EditorGUILayout.Toggle(settings.promptBeforeAutoResolution);
             GUILayout.EndHorizontal();
             EditorGUI.EndDisabledGroup();
 
@@ -353,4 +383,3 @@ namespace GooglePlayServices
         }
     }
 }
-

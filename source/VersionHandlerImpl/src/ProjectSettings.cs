@@ -14,32 +14,64 @@
 //    limitations under the License.
 // </copyright>
 
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Xml;
+using UnityEditor;
+
 namespace Google {
-
-    using UnityEditor;
-    using UnityEngine;
-    using System.Collections.Generic;
-    using System.IO;
-    using System.Xml;
-    using System;
-
     /// <summary>
     /// Provides storage of project or global settings.
     /// This class is compatible with UnityEditor.EditorPrefs allowing a user to read from
     /// either application or project level settings based upon the UseProjectSettings flag.
     /// </summary>
     internal class ProjectSettings {
+        /// <summary>
+        /// Enum to determine if setting should be saved to system-level EditorPrefs
+        /// </summary>
+        public enum SettingsSave {
+            ProjectOnly,
+            EditorPrefs,
+            BothProjectAndEditorPrefs
+        }
 
         /// <summary>
         /// File to store project level settings.
         /// </summary>
-        private static string PROJECT_SETTINGS_FILE = Path.Combine(
+        private static readonly string PROJECT_SETTINGS_FILE = Path.Combine(
             "ProjectSettings", "GvhProjectSettings.xml");
 
         /// <summary>
         /// Backing store for Settings property.
         /// </summary>
         private static SortedDictionary<string, string> settings;
+
+        /// <summary>
+        /// Used to lock the static class;
+        /// </summary>
+        private static readonly object classLock = new object();
+
+        /// <summary>
+        /// Logger used to log messages when loading / saving settings.
+        /// </summary>
+        private static readonly Logger logger = new Logger();
+
+        /// <summary>
+        /// Name of the module used to control whether project or global settings are used.
+        /// </summary>
+        private readonly string moduleName;
+
+        /// <summary>
+        /// Create an instance of the settings class.
+        /// </summary>
+        /// <param name="moduleName">
+        /// Name of the module that owns this class, used to serialize
+        /// the UseProjectSettings option.
+        /// </param>
+        public ProjectSettings(string moduleName) {
+            this.moduleName = moduleName;
+        }
 
         /// <summary>
         /// In-memory cache of project specific settings.
@@ -52,24 +84,11 @@ namespace Google {
         }
 
         /// <summary>
-        /// Used to lock the static class;
-        /// </summary>
-        private static object classLock = new object();
-
-        /// <summary>
-        /// Logger used to log messages when loading / saving settings.
-        /// </summary>
-        private static Logger logger = new Logger();
-
-        /// <summary>
-        /// Name of the module used to control whether project or global settings are used.
-        /// </summary>
-        private string moduleName;
-
-        /// <summary>
         /// Name of the setting that controls whether project settings are being used.
         /// </summary>
-        private string UseProjectSettingsName { get { return moduleName + "UseProjectSettings"; } }
+        private string UseProjectSettingsName {
+            get { return moduleName + "UseProjectSettings"; }
+        }
 
         /// <summary>
         /// Set to true to read settings in the project (default), false to read settings from
@@ -78,15 +97,6 @@ namespace Google {
         public bool UseProjectSettings {
             get { return EditorPrefs.GetBool(UseProjectSettingsName, true); }
             set { EditorPrefs.SetBool(UseProjectSettingsName, value); }
-        }
-
-        /// <summary>
-        /// Create an instance of the settings class.
-        /// </summary>
-        /// <param name="moduleName">Name of the module that owns this class, used to serialize
-        /// the UseProjectSettings option.</param>
-        public ProjectSettings(string moduleName) {
-            this.moduleName = moduleName;
         }
 
         /// <summary>
@@ -110,14 +120,39 @@ namespace Google {
             }
         }
 
+        private void SavePreferences(SettingsSave saveLevel, Action saveToProject, Action
+                                         saveToEditor) {
+            switch (saveLevel) {
+                case SettingsSave.ProjectOnly:
+                    saveToProject();
+                    break;
+                case SettingsSave.EditorPrefs:
+                    saveToEditor();
+                    break;
+                case SettingsSave.BothProjectAndEditorPrefs:
+                default:
+                    saveToEditor();
+                    saveToProject();
+                    break;
+            }
+        }
+
         /// <summary>
         /// Set a bool property.
         /// </summary>
         /// <param name="name">Name of the value.</param>
         /// <param name="value">Value to set.</param>
+        /// <param name="saveLevel">Determine how setting should save</param>
+        public void SetBool(string name, bool value, SettingsSave saveLevel) {
+            SavePreferences(saveLevel,
+                () => { Set(name, value); },
+                () => { EditorPrefs.SetBool(name, value); });
+        }
+
         public void SetBool(string name, bool value) {
-            EditorPrefs.SetBool(name, value);
-            Set(name, value);
+            SavePreferences(SettingsSave.BothProjectAndEditorPrefs,
+                () => { Set(name, value); },
+                () => { EditorPrefs.SetBool(name, value); });
         }
 
         /// <summary>
@@ -125,9 +160,15 @@ namespace Google {
         /// </summary>
         /// <param name="name">Name of the value.</param>
         /// <param name="value">Value to set.</param>
+        public void SetFloat(string name, float value, SettingsSave saveLevel) {
+            SavePreferences(saveLevel, () => { Set(name, value); },
+                () => { EditorPrefs.SetFloat(name, value); });
+        }
+
         public void SetFloat(string name, float value) {
-            EditorPrefs.SetFloat(name, value);
-            Set(name, value);
+            SavePreferences(SettingsSave.BothProjectAndEditorPrefs,
+                () => { Set(name, value); },
+                () => { EditorPrefs.SetFloat(name, value); });
         }
 
         /// <summary>
@@ -135,19 +176,31 @@ namespace Google {
         /// </summary>
         /// <param name="name">Name of the value.</param>
         /// <param name="value">Value to set.</param>
-        public void SetInt(string name, int value) {
-            EditorPrefs.SetInt(name, value);
-            Set(name, value);
+        public void SetInt(string name, int value, SettingsSave saveLevel) {
+            SavePreferences(saveLevel, () => { Set(name, value); },
+                () => { EditorPrefs.SetInt(name, value); });
         }
+
+        public void SetInt(string name, int value) {
+            SavePreferences(SettingsSave.BothProjectAndEditorPrefs,
+                () => { Set(name, value); },
+                () => { EditorPrefs.SetInt(name, value); });
+        }
+
 
         /// <summary>
         /// Set a string property.
         /// </summary>
         /// <param name="name">Name of the value.</param>
         /// <param name="value">Value to set.</param>
+        public void SetString(string name, string value, SettingsSave saveLevel) {
+            SavePreferences(saveLevel, () => { Set(name, value); },
+                () => { EditorPrefs.SetString(name, value); });
+        }
+
         public void SetString(string name, string value) {
-            EditorPrefs.SetString(name, value);
-            Set(name, value ?? "");
+            SavePreferences(SettingsSave.BothProjectAndEditorPrefs, () => { Set(name, value); },
+                () => { EditorPrefs.SetString(name, value); });
         }
 
         /// <summary>
@@ -370,5 +423,4 @@ namespace Google {
             }
         }
     }
-
 }

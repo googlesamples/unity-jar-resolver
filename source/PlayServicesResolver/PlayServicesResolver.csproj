@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -32,15 +32,15 @@
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
   </PropertyGroup>
-    <PropertyGroup>
-        <UnityHintPath>..\..\unity_dlls</UnityHintPath>
-   </PropertyGroup>
+  <PropertyGroup>
+    <UnityHintPath>..\..\unity_dlls</UnityHintPath>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="UnityEditor">
-        <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
+      <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
-        <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
+      <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
@@ -53,6 +53,7 @@
     <Folder Include="Properties\" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="src\AlertModal.cs" />
     <Compile Include="src\AndroidAbis.cs" />
     <Compile Include="src\AndroidSdkManager.cs" />
     <Compile Include="src\AndroidXmlDependencies.cs" />
@@ -61,6 +62,7 @@
     <Compile Include="src\DefaultResolver.cs" />
     <Compile Include="src\IResolver.cs" />
     <Compile Include="src\JavaUtilities.cs" />
+    <Compile Include="src\PlayServicesPreBuild.cs" />
     <Compile Include="src\PlayServicesResolver.cs" />
     <Compile Include="src\ResolverVer1_1.cs" />
     <Compile Include="src\SettingsDialog.cs" />

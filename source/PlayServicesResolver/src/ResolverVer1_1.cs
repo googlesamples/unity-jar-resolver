@@ -751,7 +751,7 @@ namespace GooglePlayServices
             // Run the build script to perform the resolution popping up a window in the editor.
             var window = CommandLineDialog.CreateCommandLineDialog(
                 "Resolving Android Dependencies");
-            window.summaryText = "Resolving Android Dependencies....";
+            window.summaryText = "Resolving Android Dependencies...";
             window.modal = false;
             window.progressTitle = window.summaryText;
             window.autoScrollToBottom = true;
