@@ -19,6 +19,7 @@
 /plugin/plugin.sln
 /plugin/plugin.userprefs
 
+/source/.idea/
 /unity_dlls/
 
 .DS_Store

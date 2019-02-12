@@ -1,3 +1,10 @@
+# Version 1.2.101 - Feb 12, 2019
+## New Features
+* Android Resolver: Prompt the user before the resolver runs for the
+  first time and allow the user to elect to disable from the prompt.
+* Android Resolver: Change popup warning when resolver is disabled
+  to be a console warning.
+
 # Version 1.2.100 - Jan 25, 2019
 ## Bug Fixes
 * Android Resolver: Fixed AAR processing sometimes failing on Windows
