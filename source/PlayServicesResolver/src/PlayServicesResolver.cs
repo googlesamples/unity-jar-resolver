@@ -1367,14 +1367,14 @@ namespace GooglePlayServices {
                               "\"Assets > Play Services Resolver " +
                               "> Android Resolver > Settings.",
                     Ok = new AlertModal.LabeledAction {
-                        Label = "Enable Auto-resolution",
+                        Label = "Enable",
                         DelegateAction = () => {
                             shouldResolve = true;
                             GooglePlayServices.SettingsDialog.PromptBeforeAutoResolution = false;
                         }
                     },
                     Cancel = new AlertModal.LabeledAction {
-                        Label = "Disable Auto-Resolution",
+                        Label = "Disable",
                         DelegateAction = () => {
                             GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
                             GooglePlayServices.SettingsDialog.PromptBeforeAutoResolution = false;
