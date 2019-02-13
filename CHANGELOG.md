@@ -1,3 +1,9 @@
+# Version 1.2.102 - Feb 13, 2019
+## Bug Fixes
+* Android Resolver: Fixed the text overflow on the Android Resolver
+  prompt before initial run to fit inside the buttons for
+  smaller screens.
+
 # Version 1.2.101 - Feb 12, 2019
 ## New Features
 * Android Resolver: Prompt the user before the resolver runs for the
