@@ -46,7 +46,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Minimum JDK version required to build with recently released Android libraries.
         /// </summary>
-        private const float MINIMUM_JDK_VERSION_MAJOR_MINOR = 1.8f;
+        private static Version MinimumJdkVersion = new Version("1.8");
 
         /// <summary>
         /// Get the JDK path (JAVA_HOME) configured in the Unity editor.
@@ -183,29 +183,34 @@ namespace GooglePlayServices {
                 LogJdkVersionFailedWarning(javaPath, result.message);
                 return;
             }
-            float majorMinorVersion = 0;
+            Version foundVersion = null;
             // The version string is can be reported via stderr or stdout so scrape the
             // concatenated message string.
-            string pattern = "^(?<model>java||openjdk) version \"(?<major>\\d).(?<minor>\\d).(?<patch>\\d).*$";
-            
-            Match match = Regex.Match(result.message,pattern,RegexOptions.Multiline);
+            string pattern = "^(?<model>java||openjdk) version \"(?<version>[^\"]*)\".*$";
+
+            Match match = Regex.Match(result.message, pattern, RegexOptions.Multiline);
             if (match.Success) {
-                float.TryParse(match.Groups["major"].Value + "." + match.Groups["minor"].Value, NumberStyles.Any,
-                                        CultureInfo.InvariantCulture, out majorMinorVersion);
+                String versionString = match.Groups["version"].Value;
+                // Version requires a Max and Min version, so if there is only one version,
+                // add a 0 minor version.
+                if (!versionString.Contains(".")) {
+                    versionString += ".0";
+                }
+                foundVersion = new Version(Regex.Replace(versionString, "[^0-9\\.]", ""));
             }
-            if (majorMinorVersion == 0) {
+            if (foundVersion == null) {
                 LogJdkVersionFailedWarning(javaPath, result.message);
                 return;
             }
             // If the user's installed JDK is too old, report an error.
-            if (majorMinorVersion < MINIMUM_JDK_VERSION_MAJOR_MINOR) {
+            if (foundVersion < MinimumJdkVersion) {
                 PlayServicesResolver.Log(
                     String.Format("The configured JDK {0} is too old to build Android " +
                                   "applications with recent libraries.\n" +
                                   "Please install JDK version {1} or newer and configure Unity " +
                                   "to use the new JDK installation in the " +
                                   "'Unity Preferences > External Tools' menu.\n",
-                                  majorMinorVersion, MINIMUM_JDK_VERSION_MAJOR_MINOR),
+                                  foundVersion, MinimumJdkVersion),
                     level: LogLevel.Error);
             }
         }
