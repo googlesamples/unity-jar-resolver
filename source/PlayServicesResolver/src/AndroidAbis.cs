@@ -24,6 +24,10 @@ namespace GooglePlayServices {
 /// Provides access to Android ABI settings across different Unity versions.
 /// </summary>
 internal class AndroidAbis {
+    /// <summary>
+    /// Minimum Unity version that added ARM64 support on Android.
+    /// </summary>
+    private const float MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT = 2017.4f;
 
     /// <summary>
     /// Set of selected ABIs.
@@ -95,12 +99,12 @@ internal class AndroidAbis {
     /// Get the supported set of Android ABIs for the current Unity version.
     /// The dictionary maps the official Android ABI name (i.e the directory name looked up by the
     /// operating system) to the UnityEditor.AndroidTargetDevice (Unity 5.x & 2017.x) or
-    // UnityEditor.AndroidArchitecture (Unity 2018.x) enumeration value name.
+    // UnityEditor.AndroidArchitecture enumeration value name.
     /// </summary>
     private static Dictionary<string, string> SupportedAbiToAbiEnumValue {
         get {
             float unityVersion = Google.VersionHandler.GetUnityVersionMajorMinor();
-            if (unityVersion >= 2018.0f) {
+            if (unityVersion >= MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT) {
                 return new Dictionary<string, string>() {
                     {"armeabi-v7a", "ARMv7"},
                     {"arm64-v8a", "ARM64"},
@@ -146,7 +150,7 @@ internal class AndroidAbis {
     private static KeyValuePair<PropertyInfo, Type> AbiPropertyAndEnumType {
         get {
             float unityVersion = Google.VersionHandler.GetUnityVersionMajorMinor();
-            if (unityVersion >= 2018.0f) {
+            if (unityVersion >= MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT) {
                 return new KeyValuePair<PropertyInfo, Type>(
                     typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetArchitectures"),
                     Google.VersionHandler.FindClass("UnityEditor",
@@ -184,8 +188,8 @@ internal class AndroidAbis {
 
     /// <summary>
     /// Get / set the target device ABI (Unity >= 5.0.x)
-    /// Unity >= 2018.x supports armeabi-v7a, arm64-v8a, x86 & fat (i.e armeabi-v7a, arm64, x86)
-    /// Unity >= 5.0.x & <= 2017.x only support armeabi-v7a, x86 & fat (i.e armeabi-v7a & x86)
+    /// Unity >= 2017.4 supports armeabi-v7a, arm64-v8a, x86 & fat (i.e armeabi-v7a, arm64, x86)
+    /// Unity >= 5.0.x & <= 2017.3 only support armeabi-v7a, x86 & fat (i.e armeabi-v7a & x86)
     /// </summary>
     public static AndroidAbis Current {
         set {
@@ -195,7 +199,7 @@ internal class AndroidAbis {
             var enumType = propertyAndType.Value;
             var supportedAbis = SupportedAbiToAbiEnumValue;
             var abiSet = value.ToSet();
-            if (unityVersion >= 2018.0f) {
+            if (unityVersion >= MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT) {
                 // Convert selected ABIs to a flags enum.
                 ulong enumValue = 0;
                 foreach (var abi in supportedAbis) {
@@ -234,7 +238,7 @@ internal class AndroidAbis {
             var enumType = propertyAndType.Value;
             var supportedAbis = SupportedAbiToAbiEnumValue;
             var selectedAbis = new HashSet<string>();
-            if (unityVersion >= 2018.0f) {
+            if (unityVersion >= MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT) {
                 // Convert flags enum value to a set of ABI names.
                 ulong enumValueInt = EnumValueObjectToULong(property.GetValue(null, null));
                 foreach (var abi in supportedAbis) {
