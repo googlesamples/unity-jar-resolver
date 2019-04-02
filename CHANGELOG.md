@@ -1,3 +1,8 @@
+# Version 1.2.103 - Apr 2, 2019
+## Bug Fixes
+* Android Resolver: Whitelisted Unity 2017.4 and above with ARM64 support.
+* Android Resolver: Fixed Java version check to work with Java SE 12 and above.
+
 # Version 1.2.102 - Feb 13, 2019
 ## Bug Fixes
 * Android Resolver: Fixed the text overflow on the Android Resolver
