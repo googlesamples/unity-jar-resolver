@@ -124,7 +124,7 @@ namespace GooglePlayServices {
                         "Android Resolver",
                         String.Format("{0} environment references a directory ({1}) that does " +
                                       "not contain {2} which is required to process Android " +
-                                      "libraries.", JAVA_HOME, javaHome, toolPath),
+                                      "libraries.", JAVA_HOME, javaHome, javaTool),
                         "OK");
                     throw new ToolNotFoundException(
                         String.Format("{0} not found, {1} references incomplete Java distribution.",
