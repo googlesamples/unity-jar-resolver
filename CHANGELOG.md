@@ -1,3 +1,9 @@
+# Version 1.2.104 - Apr 10, 2019
+## Bug Fixes
+* Android Resolver: Changed Android ABI selection method from using whitelisted
+  Unity versions to type availability.  This fixes an exception on resolution
+  in some versions of Unity 2017.4.
+
 # Version 1.2.103 - Apr 2, 2019
 ## Bug Fixes
 * Android Resolver: Whitelisted Unity 2017.4 and above with ARM64 support.
