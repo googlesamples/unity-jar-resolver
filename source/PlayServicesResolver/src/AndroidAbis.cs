@@ -25,9 +25,80 @@ namespace GooglePlayServices {
 /// </summary>
 internal class AndroidAbis {
     /// <summary>
-    /// Minimum Unity version that added ARM64 support on Android.
+    /// Determines and caches properties used to configure Android ABI selection.
     /// </summary>
-    private const float MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT = 2017.4f;
+    private class PropertyConfiguration {
+        /// <summary>
+        /// The mode used to select Android ABIs by Unity.
+        /// </summary>
+        public enum Mode {
+            FatOnly, // Only supports fat (armeabi-v7a & x86) builds.
+            OneOfArmX86Fat, // Supports one of armeabi-v7a, x86 or fat builds.
+            AnyOfArmX86Arm64, // Supports any combination of armeabi-v7a, x86 or arm64 builds.
+        }
+
+        /// <summary>
+        /// Mode used to select Android ABIs.
+        /// </summary>
+        public Mode SelectionMode { private set; get; }
+
+        /// <summary>
+        /// Property to read and set ABIs, this is null in Unity 4.+.
+        /// </summary>
+        public PropertyInfo Property { private set; get; }
+
+        /// <summary>
+        /// Enum type used by the member, this is null in Unity 4.+.
+        /// </summary>
+        public Type EnumType { private set; get; }
+
+        /// <summary>
+        /// The dictionary maps the official Android ABI name (i.e the directory name looked up by
+        /// the operating system) to the UnityEditor.AndroidTargetDevice (Unity 5.x & 2017.x) or
+        /// UnityEditor.AndroidArchitecture enumeration value name.
+        /// </summary>
+        public Dictionary<string, string> SupportedAbiToAbiEnumValue { private set; get; }
+
+        /// <summary>
+        /// Determine and cache the method of ABI selection used by the current version of Unity.
+        /// </summary>
+        public PropertyConfiguration() {
+            // Unity 2017.4 and above should support targetArchitectures.
+            Property = typeof(UnityEditor.PlayerSettings.Android).GetProperty(
+                "targetArchitectures");
+            EnumType = Google.VersionHandler.FindClass("UnityEditor",
+                                                       "UnityEditor.AndroidArchitecture");
+            if (Property != null && EnumType != null) {
+                SelectionMode = Mode.AnyOfArmX86Arm64;
+                SupportedAbiToAbiEnumValue = new Dictionary<string, string>() {
+                    {"armeabi-v7a", "ARMv7"},
+                    {"arm64-v8a", "ARM64"},
+                    {"x86", "X86"}
+                };
+                return;
+            }
+            // Unity 5.0 and above should support targetDevice.
+            Property = typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetDevice");
+            EnumType = Google.VersionHandler.FindClass("UnityEditor",
+                                                       "UnityEditor.AndroidTargetDevice");
+            if (Property != null && EnumType != null) {
+                SelectionMode = Mode.OneOfArmX86Fat;
+                SupportedAbiToAbiEnumValue = new Dictionary<string, string>() {
+                    {"armeabi-v7a", "ARMv7"},
+                    {"x86", "x86"}
+                };
+                return;
+            }
+            // Unity 4.0 and above only support fat builds.
+            SelectionMode = Mode.FatOnly;
+            SupportedAbiToAbiEnumValue = new Dictionary<string, string>() {
+                {"armeabi-v7a", ""},
+                {"x86", ""}
+            };
+        }
+    }
+
+    private static PropertyConfiguration propertyConfiguration = null;
 
     /// <summary>
     /// Set of selected ABIs.
@@ -38,6 +109,9 @@ internal class AndroidAbis {
     /// Create the default ABI set.
     /// </summary>
     public AndroidAbis() {
+        lock (typeof(AndroidAbis)) {
+            if (propertyConfiguration == null) propertyConfiguration = new PropertyConfiguration();
+        }
         abis = new HashSet<string>(Supported);
     }
 
@@ -102,25 +176,7 @@ internal class AndroidAbis {
     // UnityEditor.AndroidArchitecture enumeration value name.
     /// </summary>
     private static Dictionary<string, string> SupportedAbiToAbiEnumValue {
-        get {
-            float unityVersion = Google.VersionHandler.GetUnityVersionMajorMinor();
-            if (unityVersion >= MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT) {
-                return new Dictionary<string, string>() {
-                    {"armeabi-v7a", "ARMv7"},
-                    {"arm64-v8a", "ARM64"},
-                    {"x86", "X86"},
-                };
-            } else if (unityVersion >= 5.0f) {
-                return new Dictionary<string, string>() {
-                    {"armeabi-v7a", "ARMv7"},
-                    {"x86", "x86"},
-                };
-            }
-            return new Dictionary<string, string>() {
-                {"armeabi-v7a", ""},
-                {"x86", ""},
-            };
-        }
+        get { return propertyConfiguration.SupportedAbiToAbiEnumValue; }
     }
 
     /// <summary>
@@ -140,28 +196,6 @@ internal class AndroidAbis {
             return new [] {
                 "armeabi", "armeabi-v7a", "arm64-v8a", "x86", "x86_64", "mips", "mips64"
             };
-        }
-    }
-
-    /// <summary>
-    /// Get the Android ABI type in the UnityEditor.PlayerSettings.Android structure and
-    /// the name of the enumeration type used by the member for the current Unity version.
-    /// </summary>
-    private static KeyValuePair<PropertyInfo, Type> AbiPropertyAndEnumType {
-        get {
-            float unityVersion = Google.VersionHandler.GetUnityVersionMajorMinor();
-            if (unityVersion >= MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT) {
-                return new KeyValuePair<PropertyInfo, Type>(
-                    typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetArchitectures"),
-                    Google.VersionHandler.FindClass("UnityEditor",
-                                                    "UnityEditor.AndroidArchitecture"));
-            } else if (unityVersion >= 5.0f) {
-                return new KeyValuePair<PropertyInfo, Type>(
-                    typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetDevice"),
-                    Google.VersionHandler.FindClass("UnityEditor",
-                                                    "UnityEditor.AndroidTargetDevice"));
-            }
-            return new KeyValuePair<PropertyInfo, Type>(null, null);
         }
     }
 
@@ -193,13 +227,12 @@ internal class AndroidAbis {
     /// </summary>
     public static AndroidAbis Current {
         set {
-            float unityVersion = Google.VersionHandler.GetUnityVersionMajorMinor();
-            var propertyAndType = AbiPropertyAndEnumType;
-            var property = propertyAndType.Key;
-            var enumType = propertyAndType.Value;
+            var property = propertyConfiguration.Property;
+            var enumType = propertyConfiguration.EnumType;
             var supportedAbis = SupportedAbiToAbiEnumValue;
             var abiSet = value.ToSet();
-            if (unityVersion >= MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT) {
+            if (propertyConfiguration.SelectionMode ==
+                PropertyConfiguration.Mode.AnyOfArmX86Arm64) {
                 // Convert selected ABIs to a flags enum.
                 ulong enumValue = 0;
                 foreach (var abi in supportedAbis) {
@@ -211,7 +244,8 @@ internal class AndroidAbis {
                     }
                 }
                 property.SetValue(null, Enum.ToObject(enumType, enumValue), null);
-            } else if (unityVersion >= 5.0f) {
+            } else if (propertyConfiguration.SelectionMode ==
+                       PropertyConfiguration.Mode.OneOfArmX86Fat) {
                 // Filter the requested ABIs by those supported.
                 abiSet.IntersectWith(supportedAbis.Keys);
                 if (abiSet.Count == 0) return;
@@ -226,19 +260,18 @@ internal class AndroidAbis {
                                 supportedAbis[(new List<string>(abiSet))[0]])), null);
             } else {
                 UnityEngine.Debug.LogWarning(
-                    String.Format("Unity {0} does not support targeting a " +
-                                  "specific set of Android ABIs.", unityVersion));
+                    "The current version of Unity does not support targeting a " +
+                    "specific set of Android ABIs.");
             }
         }
 
         get {
-            float unityVersion = Google.VersionHandler.GetUnityVersionMajorMinor();
-            var propertyAndType = AbiPropertyAndEnumType;
-            var property = propertyAndType.Key;
-            var enumType = propertyAndType.Value;
+            var property = propertyConfiguration.Property;
+            var enumType = propertyConfiguration.EnumType;
             var supportedAbis = SupportedAbiToAbiEnumValue;
             var selectedAbis = new HashSet<string>();
-            if (unityVersion >= MINIMUM_UNITY_VERSION_FOR_ARM64_SUPPORT) {
+            if (propertyConfiguration.SelectionMode ==
+                PropertyConfiguration.Mode.AnyOfArmX86Arm64) {
                 // Convert flags enum value to a set of ABI names.
                 ulong enumValueInt = EnumValueObjectToULong(property.GetValue(null, null));
                 foreach (var abi in supportedAbis) {
@@ -246,7 +279,8 @@ internal class AndroidAbis {
                         selectedAbis.Add(abi.Key);
                     }
                 }
-            } else if (unityVersion >= 5.0f) {
+            } else if (propertyConfiguration.SelectionMode ==
+                       PropertyConfiguration.Mode.OneOfArmX86Fat) {
                 // Convert enum value to an ABI name.
                 var abiName = Enum.GetName(enumType, property.GetValue(null, null));
                 foreach (var abi in supportedAbis) {
