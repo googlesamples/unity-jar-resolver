@@ -539,8 +539,18 @@ namespace GooglePlayServices
                 bool stdoutRedirectionInShellMode = true) {
             System.Text.Encoding inputEncoding = Console.InputEncoding;
             System.Text.Encoding outputEncoding = Console.OutputEncoding;
-            Console.InputEncoding = System.Text.Encoding.UTF8;
-            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            // Android SDK manager requires the input encoding to be set to
+            // UFT8 to pipe data to the tool.
+            // Cocoapods requires the output encoding to be set to UTF8 to
+            // retrieve output.
+            try {
+                Console.InputEncoding = System.Text.Encoding.UTF8;
+                Console.OutputEncoding = System.Text.Encoding.UTF8;
+            } catch (Exception e) {
+                UnityEngine.Debug.LogWarning(String.Format(
+                    "Unable to set console input / output  encoding to UTF8 (e.g en_US.UTF8-8). " +
+                    "Some commands may fail. {0}", e));
+            }
 
             // Mono 3.x on Windows can't execute tools with single quotes (apostrophes) in the path.
             // The following checks for this condition and forces shell execution of tools in these
