@@ -164,7 +164,7 @@ public class TestResolveAsync {
                     Name = "SetupDependencies",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
-                        SetupDependencies(testCase, testCaseComplete);
+                        SetupDependencies();
                         testCaseComplete(new TestCaseResult(testCase));
                     }
                 },
@@ -172,7 +172,7 @@ public class TestResolveAsync {
                     Name = "ResolveForGradleBuildSystem",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
-                        SetupDependencies(testCase, testCaseComplete);
+                        SetupDependencies();
                         Resolve("Gradle", false, "ExpectedArtifacts/NoExport/Gradle",
                                 null, testCase, testCaseComplete);
                     }
@@ -181,7 +181,7 @@ public class TestResolveAsync {
                     Name = "ResolveForGradleBuildSystemSync",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
-                        SetupDependencies(testCase, testCaseComplete);
+                        SetupDependencies();
                         Resolve("Gradle", false, "ExpectedArtifacts/NoExport/Gradle",
                                 null, testCase, testCaseComplete, synchronous: true);
                     }
@@ -190,7 +190,7 @@ public class TestResolveAsync {
                     Name = "ResolveForInternalBuildSystem",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
-                        SetupDependencies(testCase, testCaseComplete);
+                        SetupDependencies();
                         Resolve("Internal", false,
                                 AarsWithNativeLibrariesSupported ?
                                     "ExpectedArtifacts/NoExport/InternalNativeAars" :
@@ -202,7 +202,7 @@ public class TestResolveAsync {
                     Name = "ResolveForGradleBuildSystemAndExport",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
-                        SetupDependencies(testCase, testCaseComplete);
+                        SetupDependencies();
                         Resolve("Gradle", true, "ExpectedArtifacts/Export/Gradle",
                                 null, testCase, testCaseComplete);
                     }
@@ -211,7 +211,7 @@ public class TestResolveAsync {
                     Name = "ResolveAddedDependencies",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
-                        SetupDependencies(testCase, testCaseComplete);
+                        SetupDependencies();
                         UpdateAdditionalDependenciesFile(true);
                         Resolve("Gradle", true, "ExpectedArtifacts/Export/GradleAddedDeps",
                                 null, testCase, testCaseComplete);
@@ -221,7 +221,7 @@ public class TestResolveAsync {
                     Name = "ResolveRemovedDependencies",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
-                        SetupDependencies(testCase, testCaseComplete);
+                        SetupDependencies();
                         // Add the additional dependencies file then immediately remove it.
                         UpdateAdditionalDependenciesFile(true);
                         UpdateAdditionalDependenciesFile(false);
@@ -229,6 +229,30 @@ public class TestResolveAsync {
                                 null, testCase, testCaseComplete);
                     }
                 },
+                new TestCase {
+                    Name = "DeleteResolvedLibraries",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies();
+                        Resolve("Gradle", true, "ExpectedArtifacts/Export/Gradle",
+                                null, testCase, (testCaseResult) => {
+                                    Google.VersionHandler.InvokeStaticMethod(
+                                        AndroidResolverClass, "DeleteResolvedLibrariesSync", null);
+                                    var unexpectedFilesMessage = new List<string>();
+                                    var resolvedFiles = ListFiles("Assets/Plugins/Android");
+                                    if (resolvedFiles.Count > 0) {
+                                        unexpectedFilesMessage.Add("Libraries not deleted!");
+                                        foreach (var filename in resolvedFiles.Values) {
+                                            unexpectedFilesMessage.Add(filename);
+                                        }
+                                    }
+                                    testCaseComplete(new TestCaseResult(testCase) {
+                                            ErrorMessages = unexpectedFilesMessage
+                                        });
+                                },
+                                synchronous: true);
+                    }
+                }
             });
 
         // Test resolution with Android ABI filtering.
@@ -497,10 +521,7 @@ public class TestResolveAsync {
     /// NOTE: This is the deprecated way of adding dependencies and will likely be removed in
     /// future.
     /// </summary>
-    /// <param name="testCase">Object executing this method.</param>
-    /// <param name="testCaseComplete">Called when the test is complete.</param>
-    private static void SetupDependencies(TestCase testCase,
-                                          Action<TestCaseResult> testCaseComplete) {
+    private static void SetupDependencies() {
         Google.VersionHandler.InvokeInstanceMethod(
             AndroidResolverSupport, "DependOn",
             new object[] { "com.google.firebase", "firebase-common", "16.0.0" });

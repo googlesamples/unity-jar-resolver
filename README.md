@@ -230,7 +230,7 @@ element:
 
 By default the Android Resolver automatically monitors the dependencies you have
 specified and the `Plugins/Android` folder of your Unity project.  The
-resolution process runs when the specified dependencies are not present in your 
+resolution process runs when the specified dependencies are not present in your
 project.
 
 The *auto-resolution* process can be disabled via the
@@ -240,6 +240,13 @@ Manual resolution can be performed using the following menu options:
 
    * `Assets > Play Services Resolver > Android Resolver > Resolve`
    * `Assets > Play Services Resolver > Android Resolver > Force Resolve`
+
+## Deleting libraries
+
+Resolved packages are tracked via asset labels by the Android Resolver.
+They can easily be deleted using the
+`Assets > Play Services Resolver > Android Resolver > Delete Resolved Libraries`
+menu item.
 
 ## Android Manifest Variable Processing
 

@@ -1249,6 +1249,20 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Wait for a ManualResetEvent to complete.
+        /// </summary>
+        /// <param name="eventToPoll">Event to poll until it's complete.</param>
+        private static void PollManualResetEvent(ManualResetEvent eventToPoll) {
+            // We poll from this thread to pump the update queue.
+            while (true) {
+                RunOnMainThread.TryExecuteAll();
+                if (eventToPoll.WaitOne(100 /* 100ms poll interval */)) {
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
         /// Resolve dependencies synchronously.
         /// </summary>
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
@@ -1262,15 +1276,33 @@ namespace GooglePlayServices {
                     successful = success;
                     completeEvent.Set();
                 }, false);
-            // We poll from this thread to pump the update queue if the scheduled job isn't
-            // executed immediately.
-            while (true) {
-                RunOnMainThread.TryExecuteAll();
-                if (completeEvent.WaitOne(100 /* 100ms poll interval */)) {
-                    break;
-                }
-            }
+            PollManualResetEvent(completeEvent);
             return successful;
+        }
+
+        /// <summary>
+        /// Delete all resolved libraries asynchronously.
+        /// </summary>
+        /// <param name="complete">Delegate called when delete is complete.</param>
+        public static void DeleteResolvedLibraries(System.Action complete = null) {
+            RunOnMainThread.Schedule(() => {
+                    if (Resolver.AutomaticResolutionEnabled()) {
+                        Log("Disabling auto-resolution to prevent libraries from being " +
+                            "resolved after deletion.", level: LogLevel.Warning);
+                        GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
+                    }
+                    DeleteLabeledAssets();
+                    if (complete != null) complete();
+                }, 0);
+        }
+
+        /// <summary>
+        /// Delete all resolved libraries synchronously.
+        /// </summary>
+        public static void DeleteResolvedLibrariesSync() {
+            var completeEvent = new ManualResetEvent(false);
+            DeleteResolvedLibraries(complete: () => { completeEvent.Set(); });
+            PollManualResetEvent(completeEvent);
         }
 
         /// <summary>
@@ -1502,6 +1534,14 @@ namespace GooglePlayServices {
         [MenuItem("Assets/Play Services Resolver/Android Resolver/Force Resolve")]
         public static void MenuForceResolve() {
             ExecuteMenuResolve(true);
+        }
+
+        /// <summary>
+        /// Add a menu item to clear all resolved libraries.
+        /// </summary>
+        [MenuItem("Assets/Play Services Resolver/Android Resolver/Delete Resolved Libraries")]
+        public static void MenuDeleteResolvedLibraries() {
+            DeleteResolvedLibrariesSync();
         }
 
         /// <summary>
