@@ -61,6 +61,7 @@ public class TestResolveAsync {
         /// </summary>
         public TestCaseResult(TestCase testCase) {
             TestCaseName = testCase.Name;
+            ErrorMessages = new List<string>();
             Skipped = false;
         }
 
@@ -165,7 +166,10 @@ public class TestResolveAsync {
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
                         SetupDependencies();
-                        testCaseComplete(new TestCaseResult(testCase));
+
+                        var testCaseResult = new TestCaseResult(testCase);
+                        ValidateDependencies(testCaseResult);
+                        testCaseComplete(testCaseResult);
                     }
                 },
                 new TestCase {
@@ -525,6 +529,70 @@ public class TestResolveAsync {
         Google.VersionHandler.InvokeInstanceMethod(
             AndroidResolverSupport, "DependOn",
             new object[] { "com.google.firebase", "firebase-common", "16.0.0" });
+    }
+
+    /// <summary>
+    /// Validate Android libraries and repos are setup correctly.
+    /// </summary>
+    /// <param name="testCaseResult">TestCaseResult instance to add errors to if this method
+    /// fails. </param>
+    private static void ValidateDependencies(TestCaseResult testCaseResult) {
+        // Validate set dependencies are present.
+        CompareKeyValuePairLists(
+            new List<KeyValuePair<string, string>>() {
+                new KeyValuePair<string, string>(
+                    "com.android.support:support-annotations:26.1.0",
+                    "Assets/PlayServicesResolver/Editor/TestDependencies.xml:4"),
+                new KeyValuePair<string, string>(
+                    "com.google.firebase:firebase-app-unity:5.1.1",
+                    "Assets/PlayServicesResolver/Editor/TestDependencies.xml:10"),
+                new KeyValuePair<string, string>(
+                    "com.google.firebase:firebase-common:16.0.0",
+                    "TestResolveAsync.SetupDependencies()")
+            },
+            (IList<KeyValuePair<string, string>>)Google.VersionHandler.InvokeStaticMethod(
+                AndroidResolverClass, "GetPackageSpecs", null),
+            "Package Specs", testCaseResult);
+        // Validate configured repos are present.
+        CompareKeyValuePairLists(
+            new List<KeyValuePair<string, string>>() {
+                new KeyValuePair<string, string>(
+                    "file:///" + Path.GetFullPath(
+                       "Assets/Firebase/m2repository").Replace("\\", "/"),
+                    "Assets/PlayServicesResolver/Editor/TestDependencies.xml:10")
+            },
+            (IList<KeyValuePair<string, string>>)Google.VersionHandler.InvokeStaticMethod(
+                AndroidResolverClass, "GetRepos", null),
+            "Repos", testCaseResult);
+    }
+
+    /// <summary>
+    /// Compare two ordered lists.
+    /// </summary>
+    /// <param name="expectedList">Expected list.</param>
+    /// <param name="testList">List to compare with expectedList.</param>
+    /// <param name="listDescription">Human readable description of both lists.</param>
+    /// <param name="testCaseResult">TestCaseResult instance to add errors to if lists do not
+    /// match.</param>
+    private static void CompareKeyValuePairLists(
+            IList<KeyValuePair<string, string>> expectedList,
+            IList<KeyValuePair<string, string>> testList, string listDescription,
+            TestCaseResult testCaseResult) {
+        if (expectedList.Count != testList.Count) {
+            testCaseResult.ErrorMessages.Add(String.Format(
+                "Returned list of {0} is an unexpected size {1} vs {2}",
+                listDescription, testList.Count, expectedList.Count));
+            return;
+        }
+        for (int i = 0; i < expectedList.Count; ++i) {
+            var expected = expectedList[i];
+            var test = testList[i];
+            if (expected.Key != test.Key || expected.Value != test.Value) {
+                testCaseResult.ErrorMessages.Add(String.Format(
+                    "Element {0} of list {1} ({2} {3}) mismatches the expected value ({4} {5})",
+                    i, listDescription, test.Key, test.Value, expected.Key, expected.Value));
+            }
+        }
     }
 
     /// <summary>

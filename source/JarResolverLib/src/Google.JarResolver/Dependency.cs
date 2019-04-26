@@ -57,12 +57,34 @@ namespace Google.JarResolver {
         /// originated.</param>
         public Dependency(string group, string artifact, string version, string[] packageIds=null,
                           string[] repositories=null, string createdBy=null) {
+            // If the dependency was added programmatically, strip out stack frames from inside the
+            // library since the developer is likely interested in where in their code the
+            // dependency was injected.
+            if (createdBy == null) {
+                var usefulFrames = new List<string>();
+                bool filterFrames = true;
+                // Filter all of the initial stack frames from system libraries and this plugin.
+                foreach (var frame in System.Environment.StackTrace.Split(new char[] { '\n' })) {
+                    var frameString = frame.Trim();
+                    if (frameString.StartsWith("at ")) frameString = frameString.Split()[1];
+                    if (filterFrames && (
+                            frameString.StartsWith("System.Environment.") ||
+                            frameString.StartsWith("Google.JarResolver.") ||
+                            frameString.StartsWith("System.Reflection.") ||
+                            frameString.StartsWith("Google.VersionHandler"))) {
+                        continue;
+                    }
+                    filterFrames = false;
+                    usefulFrames.Add(frameString);
+                }
+                createdBy = String.Join("\n", usefulFrames.ToArray());
+            }
             Group = group;
             Artifact = artifact;
             Version = version;
             PackageIds = packageIds;
             Repositories = repositories;
-            CreatedBy = createdBy ?? System.Environment.StackTrace;
+            CreatedBy = createdBy;
         }
 
         /// <summary>

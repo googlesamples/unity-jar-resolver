@@ -19,6 +19,7 @@ namespace GooglePlayServices
     using UnityEngine;
     using UnityEditor;
     using System.Collections.Generic;
+    using System.Collections.Specialized;
     using Google;
     using Google.JarResolver;
     using System;
@@ -514,6 +515,84 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// From a list of dependencies generate a list of Maven / Gradle / Ivy package spec
+        /// strings.
+        /// </summary>
+        /// <param name="dependencies">Dependency instances to query for package specs.</param>
+        /// <returns>Dictionary of Dependency instances indexed by package spec strings.</returns>
+        internal static Dictionary<string, string> DependenciesToPackageSpecs(
+                IEnumerable<Dependency> dependencies) {
+            var sourcesByPackageSpec = new Dictionary<string, string>();
+            foreach (var dependency in dependencies) {
+                // Convert the legacy "LATEST" version spec to a Gradle version spec.
+                var packageSpec = dependency.Version.ToUpper() == "LATEST" ?
+                    dependency.VersionlessKey + ":+" : dependency.Key;
+                var source = CommandLine.SplitLines(dependency.CreatedBy)[0];
+                string sources;
+                if (sourcesByPackageSpec.TryGetValue(packageSpec, out sources)) {
+                    sources = sources + ", " + source;
+                } else {
+                    sources = source;
+                }
+                sourcesByPackageSpec[packageSpec] = sources;
+            }
+            return sourcesByPackageSpec;
+        }
+
+        /// <summary>
+        /// Extract the ordered set of repository URIs from the specified dependencies.
+        /// </summary>
+        /// <param name="dependencies">Dependency instances to query for repos.</param>
+        /// <returns>Dictionary of source filenames by repo names.</returns>
+        internal static List<KeyValuePair<string, string>> DependenciesToRepoUris(
+                IEnumerable<Dependency> dependencies) {
+            var sourcesByRepo = new OrderedDictionary();
+            // Build array of repos to search, they're interleaved across all dependencies as the
+            // order matters.
+            int maxNumberOfRepos = 0;
+            foreach (var dependency in dependencies) {
+                maxNumberOfRepos = Math.Max(maxNumberOfRepos, dependency.Repositories.Length);
+            }
+            for (int i = 0; i < maxNumberOfRepos; i++) {
+                foreach (var dependency in dependencies) {
+                    var repos = dependency.Repositories;
+                    if (i >= repos.Length) continue;
+                    var source = CommandLine.SplitLines(dependency.CreatedBy)[0];
+                    var repo = repos[i];
+                    // Filter Android SDK repos as they're supplied in the build script.
+                    if (repo.StartsWith(PlayServicesSupport.SdkVariable)) continue;
+                    // Since we need a URL, determine whether the repo has a scheme.  If not,
+                    // assume it's a local file.
+                    bool validScheme = false;
+                    foreach (var scheme in new [] { "file:", "http:", "https:" }) {
+                        validScheme |= repo.StartsWith(scheme);
+                    }
+                    if (!validScheme) {
+                        repo = "file:///" + Path.GetFullPath(repo).Replace("\\", "/");
+                    }
+                    // Escape the URI to handle special characters like spaces and percent escape
+                    // all characters that are interpreted by gradle.
+                    repo = EscapeGradlePropertyValue(
+                        Uri.EscapeUriString(repo),
+                        escapeFunc: Uri.EscapeDataString,
+                        charactersToExclude: GradleUriExcludeEscapeCharacters);
+                    if (sourcesByRepo.Contains(repo)) {
+                        sourcesByRepo[repo] = sourcesByRepo[repo] + ", " + source;
+                        continue;
+                    }
+                    sourcesByRepo[repo] = source;
+                }
+            }
+            var sourcesByRepoList = new List<KeyValuePair<string, string>>();
+            var enumerator = sourcesByRepo.GetEnumerator();
+            while (enumerator.MoveNext()) {
+                sourcesByRepoList.Add(new KeyValuePair<string, string>((string)enumerator.Key,
+                                                                       (string)enumerator.Value));
+            }
+            return sourcesByRepoList;
+        }
+
+        /// <summary>
         /// Perform resolution using Gradle.
         /// </summary>
         /// <param name="destinationDirectory">Directory to copy packages into.</param>
@@ -579,39 +658,8 @@ namespace GooglePlayServices
 
             // Build array of repos to search, they're interleaved across all dependencies as the
             // order matters.
-            int maxNumberOfRepos = 0;
-            foreach (var dependency in allDependencies.Values) {
-                maxNumberOfRepos = Math.Max(maxNumberOfRepos, dependency.Repositories.Length);
-            }
-            var repoSet = new HashSet<string>();
             var repoList = new List<string>();
-            for (int i = 0; i < maxNumberOfRepos; i++) {
-                foreach (var dependency in allDependencies.Values) {
-                    var repos = dependency.Repositories;
-                    if (i >= repos.Length) continue;
-                    var repo = repos[i];
-                    // Filter Android SDK repos as they're supplied in the build script.
-                    if (repo.StartsWith(PlayServicesSupport.SdkVariable)) continue;
-                    // Since we need a URL, determine whether the repo has a scheme.  If not,
-                    // assume it's a local file.
-                    bool validScheme = false;
-                    foreach (var scheme in new [] { "file:", "http:", "https:" }) {
-                        validScheme |= repo.StartsWith(scheme);
-                    }
-                    if (!validScheme) {
-                        repo = "file:///" + Path.GetFullPath(repo).Replace("\\", "/");
-                    }
-                    // Escape the URI to handle special characters like spaces and percent escape
-                    // all characters that are interpreted by gradle.
-                    repo = EscapeGradlePropertyValue(
-                        Uri.EscapeUriString(repo),
-                        escapeFunc: Uri.EscapeDataString,
-                        charactersToExclude: GradleUriExcludeEscapeCharacters);
-                    if (repoSet.Contains(repo)) continue;
-                    repoSet.Add(repo);
-                    repoList.Add(repo);
-                }
-            }
+            foreach (var kv in DependenciesToRepoUris(allDependencies.Values)) repoList.Add(kv.Key);
 
             // Executed when Gradle finishes execution.
             CommandLine.CompletionHandler gradleComplete = (result) => {
@@ -711,18 +759,14 @@ namespace GooglePlayServices
                 RunOnMainThread.Run(processResult);
             };
 
-            var filteredDependencies = new List<string>();
-            foreach (var dependency in allDependencies.Values) {
-                // Convert the legacy "LATEST" version spec to a Gradle version spec.
-                filteredDependencies.Add(dependency.Version.ToUpper() == "LATEST" ?
-                                         dependency.VersionlessKey + ":+" : dependency.Key);
-            }
+            var packageSpecs =
+                new List<string>(DependenciesToPackageSpecs(allDependencies.Values).Keys);
 
             var gradleProjectProperties = new Dictionary<string, string>() {
                 { "ANDROID_HOME", androidSdkPath },
                 { "TARGET_DIR", Path.GetFullPath(destinationDirectory) },
                 { "MAVEN_REPOS", String.Join(";", repoList.ToArray()) },
-                { "PACKAGES_TO_COPY", String.Join(";", filteredDependencies.ToArray()) }
+                { "PACKAGES_TO_COPY", String.Join(";", packageSpecs.ToArray()) }
             };
             var gradleArguments = new List<string> {
                 String.Format("-b \"{0}\"", buildScript),

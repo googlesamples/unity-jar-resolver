@@ -1545,6 +1545,73 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// If dependencies is specified return the value, otherwise refresh from the project and
+        /// return the parsed dependencies.
+        /// </summary>
+        /// <returns>List of Android library dependencies.</returns>
+        private static IEnumerable<Dependency> GetOrReadDependencies(
+                IEnumerable<Dependency> dependencies) {
+            if (dependencies == null) {
+                xmlDependencies.ReadAll(logger);
+                dependencies = PlayServicesSupport.GetAllDependencies().Values;
+            }
+            return dependencies;
+        }
+
+        /// <summary>
+        /// Get the list of Android package specs referenced by the project and the sources they're
+        /// loaded from.
+        /// </summary>
+        /// <returns>List of package spec, source pairs.</returns>
+        public static IList<KeyValuePair<string, string>> GetPackageSpecs(
+                IEnumerable<Dependency> dependencies = null) {
+            return new List<KeyValuePair<string, string>>(new SortedList<string, string>(
+                ResolverVer1_1.DependenciesToPackageSpecs(GetOrReadDependencies(dependencies))));
+        }
+
+        /// <summary>
+        /// Get the list of Maven repo URIs required for Android libraries in this project.
+        /// </summary>
+        /// <returns>List of repo, source pairs.</returns>
+        public static IList<KeyValuePair<string, string>> GetRepos(
+                IEnumerable<Dependency> dependencies = null) {
+            return ResolverVer1_1.DependenciesToRepoUris(GetOrReadDependencies(dependencies));
+        }
+
+        /// <summary>
+        /// Display the set of dependncies / libraries currently included in the project.
+        /// This prints out the set of libraries in a form that can be easily included in a Gradle
+        /// script.  This does not resolve dependency conflicts, it simply displays what is included
+        /// by plugins in the project.
+        /// </summary>
+        [MenuItem("Assets/Play Services Resolver/Android Resolver/Display Libraries")]
+        public static void MenuDisplayLibraries() {
+            xmlDependencies.ReadAll(logger);
+            var dependencies = PlayServicesSupport.GetAllDependencies().Values;
+
+            var lines = new List<string>();
+            lines.Add("allprojects {");
+            lines.Add("  repositories {");
+            lines.Add("    maven {");
+            foreach (var repoAndSources in GetRepos(dependencies: dependencies)) {
+                lines.Add(String.Format("      url \"{0}\" // {1}", repoAndSources.Key,
+                                        repoAndSources.Value));
+            }
+            lines.Add("    }");
+            lines.Add("  }");
+            lines.Add("}");
+
+            lines.Add("dependencies {");
+            foreach (var packageSpecAndSources in GetPackageSpecs(dependencies: dependencies)) {
+                lines.Add(String.Format("  implementation '{0}' // {1}", packageSpecAndSources.Key,
+                                        packageSpecAndSources.Value));
+            }
+            lines.Add("}");
+
+            Log(String.Join("\n", lines.ToArray()));
+        }
+
+        /// <summary>
         /// Called when settings change.
         /// </summary>
         internal static void OnSettingsChanged() {
