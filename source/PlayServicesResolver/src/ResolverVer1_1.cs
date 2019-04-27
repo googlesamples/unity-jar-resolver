@@ -54,6 +54,8 @@ namespace GooglePlayServices
             public bool gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
             // Whether gradle export is enabled.
             public bool gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
+            // Whether the gradle template is enabled.
+            public bool gradleTemplate = PlayServicesResolver.GradleTemplateEnabled;
             // AAR version that should be ignored when attempting to overwrite an existing
             // dependency.  This is reset when the dependency is updated to a version different
             // to this.
@@ -114,6 +116,7 @@ namespace GooglePlayServices
                 targetAbis = dataToCopy.targetAbis;
                 gradleBuildSystem = dataToCopy.gradleBuildSystem;
                 gradleExport = dataToCopy.gradleExport;
+                gradleTemplate = dataToCopy.gradleTemplate;
                 ignoredVersion = dataToCopy.ignoredVersion;
             }
 
@@ -133,6 +136,7 @@ namespace GooglePlayServices
                     targetAbis == data.targetAbis &&
                     gradleBuildSystem == data.gradleBuildSystem &&
                     gradleExport == data.gradleExport &&
+                    gradleTemplate == data.gradleTemplate &&
                     ignoredVersion == data.ignoredVersion;
             }
 
@@ -149,6 +153,7 @@ namespace GooglePlayServices
                     targetAbis.GetHashCode() ^
                     gradleBuildSystem.GetHashCode() ^
                     gradleExport.GetHashCode() ^
+                    gradleTemplate.GetHashCode() ^
                     ignoredVersion.GetHashCode();
             }
 
@@ -176,9 +181,10 @@ namespace GooglePlayServices
                                      "availableAbis={4} " +
                                      "targetAbis={5} " +
                                      "gradleBuildSystem={6} " +
-                                     "gradleExport={7}",
+                                     "gradleExport={7} " +
+                                     "gradleTemplate={8}",
                                      modificationTime, explode, bundleId, path, availableAbis,
-                                     targetAbis, gradleBuildSystem, gradleExport);
+                                     targetAbis, gradleBuildSystem, gradleExport, gradleTemplate);
             }
         }
 
@@ -302,6 +308,9 @@ namespace GooglePlayServices
                                                 } else if (elementName == "gradleExport") {
                                                     aarData.gradleExport =
                                                         reader.ReadContentAsBoolean();
+                                                } else if (elementName == "gradleTemplate") {
+                                                    aarData.gradleTemplate =
+                                                        reader.ReadContentAsBoolean();
                                                 } else if (elementName == "ignoredVersion") {
                                                     aarData.ignoredVersion =
                                                         reader.ReadContentAsString();
@@ -374,6 +383,9 @@ namespace GooglePlayServices
                         writer.WriteEndElement();
                         writer.WriteStartElement("gradleExport");
                         writer.WriteValue(kv.Value.gradleExport);
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("gradleTemplate");
+                        writer.WriteValue(kv.Value.gradleTemplate);
                         writer.WriteEndElement();
                         writer.WriteStartElement("ignoredVersion");
                         writer.WriteValue(kv.Value.ignoredVersion);
@@ -1305,7 +1317,7 @@ namespace GooglePlayServices
             }
             if (aarData.gradleBuildSystem != PlayServicesResolver.GradleBuildEnabled) {
                 PlayServicesResolver.Log(
-                    String.Format("{0}: Gradle build system enabled changed {0} --> {1}",
+                    String.Format("{0}: Gradle build system enabled changed {1} --> {2}",
                                   aarData.path, aarData.gradleBuildSystem,
                                   PlayServicesResolver.GradleBuildEnabled),
                     level: LogLevel.Verbose);
@@ -1313,9 +1325,17 @@ namespace GooglePlayServices
             }
             if (aarData.gradleExport != PlayServicesResolver.GradleProjectExportEnabled) {
                 PlayServicesResolver.Log(
-                    String.Format("{0}: Gradle export settings changed {0} --> {1}",
+                    String.Format("{0}: Gradle export settings changed {1} --> {2}",
                                   aarData.path, aarData.gradleExport,
                                   PlayServicesResolver.GradleProjectExportEnabled),
+                    level: LogLevel.Verbose);
+                return true;
+            }
+            if (aarData.gradleTemplate != PlayServicesResolver.GradleTemplateEnabled) {
+                PlayServicesResolver.Log(
+                    String.Format("{0}: Gradle template changed {1} --> {2}",
+                                  aarData.path, aarData.gradleTemplate,
+                                  PlayServicesResolver.GradleTemplateEnabled),
                     level: LogLevel.Verbose);
                 return true;
             }
@@ -1436,6 +1456,7 @@ namespace GooglePlayServices
                         }
                         aarData.gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
                         aarData.gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
+                        aarData.gradleTemplate = PlayServicesResolver.GradleTemplateEnabled;
                         aarData.TargetAbis = AndroidAbis.Current;
                     }
                     SaveAarExplodeCache();

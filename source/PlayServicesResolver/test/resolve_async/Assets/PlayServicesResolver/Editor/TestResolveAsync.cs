@@ -129,6 +129,17 @@ public class TestResolveAsync {
     private const string ADDITIONAL_DEPENDENCIES_FILENAME = "TestAdditionalDependencies";
 
     /// <summary>
+    /// Disabled Gradle template file.
+    /// </summary>
+    private const string GRADLE_TEMPLATE_DISABLED =
+        "Assets/Plugins/Android/mainTemplateDISABLED.gradle";
+
+    /// <summary>
+    /// Enabled Gradle template file.
+    /// </summary>
+    private const string GRADLE_TEMPLATE_ENABLED = "Assets/Plugins/Android/mainTemplate.gradle";
+
+    /// <summary>
     /// Major / minor Unity version numbers.
     /// </summary>
     private static float unityVersion;
@@ -154,6 +165,12 @@ public class TestResolveAsync {
         // Disable stack traces for more condensed logs.
         UnityEngine.Application.stackTraceLogType = UnityEngine.StackTraceLogType.None;
 
+        // Set of files to ignore (relative to the Assets/Plugins/Android directory) in all tests
+        // that do not use the Gradle template.
+        var nonGradleTemplateFilesToIgnore = new HashSet<string>() {
+            Path.GetFileName(GRADLE_TEMPLATE_DISABLED)
+        };
+
         UnityEngine.Debug.Log("Setting up test cases for execution.");
         testCases.AddRange(new [] {
                 // This *must* be the first test case as other test cases depend upon it.
@@ -173,12 +190,58 @@ public class TestResolveAsync {
                     }
                 },
                 new TestCase {
+                    Name = "ResolveForGradleBuildSystemWithTemplate",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies();
+
+                        ResolveWithGradleTemplate(
+                            "ExpectedArtifacts/NoExport/GradleTemplate",
+                            testCase, testCaseComplete,
+                            otherExpectedFiles: new [] {
+                                "Assets/Firebase/m2repository/com/google/firebase/" +
+                                "firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" });
+                    }
+                },
+                new TestCase {
+                    Name = "ResolveForGradleBuildSystemWithTemplateEmpty",
+                    Method = (testCase, testCaseComplete) => {
+                        string enabledDependencies =
+                            "Assets/PlayServicesResolver/Editor/TestDependencies.xml";
+                        string disabledDependencies =
+                            "Assets/PlayServicesResolver/Editor/TestDependenciesDISABLED.xml";
+                        Action enableDependencies = () => {
+                            UnityEditor.AssetDatabase.MoveAsset(disabledDependencies,
+                                                                enabledDependencies);
+                        };
+                        try {
+                            // Disable all XML dependencies.
+                            var error = UnityEditor.AssetDatabase.MoveAsset(enabledDependencies,
+                                                                            disabledDependencies);
+                            if (!String.IsNullOrEmpty(error)) {
+                                testCaseComplete(new TestCaseResult(testCase) {
+                                        ErrorMessages = new List<string>() { error } });
+                                return;
+                            }
+                            ClearAllDependencies();
+                            ResolveWithGradleTemplate(
+                                "ExpectedArtifacts/NoExport/GradleTemplateEmpty",
+                                testCase, (testCaseResult) => {
+                                    enableDependencies();
+                                    testCaseComplete(testCaseResult);
+                                });
+                        } finally {
+                            enableDependencies();
+                        }
+                    }
+                },
+                new TestCase {
                     Name = "ResolveForGradleBuildSystem",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
                         SetupDependencies();
                         Resolve("Gradle", false, "ExpectedArtifacts/NoExport/Gradle",
-                                null, testCase, testCaseComplete);
+                                null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
                 new TestCase {
@@ -187,7 +250,8 @@ public class TestResolveAsync {
                         ClearAllDependencies();
                         SetupDependencies();
                         Resolve("Gradle", false, "ExpectedArtifacts/NoExport/Gradle",
-                                null, testCase, testCaseComplete, synchronous: true);
+                                null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete,
+                                synchronous: true);
                     }
                 },
                 new TestCase {
@@ -199,7 +263,7 @@ public class TestResolveAsync {
                                 AarsWithNativeLibrariesSupported ?
                                     "ExpectedArtifacts/NoExport/InternalNativeAars" :
                                     "ExpectedArtifacts/NoExport/InternalNativeAarsExploded",
-                                null, testCase, testCaseComplete);
+                                null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
                 new TestCase {
@@ -208,7 +272,7 @@ public class TestResolveAsync {
                         ClearAllDependencies();
                         SetupDependencies();
                         Resolve("Gradle", true, "ExpectedArtifacts/Export/Gradle",
-                                null, testCase, testCaseComplete);
+                                null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
                 new TestCase {
@@ -218,7 +282,7 @@ public class TestResolveAsync {
                         SetupDependencies();
                         UpdateAdditionalDependenciesFile(true);
                         Resolve("Gradle", true, "ExpectedArtifacts/Export/GradleAddedDeps",
-                                null, testCase, testCaseComplete);
+                                null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
                 new TestCase {
@@ -230,7 +294,7 @@ public class TestResolveAsync {
                         UpdateAdditionalDependenciesFile(true);
                         UpdateAdditionalDependenciesFile(false);
                         Resolve("Gradle", true, "ExpectedArtifacts/Export/Gradle",
-                                null, testCase, testCaseComplete);
+                                null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
                 new TestCase {
@@ -239,24 +303,46 @@ public class TestResolveAsync {
                         ClearAllDependencies();
                         SetupDependencies();
                         Resolve("Gradle", true, "ExpectedArtifacts/Export/Gradle",
-                                null, testCase, (testCaseResult) => {
+                                null, nonGradleTemplateFilesToIgnore,
+                                testCase, (testCaseResult) => {
                                     Google.VersionHandler.InvokeStaticMethod(
                                         AndroidResolverClass, "DeleteResolvedLibrariesSync", null);
                                     var unexpectedFilesMessage = new List<string>();
-                                    var resolvedFiles = ListFiles("Assets/Plugins/Android");
+                                    var resolvedFiles = ListFiles("Assets/Plugins/Android",
+                                                                  nonGradleTemplateFilesToIgnore);
                                     if (resolvedFiles.Count > 0) {
                                         unexpectedFilesMessage.Add("Libraries not deleted!");
                                         foreach (var filename in resolvedFiles.Values) {
                                             unexpectedFilesMessage.Add(filename);
                                         }
                                     }
-                                    testCaseComplete(new TestCaseResult(testCase) {
-                                            ErrorMessages = unexpectedFilesMessage
-                                        });
+                                    testCaseResult.ErrorMessages.AddRange(unexpectedFilesMessage);
+                                    testCaseComplete(testCaseResult);
                                 },
                                 synchronous: true);
                     }
-                }
+                },
+                new TestCase {
+                    Name = "ResolveForGradleBuildSystemWithTemplateDeleteLibraries",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies();
+
+                        ResolveWithGradleTemplate(
+                            "ExpectedArtifacts/NoExport/GradleTemplate",
+                            testCase, (testCaseResult) => {
+                                Google.VersionHandler.InvokeStaticMethod(
+                                        AndroidResolverClass, "DeleteResolvedLibrariesSync", null);
+                                testCaseResult.ErrorMessages.AddRange(CompareDirectoryContents(
+                                            "ExpectedArtifacts/NoExport/GradleTemplateEmpty",
+                                            "Assets/Plugins/Android", null));
+                                if (File.Exists(GRADLE_TEMPLATE_ENABLED)) {
+                                    File.Delete(GRADLE_TEMPLATE_ENABLED);
+                                }
+                                testCaseComplete(testCaseResult);
+                            }, deleteGradleTemplate: false);
+                    }
+                },
             });
 
         // Test resolution with Android ABI filtering.
@@ -268,7 +354,8 @@ public class TestResolveAsync {
                             ClearAllDependencies();
                             Resolve("Gradle", false,
                                     "ExpectedArtifacts/NoExport/GradleArmeabiv7aArm64",
-                                    "armeabi-v7a, arm64-v8a", testCase, testCaseComplete);
+                                    "armeabi-v7a, arm64-v8a", nonGradleTemplateFilesToIgnore,
+                                    testCase, testCaseComplete);
                         }
                     }
                 });
@@ -280,7 +367,8 @@ public class TestResolveAsync {
                             ClearAllDependencies();
                             Resolve("Gradle", false,
                                     "ExpectedArtifacts/NoExport/GradleArmeabiv7a",
-                                    "armeabi-v7a", testCase, testCaseComplete);
+                                    "armeabi-v7a", nonGradleTemplateFilesToIgnore,
+                                    testCase, testCaseComplete);
                         }
                     }
                 });
@@ -596,7 +684,7 @@ public class TestResolveAsync {
     }
 
     /// <summary>
-    /// Programmatically add/remove dependencies by copying/deleting a template file.
+    /// Programmatically add/remove dependencies by copying/deleting a template file.
     /// The change will be processed by the plugin after the UnityEditor.AssetDatabase.Refresh()
     /// call.
     /// </summary>
@@ -636,11 +724,13 @@ public class TestResolveAsync {
     /// resolution step.</param>
     /// <param name="targetAbis">String of Android ABIs to target or null if the default ABIs
     /// should be selected.</param>
+    /// <param name="filesToIgnore">Set of files to relative to the generatedAssetsDir.</param>
     /// <param name="testCase">Object executing this method.</param>
     /// <param name="testCaseComplete">Called with the test result.</param>
     /// <param name="synchronous">Whether the resolution should be executed synchronously.</param>
     private static void Resolve(string androidBuildSystem, bool exportProject,
                                 string expectedAssetsDir, string targetAbis,
+                                ICollection<string> filesToIgnore,
                                 TestCase testCase, Action<TestCaseResult> testCaseComplete,
                                 bool synchronous = false) {
         // Set the Android target ABIs.
@@ -685,7 +775,8 @@ public class TestResolveAsync {
                 testCase,
                 () => {
                     testCaseComplete(new TestCaseResult(testCase) {
-                            ErrorMessages = ValidateAndroidResolution(expectedAssetsDir, complete)
+                            ErrorMessages = ValidateAndroidResolution(expectedAssetsDir, complete,
+                                                                      filesToIgnore)
                         });
                 }, true);
         };
@@ -704,6 +795,53 @@ public class TestResolveAsync {
     }
 
     /// <summary>
+    /// Resolve for Gradle using a template .gradle file.
+    /// </summary>
+    /// <param name="expectedAssetsDir">Directory that contains the assets expected from the
+    /// resolution step.</param>
+    /// <param name="testCase">Object executing this method.</param>
+    /// <param name="testCaseComplete">Called with the test result.</param>
+    /// <param name="otherExpectedFiles">Set of additional files that are expected in the
+    /// project.</param>
+    /// <param name="deleteGradleTemplate">Whether to delete the gradle template before
+    /// testCaseComplete is called.</param>
+    private static void ResolveWithGradleTemplate(string expectedAssetsDir,
+                                                  TestCase testCase,
+                                                  Action<TestCaseResult> testCaseComplete,
+                                                  IEnumerable<string> otherExpectedFiles = null,
+                                                  bool deleteGradleTemplate = true) {
+        var cleanUpFiles = new List<string>();
+        if (deleteGradleTemplate) cleanUpFiles.Add(GRADLE_TEMPLATE_ENABLED);
+        if (otherExpectedFiles != null) cleanUpFiles.AddRange(otherExpectedFiles);
+        Action cleanUpTestCase = () => {
+            foreach (var filename in cleanUpFiles) {
+                if (File.Exists(filename)) File.Delete(filename);
+            }
+        };
+        try {
+            File.Copy(GRADLE_TEMPLATE_DISABLED, GRADLE_TEMPLATE_ENABLED);
+            Resolve("Gradle", false, expectedAssetsDir,
+                    null, null, testCase, (TestCaseResult testCaseResult) => {
+                        if (otherExpectedFiles != null) {
+                            foreach (var expectedFile in otherExpectedFiles) {
+                                if (!File.Exists(expectedFile)) {
+                                    testCaseResult.ErrorMessages.Add(String.Format("{0} not found",
+                                                                                   expectedFile));
+                                }
+                            }
+                        }
+                        cleanUpTestCase();
+                        testCaseComplete(testCaseResult);
+                    }, synchronous: true);
+        } catch (Exception ex) {
+            var testCaseResult = new TestCaseResult(testCase);
+            testCaseResult.ErrorMessages.Add(ex.ToString());
+            cleanUpTestCase();
+            testCaseComplete(testCaseResult);
+        }
+    }
+
+    /// <summary>
     /// Get a list of files under a directory indexed by the path relative to the directory.
     /// This filters all Unity .meta files from the resultant list.
     /// </summary>
@@ -712,15 +850,21 @@ public class TestResolveAsync {
     /// under the specified searchDir argument.  If this is null, searchDir is used.</param>
     /// <returns>Dictionary of file paths mapped to relative file paths.</returns>
     private static Dictionary<string, string> ListFiles(string searchDir,
+                                                        ICollection<string> filesToIgnore,
                                                         string relativeDir = null) {
         var foundFiles = new Dictionary<string, string>();
         relativeDir = relativeDir != null ? relativeDir : searchDir;
         foreach (var path in Directory.GetFiles(searchDir)) {
-            if (path.EndsWith(".meta")) continue;
-            foundFiles[path.Substring(relativeDir.Length + 1)] = path;
+            var relativeFilename = path.Substring(relativeDir.Length + 1);
+            // Skip files that should be ignored.
+            if (path.EndsWith(".meta") ||
+                (filesToIgnore != null && filesToIgnore.Contains(relativeFilename))) {
+                continue;
+            }
+            foundFiles[relativeFilename] = path;
         }
         foreach (var path in Directory.GetDirectories(searchDir)) {
-            foreach (var kv in ListFiles(path, relativeDir)) {
+            foreach (var kv in ListFiles(path, filesToIgnore, relativeDir)) {
                 foundFiles[kv.Key] = kv.Value;
             }
         }
@@ -757,18 +901,20 @@ public class TestResolveAsync {
     /// </summary>
     /// <param name="expectedAssetsDir">Directory that contains expected assets.</param>
     /// <param name="generatedAssetsDir">Directory that contains generated assets.</param>
+    /// <param name="filesToIgnore">Set of files to relative to the generatedAssetsDir.</param>
     /// <returns>List of errors.  If validation was successful the list will be empty.</returns>
     private static List<string> CompareDirectoryContents(string expectedAssetsDir,
-                                                         string generatedAssetsDir) {
+                                                         string generatedAssetsDir,
+                                                         ICollection<string> filesToIgnore) {
         var failureMessages = new List<string>();
         // Get the set of expected artifact paths and resolved artifact paths.
         var expectedAndResolvedArtifactsByFilename =
             new Dictionary<string, KeyValuePair<string, string>>();
-        foreach (var kv in ListFiles(expectedAssetsDir)) {
+        foreach (var kv in ListFiles(expectedAssetsDir, null)) {
             expectedAndResolvedArtifactsByFilename[kv.Key] =
                 new KeyValuePair<string, string>(kv.Value, null);
         }
-        foreach (var kv in ListFiles(generatedAssetsDir)) {
+        foreach (var kv in ListFiles(generatedAssetsDir, filesToIgnore)) {
             KeyValuePair<string, string> expectedResolved;
             if (expectedAndResolvedArtifactsByFilename.TryGetValue(kv.Key,
                                                                    out expectedResolved)) {
@@ -800,34 +946,50 @@ public class TestResolveAsync {
                     break;
                 }
             }
-            if (isZipFile) {
-                // Extract both files and compare the contents.
-                string[] extractedDirectories = new string[] { null, null };
-                try {
-                    var expectedDir = ExtractZip(expectedFile, failureMessages);
-                    extractedDirectories[0] = expectedDir;
-                    var resolvedDir = ExtractZip(resolvedFile, failureMessages);
-                    extractedDirectories[1] = resolvedDir;
-                    if (expectedDir != null && resolvedDir != null) {
-                        var zipDirCompareFailures = CompareDirectoryContents(expectedDir,
-                                                                             resolvedDir);
-                        if (zipDirCompareFailures.Count > 0) {
-                            failureMessages.Add(String.Format("Artifact {0} does not match {1}",
-                                                              resolvedFile, expectedFile));
-                            failureMessages.AddRange(zipDirCompareFailures);
+            var expectedContents = File.ReadAllBytes(expectedFile);
+            var resolvedContents = File.ReadAllBytes(resolvedFile);
+            if (!expectedContents.SequenceEqual(resolvedContents)) {
+                if (isZipFile) {
+                    // Extract both files and compare the contents.
+                    string[] extractedDirectories = new string[] { null, null };
+                    try {
+                        var expectedDir = ExtractZip(expectedFile, failureMessages);
+                        extractedDirectories[0] = expectedDir;
+                        var resolvedDir = ExtractZip(resolvedFile, failureMessages);
+                        extractedDirectories[1] = resolvedDir;
+                        if (expectedDir != null && resolvedDir != null) {
+                            var zipDirCompareFailures = CompareDirectoryContents(expectedDir,
+                                                                                 resolvedDir, null);
+                            if (zipDirCompareFailures.Count > 0) {
+                                failureMessages.Add(String.Format("Artifact {0} does not match {1}",
+                                                                  resolvedFile, expectedFile));
+                                failureMessages.AddRange(zipDirCompareFailures);
+                            }
+                        }
+                    } finally {
+                        foreach (var directory in extractedDirectories) {
+                            if (directory != null) Directory.Delete(directory, true);
                         }
                     }
-                } finally {
-                    foreach (var directory in extractedDirectories) {
-                        if (directory != null) Directory.Delete(directory, true);
+                } else {
+                    // Determine whether to display the file as a string.
+                    bool displayContents = false;
+                    string resolvedExtension = Path.GetExtension(resolvedFile).ToLower();
+                    foreach (var extension in new[] { ".xml", ".txt", ".gradle" }) {
+                        if (resolvedExtension == extension) {
+                            displayContents = true;
+                            break;
+                        }
                     }
-                }
-            } else {
-                var expectedContents = File.ReadAllBytes(expectedFile);
-                var resolvedContents = File.ReadAllBytes(resolvedFile);
-                if (!expectedContents.SequenceEqual(resolvedContents)) {
-                    failureMessages.Add(String.Format("Artifact {0} does not match contents of {1}",
-                                                      resolvedFile, expectedFile));
+                    // Log an error.
+                    failureMessages.Add(String.Format(
+                        "Artifact {0} does not match contents of {1}\n" +
+                        "--- {0} -------\n" +
+                        "{2}\n" +
+                        "--- {0} end ---\n",
+                        resolvedFile, expectedFile,
+                        displayContents ? System.Text.Encoding.Default.GetString(resolvedContents) :
+                            "(binary)"));
                 }
             }
         }
@@ -840,14 +1002,16 @@ public class TestResolveAsync {
     /// <param name="expectedAssetsDir">Directory that contains the assets expected from the
     /// resolution step.</param>
     /// <param name="result">true if resolution completed successfully, false otherwise.</param>
+    /// <param name="filesToIgnore">Set of files to relative to the generatedAssetsDir.</param>
     /// <returns>List of errors.  If validation was successful the list will be empty.</returns>
-    private static List<string> ValidateAndroidResolution(string expectedAssetsDir, bool result) {
+    private static List<string> ValidateAndroidResolution(string expectedAssetsDir, bool result,
+                                                          ICollection<string> filesToIgnore) {
         var failureMessages = new List<string>();
         if (!result) {
             failureMessages.Add(String.Format("Android resolver reported a failure {0}", result));
         }
         failureMessages.AddRange(CompareDirectoryContents(expectedAssetsDir,
-                                                          "Assets/Plugins/Android"));
+                                                          "Assets/Plugins/Android", filesToIgnore));
         return failureMessages;
     }
 }

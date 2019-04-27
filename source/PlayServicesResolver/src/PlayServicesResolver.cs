@@ -424,6 +424,15 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Whether the Gradle template is enabled.
+        /// </summary>
+        public static bool GradleTemplateEnabled {
+            get {
+                return GradleBuildEnabled && File.Exists(GradleTemplateResolver.GradleTemplatePath);
+            }
+        }
+
+        /// <summary>
         /// Whether project export is enabled.
         /// </summary>
         public static bool ProjectExportEnabled {
@@ -454,6 +463,11 @@ namespace GooglePlayServices {
             public bool GradleBuildEnabled { get; private set; }
 
             /// <summary>
+            /// Whether the Gradle template is enabled.
+            /// </summary>
+            public bool GradleTemplateEnabled { get; private set; }
+
+            /// <summary>
             // Whether project export is enabled.
             /// </summary>
             public bool ProjectExportEnabled { get; private set; }
@@ -465,6 +479,7 @@ namespace GooglePlayServices {
                 get {
                     return new AndroidBuildSystemSettings {
                         GradleBuildEnabled = PlayServicesResolver.GradleBuildEnabled,
+                        GradleTemplateEnabled = PlayServicesResolver.GradleTemplateEnabled,
                         ProjectExportEnabled = PlayServicesResolver.ProjectExportEnabled
                     };
                 }
@@ -478,6 +493,7 @@ namespace GooglePlayServices {
             public override bool Equals(System.Object obj) {
                 var other = (AndroidBuildSystemSettings)obj;
                 return other.GradleBuildEnabled == GradleBuildEnabled &&
+                    other.GradleTemplateEnabled == GradleTemplateEnabled &&
                     other.ProjectExportEnabled == ProjectExportEnabled;
             }
 
@@ -486,7 +502,8 @@ namespace GooglePlayServices {
             /// </summary>
             /// <returns>Hash of this object.</returns>
             public override int GetHashCode() {
-                return GradleBuildEnabled.GetHashCode() ^ ProjectExportEnabled.GetHashCode();
+                return GradleBuildEnabled.GetHashCode() ^ GradleTemplateEnabled.GetHashCode() ^
+                    ProjectExportEnabled.GetHashCode();
             }
 
 
@@ -495,8 +512,10 @@ namespace GooglePlayServices {
             /// </summary>
             /// <returns>String representation.</returns>
             public override string ToString() {
-                return String.Format("[GradleBuildEnabled={0} ProjectExportEnabled={1}]",
-                                     GradleBuildEnabled, ProjectExportEnabled);
+                return String.Format("[GradleBuildEnabled={0} GradleTemplateEnabled={1} " +
+                                     "ProjectExportEnabled={2}]",
+                                     GradleBuildEnabled, GradleTemplateEnabled,
+                                     ProjectExportEnabled);
             }
         }
 
@@ -520,6 +539,17 @@ namespace GooglePlayServices {
             /// Whether Gradle was selected as the build system the last time this event was fired.
             /// </summary>
             public bool PreviousGradleBuildEnabled { get; set; }
+
+            /// <summary>
+            /// Whether a custom Gradle template is enabled.
+            /// This will only be true if GradleBuildEnabled is also true.
+            /// </summary>
+            public bool GradleTemplateEnabled { get; set; }
+
+            /// <summary>
+            /// Whether a custom Gradle template was enabled the last time this event was fired.
+            /// </summary>
+            public bool PreviousGradleTemplateEnabled { get; set; }
 
             /// <summary>
             /// Project export was selected when this event was fired.
@@ -1125,6 +1155,8 @@ namespace GooglePlayServices {
                         AndroidBuildSystemChanged(null, new AndroidBuildSystemChangedArgs {
                                 GradleBuildEnabled = currentValue.GradleBuildEnabled,
                                 PreviousGradleBuildEnabled = previousValue.GradleBuildEnabled,
+                                GradleTemplateEnabled = currentValue.GradleTemplateEnabled,
+                                PreviousGradleTemplateEnabled = previousValue.GradleTemplateEnabled,
                                 ProjectExportEnabled = currentValue.ProjectExportEnabled,
                                 PreviousProjectExportEnabled = previousValue.ProjectExportEnabled,
                             });
@@ -1292,6 +1324,9 @@ namespace GooglePlayServices {
                         GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
                     }
                     DeleteLabeledAssets();
+                    if (GradleTemplateEnabled) {
+                        GradleTemplateResolver.InjectDependencies(new List<Dependency>());
+                    }
                     if (complete != null) complete();
                 }, 0);
         }
@@ -1371,6 +1406,10 @@ namespace GooglePlayServices {
                 if (PlayServicesResolver.FindLabeledAssets() != null) {
                     Log("Stale dependencies exist. Deleting assets...", level: LogLevel.Verbose);
                     DeleteLabeledAssets();
+                    if (GradleTemplateEnabled) {
+                        GradleTemplateResolver.InjectDependencies(
+                            PlayServicesSupport.GetAllDependencies().Values);
+                    }
                 }
 
                 if (resolutionComplete != null) {
@@ -1457,22 +1496,33 @@ namespace GooglePlayServices {
                                   PlayServicesSupport.GetAllDependencies().Keys)).ToArray())),
                 level: LogLevel.Verbose);
 
-            lastError = "";
-            Resolver.DoResolution(
-                svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
-                () => {
-                    RunOnMainThread.Run(() => {
-                            bool succeeded = String.IsNullOrEmpty(lastError);
-                            AssetDatabase.Refresh();
-                            DependencyState.GetState().WriteToFile();
-                            Log(String.Format("Resolution {0}.\n\n{1}",
-                                              succeeded ? "Succeeded" : "Failed",
-                                              lastError), level: LogLevel.Verbose);
-                            if (resolutionComplete != null) {
-                                RunOnMainThread.Run(() => { resolutionComplete(succeeded); });
-                            }
-                        });
-                });
+            // Writes the current dependency state and reports whether resolution was successful.
+            Action<bool, string> finishResolution = (bool succeeded, string error) => {
+                AssetDatabase.Refresh();
+                DependencyState.GetState().WriteToFile();
+                Log(String.Format("Resolution {0}.\n\n{1}",
+                                  succeeded ? "Succeeded" : "Failed",
+                                  error), level: LogLevel.Verbose);
+                if (resolutionComplete != null) {
+                    RunOnMainThread.Run(() => { resolutionComplete(succeeded); });
+                }
+            };
+
+            if (GradleTemplateEnabled) {
+                RunOnMainThread.Run(() => {
+                        finishResolution(GradleTemplateResolver.InjectDependencies(
+                            PlayServicesSupport.GetAllDependencies().Values), "");
+                    });
+            } else {
+                lastError = "";
+                Resolver.DoResolution(
+                    svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
+                    () => {
+                        RunOnMainThread.Run(() => {
+                                finishResolution(String.IsNullOrEmpty(lastError), lastError);
+                            });
+                    });
+            }
         }
 
         /// <summary>
@@ -1579,6 +1629,55 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Get the included dependency repos as lines that can be included in a Gradle file.
+        /// </summary>
+        /// <returns>Lines that can be included in a gradle file.</returns>
+        internal static IList<string> GradleMavenReposLines(ICollection<Dependency> dependencies) {
+            var lines = new List<string>();
+            if (dependencies.Count > 0) {
+                lines.Add("allprojects {");
+                lines.Add("    repositories {");
+                lines.Add("        maven {");
+                lines.Add("            url \"https://maven.google.com\"");
+                lines.Add("        }");
+                foreach (var repoAndSources in GetRepos(dependencies: dependencies)) {
+                    lines.Add("        maven {");
+                    lines.Add(String.Format("            url \"{0}\" // {1}", repoAndSources.Key,
+                                            repoAndSources.Value));
+                    lines.Add("        }");
+                }
+                lines.Add("        mavenLocal()");
+                lines.Add("        jcenter()");
+                lines.Add("        mavenCentral()");
+                lines.Add("    }");
+                lines.Add("}");
+            }
+            return lines;
+        }
+
+        /// <summary>
+        /// Get the included dependencies as lines that can be included in a Gradle file.
+        /// </summary>
+        /// <param name="dependencies">Set of dependencies to convert to package specs.</param>
+        /// <param name="includeDependenciesBlock">Whether to include the "dependencies {" block
+        /// scope in the returned list.</param>
+        /// <returns>Lines that can be included in a gradle file.</returns>
+        internal static IList<string> GradleDependenciesLines(
+                ICollection<Dependency> dependencies, bool includeDependenciesBlock = true) {
+            var lines = new List<string>();
+            if (dependencies.Count > 0) {
+                if (includeDependenciesBlock) lines.Add("dependencies {");
+                foreach (var packageSpecAndSources in GetPackageSpecs(dependencies: dependencies)) {
+                    lines.Add(String.Format(
+                        "    compile '{0}' // {1}",
+                        packageSpecAndSources.Key, packageSpecAndSources.Value));
+                }
+                if (includeDependenciesBlock) lines.Add("}");
+            }
+            return lines;
+        }
+
+        /// <summary>
         /// Display the set of dependncies / libraries currently included in the project.
         /// This prints out the set of libraries in a form that can be easily included in a Gradle
         /// script.  This does not resolve dependency conflicts, it simply displays what is included
@@ -1590,24 +1689,8 @@ namespace GooglePlayServices {
             var dependencies = PlayServicesSupport.GetAllDependencies().Values;
 
             var lines = new List<string>();
-            lines.Add("allprojects {");
-            lines.Add("  repositories {");
-            lines.Add("    maven {");
-            foreach (var repoAndSources in GetRepos(dependencies: dependencies)) {
-                lines.Add(String.Format("      url \"{0}\" // {1}", repoAndSources.Key,
-                                        repoAndSources.Value));
-            }
-            lines.Add("    }");
-            lines.Add("  }");
-            lines.Add("}");
-
-            lines.Add("dependencies {");
-            foreach (var packageSpecAndSources in GetPackageSpecs(dependencies: dependencies)) {
-                lines.Add(String.Format("  implementation '{0}' // {1}", packageSpecAndSources.Key,
-                                        packageSpecAndSources.Value));
-            }
-            lines.Add("}");
-
+            lines.AddRange(GradleMavenReposLines(dependencies: dependencies));
+            lines.AddRange(GradleDependenciesLines(dependencies: dependencies));
             Log(String.Join("\n", lines.ToArray()));
         }
 

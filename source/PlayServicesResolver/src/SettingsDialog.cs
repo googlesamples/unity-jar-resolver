@@ -99,7 +99,7 @@ namespace GooglePlayServices {
             UseGradleDaemonKey
         };
 
-        private const string AndroidPluginsDir = "Assets/Plugins/Android";
+        internal const string AndroidPluginsDir = "Assets/Plugins/Android";
 
         // Unfortunately, Unity currently does not search recursively search subdirectories of
         // AndroidPluginsDir for Android library plugins.  When this is supported - or we come up
