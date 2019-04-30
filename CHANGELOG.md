@@ -1,3 +1,16 @@
+# Version 1.2.105 - Apr 30, 2019
+## Bug fixes
+* Android Resolver: Fixed reference to Java tool path in logs.
+* Android and iOS Resolvers: Changed command line execution to emit a warning
+  rather than throwing an exception and failing, when it is not possible to
+  change the console input and output encoding to UTF-8.
+* Android Resolver: Added menu option and API to delete resolved libraries.
+* Android Resolver: Added menu option and API to log the repos and libraries
+  currently included in the project.
+* Android Resolver: If Plugins/Android/mainTemplate.gradle file is present and
+  Gradle is selected as the build type, resolution will simply patch the file
+  with Android dependencies specified by plugins in the project.
+
 # Version 1.2.104 - Apr 10, 2019
 ## Bug Fixes
 * Android Resolver: Changed Android ABI selection method from using whitelisted
