@@ -54,6 +54,11 @@ public class SettingsDialog : EditorWindow
         internal bool useProjectSettings;
 
         /// <summary>
+        /// Whether files can be disabled by renaming them.
+        /// </summary>
+        internal bool renameToDisableFilesEnabled;
+
+        /// <summary>
         /// Load settings into the dialog.
         /// </summary>
         internal Settings() {
@@ -62,6 +67,7 @@ public class SettingsDialog : EditorWindow
             renameToCanonicalFilenames = VersionHandlerImpl.RenameToCanonicalFilenames;
             verboseLoggingEnabled = VersionHandlerImpl.VerboseLoggingEnabled;
             useProjectSettings = VersionHandlerImpl.UseProjectSettings;
+            renameToDisableFilesEnabled = VersionHandlerImpl.RenameToDisableFilesEnabled;
         }
 
         /// <summary>
@@ -73,6 +79,9 @@ public class SettingsDialog : EditorWindow
             VersionHandlerImpl.RenameToCanonicalFilenames = renameToCanonicalFilenames;
             VersionHandlerImpl.VerboseLoggingEnabled = verboseLoggingEnabled;
             VersionHandlerImpl.UseProjectSettings = useProjectSettings;
+            VersionHandlerImpl.RenameToDisableFilesEnabled = renameToDisableFilesEnabled;
+
+            VersionHandlerImpl.BuildTargetChecker.HandleSettingsChanged();
         }
     }
 
@@ -89,7 +98,7 @@ public class SettingsDialog : EditorWindow
     /// Setup the window's initial position and size.
     /// </summary>
     public void Initialize() {
-        minSize = new Vector2(300, 200);
+        minSize = new Vector2(300, 250);
         position = new Rect(UnityEngine.Screen.width / 3,
                             UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
@@ -131,6 +140,12 @@ public class SettingsDialog : EditorWindow
         GUILayout.EndHorizontal();
 
         GUILayout.BeginHorizontal();
+        GUILayout.Label("Allow disabling files via renaming", EditorStyles.boldLabel);
+        settings.renameToDisableFilesEnabled =
+                                EditorGUILayout.Toggle(settings.renameToDisableFilesEnabled);
+        GUILayout.EndHorizontal();
+
+        GUILayout.BeginHorizontal();
         GUILayout.Label("Verbose logging", EditorStyles.boldLabel);
         settings.verboseLoggingEnabled = EditorGUILayout.Toggle(settings.verboseLoggingEnabled);
         GUILayout.EndHorizontal();
@@ -139,6 +154,7 @@ public class SettingsDialog : EditorWindow
         GUILayout.Label("Use project settings", EditorStyles.boldLabel);
         settings.useProjectSettings = EditorGUILayout.Toggle(settings.useProjectSettings);
         GUILayout.EndHorizontal();
+
 
         GUILayout.Space(10);
 

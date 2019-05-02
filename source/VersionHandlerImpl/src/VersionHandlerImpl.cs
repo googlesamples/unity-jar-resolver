@@ -99,6 +99,12 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// </summary>
         public static string ASSET_LABEL = "gvh";
 
+        /// <summary>
+        /// Label which flags whether an asset should be disabled by renaming the file
+        /// (instead of using the PluginManager).
+        /// </summary>
+        public static string ASSET_LABEL_RENAME_TO_DISABLE = "gvh_rename_to_disable";
+
         // Special build target name which enables all platforms / build targets.
         public static string BUILD_TARGET_NAME_ANY = "any";
 
@@ -268,6 +274,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public bool isManifest = false;
 
         /// <summary>
+        /// Set if this references an asset which is handled by PluginManager.
+        /// </summary>
+        public bool isHandledByPluginImporter = false;
+
+        /// <summary>
         /// List of compatible .NET versions parsed from this asset.
         /// </summary>
         public string[] dotNetTargets = null;
@@ -306,6 +317,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 foreach (string label in AssetDatabase.GetLabels(importer)) {
                     ParseLabel(label);
                 }
+
+                isHandledByPluginImporter = typeof(PluginImporter).IsInstanceOfType(importer);
             }
 
             // On Windows the AssetDatabase converts native path separators
@@ -515,6 +528,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             if (targets != null && targets.Length > 0) {
                 labels.Add(CreateLabel(TOKEN_TARGETS, targets));
+
+                if(!isHandledByPluginImporter) {
+                    labels.Add(ASSET_LABEL_RENAME_TO_DISABLE);
+                }
             }
             if (dotNetTargets != null && dotNetTargets.Length > 0) {
                 labels.Add(CreateLabel(TOKEN_DOTNET_TARGETS, dotNetTargets));
@@ -1429,12 +1446,15 @@ public class VersionHandlerImpl : AssetPostprocessor {
         "Google.VersionHandler.RenameToCanonicalFilenames";
     private const string PREFERENCE_VERBOSE_LOGGING_ENABLED =
         "Google.VersionHandler.VerboseLoggingEnabled";
+    private const string PREFERENCE_RENAME_TO_DISABLE_FILES_ENABLED =
+        "Google.VersionHandler.RenameToDisableFilesEnabled";
     // List of preference keys, used to restore default settings.
     private static string[] PREFERENCE_KEYS = new [] {
         PREFERENCE_ENABLED,
         PREFERENCE_CLEANUP_PROMPT_ENABLED,
         PREFERENCE_RENAME_TO_CANONICAL_FILENAMES,
-        PREFERENCE_VERBOSE_LOGGING_ENABLED
+        PREFERENCE_VERBOSE_LOGGING_ENABLED,
+        PREFERENCE_RENAME_TO_DISABLE_FILES_ENABLED
     };
 
     // Name of this plugin.
@@ -1466,6 +1486,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     static void UpdateVersionedAssetsOnUpdate() {
         UpdateVersionedAssets();
         NotifyWhenCompliationComplete(false);
+        UpdateAssetsWithBuildTargets(EditorUserBuildSettings.activeBuildTarget);
     }
 
     /// <summary>
@@ -1604,6 +1625,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
                                  defaultValue: false); }
         set { settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
+    }
+
+    /// <summary>
+    /// Enable / disable verbose logging.
+    /// </summary>
+    public static bool RenameToDisableFilesEnabled {
+        get {
+            return settings.GetBool(PREFERENCE_RENAME_TO_DISABLE_FILES_ENABLED, defaultValue: true);
+        }
+        set { settings.SetBool(PREFERENCE_RENAME_TO_DISABLE_FILES_ENABLED, value); }
     }
 
     /// <summary>
@@ -1747,6 +1778,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
         // If this module is disabled do nothing.
         if (!forceUpdate && !Enabled) return;
 
+        UpdateAssetsWithBuildTargets(EditorUserBuildSettings.activeBuildTarget);
+
         var metadataSet = FileMetadataSet.ParseFromFilenames(FindAllAssets());
         // Rename linux libraries, if any are being tracked.
         var linuxLibraries = new LinuxLibraryRenamer(metadataSet);
@@ -1825,6 +1858,70 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
     }
 
+    /// <summary>
+    /// Go through all files with build targets that need to be enabled/disabled by renaming
+    /// (can't be handled through PluginHandler) and enable/disable them based on the whether they
+    /// should build on currentBuildTarget.
+    /// </summary>
+    /// <param name="currentBuildTarget">
+    /// The BuildTarget to use to determine which files should be enabled/disabled.
+    /// </param>
+    public static void UpdateAssetsWithBuildTargets(BuildTarget currentBuildTarget) {
+        string[] assets = SearchAssetDatabase(
+                            assetsFilter: "l:" + FileMetadata.ASSET_LABEL_RENAME_TO_DISABLE);
+
+        var metadataSet = FileMetadataSet.ParseFromFilenames(assets);
+        foreach (var versionPair in metadataSet.Values) {
+            // Disable all but the most recent version of the file.
+            // Enable / disable most recent version based on whether its targets contain
+            // the currently selected build target.
+            foreach (var versionData in versionPair.Values) {
+                bool enabled = false;
+                if (versionData == versionPair.MostRecentVersion) {
+                    if (versionData.GetBuildTargetsSpecified()) {
+                        var buildTargets = versionData.GetBuildTargets();
+                        enabled = buildTargets.Contains(currentBuildTarget);
+                    } else {
+                        enabled = true;
+                    }
+                }
+
+                SetFileEnabledByRename(versionData, enabled);
+            }
+        }
+
+    }
+
+    /// <summary>
+    /// Enable or disable a file by renaming it (changing its extension to/from .xxx_DISABLED).
+    /// </summary>
+    /// <param name="metadata"> The metadata for the file which should be changed. </param>
+    /// <param name="enabled"> The new state of the file. </param>
+    private static void SetFileEnabledByRename(FileMetadata metadata, bool enabled) {
+        if (!RenameToDisableFilesEnabled)
+            return;
+
+        string disableToken = "_DISABLED";
+
+        var filename = metadata.filename;
+        var newFilename = filename;
+        if (enabled && filename.EndsWith(disableToken)) {
+            int tokenIndex = filename.LastIndexOf(disableToken);
+            if (tokenIndex > 0) {
+                newFilename = filename.Substring(0, tokenIndex);
+            }
+        } else if (!enabled && !filename.EndsWith(disableToken)) {
+            newFilename = filename + disableToken;
+        }
+
+        if (filename == newFilename || newFilename == "") {
+            return;
+        }
+
+        Log("Renaming file " + filename + " to " + newFilename, verbose: true);
+        AssetDatabase.MoveAsset(filename, newFilename);
+    }
+
     // Returns the major/minor version of the unity environment we are running in
     // as a float so it can be compared numerically.
     public static float GetUnityVersionMajorMinor() {
@@ -1877,6 +1974,52 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             return paths;
         }
+    }
+
+    /// <summary>
+    /// Update assets when BuildTarget changes.
+    /// </summary>
+    [InitializeOnLoad]
+    internal class BuildTargetChecker {
+        private static BuildTarget? lastKnownBuildTarget = null;
+        private static int ticksSinceLastCheck = 0;
+        private static int ticksBetweenChecks = 60;
+
+
+        static BuildTargetChecker() {
+            HandleSettingsChanged();
+        }
+
+        public static void HandleSettingsChanged() {
+            RunOnMainThread.OnUpdate -= CheckBuildTarget;
+            if (Enabled && RenameToDisableFilesEnabled) {
+                RunOnMainThread.OnUpdate += CheckBuildTarget;
+            }
+        }
+
+        private static void CheckBuildTarget() {
+            ticksSinceLastCheck++;
+            if (ticksSinceLastCheck < ticksBetweenChecks) {
+                return;
+            }
+
+            if (!Enabled || !RenameToDisableFilesEnabled) {
+                RunOnMainThread.OnUpdate -= CheckBuildTarget;
+            }
+
+            var newBuildTarget = EditorUserBuildSettings.activeBuildTarget;
+            if (lastKnownBuildTarget == null || newBuildTarget != lastKnownBuildTarget) {
+                lastKnownBuildTarget = newBuildTarget;
+                HandleBuildTargetChanged(newBuildTarget);
+            }
+
+            ticksSinceLastCheck = 0;
+        }
+
+        private static void HandleBuildTargetChanged(BuildTarget newBuildTarget) {
+            UpdateAssetsWithBuildTargets(newBuildTarget);
+        }
+
     }
 }
 
