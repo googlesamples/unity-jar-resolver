@@ -1,3 +1,10 @@
+# Version 1.2.106 - May 2, 2019
+## New Features
+* iOS Resolver: Added support for development pods in Xcode project integration
+  mode.
+* iOS Resolver: Added support for source pods with resources in Xcode project
+  integration mode.
+
 # Version 1.2.105 - Apr 30, 2019
 ## Bug fixes
 * Android Resolver: Fixed reference to Java tool path in logs.
