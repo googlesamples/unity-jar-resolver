@@ -1,4 +1,11 @@
-# Version 1.2.106 - May 2, 2019
+# Version 1.2.107 - May 3, 2019
+# New Features:
+* Version Handler: Added support for enabling / disabling assets that do not
+  support the PluginImporter, based upon build target selection.
+* Android Resolver: Added support for the global specification of maven repos.
+* iOS Resolver: Added support for the global specification of Cocoapod sources.
+
+# Version 1.2.106 - May 1, 2019
 ## New Features
 * iOS Resolver: Added support for development pods in Xcode project integration
   mode.
