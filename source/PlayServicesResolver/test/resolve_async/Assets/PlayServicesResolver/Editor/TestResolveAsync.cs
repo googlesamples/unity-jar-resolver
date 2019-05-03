@@ -646,7 +646,10 @@ public class TestResolveAsync {
             new List<KeyValuePair<string, string>>() {
                 new KeyValuePair<string, string>(
                     "file:///my/nonexistant/test/repo",
-                    "Assets/PlayServicesResolver/Editor/TestDependencies.xml:14"),
+                    "Assets/PlayServicesResolver/Editor/TestDependencies.xml:15"),
+                new KeyValuePair<string, string>(
+                    "file:///" + Path.GetFullPath("project_relative_path/repo").Replace("\\", "/"),
+                    "Assets/PlayServicesResolver/Editor/TestDependencies.xml:15"),
                 new KeyValuePair<string, string>(
                     "file:///" + Path.GetFullPath(
                        "Assets/Firebase/m2repository").Replace("\\", "/"),

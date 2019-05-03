@@ -11,6 +11,7 @@
     <!-- Global repository. -->
     <repositories>
       <repository>file:///my/nonexistant/test/repo</repository>
+      <repository>project_relative_path/repo</repository>
     </repositories>
   </androidPackages>
 </dependencies>

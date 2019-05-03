@@ -552,6 +552,30 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Convert a repo path to a valid URI
+        /// </summary>
+        /// <param name="repoPath">Repo path to convert.</param>
+        /// <returns>URI to the repo.</returns>
+        private static string RepoPathToUri(string repoPath) {
+            // Filter Android SDK repos as they're supplied in the build script.
+            if (repoPath.StartsWith(PlayServicesSupport.SdkVariable)) return null;
+            // Since we need a URL, determine whether the repo has a scheme.  If not,
+            // assume it's a local file.
+            bool validScheme = false;
+            foreach (var scheme in new [] { "file:", "http:", "https:" }) {
+                validScheme |= repoPath.StartsWith(scheme);
+            }
+            if (!validScheme) {
+                repoPath = "file:///" + Path.GetFullPath(repoPath).Replace("\\", "/");
+            }
+            // Escape the URI to handle special characters like spaces and percent escape
+            // all characters that are interpreted by gradle.
+            return EscapeGradlePropertyValue(Uri.EscapeUriString(repoPath),
+                                             escapeFunc: Uri.EscapeDataString,
+                                             charactersToExclude: GradleUriExcludeEscapeCharacters);
+        }
+
+        /// <summary>
         /// Extract the ordered set of repository URIs from the specified dependencies.
         /// </summary>
         /// <param name="dependencies">Dependency instances to query for repos.</param>
@@ -559,13 +583,21 @@ namespace GooglePlayServices
         internal static List<KeyValuePair<string, string>> DependenciesToRepoUris(
                 IEnumerable<Dependency> dependencies) {
             var sourcesByRepo = new OrderedDictionary();
+            Action<string, string> addToSourcesByRepo = (repo, source) => {
+                if (!String.IsNullOrEmpty(repo)) {
+                    if (sourcesByRepo.Contains(repo)) {
+                        var sources = (List<string>)sourcesByRepo[repo];
+                        if (!sources.Contains(source)) {
+                            sources.Add(source);
+                        }
+                    } else {
+                        sourcesByRepo[repo] = new List<string>() { source };
+                    }
+                }
+            };
             // Add global repos first.
             foreach (var kv in PlayServicesSupport.AdditionalRepositoryPaths) {
-                var sources = kv.Value;
-                if (sourcesByRepo.Contains(kv.Key)) {
-                    sources += ", " + kv.Value;
-                }
-                sourcesByRepo[kv.Key] = sources;
+                addToSourcesByRepo(RepoPathToUri(kv.Key), kv.Value);
             }
             // Build array of repos to search, they're interleaved across all dependencies as the
             // order matters.
@@ -577,37 +609,17 @@ namespace GooglePlayServices
                 foreach (var dependency in dependencies) {
                     var repos = dependency.Repositories;
                     if (i >= repos.Length) continue;
-                    var source = CommandLine.SplitLines(dependency.CreatedBy)[0];
-                    var repo = repos[i];
-                    // Filter Android SDK repos as they're supplied in the build script.
-                    if (repo.StartsWith(PlayServicesSupport.SdkVariable)) continue;
-                    // Since we need a URL, determine whether the repo has a scheme.  If not,
-                    // assume it's a local file.
-                    bool validScheme = false;
-                    foreach (var scheme in new [] { "file:", "http:", "https:" }) {
-                        validScheme |= repo.StartsWith(scheme);
-                    }
-                    if (!validScheme) {
-                        repo = "file:///" + Path.GetFullPath(repo).Replace("\\", "/");
-                    }
-                    // Escape the URI to handle special characters like spaces and percent escape
-                    // all characters that are interpreted by gradle.
-                    repo = EscapeGradlePropertyValue(
-                        Uri.EscapeUriString(repo),
-                        escapeFunc: Uri.EscapeDataString,
-                        charactersToExclude: GradleUriExcludeEscapeCharacters);
-                    if (sourcesByRepo.Contains(repo)) {
-                        sourcesByRepo[repo] = sourcesByRepo[repo] + ", " + source;
-                        continue;
-                    }
-                    sourcesByRepo[repo] = source;
+                    addToSourcesByRepo(RepoPathToUri(repos[i]),
+                                       CommandLine.SplitLines(dependency.CreatedBy)[0]);
                 }
             }
             var sourcesByRepoList = new List<KeyValuePair<string, string>>();
             var enumerator = sourcesByRepo.GetEnumerator();
             while (enumerator.MoveNext()) {
-                sourcesByRepoList.Add(new KeyValuePair<string, string>((string)enumerator.Key,
-                                                                       (string)enumerator.Value));
+                sourcesByRepoList.Add(
+                    new KeyValuePair<string, string>(
+                        (string)enumerator.Key,
+                        String.Join(", ", ((List<string>)enumerator.Value).ToArray())));
             }
             return sourcesByRepoList;
         }

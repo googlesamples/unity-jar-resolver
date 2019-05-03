@@ -26,7 +26,10 @@ allprojects {
             url "https://maven.google.com"
         }
         maven {
-            url "file:///my/nonexistant/test/repo" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:14, Assets/PlayServicesResolver/Editor/TestDependencies.xml:14
+            url "file:///my/nonexistant/test/repo" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:15
+        }
+        maven {
+            url "file:///PROJECT_DIR/project_relative_path/repo" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:15
         }
         maven {
             url "file:///PROJECT_DIR/Assets/Firebase/m2repository" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:10
