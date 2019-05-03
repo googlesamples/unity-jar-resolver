@@ -8,5 +8,9 @@
         <repository>Assets/Firebase/m2repository</repository>
       </repositories>
     </androidPackage>
+    <!-- Global repository. -->
+    <repositories>
+      <repository>file:///my/nonexistant/test/repo</repository>
+    </repositories>
   </androidPackages>
 </dependencies>

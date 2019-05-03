@@ -645,6 +645,9 @@ public class TestResolveAsync {
         CompareKeyValuePairLists(
             new List<KeyValuePair<string, string>>() {
                 new KeyValuePair<string, string>(
+                    "file:///my/nonexistant/test/repo",
+                    "Assets/PlayServicesResolver/Editor/TestDependencies.xml:14"),
+                new KeyValuePair<string, string>(
                     "file:///" + Path.GetFullPath(
                        "Assets/Firebase/m2repository").Replace("\\", "/"),
                     "Assets/PlayServicesResolver/Editor/TestDependencies.xml:10")
@@ -897,6 +900,20 @@ public class TestResolveAsync {
     }
 
     /// <summary>
+    /// In .gradle file contents, replace file:///PROJECT_DIR URIs with the absolute path to the
+    /// project directory.
+    /// </summary>
+    /// <param name="filename">Name of the file.</param>
+    /// <param name="contents">Contents of the file to search and replace.</param>
+    private static string ReplaceFileProjectDirUri(string filename, string contents) {
+        if (filename.ToLower().EndsWith(".gradle")) {
+            return contents.Replace("file:///PROJECT_DIR",
+                                    "file:///" + Path.GetFullPath(".").Replace("\\", "/"));
+        }
+        return contents;
+    }
+
+    /// <summary>
     /// Compare the contents of two directories.
     /// </summary>
     /// <param name="expectedAssetsDir">Directory that contains expected assets.</param>
@@ -972,8 +989,11 @@ public class TestResolveAsync {
                         }
                     }
                 } else {
+                    bool differs = true;
                     // Determine whether to display the file as a string.
                     bool displayContents = false;
+                    string expectedContentsAsString = "(binary)";
+                    string resolvedContentsAsString = expectedContentsAsString;
                     string resolvedExtension = Path.GetExtension(resolvedFile).ToLower();
                     foreach (var extension in new[] { ".xml", ".txt", ".gradle" }) {
                         if (resolvedExtension == extension) {
@@ -981,15 +1001,28 @@ public class TestResolveAsync {
                             break;
                         }
                     }
-                    // Log an error.
-                    failureMessages.Add(String.Format(
-                        "Artifact {0} does not match contents of {1}\n" +
-                        "--- {0} -------\n" +
-                        "{2}\n" +
-                        "--- {0} end ---\n",
-                        resolvedFile, expectedFile,
-                        displayContents ? System.Text.Encoding.Default.GetString(resolvedContents) :
-                            "(binary)"));
+                    if (displayContents) {
+                        expectedContentsAsString = ReplaceFileProjectDirUri(
+                            expectedFile,
+                            System.Text.Encoding.Default.GetString(expectedContents));
+                        resolvedContentsAsString = ReplaceFileProjectDirUri(
+                            expectedFile,
+                            System.Text.Encoding.Default.GetString(resolvedContents));
+                        differs = expectedContentsAsString != resolvedContentsAsString;
+                    }
+                    if (differs) {
+                        // Log an error.
+                        failureMessages.Add(String.Format(
+                            "Artifact {0} does not match contents of {1}\n" +
+                            "--- {0} -------\n" +
+                            "{2}\n" +
+                            "--- {0} end ---\n" +
+                            "--- {1} -------\n" +
+                            "{3}\n" +
+                            "--- {1} -------\n",
+                            resolvedFile, expectedFile, resolvedContentsAsString,
+                            expectedContentsAsString));
+                    }
                 }
             }
         }

@@ -26,7 +26,10 @@ allprojects {
             url "https://maven.google.com"
         }
         maven {
-            url "file:////Users/smiles/dev/src/unity-jar-resolver/test_output/testAndroidResolverAsyncResolveBatchMode/testAndroidResolverAsyncResolveBatchMode/Assets/Firebase/m2repository" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:10
+            url "file:///my/nonexistant/test/repo" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:14, Assets/PlayServicesResolver/Editor/TestDependencies.xml:14
+        }
+        maven {
+            url "file:///PROJECT_DIR/Assets/Firebase/m2repository" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:10
         }
         mavenLocal()
         jcenter()

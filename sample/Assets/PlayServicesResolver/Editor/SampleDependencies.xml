@@ -1,8 +1,15 @@
 <dependencies>
+
   <!-- Android dependencies are specified under the "androidPackages" element.
        Each "androidPackage" element contains the attributes of an Android
        dependency (e.g AAR, JAR reference). -->
   <androidPackages>
+    <!-- Global set of repositories to search for packages.
+         These repos will be searched for all packages specified by
+         androidPackage. -->
+    <repositories>
+      <repository>https://repo.maven.apache.org/maven2</repository>
+    </repositories>
     <!-- The "spec" attribute is *required* and provides the Maven package
          specification.
 
@@ -36,6 +43,12 @@
 
   <!-- iOS Cocoapod dependencies can be specified by each iosPod element. -->
   <iosPods>
+    <!-- Global set of sources to search for Cocoapods.
+         These sources will be searched for all Cocoapods specified by
+         iosPod. -->
+    <sources>
+      <source>https://cocoapods.mycompany.com/Specs</source>
+    </sources>
     <!-- iosPod supports the following attributes:
          * "name" (required)
            Name of the Cocoapod.

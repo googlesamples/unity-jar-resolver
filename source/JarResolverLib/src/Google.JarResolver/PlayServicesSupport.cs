@@ -73,10 +73,29 @@ namespace Google.JarResolver
         /// </summary>
         private List<string> repositoryPaths = new List<string>();
 
+
+        /// <summary>
+        /// List of additional global repository paths.
+        /// These are added to the set of repositories used to construct this class.
+        /// The key in the pair is the repo and the value is the source (file & line) it was
+        /// parsed from.
+        /// </summary>
+        internal static List<KeyValuePair<string, string>> AdditionalRepositoryPaths =
+            new List<KeyValuePair<string, string>>();
+
         /// <summary>
         /// Get the set of repository paths.
+        /// This includes the repo paths specified at construction and AdditionalRepositoryPaths.
         /// </summary>
-        internal List<string> RepositoryPaths { get { return new List<string>(repositoryPaths); } }
+        internal List<string> RepositoryPaths {
+            get {
+                var allPaths = new List<string>(repositoryPaths);
+                foreach (var kv in AdditionalRepositoryPaths) {
+                    allPaths.Add(kv.Value);
+                }
+                return allPaths;
+            }
+        }
 
         /// <summary>
         /// The client dependencies map.  This is a proper subset of dependencyMap.
@@ -303,6 +322,7 @@ namespace Google.JarResolver
         public void ClearDependencies()
         {
             clientDependenciesMap = new Dictionary<string, Dependency>();
+            AdditionalRepositoryPaths = new List<KeyValuePair<string, string>>();
         }
 
         /// <summary>

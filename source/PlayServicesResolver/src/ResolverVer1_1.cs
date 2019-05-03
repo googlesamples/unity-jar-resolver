@@ -559,6 +559,14 @@ namespace GooglePlayServices
         internal static List<KeyValuePair<string, string>> DependenciesToRepoUris(
                 IEnumerable<Dependency> dependencies) {
             var sourcesByRepo = new OrderedDictionary();
+            // Add global repos first.
+            foreach (var kv in PlayServicesSupport.AdditionalRepositoryPaths) {
+                var sources = kv.Value;
+                if (sourcesByRepo.Contains(kv.Key)) {
+                    sources += ", " + kv.Value;
+                }
+                sourcesByRepo[kv.Key] = sources;
+            }
             // Build array of repos to search, they're interleaved across all dependencies as the
             // order matters.
             int maxNumberOfRepos = 0;

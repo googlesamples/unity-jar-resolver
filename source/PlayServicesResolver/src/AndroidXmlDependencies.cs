@@ -119,6 +119,19 @@ namespace GooglePlayServices {
                     } else if (elementName == "repositories" &&
                                parentElementName == "androidPackage") {
                         return true;
+                    } else if (elementName == "repositories" &&
+                               parentElementName == "androidPackages") {
+                        if (isStart) {
+                            repositories = new List<string>();
+                        } else {
+                            foreach (var repo in repositories) {
+                                PlayServicesSupport.AdditionalRepositoryPaths.Add(
+                                    new KeyValuePair<string, string>(
+                                        repo, String.Format("{0}:{1}", filename,
+                                                            reader.LineNumber)));
+                            }
+                        }
+                        return true;
                     } else if (elementName == "repository" &&
                                parentElementName == "repositories") {
                         if (isStart && reader.Read() && reader.NodeType == XmlNodeType.Text) {
