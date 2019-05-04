@@ -762,8 +762,14 @@ namespace GooglePlayServices
                                       String.Join("\n",
                                                   (new List<string>(staleArtifacts)).ToArray())),
                         level: LogLevel.Verbose);
+                    var deleteFailures = new List<string>();
                     foreach (var assetPath in staleArtifacts) {
-                        FileUtils.DeleteExistingFileOrDirectory(assetPath);
+                        deleteFailures.AddRange(FileUtils.DeleteExistingFileOrDirectory(assetPath));
+                    }
+                    var deleteError = FileUtils.FormatError("Failed to delete stale artifacts",
+                                                            deleteFailures);
+                    if (!String.IsNullOrEmpty(deleteError)) {
+                        PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
                     }
                 }
                 // Process / explode copied AARs.
@@ -1057,8 +1063,15 @@ namespace GooglePlayServices
                             "the Android Resolver.  Would you like to remove the old libraries " +
                             "to resolve the conflict?",
                             "Yes", "No")) {
+                        var deleteFailures = new List<string>();
                         foreach (var filename in conflict.Value) {
-                            FileUtils.DeleteExistingFileOrDirectory(filename);
+                            deleteFailures.AddRange(
+                                FileUtils.DeleteExistingFileOrDirectory(filename));
+                        }
+                        var deleteError = FileUtils.FormatError("Unable to delete old libraries",
+                                                                deleteFailures);
+                        if (!String.IsNullOrEmpty(deleteError)) {
+                            PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
                         }
                         warningMessage = null;
                     }
@@ -1544,8 +1557,14 @@ namespace GooglePlayServices
                                 String.Format("Cleaning up previously exploded AAR {0}",
                                               aarPath),
                                 level: LogLevel.Verbose);
-                            FileUtils.DeleteExistingFileOrDirectory(
-                                DetermineExplodedAarPath(aarPath));
+                            var explodedPath = DetermineExplodedAarPath(aarPath);
+                            var deleteError = FileUtils.FormatError(
+                                String.Format("Failed to delete exploded AAR directory {0}",
+                                              explodedPath),
+                                FileUtils.DeleteExistingFileOrDirectory(explodedPath));
+                            if (!String.IsNullOrEmpty(deleteError)) {
+                                PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                            }
                         }
                         aarData.gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
                         aarData.gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
@@ -1673,7 +1692,12 @@ namespace GooglePlayServices
                         throw e;
                     }
                     finally {
-                        FileUtils.DeleteExistingFileOrDirectory(temporaryDirectory);
+                        var deleteError = FileUtils.FormatError(
+                            "Failed to clean up temporary directory",
+                            FileUtils.DeleteExistingFileOrDirectory(temporaryDirectory));
+                        if (!String.IsNullOrEmpty(deleteError)) {
+                            PlayServicesResolver.Log(deleteError, level: LogLevel.Warning);
+                        }
                     }
                 }
             }

@@ -1217,10 +1217,15 @@ namespace GooglePlayServices {
         private static bool DeleteFiles(IEnumerable<string> filenames)
         {
             if (filenames == null) return false;
-            bool deletedFiles = false;
+            var failedToDelete = new List<string>();
             foreach (string artifact in filenames) {
-                deletedFiles |= FileUtils.DeleteExistingFileOrDirectory(artifact);
+                failedToDelete.AddRange(FileUtils.DeleteExistingFileOrDirectory(artifact));
             }
+            var deleteError = FileUtils.FormatError("Failed to delete files:", failedToDelete);
+            if (!String.IsNullOrEmpty(deleteError)) {
+                Log(deleteError, level: LogLevel.Warning);
+            }
+            bool deletedFiles = failedToDelete.Count != (new List<string>(filenames)).Count;
             if (deletedFiles) AssetDatabase.Refresh();
             return deletedFiles;
         }

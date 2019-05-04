@@ -49,34 +49,55 @@ namespace Google {
         }
 
         /// <summary>
+        /// Format a file error.
+        /// </summary>
+        /// <param name="summary">Description of what went wrong.</param>
+        /// <param name="errors">List of failures.</param>
+        public static string FormatError(string summary, List<string> errors) {
+            if (errors.Count > 0) {
+                return String.Format("{0}\n{1}", summary, String.Format("\n", errors.ToArray()));
+            }
+            return "";
+        }
+
+        /// <summary>
         /// Delete a file or directory if it exists.
         /// </summary>
         /// <param name="path">Path to the file or directory to delete if it exists.</param>
         /// <param name="includeMetaFiles">Whether to delete Unity's associated .meta file(s).
         /// </param>
-        /// <returns>true if *any* files or directories were deleted, false otherwise.</returns>
-        public static bool DeleteExistingFileOrDirectory(string path,
-                                                         bool includeMetaFiles = true)
+        /// <returns>List of files, with exception messages for files / directories that could
+        /// not be deleted.</returns>
+        public static List<string> DeleteExistingFileOrDirectory(string path,
+                                                                 bool includeMetaFiles = true)
         {
-            bool deletedFileOrDirectory = false;
+            var failedToDelete = new List<string>();
             if (includeMetaFiles && !path.EndsWith(META_EXTENSION)) {
-                deletedFileOrDirectory = DeleteExistingFileOrDirectory(path + META_EXTENSION);
+                failedToDelete.AddRange(DeleteExistingFileOrDirectory(path + META_EXTENSION));
             }
-            if (Directory.Exists(path)) {
-                var di = new DirectoryInfo(path);
-                di.Attributes &= ~FileAttributes.ReadOnly;
-                foreach (string file in Directory.GetFileSystemEntries(path)) {
-                    DeleteExistingFileOrDirectory(file, includeMetaFiles: includeMetaFiles);
+            try {
+                if (Directory.Exists(path)) {
+                    if (!UnityEditor.FileUtil.DeleteFileOrDirectory(path)) {
+                        var di = new DirectoryInfo(path);
+                        di.Attributes &= ~FileAttributes.ReadOnly;
+                        foreach (string file in Directory.GetFileSystemEntries(path)) {
+                            failedToDelete.AddRange(DeleteExistingFileOrDirectory(
+                                                        file, includeMetaFiles: includeMetaFiles));
+                        }
+                        Directory.Delete(path);
+                    }
                 }
-                Directory.Delete(path);
-                deletedFileOrDirectory = true;
+                else if (File.Exists(path)) {
+                    if (!UnityEditor.FileUtil.DeleteFileOrDirectory(path)) {
+                        File.SetAttributes(path, File.GetAttributes(path) &
+                                           ~FileAttributes.ReadOnly);
+                        File.Delete(path);
+                    }
+                }
+            } catch (Exception ex) {
+                failedToDelete.Add(String.Format("{0} ({1})", path, ex));
             }
-            else if (File.Exists(path)) {
-                File.SetAttributes(path, File.GetAttributes(path) & ~FileAttributes.ReadOnly);
-                File.Delete(path);
-                deletedFileOrDirectory = true;
-            }
-            return deletedFileOrDirectory;
+            return failedToDelete;
         }
 
         /// <summary>

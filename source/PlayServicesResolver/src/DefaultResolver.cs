@@ -280,7 +280,13 @@ namespace GooglePlayServices
             }
             try {
                 string workingDir = Path.Combine(stagingDir, aarDirName);
-                FileUtils.DeleteExistingFileOrDirectory(workingDir);
+                var deleteError = FileUtils.FormatError(
+                    String.Format("Failed to create working directory to process AAR {0}",
+                                  aarFile), FileUtils.DeleteExistingFileOrDirectory(workingDir));
+                if (!String.IsNullOrEmpty(deleteError)) {
+                    PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                    return false;
+                }
                 Directory.CreateDirectory(workingDir);
                 if (!PlayServicesResolver.ExtractZip(aarFile, null, workingDir)) return false;
                 PlayServicesResolver.ReplaceVariablesInAndroidManifest(
@@ -323,7 +329,13 @@ namespace GooglePlayServices
                     var abisInArchive = AarDirectoryFindAbis(workingDir);
                     if (jniLibDir != nativeLibsDir) {
                         FileUtils.CopyDirectory(jniLibDir, nativeLibsDir);
-                        FileUtils.DeleteExistingFileOrDirectory(jniLibDir);
+                        deleteError = FileUtils.FormatError(
+                            String.Format("Unable to delete JNI directory from AAR {0}", aarFile),
+                            FileUtils.DeleteExistingFileOrDirectory(jniLibDir));
+                        if (!String.IsNullOrEmpty(deleteError)) {
+                            PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                            return false;
+                        }
                     }
                     if (abisInArchive != null) {
                         // Remove shared libraries for all ABIs that are not required for the
@@ -347,8 +359,13 @@ namespace GooglePlayServices
 
                         foreach (var abiToRemove in abisInArchiveToRemoveSet) {
                             abisInArchiveSet.Remove(abiToRemove);
-                            FileUtils.DeleteExistingFileOrDirectory(Path.Combine(nativeLibsDir,
-                                                                                 abiToRemove));
+                            deleteError = FileUtils.FormatError(
+                                String.Format("Unable to remove unused ABIs from {0}", aarFile),
+                                FileUtils.DeleteExistingFileOrDirectory(
+                                    Path.Combine(nativeLibsDir, abiToRemove)));
+                            if (!String.IsNullOrEmpty(deleteError)) {
+                                PlayServicesResolver.Log(deleteError, LogLevel.Warning);
+                            }
                         }
                         abis = new AndroidAbis(abisInArchiveSet);
                     }
@@ -369,7 +386,14 @@ namespace GooglePlayServices
                         String.Format("Creating Ant project: Replacing {0} with {1}", aarFile,
                                       outputDir), level: LogLevel.Verbose);
                     // Clean up the aar file.
-                    FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
+                    deleteError = FileUtils.FormatError(
+                        String.Format("Failed to clean up AAR file {0} after generating " +
+                                      "Ant project {1}", aarFile, outputDir),
+                        FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile)));
+                    if (!String.IsNullOrEmpty(deleteError)) {
+                        PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                        return false;
+                    }
                     // Create the output directory.
                     FileUtils.MoveDirectory(workingDir, outputDir);
                     // Add a tracking label to the exploded files.
@@ -380,7 +404,13 @@ namespace GooglePlayServices
                                                            aarFile, workingDir),
                                              level: LogLevel.Verbose);
                     // Create a new AAR file.
-                    FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile));
+                    deleteError = FileUtils.FormatError(
+                        String.Format("Failed to replace AAR file {0}", aarFile),
+                        FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile)));
+                    if (!String.IsNullOrEmpty(deleteError)) {
+                        PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                        return false;
+                    }
                     if (!ArchiveAar(aarFile, workingDir)) return false;
                     PlayServicesResolver.LabelAssets(new [] { aarFile });
                 }
@@ -390,7 +420,12 @@ namespace GooglePlayServices
                                          level: LogLevel.Error);
             } finally {
                 // Clean up the temporary directory.
-                FileUtils.DeleteExistingFileOrDirectory(stagingDir);
+                var deleteError = FileUtils.FormatError(
+                    String.Format("Failed to clean up temporary folder while processing {0}",
+                                  aarFile), FileUtils.DeleteExistingFileOrDirectory(stagingDir));
+                if (!String.IsNullOrEmpty(deleteError)) {
+                    PlayServicesResolver.Log(deleteError, level: LogLevel.Warning);
+                }
             }
             return true;
         }
