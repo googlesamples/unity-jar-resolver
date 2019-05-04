@@ -1405,6 +1405,16 @@ namespace GooglePlayServices {
 
             DeleteFiles(Resolver.OnBuildSettings());
 
+            // If the internal build system is being used and AAR explosion is disabled the build
+            // is going to fail so warn and enable explosion.
+            if (!AndroidBuildSystemSettings.Current.GradleBuildEnabled &&
+                !GooglePlayServices.SettingsDialog.ExplodeAars) {
+                Log("AAR explosion *must* be enabled when the internal build " +
+                    "system is selected, otherwise the build will very likely fail. " +
+                    "Enabling the 'explode AARs' setting.", level: LogLevel.Warning);
+                GooglePlayServices.SettingsDialog.ExplodeAars = true;
+            }
+
             xmlDependencies.ReadAll(logger);
 
             // If no dependencies are present, skip the resolution step.
