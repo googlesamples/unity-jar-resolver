@@ -309,6 +309,7 @@ namespace GooglePlayServices
                         // project or AAR without a classes.jar, the build is aborted.  This
                         // generates an empty classes.jar file to workaround the issue.
                         string emptyClassesDir = Path.Combine(stagingDir, "empty_classes_jar");
+                        Directory.CreateDirectory(emptyClassesDir);
                         if (!ArchiveAar(targetClassesFile, emptyClassesDir)) return false;
                     }
                 }
