@@ -226,7 +226,7 @@ namespace GooglePlayServices
         private static object resolveLock = new object();
 
         public ResolverVer1_1() {
-            LoadAarExplodeCache();
+            RunOnMainThread.Run(LoadAarExplodeCache, false);
         }
 
         /// <summary>
