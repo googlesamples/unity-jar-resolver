@@ -30,6 +30,7 @@ namespace GooglePlayServices {
         /// </summary>
         private class Settings {
             internal bool enableAutoResolution;
+            internal bool autoResolveOnBuild;
             internal bool useGradleDaemon;
             internal bool installAndroidPackages;
             internal string packageDir;
@@ -45,6 +46,7 @@ namespace GooglePlayServices {
             /// </summary>
             internal Settings() {
                 enableAutoResolution = SettingsDialog.EnableAutoResolution;
+                autoResolveOnBuild = SettingsDialog.AutoResolveOnBuild;
                 useGradleDaemon = SettingsDialog.UseGradleDaemon;
                 installAndroidPackages = SettingsDialog.InstallAndroidPackages;
                 packageDir = SettingsDialog.PackageDir;
@@ -62,6 +64,7 @@ namespace GooglePlayServices {
             internal void Save() {
                 SettingsDialog.UseGradleDaemon = useGradleDaemon;
                 SettingsDialog.EnableAutoResolution = enableAutoResolution;
+                SettingsDialog.AutoResolveOnBuild = autoResolveOnBuild;
                 SettingsDialog.InstallAndroidPackages = installAndroidPackages;
                 if (SettingsDialog.ConfigurablePackageDir) SettingsDialog.PackageDir = packageDir;
                 SettingsDialog.ExplodeAars = explodeAars;
@@ -75,6 +78,7 @@ namespace GooglePlayServices {
 
         const string Namespace = "GooglePlayServices.";
         private const string AutoResolveKey = Namespace + "AutoResolverEnabled";
+        private const string AutoResolveOnBuildKey = Namespace + "AutoResolveOnBuild";
         private const string PackageInstallKey = Namespace + "AndroidPackageInstallationEnabled";
         private const string PackageDirKey = Namespace + "PackageDirectory";
         private const string ExplodeAarsKey = Namespace + "ExplodeAars";
@@ -89,6 +93,7 @@ namespace GooglePlayServices {
         // List of preference keys, used to restore default settings.
         private static string[] PreferenceKeys = new[] {
             AutoResolveKey,
+            AutoResolveOnBuildKey,
             PackageInstallKey,
             PackageDirKey,
             ExplodeAarsKey,
@@ -131,6 +136,13 @@ namespace GooglePlayServices {
                 }
             }
             get { return projectSettings.GetBool(AutoResolveKey, true); }
+        }
+
+        internal static bool AutoResolveOnBuild {
+            set {
+                projectSettings.SetBool(AutoResolveOnBuildKey, value);
+            }
+            get { return projectSettings.GetBool(AutoResolveOnBuildKey, true); }
         }
 
         internal static bool UseGradleDaemon {
@@ -179,7 +191,7 @@ namespace GooglePlayServices {
         // Whether AARs that use variable expansion should be exploded when Gradle builds are
         // enabled.
         internal static bool ExplodeAars {
-            private set { projectSettings.SetBool(ExplodeAarsKey, value); }
+            set { projectSettings.SetBool(ExplodeAarsKey, value); }
             get { return projectSettings.GetBool(ExplodeAarsKey, true); }
         }
 
@@ -231,7 +243,7 @@ namespace GooglePlayServices {
         }
 
         public void Initialize() {
-            minSize = new Vector2(350, 425);
+            minSize = new Vector2(425, 445);
             position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                                 minSize.x, minSize.y);
         }
@@ -265,6 +277,19 @@ namespace GooglePlayServices {
             GUILayout.Label("Enable Auto-Resolution", EditorStyles.boldLabel);
             settings.enableAutoResolution = EditorGUILayout.Toggle(settings.enableAutoResolution);
             GUILayout.EndHorizontal();
+            GUILayout.Label(
+                settings.enableAutoResolution ?
+                ("Android libraries will be downloaded and processed in the editor.") :
+                ("Android libraries will *not* be downloaded or processed in the editor."));
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Enable Resolution On Build", EditorStyles.boldLabel);
+            settings.autoResolveOnBuild = EditorGUILayout.Toggle(settings.autoResolveOnBuild);
+            GUILayout.EndHorizontal();
+            GUILayout.Label(
+                settings.autoResolveOnBuild ?
+                ("Android libraries will be downloaded and processed in a pre-build step.") :
+                ("Android libraries will *not* be downloaded or processed in a pre-build step."));
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Install Android Packages", EditorStyles.boldLabel);
@@ -308,7 +333,8 @@ namespace GooglePlayServices {
 
             // Disable the ability to toggle the auto-resolution disabled warning
             // when auto resolution is enabled.
-            EditorGUI.BeginDisabledGroup(settings.enableAutoResolution);
+            EditorGUI.BeginDisabledGroup(settings.enableAutoResolution ||
+                                         settings.autoResolveOnBuild);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Auto-Resolution Disabled Warning", EditorStyles.boldLabel);
             settings.autoResolutionDisabledWarning =

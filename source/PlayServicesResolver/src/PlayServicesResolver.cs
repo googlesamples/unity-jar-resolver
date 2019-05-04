@@ -880,7 +880,9 @@ namespace GooglePlayServices {
             if (UnityEngine.Application.isPlaying) return;
             // If the Android resolver isn't enabled or automatic resolution is disabled,
             // do nothing.
-            if (Resolver == null || !Resolver.AutomaticResolutionEnabled()) return;
+            if (Resolver == null || !GooglePlayServices.SettingsDialog.AutoResolveOnBuild) {
+                return;
+            }
             // If post-processing has already been executed since this module was loaded, don't
             // do so again.
             scenesProcessed++;

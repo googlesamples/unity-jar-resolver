@@ -18,7 +18,7 @@ namespace GooglePlayServices {
                 return;
 
             if (SettingsDialog.AutoResolutionDisabledWarning &&
-                !SettingsDialog.EnableAutoResolution) {
+                !(SettingsDialog.EnableAutoResolution || SettingsDialog.AutoResolveOnBuild)) {
                 Debug.LogWarning("Warning: Auto-resolution of Android dependencies is disabled! " +
                                  "Ensure you have run the resolver manually." +
                                  "\n\nWith auto-resolution of Android dependencies disabled you " +
