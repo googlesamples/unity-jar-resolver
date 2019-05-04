@@ -602,11 +602,7 @@ public class PackageSpecifier implements Comparable {
    * @returns Colon separated string.
    */
   public String getSpecString() {
-    List<String> components = componentStrings
-    if (artifactType && artifactType != "srcaar") {
-      components = components.dropRight(1) + [versionExpression]
-    }
-    return components.join(":")
+    return componentStrings.join(":")
   }
 
   /*
@@ -1455,7 +1451,7 @@ def testPackageSpecifierStrings() {
   [[PackageSpecifier.fromString("a-b:c-d:1.2.3@srcaar"),
     ["a-b:c-d:1.2.3@srcaar", "a-b:c-d", "a-b.c-d-1.2.3.aar"]],
    [PackageSpecifier.fromString("a-b:c-d:1.2.3@aar"),
-    ["a-b:c-d:1.2.3", "a-b:c-d", "a-b.c-d-1.2.3.aar"]],
+    ["a-b:c-d:1.2.3@aar", "a-b:c-d", "a-b.c-d-1.2.3.aar"]],
    [PackageSpecifier.fromString("a-b:c-d:1.2.3"),
     ["a-b:c-d:1.2.3", "a-b:c-d", "a-b.c-d-1.2.3"]],
    [PackageSpecifier.fromString("a-b:c-d"),

@@ -275,6 +275,16 @@ createTestTask(
    "com.android.support.support-annotations-26.1.0.jar"])
 
 createTestTask(
+  "testDownloadAvailableWithCustomPackaging",
+  "Downloads a single artifact with custom packaging.",
+  "com.android.support:support-annotations:23.0.1@magic",
+  ["com.android.support.support-annotations-23.0.1.magic":
+   "com/android/support/support-annotations/23.0.1/" +
+   "support-annotations-23.0.1.magic"],
+  ["Copied artifacts:\n" +
+   "com.android.support.support-annotations-23.0.1.magic"])
+
+createTestTask(
   "testDownloadAvailableTwice",
   "Downloads a single artifact and it's dependencies from maven.",
   "android.arch.core:common:1.0.0",
@@ -342,7 +352,7 @@ createTestTask(
    "com.android.support.support-vector-drawable-24.0.0.aar",
    "Modified artifacts:\n" +
    "com.android.support:appcompat-v7:23.0.0 --> " +
-   "com.android.support:appcompat-v7:24.0.0"])
+   "com.android.support:appcompat-v7:24.0.0@aar"])
 
 createTestTask(
   "testDownloadSrcAar",
@@ -545,7 +555,7 @@ createTestTask(
    "org.test.psr.locked.new-common-1.5.0.aar\n" +
    "org.test.psr.locked.output-1.5.0.aar",
    "Modified artifacts:\n" +
-   "org.test.psr.locked:input:1.2.3 --> org.test.psr.locked:input:1.5.0"])
+   "org.test.psr.locked:input:1.2.3 --> org.test.psr.locked:input:1.5.0@aar"])
 
 createTestTask(
   "testVersionLockedAndNonVersionLocked",
