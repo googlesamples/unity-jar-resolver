@@ -1,5 +1,9 @@
+# Version 1.2.108 - May 3, 2019
+## Bug Fixes:
+* Version Handler: Fixed occasional hang on startup.
+
 # Version 1.2.107 - May 3, 2019
-# New Features:
+## New Features:
 * Version Handler: Added support for enabling / disabling assets that do not
   support the PluginImporter, based upon build target selection.
 * Android Resolver: Added support for the global specification of maven repos.
