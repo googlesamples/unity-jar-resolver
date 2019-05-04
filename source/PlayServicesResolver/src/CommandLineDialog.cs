@@ -148,10 +148,6 @@ namespace GooglePlayServices
                         bodyText = bodyTextHead + bodyText.Substring(carriageReturn + 1);
                     }
                     window.bodyText = bodyText;
-                    if (window.autoScrollToBottom)
-                    {
-                        window.scrollPosition.y = Mathf.Infinity;
-                    }
                     window.Repaint();
                 }
                 if (maxProgressLines > 0)
@@ -169,8 +165,12 @@ namespace GooglePlayServices
         public volatile float progress;
         public string progressTitle;
         public string progressSummary;
-        public volatile bool autoScrollToBottom;
         public Google.Logger logger = new Google.Logger();
+
+        /// <summary>
+        /// Whether a command is currently being executed.
+        /// </summary>
+        public bool RunningCommand { protected set; get; }
 
         /// <summary>
         /// Event delegate called from the Update() method of the window.
@@ -178,8 +178,6 @@ namespace GooglePlayServices
         public delegate void UpdateDelegate(CommandLineDialog window);
 
         public event UpdateDelegate UpdateEvent;
-
-        private bool progressBarVisible;
 
         /// <summary>
         /// Create a dialog box which can display command line output.
@@ -213,15 +211,6 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Alternative Repaint() method that does not crash in batch mode.
-        /// </summary>
-        public new void Repaint() {
-            if (!ExecutionEnvironment.InBatchMode) {
-                base.Repaint();
-            }
-        }
-
-        /// <summary>
         /// Alternative Close() method that does not crash in batch mode.
         /// </summary>
         public new void Close() {
@@ -240,8 +229,40 @@ namespace GooglePlayServices
             progressTitle = "";
             progressSummary = "";
             UpdateEvent = null;
-            progressBarVisible = false;
             autoScrollToBottom = false;
+        }
+
+        /// <summary>
+        /// Set the progress bar status.
+        /// </summary>
+        /// <param name="title">Text to display before the progress bar.</param>
+        /// <param name="value">Progress bar value 0..1.</param>
+        /// <param name="summary">Text to display in the progress bar.</param>
+        public void SetProgress(string title, float value, string summary) {
+            progressTitle = title;
+            progress = value;
+            progressSummary = summary;
+            Repaint();
+        }
+
+        // Draw the GUI with an optional status bar.
+        protected override void OnGUI() {
+            summaryTextDisplay = true;
+            if (!String.IsNullOrEmpty(progressTitle)) {
+                summaryTextDisplay = false;
+                EditorGUILayout.BeginVertical();
+                EditorGUILayout.LabelField(progressTitle, EditorStyles.boldLabel);
+                var progressBarRect = EditorGUILayout.BeginVertical();
+                EditorGUILayout.LabelField(""); // Creates vertical space for the progress bar.
+                EditorGUI.ProgressBar(
+                    progressBarRect, progress,
+                    String.IsNullOrEmpty(progressSummary) ?
+                        String.Format("{0}%... ", (int)(progress * 100.0f)) : progressSummary);
+                EditorGUILayout.EndVertical();
+                EditorGUILayout.Space();
+                EditorGUILayout.EndVertical();
+            }
+            base.OnGUI();
         }
 
         /// <summary>
@@ -273,38 +294,29 @@ namespace GooglePlayServices
             // Connect the caller's IoHandler delegate to the reporter.
             reporter.DataHandler += ioHandler;
             // Disconnect the reporter when the command completes.
-            CommandLine.CompletionHandler reporterUpdateDisable =
-                (CommandLine.Result unusedResult) => { this.UpdateEvent -= reporter.Update; };
+            CommandLine.CompletionHandler reporterUpdateDisable = (unusedResult) => {
+                RunningCommand = false;
+                this.UpdateEvent -= reporter.Update;
+            };
             reporter.Complete += reporterUpdateDisable;
             logger.Log(String.Format(
                 "Executing command: {0} {1}", toolPath, arguments), level: LogLevel.Verbose);
+            RunningCommand = true;
             CommandLine.RunAsync(toolPath, arguments, reporter.CommandLineToolCompletion,
                                  workingDirectory: workingDirectory, envVars: envVars,
                                  ioHandler: reporter.AggregateLine);
         }
 
         /// <summary>
-        /// Call the update event from the UI thread, optionally display / hide the progress bar.
+        /// Call the update event from the UI thread.
         /// </summary>
         protected virtual void Update()
         {
             if (UpdateEvent != null) UpdateEvent(this);
-            if (progressTitle != "")
-            {
-                progressBarVisible = true;
-                EditorUtility.DisplayProgressBar(progressTitle, progressSummary,
-                                                 progress);
-            }
-            else if (progressBarVisible)
-            {
-                progressBarVisible = false;
-                EditorUtility.ClearProgressBar();
-            }
         }
 
         // Hide the progress bar if the window is closed.
         protected override void OnDestroy() {
-            if (progressBarVisible) EditorUtility.ClearProgressBar();
             base.OnDestroy();
         }
     }

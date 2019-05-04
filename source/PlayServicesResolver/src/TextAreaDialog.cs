@@ -16,8 +16,11 @@
 
 namespace GooglePlayServices
 {
+    using System;
     using UnityEditor;
     using UnityEngine;
+
+    using Google;
 
     /// <summary>
     /// Window which displays a scrollable text area and two buttons at the bottom.
@@ -44,6 +47,11 @@ namespace GooglePlayServices
         /// Set the text to display in the summary area of the window.
         /// </summary>
         public string summaryText = "";
+
+        /// <summary>
+        /// Whether to display summary text.
+        /// </summary>
+        public bool summaryTextDisplay = true;
 
         /// <summary>
         /// Set the text to display on the "yes" (left-most) button.
@@ -77,6 +85,21 @@ namespace GooglePlayServices
         public Vector2 scrollPosition;
 
         /// <summary>
+        /// Whether to automatically scroll to the bottom of the window.
+        /// </summary>
+        public volatile bool autoScrollToBottom;
+
+        /// <summary>
+        /// Last time the window was repainted.
+        /// </summary>
+        private long lastRepaintTimeInMilliseconds = 0;
+
+        /// <summary>
+        /// Minimum repaint period.
+        /// </summary>
+        private const long REPAINT_PERIOD_IN_MILLISECONDS = 33; // ~30Hz
+
+        /// <summary>
         /// Get the existing text area window or create a new one.
         /// </summary>
         /// <param name="title">Title to display on the window.</param>
@@ -103,14 +126,39 @@ namespace GooglePlayServices
                                 minSize.x * 2, minSize.y * 2);
         }
 
+        // Add to body text.
+        public void AddBodyText(string text) {
+            bodyText += text;
+            Repaint();
+        }
+
+        /// <summary>
+        /// Alternative Repaint() method that does not crash in batch mode and throttles repaint
+        /// rate to REPAINT_PERIOD_IN_MILLISECONDS.
+        /// </summary>
+        public new void Repaint() {
+            if (!ExecutionEnvironment.InBatchMode) {
+                // Throttle repaint to REPAINT_PERIOD_IN_MILLISECONDS.
+                var timeInMilliseconds = (DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond);
+                var timeElapsedInMilliseconds = timeInMilliseconds - lastRepaintTimeInMilliseconds;
+                if (timeElapsedInMilliseconds >= REPAINT_PERIOD_IN_MILLISECONDS) {
+                    lastRepaintTimeInMilliseconds = timeInMilliseconds;
+                    if (autoScrollToBottom) scrollPosition.y = Mathf.Infinity;
+                    base.Repaint();
+                }
+            }
+        }
+
         // Draw the GUI.
         protected virtual void OnGUI()
         {
-            GUILayout.BeginVertical();
+            EditorGUILayout.BeginVertical();
 
-            GUILayout.Label(summaryText, EditorStyles.boldLabel);
+            if (!String.IsNullOrEmpty(summaryText) && summaryTextDisplay) {
+                EditorGUILayout.LabelField(summaryText, EditorStyles.boldLabel);
+            }
 
-            scrollPosition = GUILayout.BeginScrollView(scrollPosition);
+            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
             // Unity text elements can only display up to a small X number of characters (rumors
             // are ~65k) so generate a set of labels one for each subset of the text being
             // displayed.
@@ -134,16 +182,16 @@ namespace GooglePlayServices
                                                 EditorStyles.wordWrappedLabel,
                                                 GUILayout.Height(pixelHeight));
             }
-            GUILayout.EndScrollView();
+            EditorGUILayout.EndScrollView();
 
             bool yesPressed = false;
             bool noPressed = false;
-            GUILayout.BeginHorizontal();
+            EditorGUILayout.BeginHorizontal();
             if (yesText != "") yesPressed = GUILayout.Button(yesText);
             if (noText != "") noPressed = GUILayout.Button(noText);
-            GUILayout.EndHorizontal();
+            EditorGUILayout.EndHorizontal();
 
-            GUILayout.EndVertical();
+            EditorGUILayout.EndVertical();
 
             // If yes or no buttons were pressed, call the buttonClicked delegate.
             if (yesPressed || noPressed)

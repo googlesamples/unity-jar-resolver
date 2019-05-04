@@ -108,9 +108,15 @@ namespace GooglePlayServices {
                     aarFiles.Add(targetFilename);
                     if (!File.Exists(targetFilename)) {
                         bool configuredAar = false;
-                        if (AssetDatabase.CopyAsset(srcaar, targetFilename) &&
+                        bool copiedAndLabeledAar = AssetDatabase.CopyAsset(srcaar, targetFilename);
+                        if (copiedAndLabeledAar) {
+                            var unlabeledAssets = new HashSet<string>();
                             PlayServicesResolver.LabelAssets(
-                                new [] { targetFilename }).Count == 0) {
+                                new [] { targetFilename },
+                                complete: (unlabeled) => { unlabeledAssets.UnionWith(unlabeled); });
+                            copiedAndLabeledAar = unlabeledAssets.Count == 0;
+                        }
+                        if (copiedAndLabeledAar) {
                             try {
                                 PluginImporter importer = (PluginImporter)AssetImporter.GetAtPath(
                                     targetFilename);

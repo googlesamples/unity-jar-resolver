@@ -262,8 +262,8 @@ namespace GooglePlayServices
         /// to repack the processed AAR as a new AAR.</param>
         /// <param name="abis">ABIs in the AAR or null if it's universal.</param>
         /// <returns>true if successful, false otherwise.</returns>
-        internal virtual bool ProcessAar(string dir, string aarFile, bool antProject,
-                                         out AndroidAbis abis) {
+        internal bool ProcessAar(string dir, string aarFile, bool antProject,
+                                  out AndroidAbis abis) {
             PlayServicesResolver.Log(String.Format("ProcessAar {0} {1} antProject={2}",
                                                    dir, aarFile, antProject),
                                      level: LogLevel.Verbose);

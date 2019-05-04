@@ -624,6 +624,17 @@ namespace GooglePlayServices
             return sourcesByRepoList;
         }
 
+        // Holds Gradle resolution state.
+        private class ResolutionState {
+            public CommandLine.Result commandLineResult = new CommandLine.Result();
+            public List<string> copiedArtifacts = new List<string>();
+            public HashSet<string> copiedArtifactsSet = new HashSet<string>();
+            public List<string> missingArtifacts = new List<string>();
+            public List<Dependency> missingArtifactsAsDependencies = new List<Dependency>();
+            public List<string> modifiedArtifacts = new List<string>();
+            public bool errorOrWarningLogged = false;
+        }
+
         /// <summary>
         /// Perform resolution using Gradle.
         /// </summary>
@@ -693,47 +704,55 @@ namespace GooglePlayServices
             var repoList = new List<string>();
             foreach (var kv in DependenciesToRepoUris(allDependencies.Values)) repoList.Add(kv.Key);
 
-            // Executed when Gradle finishes execution.
-            CommandLine.CompletionHandler gradleComplete = (result) => {
-                if (result.exitCode != 0) {
-                    PlayServicesResolver.Log(
-                        String.Format("Gradle failed to fetch dependencies.\n\n" +
-                                      "{0}", result.message),
-                        level: LogLevel.Error);
-                    resolutionComplete(allDependenciesList);
-                    return;
-                }
-                // Parse stdout for copied and missing artifacts.
-                List<string> copiedArtifacts;
-                List<string> missingArtifacts;
-                List<string> modifiedArtifacts;
-                ParseDownloadGradleArtifactsGradleOutput(result.stdout, destinationDirectory,
-                                                         out copiedArtifacts,
-                                                         out missingArtifacts,
-                                                         out modifiedArtifacts);
-                // Label all copied files.
-                PlayServicesResolver.LabelAssets(copiedArtifacts);
-                // Display a warning about modified artifact versions.
-                if (modifiedArtifacts.Count > 0) {
-                    PlayServicesResolver.Log(
-                        String.Format("Some conflicting dependencies were found.\n" +
-                                      "The following dependency versions were modified:\n" +
-                                      "{0}\n", String.Join("\n", modifiedArtifacts.ToArray())),
-                        level: LogLevel.Warning);
-                }
-                // Poke the explode cache for each copied file and add the exploded paths to the
-                // output list set.
-                var copiedArtifactsSet = new HashSet<string>(copiedArtifacts);
-                foreach (var artifact in copiedArtifacts) {
-                    if (ShouldExplode(artifact)) {
-                        copiedArtifactsSet.Add(DetermineExplodedAarPath(artifact));
-                    }
-                }
+            // Create an instance of ResolutionState to aggregate the results.
+            var resolutionState = new ResolutionState();
 
-                // Find all labelled files that were not copied and delete them.
+            // Window used to display resolution progress.
+            var window = CommandLineDialog.CreateCommandLineDialog(
+                "Resolving Android Dependencies");
+
+            // Register an event to redirect log messages to the resolution window.
+            Google.Logger.LogMessageDelegate logToWindow = (message, logLevel) => {
+                string messagePrefix;
+                switch (logLevel) {
+                    case LogLevel.Error:
+                        messagePrefix = "ERROR: ";
+                        resolutionState.errorOrWarningLogged = true;
+                        break;
+                    case LogLevel.Warning:
+                        messagePrefix = "WARNING: ";
+                        resolutionState.errorOrWarningLogged = true;
+                        break;
+                    default:
+                        messagePrefix = "";
+                        break;
+                }
+                if (!window.RunningCommand) {
+                    window.AddBodyText(messagePrefix + message + "\n");
+                }
+            };
+            PlayServicesResolver.logger.LogMessage += logToWindow;
+
+            // When resolution is complete unregister the log redirection event.
+            Action resolutionCompleteRestoreLogger = () => {
+                PlayServicesResolver.logger.LogMessage -= logToWindow;
+                // If the command completed successfully or the log level is info or above close
+                // the window, otherwise leave it open for inspection.
+                if (resolutionState.commandLineResult.exitCode == 0 &&
+                    PlayServicesResolver.logger.Level >= LogLevel.Info &&
+                    !resolutionState.errorOrWarningLogged) {
+                    window.Close();
+                }
+                resolutionComplete(resolutionState.missingArtifactsAsDependencies);
+            };
+
+            // Executed after refreshing the explode cache.
+            Action processAars = () => {
+                // Find all labeled files that were not copied and delete them.
                 var staleArtifacts = new HashSet<string>();
                 foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
-                    if (!copiedArtifactsSet.Contains(assetPath.Replace("\\", "/"))) {
+                    if (!resolutionState.copiedArtifactsSet.Contains(
+                            assetPath.Replace("\\", "/"))) {
                         staleArtifacts.Add(assetPath);
                     }
                 }
@@ -746,15 +765,17 @@ namespace GooglePlayServices
                     foreach (var assetPath in staleArtifacts) {
                         FileUtils.DeleteExistingFileOrDirectory(assetPath);
                     }
-
                 }
                 // Process / explode copied AARs.
                 ProcessAars(
-                    destinationDirectory, new HashSet<string>(copiedArtifacts),
+                    destinationDirectory, new HashSet<string>(resolutionState.copiedArtifacts),
+                    (progress, message) => {
+                        window.SetProgress("Processing libraries...", progress, message);
+                    },
                     () => {
                         // Look up the original Dependency structure for each missing artifact.
-                        var missingArtifactsAsDependencies = new List<Dependency>();
-                        foreach (var artifact in missingArtifacts) {
+                        resolutionState.missingArtifactsAsDependencies = new List<Dependency>();
+                        foreach (var artifact in resolutionState.missingArtifacts) {
                             Dependency dep;
                             if (!allDependencies.TryGetValue(artifact, out dep)) {
                                 // If this fails, something may have gone wrong with the Gradle
@@ -776,19 +797,79 @@ namespace GooglePlayServices
                                 }
                                 dep = new Dependency(components[0], components[1], components[2]);
                             }
-                            missingArtifactsAsDependencies.Add(dep);
+                            resolutionState.missingArtifactsAsDependencies.Add(dep);
                         }
                         if (logErrorOnMissingArtifacts) {
-                            LogMissingDependenciesError(missingArtifacts);
+                            LogMissingDependenciesError(resolutionState.missingArtifacts);
                         }
-                        resolutionComplete(missingArtifactsAsDependencies);
+                        resolutionCompleteRestoreLogger();
                     });
             };
 
-            // Executes gradleComplete on the main thread.
-            CommandLine.CompletionHandler scheduleOnMainThread = (result) => {
-                System.Action processResult = () => { gradleComplete(result); };
-                RunOnMainThread.Run(processResult);
+            // Executed after labeling copied assets.
+            Action refreshExplodeCache = () => {
+                // Poke the explode cache for each copied file and add the exploded paths to the
+                // output list set.
+                resolutionState.copiedArtifactsSet =
+                    new HashSet<string>(resolutionState.copiedArtifacts);
+                var numberOfCopiedArtifacts = resolutionState.copiedArtifacts.Count;
+                var artifactsToInspect = new List<string>(resolutionState.copiedArtifacts);
+                if (numberOfCopiedArtifacts > 0) {
+                    RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                            var remaining = artifactsToInspect.Count;
+                            if (remaining == 0) {
+                                processAars();
+                                return true;
+                            }
+                            var artifact = artifactsToInspect[0];
+                            artifactsToInspect.RemoveAt(0);
+                            window.SetProgress("Inspecting libraries...",
+                                               (float)(numberOfCopiedArtifacts - remaining) /
+                                               (float)numberOfCopiedArtifacts, artifact);
+                            if (ShouldExplode(artifact)) {
+                                resolutionState.copiedArtifactsSet.Add(
+                                    DetermineExplodedAarPath(artifact));
+                            }
+                            return false;
+                        });
+                }
+            };
+
+            // Executed when Gradle finishes execution.
+            CommandLine.CompletionHandler gradleComplete = (commandLineResult) => {
+                resolutionState.commandLineResult = commandLineResult;
+                if (commandLineResult.exitCode != 0) {
+                    resolutionState.missingArtifactsAsDependencies = allDependenciesList;
+                    PlayServicesResolver.Log(
+                        String.Format("Gradle failed to fetch dependencies.\n\n{0}",
+                                      commandLineResult.message), level: LogLevel.Error);
+                    resolutionCompleteRestoreLogger();
+                    return;
+                }
+                // Parse stdout for copied and missing artifacts.
+                ParseDownloadGradleArtifactsGradleOutput(commandLineResult.stdout,
+                                                         destinationDirectory,
+                                                         out resolutionState.copiedArtifacts,
+                                                         out resolutionState.missingArtifacts,
+                                                         out resolutionState.modifiedArtifacts);
+                // Display a warning about modified artifact versions.
+                if (resolutionState.modifiedArtifacts.Count > 0) {
+                    PlayServicesResolver.Log(
+                        String.Format(
+                            "Some conflicting dependencies were found.\n" +
+                            "The following dependency versions were modified:\n" +
+                            "{0}\n",
+                            String.Join("\n", resolutionState.modifiedArtifacts.ToArray())),
+                        level: LogLevel.Warning);
+                }
+                // Label all copied files.
+                PlayServicesResolver.LabelAssets(
+                    resolutionState.copiedArtifacts,
+                    complete: (unusedUnlabeled) => { refreshExplodeCache(); },
+                    synchronous: false,
+                    progressUpdate: (progress, message) => {
+                        window.SetProgress("Labeling libraries...", progress, message);
+                    });
             };
 
             var packageSpecs =
@@ -825,20 +906,15 @@ namespace GooglePlayServices
                                      level: LogLevel.Verbose);
 
             // Run the build script to perform the resolution popping up a window in the editor.
-            var window = CommandLineDialog.CreateCommandLineDialog(
-                "Resolving Android Dependencies");
             window.summaryText = "Resolving Android Dependencies...";
             window.modal = false;
             window.progressTitle = window.summaryText;
             window.autoScrollToBottom = true;
             window.logger = PlayServicesResolver.logger;
             window.RunAsync(gradleWrapper, gradleArgumentsString,
-                            (result) => {
-                                window.Close();
-                                scheduleOnMainThread(result);
-                            },
+                            (result) => { RunOnMainThread.Run(() => { gradleComplete(result); }); },
                             workingDirectory: gradleBuildDirectory,
-                            maxProgressLines: 50);
+                            maxProgressLines: (allDependenciesList.Count * 10) + 50);
             window.Show();
         }
 
@@ -1417,23 +1493,22 @@ namespace GooglePlayServices
         /// <param name="dir">The directory to process.</param>
         /// <param name="updatedFiles">Set of files that were recently updated and should be
         /// processed.</param>
+        /// <param name="progressUpdate">Called with the progress (0..1) and message that indicates
+        /// processing progress.</param>
         /// <param name="complete">Executed when this process is complete.</param>
-        private void ProcessAars(string dir, HashSet<string> updatedFiles, Action complete) {
+        private void ProcessAars(string dir, HashSet<string> updatedFiles,
+                                 Action<float, string> progressUpdate, Action complete) {
             // Get set of AAR files and directories we're managing.
             var uniqueAars = new HashSet<string>(PlayServicesResolver.FindLabeledAssets());
             foreach (var aarData in aarExplodeData.Values) uniqueAars.Add(aarData.path);
             var aars = new Queue<string>(uniqueAars);
 
-            const string progressBarTitle = "Processing AARs...";
             int numberOfAars = aars.Count;
-            bool displayProgress = (numberOfAars > 0 && !ExecutionEnvironment.InBatchMode);
-
             if (numberOfAars == 0) {
                 complete();
                 return;
             }
-            // EditorUtility.DisplayProgressBar can't be called multiple times per UI thread tick
-            // in some versions of Unity so perform increment processing on each UI thread tick.
+            // Processing can be slow so execute incrementally so we don't block the update thread.
             RunOnMainThread.PollOnUpdateUntilComplete(() => {
                 int remainingAars = aars.Count;
                 bool allAarsProcessed = remainingAars == 0;
@@ -1446,9 +1521,7 @@ namespace GooglePlayServices
                 allAarsProcessed = remainingAars == 0;
                 float progress = (float)processedAars / (float)numberOfAars;
                 try {
-                    if (displayProgress) {
-                        EditorUtility.DisplayProgressBar(progressBarTitle, aarPath, progress);
-                    }
+                    progressUpdate(progress, aarPath);
                     bool explode = ShouldExplode(aarPath);
                     var aarData = FindAarExplodeDataEntry(aarPath);
                     PlayServicesResolver.Log(
@@ -1482,7 +1555,7 @@ namespace GooglePlayServices
                     SaveAarExplodeCache();
                 } finally {
                     if (allAarsProcessed) {
-                        if (displayProgress) EditorUtility.ClearProgressBar();
+                        progressUpdate(1.0f, "Library processing complete");
                         complete();
                     }
                 }

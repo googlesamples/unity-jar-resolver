@@ -244,7 +244,9 @@ internal class RunOnMainThread {
     /// </summary>
     /// <param name="condition">Method that returns true when the operation is complete, false
     /// otherwise.</param>
-    public static void PollOnUpdateUntilComplete(Func<bool> condition) {
+    /// <param name="synchronous">Whether to block the calling thread until the condition is met.
+    /// </param>
+    public static void PollOnUpdateUntilComplete(Func<bool> condition, bool synchronous = false) {
         lock (pollingJobs) {
             pollingJobs.Add(condition);
         }
@@ -259,6 +261,18 @@ internal class RunOnMainThread {
                         Thread.Sleep(100);
                     }
                 });
+        } else if (synchronous) {
+            while (true) {
+                lock (pollingJobs) {
+                    if (!pollingJobs.Contains(condition)) break;
+                }
+                if (OnMainThread) {
+                    ExecuteAll();
+                } else {
+                    // Wait 100ms.
+                    Thread.Sleep(100);
+                }
+            }
         }
     }
 

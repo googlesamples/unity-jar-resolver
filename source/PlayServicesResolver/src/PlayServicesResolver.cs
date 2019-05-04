@@ -1718,61 +1718,87 @@ namespace GooglePlayServices {
         /// Label a set of assets that should be managed by this plugin.
         /// </summary>
         /// <param name="assetPaths">Set of assets to label.</param>
+        /// <param name="complete">Called when the operation is complete with the set of assets
+        /// that could not be labeled.</param>
+        /// <param name="synchronous">Whether to block until asset labeling is complete.</param>
+        /// <param name="progressUpdate">Called with the progress (0..1) and message that indicates
+        /// processing progress.</param>
         /// <param name="displayWarning">Whether to display a warning if assets can't be
         /// labeled.</param>
         /// <param name="recursive">Whether to label assets in subdirectories of the specified
         /// assetPaths.</param>
-        /// <returns>List of assets that could not be labeled.</returns>
-        internal static HashSet<string> LabelAssets(IEnumerable<string> assetPaths,
-                                                    bool displayWarning = true,
-                                                    bool recursive = false) {
-            var assetsWithoutAssetImporter = new HashSet<string>(assetPaths);
-            if (assetsWithoutAssetImporter.Count == 0) return assetsWithoutAssetImporter;
+        /// <returns></returns>
+        internal static void LabelAssets(IEnumerable<string> assetPaths,
+                                         Action<HashSet<string>> complete = null,
+                                         bool synchronous = true,
+                                         Action<float, string> progressUpdate = null,
+                                         bool displayWarning = true,
+                                         bool recursive = false) {
+            var assetsWithoutAssetImporter = new HashSet<string>();
             var projectDataFolder = Path.GetFullPath(Application.dataPath);
-            foreach (var assetPath in new List<string>(assetsWithoutAssetImporter)) {
-                // Ignore asset meta files which are used to store the labels and files that
-                // are not in the project.
-                var fullAssetPath = Path.GetFullPath(assetPath);
-                if (assetPath.EndsWith(".meta") || !fullAssetPath.StartsWith(projectDataFolder)) {
-                    assetsWithoutAssetImporter.Remove(assetPath);
-                    continue;
-                }
+            var assetsToProcess = new List<string>(assetPaths);
+            int totalAssets = assetsToProcess.Count;
+            RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                    var remainingAssets = assetsToProcess.Count;
+                    // Display summary of processing and call the completion function.
+                    if (remainingAssets == 0) {
+                        if (assetsWithoutAssetImporter.Count > 0 && displayWarning) {
+                            Log(String.Format(
+                                "Failed to add tracking label {0} to some assets.\n\n" +
+                                "The following files will not be managed by this module:\n" +
+                                "{1}\n", ManagedAssetLabel,
+                                String.Join(
+                                    "\n", new List<string>(assetsWithoutAssetImporter).ToArray())),
+                                level: LogLevel.Warning);
+                        }
+                        if (complete != null) complete(assetsWithoutAssetImporter);
+                        return true;
+                    }
+                    var assetPath = assetsToProcess[0];
+                    assetsToProcess.RemoveAt(0);
+                    // Ignore asset meta files which are used to store the labels and files that
+                    // are not in the project.
+                    var fullAssetPath = Path.GetFullPath(assetPath);
+                    if (assetPath.EndsWith(".meta") ||
+                        !fullAssetPath.StartsWith(projectDataFolder)) {
+                        return false;
+                    }
 
-                // Get the relative path of this asset.
-                var relativeAssetPath = Path.Combine(
-                    Path.GetFileName(projectDataFolder),
-                    fullAssetPath.Substring(projectDataFolder.Length +1));
+                    // Get the relative path of this asset.
+                    var relativeAssetPath = Path.Combine(
+                        Path.GetFileName(projectDataFolder),
+                        fullAssetPath.Substring(projectDataFolder.Length +1));
 
-                // If the asset is a directory, add labels to the contents.
-                if (recursive && Directory.Exists(relativeAssetPath)) {
-                    assetsWithoutAssetImporter.UnionWith(
-                        LabelAssets(Directory.GetFileSystemEntries(relativeAssetPath),
-                                    displayWarning: false));
-                }
+                    if (progressUpdate != null) {
+                        progressUpdate((float)(totalAssets - remainingAssets) /
+                                       (float)totalAssets, relativeAssetPath);
+                    }
 
-                // It's likely files have been added or removed without using AssetDatabase methods
-                // so (re)import the asset to make sure it's in the AssetDatabase.
-                AssetDatabase.ImportAsset(relativeAssetPath,
-                                          options: ImportAssetOptions.ForceSynchronousImport);
+                    // If the asset is a directory, add labels to the contents.
+                    if (recursive && Directory.Exists(relativeAssetPath)) {
+                        var contents = new List<string>(
+                            Directory.GetFileSystemEntries(relativeAssetPath));
+                        totalAssets += contents.Count;
+                        assetsToProcess.AddRange(contents);
+                        return false;
+                    }
 
-                // Add the label to the asset.
-                AssetImporter importer = AssetImporter.GetAtPath(relativeAssetPath);
-                if (importer != null) {
-                    var labels = new HashSet<string>(AssetDatabase.GetLabels(importer));
-                    labels.Add(ManagedAssetLabel);
-                    AssetDatabase.SetLabels(importer, (new List<string>(labels)).ToArray());
-                    assetsWithoutAssetImporter.Remove(assetPath);
-                }
-            }
-            if (assetsWithoutAssetImporter.Count > 0 && displayWarning) {
-                Log(String.Format(
-                    "Failed to add tracking label {0} to some assets.\n\n" +
-                    "The following files will not be managed by this module:\n" +
-                    "{1}\n", ManagedAssetLabel,
-                    String.Join("\n", new List<string>(assetsWithoutAssetImporter).ToArray())),
-                    level: LogLevel.Warning);
-            }
-            return assetsWithoutAssetImporter;
+                    // It's likely files have been added or removed without using AssetDatabase
+                    // methods so (re)import the asset to make sure it's in the AssetDatabase.
+                    AssetDatabase.ImportAsset(relativeAssetPath,
+                                              options: ImportAssetOptions.ForceSynchronousImport);
+
+                    // Add the label to the asset.
+                    AssetImporter importer = AssetImporter.GetAtPath(relativeAssetPath);
+                    if (importer != null) {
+                        var labels = new HashSet<string>(AssetDatabase.GetLabels(importer));
+                        labels.Add(ManagedAssetLabel);
+                        AssetDatabase.SetLabels(importer, (new List<string>(labels)).ToArray());
+                    } else {
+                        assetsWithoutAssetImporter.Add(assetPath);
+                    }
+                    return false;
+                }, synchronous: synchronous);
         }
 
         /// <summary>

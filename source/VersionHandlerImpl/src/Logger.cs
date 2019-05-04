@@ -52,6 +52,18 @@ namespace Google {
         internal string LogFilename { get; set; }
 
         /// <summary>
+        /// Delegate function used to log messages.
+        /// </summary>
+        /// <param name="message">Message to log.</param>
+        /// <param name="level">Log level of the message.</param>
+        internal delegate void LogMessageDelegate(string message, LogLevel level);
+
+        /// <summary>
+        /// Event that is called for each logged message.
+        /// </summary>
+        internal event LogMessageDelegate LogMessage;
+
+        /// <summary>
         /// Construct a logger.
         /// </summary>
         internal Logger() {}
@@ -93,6 +105,7 @@ namespace Google {
                         break;
                 }
             }
+            if (LogMessage != null) LogMessage(message, level);
         }
     }
 }
