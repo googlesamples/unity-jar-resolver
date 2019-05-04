@@ -69,6 +69,8 @@ public class TestEnabledCallback {
     /// Register a method to call when the Version Handler has enabled all plugins in the project.
     /// </summary>
     static TestEnabledCallback() {
+        // Disable stack traces for more condensed logs.
+        UnityEngine.Application.stackTraceLogType = UnityEngine.StackTraceLogType.None;
         UnityEngine.Debug.Log("Ensure plugin components are not loaded.");
         if (!SetInitialized()) {
             foreach (var kv in EntryPoints) {

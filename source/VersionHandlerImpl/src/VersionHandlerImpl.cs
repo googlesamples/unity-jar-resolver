@@ -1981,39 +1981,25 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     [InitializeOnLoad]
     internal class BuildTargetChecker {
+        private const double POLL_INTERVAL_MILLISECONDS = 1000.0f;
         private static BuildTarget? lastKnownBuildTarget = null;
-        private static int ticksSinceLastCheck = 0;
-        private static int ticksBetweenChecks = 60;
-
 
         static BuildTargetChecker() {
-            HandleSettingsChanged();
+            RunOnMainThread.Run(HandleSettingsChanged, runNow: false);
         }
 
-        public static void HandleSettingsChanged() {
-            RunOnMainThread.OnUpdate -= CheckBuildTarget;
-            if (Enabled && RenameToDisableFilesEnabled) {
-                RunOnMainThread.OnUpdate += CheckBuildTarget;
-            }
-        }
+        // NOTE: This should only be called from the main thread.
+        public static void HandleSettingsChanged() { CheckBuildTarget(); }
 
         private static void CheckBuildTarget() {
-            ticksSinceLastCheck++;
-            if (ticksSinceLastCheck < ticksBetweenChecks) {
-                return;
-            }
-
-            if (!Enabled || !RenameToDisableFilesEnabled) {
-                RunOnMainThread.OnUpdate -= CheckBuildTarget;
-            }
-
             var newBuildTarget = EditorUserBuildSettings.activeBuildTarget;
             if (lastKnownBuildTarget == null || newBuildTarget != lastKnownBuildTarget) {
                 lastKnownBuildTarget = newBuildTarget;
                 HandleBuildTargetChanged(newBuildTarget);
             }
-
-            ticksSinceLastCheck = 0;
+            if (Enabled && RenameToDisableFilesEnabled && !ExecutionEnvironment.InBatchMode) {
+                RunOnMainThread.Schedule(CheckBuildTarget, POLL_INTERVAL_MILLISECONDS);
+            }
         }
 
         private static void HandleBuildTargetChanged(BuildTarget newBuildTarget) {
