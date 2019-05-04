@@ -1691,7 +1691,11 @@ namespace GooglePlayServices {
             var lines = new List<string>();
             lines.AddRange(GradleMavenReposLines(dependencies: dependencies));
             lines.AddRange(GradleDependenciesLines(dependencies: dependencies));
-            Log(String.Join("\n", lines.ToArray()));
+            var dependenciesString = String.Join("\n", lines.ToArray());
+            Log(dependenciesString);
+            var window = TextAreaDialog.CreateTextAreaDialog("Android Libraries");
+            window.bodyText = dependenciesString;
+            window.Show();
         }
 
         /// <summary>
