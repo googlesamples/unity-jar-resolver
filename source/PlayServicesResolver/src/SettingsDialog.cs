@@ -166,8 +166,7 @@ namespace GooglePlayServices {
         /// </summary>
         internal static bool PromptBeforeAutoResolution {
             set {
-                projectSettings.SetBool(PromptBeforeAutoResolutionKey, value,
-                    ProjectSettings.SettingsSave.ProjectOnly);
+                projectSettings.SetBool(PromptBeforeAutoResolutionKey, value);
             }
             get { return projectSettings.GetBool(PromptBeforeAutoResolutionKey, true); }
         }
