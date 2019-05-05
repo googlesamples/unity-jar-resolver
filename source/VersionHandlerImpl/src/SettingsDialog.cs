@@ -16,6 +16,7 @@
 
 namespace Google {
 
+using System;
 using UnityEditor;
 using UnityEngine;
 
@@ -98,7 +99,7 @@ public class SettingsDialog : EditorWindow
     /// Setup the window's initial position and size.
     /// </summary>
     public void Initialize() {
-        minSize = new Vector2(300, 250);
+        minSize = new Vector2(300, 265);
         position = new Rect(UnityEngine.Screen.width / 3,
                             UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
@@ -117,6 +118,10 @@ public class SettingsDialog : EditorWindow
     public void OnGUI() {
         GUI.skin.label.wordWrap = true;
         GUILayout.BeginVertical();
+        GUILayout.Label(String.Format("Version Handler (version {0}.{1}.{2})",
+                                      VersionHandlerVersionNumber.Value.Major,
+                                      VersionHandlerVersionNumber.Value.Minor,
+                                      VersionHandlerVersionNumber.Value.Build));
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Enable version management", EditorStyles.boldLabel);

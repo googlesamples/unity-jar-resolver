@@ -243,7 +243,7 @@ namespace GooglePlayServices {
         }
 
         public void Initialize() {
-            minSize = new Vector2(425, 445);
+            minSize = new Vector2(425, 455);
             position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                                 minSize.x, minSize.y);
         }
@@ -262,6 +262,10 @@ namespace GooglePlayServices {
         public void OnGUI() {
             GUI.skin.label.wordWrap = true;
             GUILayout.BeginVertical();
+            GUILayout.Label(String.Format("Android Resolver (version {0}.{1}.{2})",
+                                          AndroidResolverVersionNumber.Value.Major,
+                                          AndroidResolverVersionNumber.Value.Minor,
+                                          AndroidResolverVersionNumber.Value.Build));
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Use Gradle Daemon", EditorStyles.boldLabel);

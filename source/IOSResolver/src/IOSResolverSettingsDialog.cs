@@ -16,6 +16,7 @@
 
 namespace Google {
 
+using System;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -93,7 +94,7 @@ public class IOSResolverSettingsDialog : EditorWindow
     }
 
     public void Initialize() {
-        minSize = new Vector2(400, 370);
+        minSize = new Vector2(400, 360);
         position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
     }
@@ -115,6 +116,10 @@ public class IOSResolverSettingsDialog : EditorWindow
     public void OnGUI() {
         GUI.skin.label.wordWrap = true;
         GUILayout.BeginVertical();
+        GUILayout.Label(String.Format("iOS Resolver (version {0}.{1}.{2})",
+                                      IOSResolverVersionNumber.Value.Major,
+                                      IOSResolverVersionNumber.Value.Minor,
+                                      IOSResolverVersionNumber.Value.Build));
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Podfile Generation", EditorStyles.boldLabel);

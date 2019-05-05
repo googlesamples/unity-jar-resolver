@@ -58,6 +58,7 @@
     <Compile Include="src\ProjectSettings.cs" />
     <Compile Include="src\RunOnMainThread.cs" />
     <Compile Include="src\SettingsDialog.cs" />
+    <Compile Include="src\VersionNumber.cs" />
     <Compile Include="src\VersionHandlerImpl.cs" />
     <Compile Include="src\XmlUtilities.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

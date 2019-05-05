@@ -575,10 +575,41 @@ Task createXbuildTask(String taskName, String taskDescription,
   Iterable<File> outputFilesInBinaryOutputDir = outputFiles.collect {
     return new File(binaryOutputDir, it.path)
   }
+  Iterable<Task> dependsOnTasks = dependsOn ? dependsOn : []
+  Iterable<Task> patchVersionFilesTasks = inputFiles.findResults {
+    if (it.name == "VersionNumber.cs") {
+      File versionFile = it
+      Task patchVersionTask = tasks.create(
+        name: taskName + "AddVersionTo" + it.name,
+        description: "Add version to " + it.path,
+        type: Task,
+        dependsOn: dependsOnTasks)
+      patchVersionTask.with {
+        inputs.files files([versionFile])
+        outputs.files files([versionFile])
+        doLast {
+          String[] lines = versionFile.text.split("\n")
+          List<String> outputLines = lines.collect {
+            it.replaceAll(
+              /(^.*VERSION_STRING[ ]*=[ ]*\")([^\"]+)(\".*)/,
+              '$1' + project.ext.pluginVersion + '$3')
+          }
+          String patchedFileString = (outputLines.join("\n") + "\n")
+          if (versionFile.text != patchedFileString) {
+            print("Patch " + versionFile.name)
+            versionFile.write(patchedFileString)
+          }
+        }
+      }
+      return patchVersionTask
+    }
+  }
   Task task = tasks.create(name: taskName,
                            description: taskDescription,
                            type: Exec,
-                           dependsOn: dependsOn ? dependsOn : []).with {
+                           dependsOn: patchVersionFilesTasks ?
+                                          patchVersionFilesTasks :
+                                      dependsOnTasks).with {
     inputs.files inputFiles
     outputs.files files(outputFilesInBinaryOutputDir)
     executable project.ext.xbuildExe
