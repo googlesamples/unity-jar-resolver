@@ -210,6 +210,7 @@ namespace GooglePlayServices {
             }
             // If the user's installed JDK is too old, report an error.
             if (foundVersion < MinimumJdkVersion) {
+                PlayServicesResolver.analytics.Report("jdk/outofdate", "JDK out of date");
                 PlayServicesResolver.Log(
                     String.Format("The configured JDK {0} is too old to build Android " +
                                   "applications with recent libraries.\n" +

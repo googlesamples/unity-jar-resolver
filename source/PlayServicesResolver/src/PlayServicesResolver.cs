@@ -737,6 +737,16 @@ namespace GooglePlayServices {
         /// </summary>
         internal static Google.Logger logger = new Google.Logger();
 
+        // Analytics reporter.
+        internal static EditorMeasurement analytics = new EditorMeasurement(
+                GooglePlayServices.SettingsDialog.projectSettings, logger,
+                VersionHandlerImpl.GA_TRACKING_ID, "com.google.unity.oss.play_services_resolver",
+                "Android Resolver", "", VersionHandlerImpl.PRIVACY_POLICY) {
+            BasePath = "/androidresolver/",
+            BaseQuery = String.Format("version={0}", AndroidResolverVersionNumber.Value.ToString()),
+            BaseReportName = "Android Resolver: "
+        };
+
         /// <summary>
         /// Arguments for the Android build system changed event.
         /// </summary>
@@ -1288,6 +1298,8 @@ namespace GooglePlayServices {
         /// </summary>
         private static void PatchAndroidManifest(string bundleId, string previousBundleId) {
             if (!SettingsDialogObj.PatchAndroidManifest) return;
+            PlayServicesResolver.analytics.Report("/patchandroidmanifest",
+                                                  "Patch AndroidManifest.xml");
             // We only need to patch the manifest in Unity 2018 and above.
             if (Google.VersionHandler.GetUnityVersionMajorMinor() < 2018.0f) return;
             var replacements = new Dictionary<string, string>();
@@ -1541,6 +1553,8 @@ namespace GooglePlayServices {
                             "resolved after deletion.", level: LogLevel.Warning);
                         SettingsDialogObj.EnableAutoResolution = false;
                     }
+                    PlayServicesResolver.analytics.Report("/deleteresolved",
+                                                          "Delete Resolved Packages");
                     DeleteLabeledAssets();
                     DeleteResolvedLibrariesFromGradleTemplate();
                     if (complete != null) complete();
@@ -1724,19 +1738,31 @@ namespace GooglePlayServices {
                 }
             }
 
+            var requestedDependencies = PlayServicesSupport.GetAllDependencies();
             System.IO.Directory.CreateDirectory(SettingsDialogObj.PackageDir);
             Log(String.Format("Resolving the following dependencies:\n{0}\n",
                               String.Join("\n", (new List<string>(
-                                  PlayServicesSupport.GetAllDependencies().Keys)).ToArray())),
+                                  requestedDependencies.Keys)).ToArray())),
                 level: LogLevel.Verbose);
+
+            var resolutionParameters = GetResolutionMeasurementParameters(null);
+            PlayServicesResolver.analytics.Report("/resolve", resolutionParameters, "Resolve");
 
             // Writes the current dependency state and reports whether resolution was successful.
             Action<bool, string> finishResolution = (bool succeeded, string error) => {
                 AssetDatabase.Refresh();
                 DependencyState.GetState().WriteToFile();
-                Log(String.Format("Resolution {0}.\n\n{1}",
-                                  succeeded ? "Succeeded" : "Failed",
-                                  error), level: LogLevel.Verbose);
+                if (succeeded) {
+                    PlayServicesResolver.analytics.Report("/resolve/success", resolutionParameters,
+                                                          "Resolve Successful");
+                    Log(String.Format("Resolution Succeeded.\n\n{0}", error),
+                        level: LogLevel.Verbose);
+                } else {
+                    PlayServicesResolver.analytics.Report("/resolve/failed", resolutionParameters,
+                                                          "Resolve Failed");
+                    Log(String.Format("Resolution Failed.\n\n{0}", error),
+                        level: LogLevel.Verbose);
+                }
                 if (resolutionComplete != null) {
                     RunOnMainThread.Run(() => { resolutionComplete(succeeded); });
                 }
@@ -2177,6 +2203,55 @@ namespace GooglePlayServices {
                 {"projectExportEnabled", buildSystemSettings.ProjectExportEnabled.ToString()},
                 {"androidAbis", androidAbis.ToString()},
             };
+        }
+
+        // List of resolution settings to report.
+        private static HashSet<string> resolutionSettingMeasurementList = new HashSet<string>() {
+            "installAndroidPackages",
+            "explodeAars",
+            "patchAndroidManifest",
+            "patchMainTemplateGradle",
+            "useJetifier",
+            "gradleBuildEnabled",
+            "gradleTemplateEnabled",
+            "projectExportEnabled",
+            "androidAbis",
+        };
+
+        /// <summary>
+        /// Get filtered resolution settings to report as parameters with measurement events.
+        /// </summary>
+        /// <param name="missingPackages">List of packages that were requested but not successfully
+        /// resolved or null if this shouldn't be reported.</param>
+        /// <returns>List of KeyValuePair instances.</returns>
+        internal static ICollection<KeyValuePair<string, string>>
+                GetResolutionMeasurementParameters(ICollection<string> missingPackages) {
+            var parameters = new List<KeyValuePair<string, string>>();
+            parameters.Add(new KeyValuePair<string, string>(
+                "autoResolution", SettingsDialogObj.EnableAutoResolution.ToString()));
+            parameters.Add(new KeyValuePair<string, string>(
+                "useGradleDaemon", SettingsDialogObj.UseGradleDaemon.ToString()));
+            foreach (var setting in GetResolutionSettings()) {
+                if (resolutionSettingMeasurementList.Contains(setting.Key)) parameters.Add(setting);
+            }
+            var gradleVersion = GradleVersion;
+            if (!String.IsNullOrEmpty(gradleVersion)) {
+                parameters.Add(new KeyValuePair<string, string>("gradleVersion", gradleVersion));
+            }
+            var androidGradlePluginVersion = AndroidGradlePluginVersion;
+            if (!String.IsNullOrEmpty(androidGradlePluginVersion)) {
+                parameters.Add(new KeyValuePair<string, string>("androidGradlePluginVersion",
+                                                                androidGradlePluginVersion));
+            }
+            parameters.Add(
+                new KeyValuePair<string, string>(
+                    "numRequestedPackages",
+                    PlayServicesSupport.GetAllDependencies().Count.ToString()));
+            if (missingPackages != null) {
+                parameters.Add(new KeyValuePair<string, string>("numMissingPackages",
+                                                                missingPackages.Count.ToString()));
+            }
+            return parameters;
         }
 
         // Matches Jetpack (AndroidX) library filenames.

@@ -16,6 +16,7 @@
 
 namespace GooglePlayServices {
     using System;
+    using System.Collections.Generic;
     using System.IO;
     using UnityEditor;
     using UnityEngine;
@@ -42,6 +43,7 @@ namespace GooglePlayServices {
             internal bool autoResolutionDisabledWarning;
             internal bool promptBeforeAutoResolution;
             internal bool useProjectSettings;
+            internal EditorMeasurement.Settings analyticsSettings;
 
             /// <summary>
             /// Load settings into the dialog.
@@ -60,6 +62,7 @@ namespace GooglePlayServices {
                 autoResolutionDisabledWarning = SettingsDialog.AutoResolutionDisabledWarning;
                 promptBeforeAutoResolution = SettingsDialog.PromptBeforeAutoResolution;
                 useProjectSettings = SettingsDialog.UseProjectSettings;
+                analyticsSettings = new EditorMeasurement.Settings(PlayServicesResolver.analytics);
             }
 
             /// <summary>
@@ -79,6 +82,7 @@ namespace GooglePlayServices {
                 SettingsDialog.AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
                 SettingsDialog.PromptBeforeAutoResolution = promptBeforeAutoResolution;
                 SettingsDialog.UseProjectSettings = useProjectSettings;
+                analyticsSettings.Save();
             }
         }
 
@@ -124,7 +128,7 @@ namespace GooglePlayServices {
 
         private Settings settings;
 
-        private static ProjectSettings projectSettings = new ProjectSettings(Namespace);
+        internal static ProjectSettings projectSettings = new ProjectSettings(Namespace);
 
         // Previously validated package directory.
         private static string previouslyValidatedPackageDir;
@@ -136,6 +140,7 @@ namespace GooglePlayServices {
         /// </summary>
         internal static void RestoreDefaultSettings() {
             projectSettings.DeleteKeys(PreferenceKeys);
+            PlayServicesResolver.analytics.RestoreDefaultSettings();
         }
 
         internal static bool EnableAutoResolution {
@@ -268,7 +273,7 @@ namespace GooglePlayServices {
         }
 
         public void Initialize() {
-            minSize = new Vector2(425, 455);
+            minSize = new Vector2(425, 510);
             position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                                 minSize.x, minSize.y);
         }
@@ -441,6 +446,8 @@ namespace GooglePlayServices {
                     "builds when mixing legacy Android support libraries and Jetpack libraries.");
             }
 
+            settings.analyticsSettings.RenderGui();
+
             GUILayout.BeginHorizontal();
             GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
             settings.verboseLogging = EditorGUILayout.Toggle(settings.verboseLogging);
@@ -458,15 +465,51 @@ namespace GooglePlayServices {
                 // saved preferences.
                 var backupSettings = new Settings();
                 RestoreDefaultSettings();
+                PlayServicesResolver.analytics.Report("settings/reset", "Settings Reset");
                 LoadSettings();
                 backupSettings.Save();
             }
 
             GUILayout.BeginHorizontal();
             bool closeWindow = GUILayout.Button("Cancel");
+            if (closeWindow) {
+                PlayServicesResolver.analytics.Report("settings/cancel", "Settings Cancel");
+            }
             bool ok = GUILayout.Button("OK");
             closeWindow |= ok;
             if (ok) {
+                PlayServicesResolver.analytics.Report(
+                    "settings/save",
+                    new KeyValuePair<string, string>[] {
+                        new KeyValuePair<string, string>(
+                            "useGradleDaemon",
+                            SettingsDialog.UseGradleDaemon.ToString()),
+                        new KeyValuePair<string, string>(
+                            "enableAutoResolution",
+                            SettingsDialog.EnableAutoResolution.ToString()),
+                        new KeyValuePair<string, string>(
+                            "installAndroidPackages",
+                            SettingsDialog.InstallAndroidPackages.ToString()),
+                        new KeyValuePair<string, string>(
+                            "explodeAars",
+                            SettingsDialog.ExplodeAars.ToString()),
+                        new KeyValuePair<string, string>(
+                            "patchAndroidManifest",
+                            SettingsDialog.PatchAndroidManifest.ToString()),
+                        new KeyValuePair<string, string>(
+                            "useJetifier",
+                            SettingsDialog.UseJetifier.ToString()),
+                        new KeyValuePair<string, string>(
+                            "verboseLogging",
+                            SettingsDialog.VerboseLogging.ToString()),
+                        new KeyValuePair<string, string>(
+                            "autoResolutionDisabledWarning",
+                            SettingsDialog.AutoResolutionDisabledWarning.ToString()),
+                        new KeyValuePair<string, string>(
+                            "promptBeforeAutoResolution",
+                            SettingsDialog.PromptBeforeAutoResolution.ToString()),
+                    },
+                    "Settings Save");
                 settings.Save();
                 PlayServicesResolver.OnSettingsChanged();
             }

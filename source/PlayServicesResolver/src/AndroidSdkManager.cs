@@ -404,6 +404,8 @@ namespace GooglePlayServices {
         /// <param name="complete">Called when the query is complete.</param>
         public static void QueryPackages(string toolPath, string toolArguments,
                                          Action<CommandLine.Result> complete) {
+            PlayServicesResolver.analytics.Report("/androidsdkmanager/querypackages",
+                                                  "Android SDK Manager: Query Packages");
             var window = CommandLineDialog.CreateCommandLineDialog(
                 "Querying Android SDK packages");
             PlayServicesResolver.Log(String.Format("Query Android SDK packages\n" +
@@ -420,7 +422,14 @@ namespace GooglePlayServices {
                 toolPath, toolArguments,
                 (CommandLine.Result result) => {
                     window.Close();
-                    if (result.exitCode != 0) {
+                    if (result.exitCode == 0) {
+                        PlayServicesResolver.analytics.Report(
+                            "/androidsdkmanager/querypackages/success",
+                            "Android SDK Manager: Query Packages Succeeded");
+                    } else {
+                        PlayServicesResolver.analytics.Report(
+                            "/androidsdkmanager/querypackages/failed",
+                            "Android SDK Manager: Query Packages Failed");
                         PlayServicesResolver.Log(String.Format(PACKAGES_MISSING, result.message));
                     }
                     complete(result);
@@ -446,6 +455,8 @@ namespace GooglePlayServices {
                 HashSet<AndroidSdkPackageNameVersion> packages,
                 string licenseQuestion, string licenseAgree, string licenseDecline,
                 Regex licenseTextHeader, Action<bool> complete) {
+            PlayServicesResolver.analytics.Report("/androidsdkmanager/installpackages",
+                                                  "Android SDK Manager: Install Packages");
             PlayServicesResolver.Log(String.Format("Install Android SDK packages\n" +
                                                    "\n" +
                                                    "{0} {1}\n",
@@ -498,7 +509,7 @@ namespace GooglePlayServices {
         /// <param name="toolPath">Tool that was executed.</param>
         /// <param name="toolArguments">Arguments to passed to the tool.</param>
         /// <param name="retrievingLicenses">Whether the command is retrieving licenses.</param>
-        /// <param name="packages">List of package versions to install / upgrade..</param>
+        /// <param name="packages">List of package versions to install / upgrade.</param>
         /// <param name="toolResult">Result of the tool's execution.</param>
         private static void LogInstallLicenseResult(
                 string toolPath, string toolArguments, bool retrievingLicenses,
@@ -520,6 +531,20 @@ namespace GooglePlayServices {
                         AndroidSdkPackageNameVersion.ListToString(packages),
                         toolResult.message),
                     level: succeeded ? LogLevel.Info : LogLevel.Warning);
+                var analyticsParameters = new KeyValuePair<string, string>[] {
+                    new KeyValuePair<string, string>(
+                        "numPackages",
+                        new List<AndroidSdkPackageNameVersion>(packages).Count.ToString())
+                };
+                if (succeeded) {
+                    PlayServicesResolver.analytics.Report(
+                        "/androidsdkmanager/installpackages/success", analyticsParameters,
+                        "Android SDK Manager: Install Packages Successful");
+                } else {
+                    PlayServicesResolver.analytics.Report(
+                        "/androidsdkmanager/installpackages/failed", analyticsParameters,
+                        "Android SDK Manager: Install Packages Failed");
+                }
             }
         }
 

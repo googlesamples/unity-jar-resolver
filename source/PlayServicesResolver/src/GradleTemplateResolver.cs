@@ -249,6 +249,14 @@ namespace GooglePlayServices {
         /// <param name="dependencies">Dependencies to inject.</param>
         /// <returns>true if successful, false otherwise.</returns>
         public static bool InjectDependencies(ICollection<Dependency> dependencies) {
+            var resolutionMeasurementParameters =
+                PlayServicesResolver.GetResolutionMeasurementParameters(null);
+            if (dependencies.Count > 0) {
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/gradletemplate", resolutionMeasurementParameters,
+                       "Gradle Template Resolve");
+            }
+
             var fileDescription = String.Format("gradle template {0}", GradleTemplatePath);
             PlayServicesResolver.Log(String.Format("Reading {0}", fileDescription),
                                      level: LogLevel.Verbose);
@@ -256,6 +264,9 @@ namespace GooglePlayServices {
             try {
                 lines = File.ReadAllLines(GradleTemplatePath);
             } catch (Exception ex) {
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/gradletemplate/failed/templateunreadable",
+                       "Gradle Template Resolve: Failed Template Unreadable");
                 PlayServicesResolver.Log(
                     String.Format("Unable to patch {0} ({1})", fileDescription, ex.ToString()),
                     level: LogLevel.Error);
@@ -277,6 +288,9 @@ namespace GooglePlayServices {
 
             // If a dependencies token isn't present report a warning and abort.
             if (!containsDeps) {
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/gradletemplate/failed/noinjectionpoint",
+                       "Gradle Template Resolve: Failed No Injection Point");
                 PlayServicesResolver.Log(
                     String.Format("No {0} token found in {1}, Android Resolver libraries will " +
                                   "not be added to the file.", DependenciesToken, fileDescription),
@@ -286,7 +300,12 @@ namespace GooglePlayServices {
 
             // Copy all srcaar files in the project to aar filenames so that they'll be included in
             // the Gradle build.
-            if (!CopySrcAars(dependencies)) return false;
+            if (!CopySrcAars(dependencies)) {
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/gradletemplate/failed/srcaarcopy",
+                       "Gradle Template Resolve: Failed srcaar I/O");
+                return false;
+            }
 
             var repoLines = new List<string>();
             // Optionally enable the jetifier.
@@ -330,6 +349,9 @@ namespace GooglePlayServices {
                 PlayServicesResolver.Log(
                     String.Format("Failed to checkout '{0}', unable to patch the file.",
                                   GradleTemplatePath), level: LogLevel.Error);
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/gradletemplate/failed/checkout",
+                       "Gradle Template Resolve: Failed to checkout");
                 return false;
             }
             PlayServicesResolver.Log(
@@ -338,7 +360,13 @@ namespace GooglePlayServices {
             try {
                 File.WriteAllText(GradleTemplatePath,
                                   String.Join("\n", outputLines.ToArray()) + "\n");
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/gradletemplate/success", resolutionMeasurementParameters,
+                       "Gradle Template Resolve Success");
             } catch (Exception ex) {
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/gradletemplate/failed/write",
+                       "Gradle Template Resolve: Failed to write");
                 PlayServicesResolver.Log(
                     String.Format("Unable to patch {0} ({1})", fileDescription,
                                   ex.ToString()), level: LogLevel.Error);

@@ -88,11 +88,20 @@ namespace GooglePlayServices
         private void LogMissingDependenciesError(List<string> missingArtifacts) {
             // Log error for missing packages.
             if (missingArtifacts.Count > 0) {
+                PlayServicesResolver.analytics.Report(
+                    "/resolve/gradle/failed",
+                    PlayServicesResolver.GetResolutionMeasurementParameters(missingArtifacts),
+                    "Gradle Resolve Failed");
                 PlayServicesResolver.Log(
                    String.Format("Resolution failed\n\n" +
                                  "Failed to fetch the following dependencies:\n{0}\n\n",
                                  String.Join("\n", missingArtifacts.ToArray())),
                    level: LogLevel.Error);
+            } else {
+                PlayServicesResolver.analytics.Report(
+                    "/resolve/gradle/failed",
+                    PlayServicesResolver.GetResolutionMeasurementParameters(null),
+                    "Gradle Resolve Failed");
             }
         }
 
@@ -245,6 +254,10 @@ namespace GooglePlayServices
             var allDependencies = PlayServicesSupport.GetAllDependencies();
             var allDependenciesList = new List<Dependency>(allDependencies.Values);
 
+            PlayServicesResolver.analytics.Report(
+                "/resolve/gradle", PlayServicesResolver.GetResolutionMeasurementParameters(null),
+                "Gradle Resolve");
+
             var gradleWrapper = PlayServicesResolver.Gradle;
             var buildScript = Path.GetFullPath(Path.Combine(
                 gradleWrapper.BuildDirectory,
@@ -265,6 +278,8 @@ namespace GooglePlayServices
                               Path.GetFullPath(Path.Combine(gradleWrapper.BuildDirectory,
                                                             "settings.gradle"))),
                       }, PlayServicesResolver.logger))) {
+                PlayServicesResolver.analytics.Report("/resolve/gradle/failed/extracttools",
+                                                      "Gradle Resolve: Tool Extraction Failed");
                 PlayServicesResolver.Log(String.Format(
                         "Failed to extract {0} and {1} from assembly {2}",
                         gradleWrapper.Executable, buildScript,
@@ -373,6 +388,8 @@ namespace GooglePlayServices
             CommandLine.CompletionHandler gradleComplete = (commandLineResult) => {
                 resolutionState.commandLineResult = commandLineResult;
                 if (commandLineResult.exitCode != 0) {
+                    PlayServicesResolver.analytics.Report("/resolve/gradle/failed/fetch",
+                                                          "Gradle Resolve: Tool Extraction Failed");
                     resolutionState.missingArtifactsAsDependencies = allDependenciesList;
                     PlayServicesResolver.Log(
                         String.Format("Gradle failed to fetch dependencies.\n\n{0}",
@@ -403,12 +420,18 @@ namespace GooglePlayServices
                         // Check copied files for Jetpack (AndroidX) libraries.
                         if (PlayServicesResolver.FilesContainJetpackLibraries(
                             resolutionState.copiedArtifacts)) {
+                            PlayServicesResolver.analytics.Report(
+                                "/resolve/gradle/androidxdetected",
+                                "Gradle Resolve: AndroidX detected");
                             bool jetifierEnabled = SettingsDialog.UseJetifier;
                             SettingsDialog.UseJetifier = true;
                             // Make sure Jetpack is supported, prompting the user to configure Unity
                             // in a supported configuration.
                             if (PlayServicesResolver.CanEnableJetifierOrPromptUser(
                                     "Jetpack (AndroidX) libraries detected, ")) {
+                                PlayServicesResolver.analytics.Report(
+                                    "/resolve/gradle/enablejetifier/enable",
+                                    "Gradle Resolve: Enable Jetifier");
                                 if (jetifierEnabled != SettingsDialog.UseJetifier) {
                                     PlayServicesResolver.Log(
                                         "Detected Jetpack (AndroidX) libraries, enabled the " +
@@ -423,6 +446,9 @@ namespace GooglePlayServices
                                     return;
                                 }
                             } else {
+                                PlayServicesResolver.analytics.Report(
+                                    "/resolve/gradle/enablejetifier/abort",
+                                    "Gradle Resolve: Enable Jetifier Aborted");
                                 // If the user didn't change their configuration, delete all
                                 // resolved libraries and abort resolution as the build will fail.
                                 PlayServicesResolver.DeleteLabeledAssets();
@@ -570,6 +596,9 @@ namespace GooglePlayServices
                         playServicesJar, String.Join("\n", playServicesJars.ToArray()),
                         String.Join("\n", managedPlayServicesArtifacts.ToArray())),
                     level: LogLevel.Warning);
+                PlayServicesResolver.analytics.Report(
+                    "/androidresolver/resolve/conflicts/duplicategoogleplayservices",
+                    "Gradle Resolve: Duplicate Google Play Services Found");
             }
 
             // For each managed artifact aggregate the set of conflicting unmanaged artifacts.
@@ -593,6 +622,7 @@ namespace GooglePlayServices
                 string basename = Path.GetFileNameWithoutExtension(Path.GetFileName(filename));
                 return basename.Substring(getVersionlessArtifactFilename(basename).Length + 1);
             };
+            int cleanedUpConflicts = 0;
             foreach (var conflict in conflicts) {
                 var currentVersion = getVersionFromFilename(conflict.Key);
                 var conflictingVersionsSet = new HashSet<string>();
@@ -631,6 +661,8 @@ namespace GooglePlayServices
                                                                 deleteFailures);
                         if (!String.IsNullOrEmpty(deleteError)) {
                             PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                        } else {
+                            cleanedUpConflicts++;
                         }
                         warningMessage = null;
                     }
@@ -650,6 +682,16 @@ namespace GooglePlayServices
                         "  dependencies and asking them to update their plugin.\n",
                         level: LogLevel.Warning);
                 }
+            }
+            if (conflicts.Count > 0) {
+                PlayServicesResolver.analytics.Report(
+                    "/androidresolver/resolve/conflicts/cleanup",
+                    new KeyValuePair<string, string>[] {
+                        new KeyValuePair<string, string>("numFound", conflicts.Count.ToString()),
+                        new KeyValuePair<string, string>("numRemoved",
+                                                         cleanedUpConflicts.ToString()),
+                    },
+                    "Gradle Resolve: Cleaned Up Conflicting Libraries");
             }
         }
 
@@ -688,6 +730,8 @@ namespace GooglePlayServices
             var sdkPath = PlayServicesResolver.AndroidSdkRoot;
             // If the Android SDK path isn't set or doesn't exist report an error.
             if (String.IsNullOrEmpty(sdkPath) || !Directory.Exists(sdkPath)) {
+                PlayServicesResolver.analytics.Report("/resolve/gradle/failed/missingandroidsdk",
+                                                      "Gradle Resolve: Failed Missing Android SDK");
                 PlayServicesResolver.Log(String.Format(
                     "Android dependency resolution failed, your application will probably " +
                     "not run.\n\n" +
@@ -908,6 +952,15 @@ namespace GooglePlayServices
                 complete();
                 return;
             }
+
+            PlayServicesResolver.analytics.Report(
+                "/resolve/gradle/processaars",
+                new KeyValuePair<string, string>[] {
+                    new KeyValuePair<string, string>("numPackages", numberOfAars.ToString())
+                },
+                "Gradle Resolve: Process AARs");
+            var failures = new List<string>();
+
             // Processing can be slow so execute incrementally so we don't block the update thread.
             RunOnMainThread.PollOnUpdateUntilComplete(() => {
                 int remainingAars = aars.Count;
@@ -930,11 +983,31 @@ namespace GooglePlayServices
                                 "Failed to process {0}, your Android build will fail.\n" +
                                 "See previous error messages for failure details.\n",
                                 aarPath));
+                            failures.Add(aarPath);
                         }
                     }
                 } finally {
                     if (allAarsProcessed) {
                         progressUpdate(1.0f, "Library processing complete");
+                        if (failures.Count == 0) {
+                            PlayServicesResolver.analytics.Report(
+                                "/resolve/gradle/processaars/success",
+                                new KeyValuePair<string, string>[] {
+                                    new KeyValuePair<string, string>("numPackages",
+                                                                     numberOfAars.ToString())
+                                },
+                                "Gradle Resolve: Process AARs Succeeded");
+                        } else {
+                            PlayServicesResolver.analytics.Report(
+                                "/resolve/gradle/processaars/failed",
+                                new KeyValuePair<string, string>[] {
+                                    new KeyValuePair<string, string>("numPackages",
+                                                                     numberOfAars.ToString()),
+                                    new KeyValuePair<string, string>("numPackagesFailed",
+                                                                     failures.Count.ToString())
+                                },
+                                "Gradle Resolve: Process AARs Failed");
+                        }
                         complete();
                     }
                 }
