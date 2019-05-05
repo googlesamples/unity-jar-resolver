@@ -1694,6 +1694,32 @@ public class VersionHandlerImpl : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Generate a documentation URL.
+    /// </summary>
+    /// <param name="subsection">String to add to the URL.</param>
+    /// <returns>URL</returns>
+    internal static string DocumentationUrl(string subsection) {
+        return String.Format("{0}{1}", "https://github.com/googlesamples/unity-jar-resolver",
+                             subsection);
+    }
+
+    /// <summary>
+    /// Link to the project documentation.
+    /// </summary>
+    [MenuItem("Assets/Play Services Resolver/Documentation")]
+    public static void OpenProjectDocumentation() {
+        Application.OpenURL(VersionHandlerImpl.DocumentationUrl("#overview"));
+    }
+
+    /// <summary>
+    /// Link to the documentation.
+    /// </summary>
+    [MenuItem("Assets/Play Services Resolver/Version Handler/Documentation")]
+    public static void OpenDocumentation() {
+        Application.OpenURL(VersionHandlerImpl.DocumentationUrl("#version-handler-usage"));
+    }
+
+    /// <summary>
     /// Add the settings dialog for this module to the menu and show the
     /// window when the menu item is selected.
     /// </summary>

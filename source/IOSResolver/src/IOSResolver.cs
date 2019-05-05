@@ -703,6 +703,14 @@ public class IOSResolver : AssetPostprocessor {
         }
     }
 
+    /// <summary>
+    /// Link to the documentation.
+    /// </summary>
+    [MenuItem("Assets/Play Services Resolver/iOS Resolver/Documentation")]
+    public static void OpenDocumentation() {
+        Application.OpenURL(VersionHandlerImpl.DocumentationUrl("#ios-resolver-usage"));
+    }
+
     // Display the iOS resolver settings menu.
     [MenuItem("Assets/Play Services Resolver/iOS Resolver/Settings")]
     public static void SettingsDialog() {

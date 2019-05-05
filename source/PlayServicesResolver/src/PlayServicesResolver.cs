@@ -1554,6 +1554,14 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Link to the documentation.
+        /// </summary>
+        [MenuItem("Assets/Play Services Resolver/Android Resolver/Documentation")]
+        public static void OpenDocumentation() {
+            Application.OpenURL(VersionHandlerImpl.DocumentationUrl("#android-resolver-usage"));
+        }
+
+        /// <summary>
         /// Add a menu item for resolving the jars manually.
         /// </summary>
         [MenuItem("Assets/Play Services Resolver/Android Resolver/Settings")]
