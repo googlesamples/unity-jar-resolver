@@ -494,7 +494,15 @@ public class VersionHandler {
     public static object InvokeMethod(
             Type type, object objectInstance, string methodName,
             object[] args, Dictionary<string, object> namedArgs = null) {
-        MethodInfo method = type.GetMethod(methodName);
+        Type[] argTypes = null;
+        if (args != null && args.Length > 0) {
+            argTypes = new Type[args.Length];
+            for (int i = 0; i < args.Length; ++i) {
+                argTypes[i] = args[i].GetType();
+            }
+        }
+        MethodInfo method = argTypes != null ?
+            type.GetMethod(methodName, argTypes) : type.GetMethod(methodName);
         ParameterInfo[] parameters = method.GetParameters();
         int numParameters = parameters.Length;
         object[] parameterValues = new object[numParameters];

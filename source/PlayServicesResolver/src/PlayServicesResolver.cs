@@ -608,7 +608,19 @@ namespace GooglePlayServices {
         /// Get the Android SDK directory.
         /// </summary>
         public static string AndroidSdkRoot {
-            get { return EditorPrefs.GetString("AndroidSdkRoot"); }
+            get {
+                var sdkPath = EditorPrefs.GetString("AndroidSdkRoot");
+                // Unity 2019.x added installation of the Android SDK in the AndroidPlayer directory
+                // so fallback to searching for it there.
+                if (String.IsNullOrEmpty(sdkPath) || EditorPrefs.GetBool("SdkUseEmbedded")) {
+                    var androidPlayerDir = AndroidPlaybackEngineDirectory;
+                    if (!String.IsNullOrEmpty(androidPlayerDir)) {
+                        var androidPlayerSdkDir = Path.Combine(androidPlayerDir, "SDK");
+                        if (Directory.Exists(androidPlayerSdkDir)) sdkPath = androidPlayerSdkDir;
+                    }
+                }
+                return sdkPath;
+            }
         }
 
         /// <summary>
@@ -636,6 +648,22 @@ namespace GooglePlayServices {
         /// Event which is fired when the Android SDK root changes.
         /// </summary>
         public static event EventHandler<AndroidSdkRootChangedArgs> AndroidSdkRootChanged;
+
+        /// <summary>
+        /// Get the Android playback engine directory.
+        /// </summary>
+        /// <returns>Get the playback engine directory.</returns>
+        public static string AndroidPlaybackEngineDirectory {
+            get {
+                try {
+                    return (string)VersionHandler.InvokeStaticMethod(
+                        typeof(BuildPipeline), "GetPlaybackEngineDirectory",
+                        new object[] { BuildTarget.Android, BuildOptions.None });
+                } catch (Exception) {
+                    return null;
+                }
+            }
+        }
 
         /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.

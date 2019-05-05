@@ -49,19 +49,25 @@ namespace GooglePlayServices {
         private static Version MinimumJdkVersion = new Version("1.8");
 
         /// <summary>
-        /// Get the JDK path (JAVA_HOME) configured in the Unity editor.
-        /// </summary>
-        private static string EditorJavaHome {
-            get { return UnityEditor.EditorPrefs.GetString("JdkPath"); }
-        }
-
-        /// <summary>
         /// Find the JDK path (JAVA_HOME) either configured in the Unity editor or via the JAVA_HOME
         /// environment variable.
         /// </summary>
         private static string JavaHome {
             get {
-                var javaHome = EditorJavaHome;
+                var javaHome = UnityEditor.EditorPrefs.GetString("JdkPath");
+                // Unity 2019.x added installation of the JDK in the AndroidPlayer directory
+                // so fallback to searching for it there.
+                if (String.IsNullOrEmpty(javaHome) || EditorPrefs.GetBool("JdkUseEmbedded")) {
+                    var androidPlayerDir = PlayServicesResolver.AndroidPlaybackEngineDirectory;
+                    if (!String.IsNullOrEmpty(androidPlayerDir)) {
+                        var platformDir = UnityEngine.Application.platform.ToString().Replace(
+                            "Editor", "").Replace("OSX", "MacOS");
+                        var openJdkDir = Path.Combine(Path.Combine(Path.Combine(
+                            androidPlayerDir, "Tools"), "OpenJDK"), platformDir);
+                        if (Directory.Exists(openJdkDir)) javaHome = openJdkDir;
+                    }
+                }
+                // If the JDK stil isn't found, check the environment.
                 if (String.IsNullOrEmpty(javaHome)) {
                     javaHome = Environment.GetEnvironmentVariable(JAVA_HOME);
                 }
