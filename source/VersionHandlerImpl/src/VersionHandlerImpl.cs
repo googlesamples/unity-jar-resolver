@@ -1919,7 +1919,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
 
         Log("Renaming file " + filename + " to " + newFilename, verbose: true);
-        AssetDatabase.MoveAsset(filename, newFilename);
+        bool movedAsset = true;
+        if (File.Exists(newFilename)) {
+            movedAsset = AssetDatabase.MoveAssetToTrash(newFilename);
+        }
+        string moveError = AssetDatabase.MoveAsset(filename, newFilename);
+        movedAsset &= String.IsNullOrEmpty(moveError);
+        if (!movedAsset) {
+            Log(String.Format("Unable to disable {0} ({1})", filename, moveError),
+                level: LogLevel.Error);
+        }
     }
 
     // Returns the major/minor version of the unity environment we are running in
