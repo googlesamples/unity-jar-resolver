@@ -917,10 +917,11 @@ namespace GooglePlayServices
             window.progressTitle = window.summaryText;
             window.autoScrollToBottom = true;
             window.logger = PlayServicesResolver.logger;
+            var maxProgressLines = (allDependenciesList.Count * 10) + 50;
             window.RunAsync(gradleWrapper, gradleArgumentsString,
                             (result) => { RunOnMainThread.Run(() => { gradleComplete(result); }); },
                             workingDirectory: gradleBuildDirectory,
-                            maxProgressLines: (allDependenciesList.Count * 10) + 50);
+                            maxProgressLines: maxProgressLines);
             window.Show();
         }
 
