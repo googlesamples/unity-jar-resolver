@@ -1,3 +1,23 @@
+# Version 1.2.109 - May 6, 2019
+## New Features:
+* Added links to documentation from menu.
+* Android Resolver: Added option to auto-resolve Android libraries on build.
+* Android Resolver: Added support for packaging specs of Android libraries.
+* Android Resolver: Pop up a window when displaying Android dependencies.
+
+## Bug Fixes
+* Android Resolver: Support for Unity 2019 Android SDK and JDK install locations
+* Android Resolver: e-enable AAR explosion if internal builds are enabled.
+* Android Resolver: Gracefully handle exceptions on file deletion.
+* Android Resolver: Fixed Android Resolver log spam on load.
+* Android Resolver: Fixed save of Android Resolver PromptBeforeAutoResolution
+  setting.
+* Android Resolver: Fixed AAR processing failure when an AAR without
+  classes.jar is found.
+* Android Resolver: Removed use of EditorUtility.DisplayProgressBar which
+  was occasionally left displayed when resolution had completed.
+* Version Handler: Fixed asset rename to disable when a disabled file exists.
+
 # Version 1.2.108 - May 3, 2019
 ## Bug Fixes:
 * Version Handler: Fixed occasional hang on startup.
