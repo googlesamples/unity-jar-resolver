@@ -74,7 +74,6 @@ namespace GooglePlayServices {
         /// <param name="dependencies">Dependencies to inject.</param>
         /// <returns>true if successful, false otherwise.</returns>
         private static bool CopySrcAars(ICollection<Dependency> dependencies) {
-            // Find all repositories embedded in the project.
             bool succeeded = true;
             var aarFiles = new List<string>();
             // Copy each .srcaar file to .aar while configuring the plugin importer to ignore the
