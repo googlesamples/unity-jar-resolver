@@ -1,3 +1,8 @@
+# Version 1.2.110 - May 7, 2019
+## Bug Fixes
+* Android Resolver: Fixed inclusion of some srcaar artifacts in builds with
+  Gradle builds when using mainTemplate.gradle.
+
 # Version 1.2.109 - May 6, 2019
 ## New Features:
 * Added links to documentation from menu.
