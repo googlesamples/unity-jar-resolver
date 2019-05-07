@@ -1359,6 +1359,8 @@ namespace GooglePlayServices {
                         GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
                     }
                     DeleteLabeledAssets();
+                    LocalMavenRepository.PatchPomFilesInLocalRepos(
+                        PlayServicesSupport.GetAllDependencies().Values);
                     if (GradleTemplateEnabled) {
                         GradleTemplateResolver.InjectDependencies(new List<Dependency>());
                     }

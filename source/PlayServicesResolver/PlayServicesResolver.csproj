@@ -62,6 +62,7 @@
     <Compile Include="src\DefaultResolver.cs" />
     <Compile Include="src\GradleTemplateResolver.cs" />
     <Compile Include="src\IResolver.cs" />
+    <Compile Include="src\LocalMavenRepository.cs" />
     <Compile Include="src\JavaUtilities.cs" />
     <Compile Include="src\PlayServicesPreBuild.cs" />
     <Compile Include="src\PlayServicesResolver.cs" />

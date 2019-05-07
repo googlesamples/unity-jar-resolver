@@ -1,0 +1,191 @@
+// <copyright file="LocalMavenRepository.cs" company="Google Inc.">
+// Copyright (C) 2019 Google Inc. All Rights Reserved.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//  http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//    limitations under the License.
+// </copyright>
+
+namespace GooglePlayServices {
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Xml;
+
+    using Google;
+    using Google.JarResolver;
+
+    /// <summary>
+    /// Finds and operates on Maven repositories embedded in the Unity project.
+    /// </summary>
+    internal class LocalMavenRepository {
+
+        /// <summary>
+        /// Find paths to repositories that are included in the project.
+        /// </summary>
+        /// <param name="dependencies">Dependencies to search for local repositories.</param>
+        /// <returns>Set of repository paths in the project.</returns>
+        public static HashSet<string> FindLocalRepos(ICollection<Dependency> dependencies) {
+            // Find all repositories embedded in the project.
+            var repos = new HashSet<string>();
+            foreach (var dependency in dependencies) {
+                foreach (var repo in dependency.Repositories) {
+                    if (repo.Replace("\\", "/").ToLower().StartsWith("assets/")) {
+                        repos.Add(repo);
+                    }
+                }
+            }
+            return repos;
+        }
+
+        /// <summary>
+        /// Find all .aar and .srcaar files under a directory.
+        /// </summary>
+        /// <param name="directory">Directory to recursively search.</param>
+        /// <returns>A list of found aar and srcaar files.</returns>
+        public static List<string> FindAars(string directory) {
+            var foundFiles = new List<string>();
+            foreach (string filename in Directory.GetFiles(directory)) {
+                var packaging = Path.GetExtension(filename).ToLower();
+                if (packaging == ".aar" || packaging == ".srcaar") foundFiles.Add(filename);
+            }
+            foreach (string currentDirectory in Directory.GetDirectories(directory)) {
+                foundFiles.AddRange(FindAars(currentDirectory));
+            }
+            return foundFiles;
+        }
+
+        /// <summary>
+        /// Find all .aar and .srcaar files in the project's repositories.
+        /// </summary>
+        /// <param name="dependencies">Dependencies to search for local repositories.</param>
+        /// <returns>A list of found aar and srcaar files.</returns>
+        public static List<string> FindAarsInLocalRepos(ICollection<Dependency> dependencies) {
+            var libraries = new List<string>();
+            foreach (var repo in FindLocalRepos(dependencies)) {
+                libraries.AddRange(FindAars(repo));
+            }
+            return libraries;
+        }
+
+        /// <summary>
+        /// Get a path without a filename extension.
+        /// </summary>
+        /// <param name="filename">Path to a file.</param>
+        /// <returns>Path (including directory) without a filename extension.</returns>
+        private static string PathWithoutExtension(string path) {
+            return Path.Combine(Path.GetDirectoryName(path),
+                                Path.GetFileNameWithoutExtension(path));
+        }
+
+        /// <summary>
+        /// Search for the POM file associated with the specified maven artifact and patch the
+        /// packaging reference if the POM doesn't reference the artifact.
+        /// file.
+        /// </summary>
+        /// <param name="artifactFilename">artifactFilename</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        public static bool PatchPomFile(string artifactFilename) {
+            var failureImpact = String.Format("{0} may not be included in your project",
+                                              Path.GetFileName(artifactFilename));
+            var pomFilename = PathWithoutExtension(artifactFilename) + ".pom";
+            if (!File.Exists(pomFilename)) {
+                PlayServicesResolver.Log(
+                    String.Format("Maven POM {0} for {1} does not exist. " + failureImpact,
+                                  pomFilename, artifactFilename), level: LogLevel.Warning);
+                return false;
+            }
+            var artifactPackaging = Path.GetExtension(artifactFilename).ToLower().Substring(1);
+            var pom = new XmlDocument();
+            try {
+                using (var stream = new StreamReader(pomFilename)) {
+                    pom.Load(stream);
+                }
+            } catch (Exception ex) {
+                PlayServicesResolver.Log(
+                    String.Format("Unable to read maven POM {0} for {1} ({2}). " + failureImpact,
+                                  pom, artifactFilename, ex), level: LogLevel.Error);
+                return false;
+            }
+            bool updatedPackaging = false;
+            XmlNodeList packagingNode = pom.GetElementsByTagName("packaging");
+            foreach (XmlNode node in packagingNode) {
+                if (node.InnerText != artifactPackaging) {
+                    PlayServicesResolver.Log(String.Format(
+                        "Replacing packaging of maven POM {0} {1} --> {2}",
+                        pomFilename, node.InnerText, artifactPackaging), level: LogLevel.Verbose);
+                    node.InnerText = artifactPackaging;
+                    updatedPackaging = true;
+                }
+            }
+            if (updatedPackaging) {
+                try {
+                    using (var xmlWriter =
+                           XmlWriter.Create(pomFilename,
+                                            new XmlWriterSettings {
+                                                Indent = true,
+                                                IndentChars = "  ",
+                                                NewLineChars = "\n",
+                                                NewLineHandling = NewLineHandling.Replace
+                                            })) {
+                        pom.Save(xmlWriter);
+                    }
+                } catch (Exception ex) {
+                    PlayServicesResolver.Log(
+                        String.Format("Unable to write patch maven POM {0} for {1} with " +
+                                      "packaging {2} ({3}). " + failureImpact,
+                                      pom, artifactFilename, artifactPackaging, ex));
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Patch all POM files in the local repository with PatchPomFile().
+        /// If a srcaar and an aar are present in the same directory the POM is patched with a
+        /// reference to the aar.
+        /// </summary>
+        /// <returns>true if successful, false otherwise.</returns>
+        public static bool PatchPomFilesInLocalRepos(ICollection<Dependency> dependencies) {
+            // Filename extensions by the basename of each file path.
+            var extensionsByBasenames = new Dictionary<string, HashSet<string>>();
+            foreach (var filename in FindAarsInLocalRepos(dependencies)) {
+                var pathWithoutExtension = PathWithoutExtension(filename);
+                HashSet<string> extensions;
+                if (!extensionsByBasenames.TryGetValue(pathWithoutExtension, out extensions)) {
+                    extensions = new HashSet<string>();
+                    extensionsByBasenames[pathWithoutExtension] = extensions;
+                }
+                extensions.Add(Path.GetExtension(filename));
+            }
+            bool successful = true;
+            var packagingPriority = new [] { ".aar", ".srcaar" };
+            foreach (var kv in extensionsByBasenames) {
+                string filePackagingToUse = "";
+                foreach (var packaging in packagingPriority) {
+                    bool foundFile = false;
+                    foreach (var filenamePackaging in kv.Value) {
+                        filePackagingToUse = filenamePackaging;
+                        if (filenamePackaging.ToLower() == packaging) {
+                            foundFile = true;
+                            break;
+                        }
+                    }
+                    if (foundFile) break;
+                }
+                successful &= PatchPomFile(kv.Key + filePackagingToUse);
+            }
+            return successful;
+        }
+    }
+
+}

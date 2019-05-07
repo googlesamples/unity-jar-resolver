@@ -67,82 +67,63 @@ namespace GooglePlayServices {
         /// </summary>
         private const string DependenciesToken = "**DEPS**";
 
-        /// <summary>
-        /// Find all srcaar files under a directory.
-        /// </summary>
-        private static List<string> FindSrcAars(string directory) {
-            var foundFiles = new List<string>();
-            foreach (string filename in Directory.GetFiles(directory)) {
-                if (Path.GetExtension(filename).ToLower() == ".srcaar") {
-                    foundFiles.Add(filename);
-                }
-            }
-            foreach (string currentDirectory in Directory.GetDirectories(directory)) {
-                foundFiles.AddRange(FindSrcAars(currentDirectory));
-            }
-            return foundFiles;
-        }
 
         /// <summary>
         /// Copy srcaar files to aar files that are excluded from Unity's build process.
         /// </summary>
+        /// <param name="dependencies">Dependencies to inject.</param>
+        /// <returns>true if successful, false otherwise.</returns>
         private static bool CopySrcAars(ICollection<Dependency> dependencies) {
             // Find all repositories embedded in the project.
-            var repos = new HashSet<string>();
-            foreach (var dependency in dependencies) {
-                foreach (var repo in dependency.Repositories) {
-                    if (repo.Replace("\\", "/").ToLower().StartsWith("assets/")) {
-                        repos.Add(repo);
-                    }
-                }
-            }
             bool succeeded = true;
             var aarFiles = new List<string>();
             // Copy each .srcaar file to .aar while configuring the plugin importer to ignore the
             // file.
-            foreach (var repo in repos) {
-                foreach (var srcaar in FindSrcAars(repo)) {
-                    var dir = Path.GetDirectoryName(srcaar);
-                    var filename = Path.GetFileNameWithoutExtension(srcaar);
-                    var targetFilename = Path.Combine(dir, filename + ".aar");
-                    aarFiles.Add(targetFilename);
-                    if (!File.Exists(targetFilename)) {
-                        bool configuredAar = false;
-                        bool copiedAndLabeledAar = AssetDatabase.CopyAsset(srcaar, targetFilename);
-                        if (copiedAndLabeledAar) {
-                            var unlabeledAssets = new HashSet<string>();
-                            PlayServicesResolver.LabelAssets(
-                                new [] { targetFilename },
-                                complete: (unlabeled) => { unlabeledAssets.UnionWith(unlabeled); });
-                            copiedAndLabeledAar = unlabeledAssets.Count == 0;
-                        }
-                        if (copiedAndLabeledAar) {
-                            try {
-                                PluginImporter importer = (PluginImporter)AssetImporter.GetAtPath(
-                                    targetFilename);
-                                importer.SetCompatibleWithAnyPlatform(false);
-                                importer.SetCompatibleWithPlatform(BuildTarget.Android, false);
-                                configuredAar = true;
-                            } catch (Exception ex) {
-                                PlayServicesResolver.Log(String.Format(
-                                    "Failed to disable {0} from being included by Unity's " +
-                                    "internal build.  {0} has been deleted and will not be " +
-                                    "included in Gradle builds. ({1})", srcaar, ex),
-                                    level: LogLevel.Error);
-                            }
-                        } else {
+            foreach (var aar in LocalMavenRepository.FindAarsInLocalRepos(dependencies)) {
+                var dir = Path.GetDirectoryName(aar);
+                var filename = Path.GetFileNameWithoutExtension(aar);
+                var targetFilename = Path.Combine(dir, filename + ".aar");
+                bool configuredAar = File.Exists(targetFilename);
+                if (!configuredAar) {
+                    bool copiedAndLabeledAar = AssetDatabase.CopyAsset(aar, targetFilename);
+                    if (copiedAndLabeledAar) {
+                        var unlabeledAssets = new HashSet<string>();
+                        PlayServicesResolver.LabelAssets(
+                            new [] { targetFilename },
+                            complete: (unlabeled) => { unlabeledAssets.UnionWith(unlabeled); });
+                        copiedAndLabeledAar = unlabeledAssets.Count == 0;
+                    }
+                    if (copiedAndLabeledAar) {
+                        try {
+                            PluginImporter importer = (PluginImporter)AssetImporter.GetAtPath(
+                                targetFilename);
+                            importer.SetCompatibleWithAnyPlatform(false);
+                            importer.SetCompatibleWithPlatform(BuildTarget.Android, false);
+                            configuredAar = true;
+                        } catch (Exception ex) {
                             PlayServicesResolver.Log(String.Format(
-                                "Unable to copy {0} to {1}.  {1} will not be included in Gradle " +
-                                "builds.", srcaar, targetFilename), level: LogLevel.Error);
+                                "Failed to disable {0} from being included by Unity's " +
+                                "internal build.  {0} has been deleted and will not be " +
+                                "included in Gradle builds. ({1})", aar, ex),
+                                level: LogLevel.Error);
                         }
-                        if (!configuredAar) {
-                            if (File.Exists(targetFilename)) {
-                                AssetDatabase.DeleteAsset(targetFilename);
-                            }
-                            succeeded = false;
+                    } else {
+                        PlayServicesResolver.Log(String.Format(
+                            "Unable to copy {0} to {1}.  {1} will not be included in Gradle " +
+                            "builds.", aar, targetFilename), level: LogLevel.Error);
+                    }
+                    if (configuredAar) {
+                        aarFiles.Add(targetFilename);
+                    } else {
+                        if (File.Exists(targetFilename)) {
+                            AssetDatabase.DeleteAsset(targetFilename);
                         }
+                        succeeded = false;
                     }
                 }
+            }
+            foreach (var aar in aarFiles) {
+                if (!LocalMavenRepository.PatchPomFile(aar)) succeeded = false;
             }
             return succeeded;
         }
@@ -245,6 +226,8 @@ namespace GooglePlayServices {
         /// <summary>
         /// Inject / update dependencies in the gradle template file.
         /// </summary>
+        /// <param name="dependencies">Dependencies to inject.</param>
+        /// <returns>true if successful, false otherwise.</returns>
         public static bool InjectDependencies(ICollection<Dependency> dependencies) {
             var fileDescription = String.Format("gradle template {0}", GradleTemplatePath);
             PlayServicesResolver.Log(String.Format("Reading {0}", fileDescription),
