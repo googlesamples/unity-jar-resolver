@@ -266,7 +266,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <summary>
         /// List of target platforms parsed from the filename.
         /// </summary>
-        public string[] targets = null;
+        public HashSet<string> targets = null;
 
         /// <summary>
         /// Set if this references an asset manifest.
@@ -281,7 +281,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <summary>
         /// List of compatible .NET versions parsed from this asset.
         /// </summary>
-        public string[] dotNetTargets = null;
+        public HashSet<string> dotNetTargets = null;
 
         /// <summary>
         /// Basename of a Linux library plugin.
@@ -384,19 +384,22 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             values = MatchPrefixesGetValues(token, TOKEN_DOTNET_TARGETS, prefix);
             if (values != null && StringListMatchesRegex(values, DOTNET_RUNTIME_REGEX)) {
-                dotNetTargets = values;
+                if(dotNetTargets == null) {
+                    dotNetTargets = new HashSet<string>();
+                }
+                dotNetTargets.UnionWith(values);
                 return true;
             }
             values = MatchPrefixesGetValues(token, TOKEN_TARGETS, prefix);
             if (values != null && StringListMatchesRegex(values, BUILD_TARGET_REGEX)) {
                 if (targets == null) {
-                    // Convert all target names to lower case.
-                    targets = new string[values.Length];
-                    for (int i = 0; i < targets.Length; ++i) {
-                        targets[i] = values[i].ToLower();
-                    }
-                    return true;
+                    targets = new HashSet<string>();
                 }
+                // Convert all target names to lower case.
+                foreach (var value in values) {
+                    targets.Add(value.ToLower());
+                }
+                return true;
             }
             values = MatchPrefixesGetValues(token, TOKEN_VERSION, prefix);
             if (values != null && StringListMatchesRegex(values, VERSION_REGEX)) {
@@ -435,13 +438,29 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
 
         /// <summary>
-        /// Create an asset label from a prefix and set of values.
+        /// Create an array of asset labels from a prefix and set of values.
         /// </summary>
         /// <param name="fieldPrefixes">The first item of this list is used as the prefix.
         /// </param>
         /// <param name="values">Set of values to store with the field.</param>
-        private string CreateLabel(string[] fieldPrefixes, string[] values) {
-            return LABEL_PREFIX + CreateToken(fieldPrefixes, values);
+        private string[] CreateLabels(string[] fieldPrefixes, IEnumerable<string> values) {
+            string prefix = fieldPrefixes[0];
+            List<string> labels = new List<string>();
+            foreach (var value in values) {
+                labels.Add(CreateLabel(prefix, value));
+            }
+
+            return labels.ToArray();
+        }
+
+        /// <summary>
+        /// Create an asset label from a prefix and a single value
+        /// </summary>
+        /// <param name="prefix"> The field prefix to be applied to the label.
+        /// </param>
+        /// <param name="value">The value to store in the field</param>
+        private string CreateLabel(string prefix, string value) {
+            return LABEL_PREFIX + prefix + value;
         }
 
         /// <summary>
@@ -452,7 +471,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <returns>true if this file targets the editor, false
         /// otherwise.</returns>
         public bool GetEditorEnabled() {
-            return targets != null && Array.IndexOf(targets, "editor") >= 0;
+            return targets != null && targets.Contains("editor");
         }
 
         /// <summary>
@@ -460,7 +479,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// </summary>
         /// <returns>true if targets are specified, false otherwise.</returns>
         public bool GetBuildTargetsSpecified() {
-            return targets != null && targets.Length > 0;
+            return targets != null && targets.Count > 0;
         }
 
         /// <summary>
@@ -524,24 +543,23 @@ public class VersionHandlerImpl : AssetPostprocessor {
             labels.Add(ASSET_LABEL);
             // Add labels for the metadata in this class.
             if (!String.IsNullOrEmpty(versionString)) {
-                labels.Add(CreateLabel(TOKEN_VERSION, new [] { versionString }));
+                labels.Add(CreateLabel(TOKEN_VERSION[0], versionString));
             }
-            if (targets != null && targets.Length > 0) {
-                labels.Add(CreateLabel(TOKEN_TARGETS, targets));
+            if (targets != null && targets.Count > 0) {
+                labels.AddRange(CreateLabels(TOKEN_TARGETS, targets));
 
-                if(!isHandledByPluginImporter) {
+                if (!isHandledByPluginImporter) {
                     labels.Add(ASSET_LABEL_RENAME_TO_DISABLE);
                 }
             }
-            if (dotNetTargets != null && dotNetTargets.Length > 0) {
-                labels.Add(CreateLabel(TOKEN_DOTNET_TARGETS, dotNetTargets));
+            if (dotNetTargets != null && dotNetTargets.Count > 0) {
+                labels.AddRange(CreateLabels(TOKEN_DOTNET_TARGETS, dotNetTargets));
             }
             if (!String.IsNullOrEmpty(linuxLibraryBasename)) {
-                labels.Add(CreateLabel(TOKEN_LINUX_LIBRARY_BASENAME,
-                                       new [] { linuxLibraryBasename }));
+                labels.Add(CreateLabel(TOKEN_LINUX_LIBRARY_BASENAME[0], linuxLibraryBasename));
             }
             if (isManifest) {
-                labels.Add(CreateLabel(TOKEN_MANIFEST, null));
+                labels.Add(CreateLabel(TOKEN_MANIFEST[0], null));
             }
             if (!(new HashSet<string>(labels)).SetEquals(new HashSet<string>(currentLabels))) {
                 Log(String.Format("Changing labels of {0}\n" +
@@ -1036,7 +1054,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     foreach (var metadata in metadataByVersion.Values) {
                         // Ignore manifests and files that don't target any build targets.
                         if (metadata.isManifest ||
-                            metadata.targets == null || metadata.targets.Length == 0) {
+                            metadata.targets == null || metadata.targets.Count == 0) {
                             continue;
                         }
                         // Ignore missing files.
@@ -1054,7 +1072,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                 metadata.versionString,
                                 currentFilename,
                                 metadata.targets != null ?
-                                    String.Join(", ", metadata.targets) : ""));
+                                    String.Join(", ", new List<string>(metadata.targets).ToArray()) 
+                                                                                            : ""));
                     }
                     fileInfoLines.Add("");
                     if (hasRelevantVersions) warningLines.AddRange(fileInfoLines);
@@ -1109,7 +1128,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 bool needsUpdate = metadataByVersion.Count > 1;
                 foreach (var metadata in metadataByVersion) {
                     if ((metadata.targets != null &&
-                         metadata.targets.Length > 0) ||
+                         metadata.targets.Count > 0) ||
                         metadata.isManifest) {
                         needsUpdate = true;
                         break;
