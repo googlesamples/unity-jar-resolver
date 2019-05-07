@@ -1196,16 +1196,36 @@ task gitAddReleaseFilesToStaging(type: Exec, dependsOn: releasePlugin) {
   commandLine "git", "add", "-A"
 }
 
+/*
+ * Read the changes applied to the current version from the changelog.
+ *
+ * @returns Version summary in a multiline string.
+ */
+String readVersionSummaryFromChangelog() {
+  String versionSummary = ""
+  for (String line in project.ext.changelog.text.split("\n")) {
+    String trimmedLine = line.trim()
+    if (line.isEmpty()) break
+    versionSummary += line + "\n"
+  }
+  return versionSummary
+}
+
+/*
+ * Create a commit message for a release commit.
+ *
+ * @returns Commit message string.
+ */
+String createCommitMessage() {
+  return sprintf("Version %s\n\n%s",
+                 project.ext.pluginVersionSemVer,
+                 readVersionSummaryFromChangelog())
+}
+
 task gitCreateReleaseCommit(dependsOn: gitAddReleaseFilesToStaging) {
   description "Run git to create a release commit."
 
   doLast {
-    String versionSummary = ""
-    for (String line in project.ext.changelog.text.split("\n")) {
-      String trimmedLine = line.trim()
-      if (line.isEmpty()) break
-      versionSummary += line + "\n"
-    }
     def stdout = new ByteArrayOutputStream()
     exec {
       commandLine "git", "status", "-s"
@@ -1214,10 +1234,7 @@ task gitCreateReleaseCommit(dependsOn: gitAddReleaseFilesToStaging) {
     }
     if (!stdout.toString().isEmpty()) {
       exec {
-        commandLine "git", "commit", "-a", "-m",
-                    sprintf("Version %s\n\n%s",
-                            project.ext.pluginVersionSemVer,
-                            versionSummary)
+        commandLine "git", "commit", "-a", "-m", createCommitMessage()
       }
     }
   }
@@ -1228,7 +1245,13 @@ task gitTagRelease(type: Exec, dependsOn: gitCreateReleaseCommit) {
                "*after* a release commit has been be created.")
   commandLine "git", "tag", "-a",
               sprintf("v%s", pluginVersionSemVer), "-m",
-              sprintf("release %s", pluginVersionSemVer)
+              sprintf("%s\n\nDownload [here](%s)",
+                      createCommitMessage(),
+                      sprintf("https://github.com/googlesamples/" +
+                              "unity-jar-resolver/raw/v%s/" +
+                              "play-services-resolver-%s.unitypackage",
+                              project.ext.pluginVersionSemVer,
+                              project.ext.pluginVersion))
 }
 
 // TODO: Version Handler tests to implement in both batch and interactive modes
