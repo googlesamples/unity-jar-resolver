@@ -494,35 +494,56 @@ public class VersionHandler {
     public static object InvokeMethod(
             Type type, object objectInstance, string methodName,
             object[] args, Dictionary<string, object> namedArgs = null) {
-        Type[] argTypes = null;
-        if (args != null && args.Length > 0) {
-            argTypes = new Type[args.Length];
-            for (int i = 0; i < args.Length; ++i) {
-                argTypes[i] = args[i].GetType();
-            }
-        }
-        MethodInfo method = argTypes != null ?
-            type.GetMethod(methodName, argTypes) : type.GetMethod(methodName);
-        ParameterInfo[] parameters = method.GetParameters();
-        int numParameters = parameters.Length;
-        object[] parameterValues = new object[numParameters];
-        int numPositionalArgs = args != null ? args.Length : 0;
-        foreach (var parameter in parameters) {
-            int position = parameter.Position;
-            if (position < numPositionalArgs) {
-                parameterValues[position] = args[position];
-                continue;
-            }
-            object namedValue = parameter.RawDefaultValue;
-            if (namedArgs != null) {
-                object overrideValue;
-                if (namedArgs.TryGetValue(parameter.Name, out overrideValue)) {
-                    namedValue = overrideValue;
+        object[] parameterValues = null;
+        int numberOfPositionalArgs = args != null ? args.Length : 0;
+        int numberOfNamedArgs = namedArgs != null ? namedArgs.Count : 0;
+        MethodInfo foundMethod = null;
+        foreach (var method in type.GetMethods()) {
+            if (method.Name != methodName) continue;
+            var parameters = method.GetParameters();
+            int numberOfParameters = parameters.Length;
+            parameterValues = new object[numberOfParameters];
+            int matchedPositionalArgs = 0;
+            int matchedNamedArgs = 0;
+            bool matchedAllRequiredArgs = true;
+            foreach (var parameter in parameters) {
+                var parameterType = parameter.ParameterType;
+                int position = parameter.Position;
+                if (position < numberOfPositionalArgs) {
+                    var positionalArg = args[position];
+                    // If the parameter type doesn't match, ignore this method.
+                    if (positionalArg != null && parameterType != positionalArg.GetType()) break;
+                    parameterValues[position] = positionalArg;
+                    matchedPositionalArgs ++;
+                } else if (parameter.RawDefaultValue != DBNull.Value) {
+                    object namedValue = parameter.RawDefaultValue;
+                    if (numberOfNamedArgs > 0) {
+                        object namedArg;
+                        if (namedArgs.TryGetValue(parameter.Name, out namedArg)) {
+                            // If the parameter type doesn't match, ignore this method.
+                            if (namedArg != null && parameterType != namedArg.GetType()) break;
+                            namedValue = namedArg;
+                            matchedNamedArgs ++;
+                        }
+                    }
+                    parameterValues[position] = namedValue;
+                } else {
+                    matchedAllRequiredArgs = false;
+                    break;
                 }
             }
-            parameterValues[position] = namedValue;
+            // If all arguments were consumed by the method, we've found a match.
+            if (matchedAllRequiredArgs &&
+                matchedPositionalArgs == numberOfPositionalArgs &&
+                matchedNamedArgs == numberOfNamedArgs) {
+                foundMethod = method;
+                break;
+            }
         }
-        return method.Invoke(objectInstance, parameterValues);
+        if (foundMethod == null) {
+            throw new Exception(String.Format("Method {0}.{1} not found", type.Name, methodName));
+        }
+        return foundMethod.Invoke(objectInstance, parameterValues);
     }
 }
 

@@ -1286,6 +1286,13 @@ createUnityTestBatchAndNonBatch(
   new File("source/VersionHandlerImpl/test/activation"), [])
 
 createUnityTestBatchAndNonBatch(
+  "testVersionHandlerReflection",
+  ("Imports the plugin into a Unity project and tests reflection " +
+   "methods."),
+  [buildPlugin],
+  new File("source/VersionHandler/test/reflection"), [])
+
+createUnityTestBatchAndNonBatch(
   "testAndroidResolverAsyncResolve",
   ("Imports the plugin into a Unity project, runs Android resolution with " +
    "a combination of dependencies added via the programmatic API and via " +
