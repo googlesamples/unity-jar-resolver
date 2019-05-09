@@ -807,6 +807,7 @@ Task createUnityTask(String taskName, String summary,
                                   summary, projectName),
                                 type: Exec,
                                 dependsOn: dependsOn).with {
+    inputs.files fileTree(projectDir)
     outputs.files files(logFile)
     executable project.ext.unityExe
     args executeArguments
