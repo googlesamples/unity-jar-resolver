@@ -1,3 +1,9 @@
+# Version 1.2.111 - May 9, 2019
+## Bug Fixes
+* Version Handler: Fixed invocation of methods with named arguments.
+* Version Handler: Fixed occasional hang when the editor is compiling
+  while activating plugins.
+
 # Version 1.2.110 - May 7, 2019
 ## Bug Fixes
 * Android Resolver: Fixed inclusion of some srcaar artifacts in builds with
