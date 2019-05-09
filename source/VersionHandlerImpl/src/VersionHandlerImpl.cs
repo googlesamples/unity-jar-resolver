@@ -1535,7 +1535,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
                         Log("Compiling...", verbose: true);
                     }
                     compiling = true;
-                    return false;
+                    // In batch mode this can get stuck forever as PollOnUpdateUntilComplete()
+                    // will block the main thread which prevents the EditorApplication.isCompiling
+                    // flag from being updated by the editor.
+                    return ExecutionEnvironment.InBatchMode;
                 }
                 if (compiling) {
                     Log("Compilation complete.", verbose: true);
