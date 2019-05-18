@@ -1,3 +1,9 @@
+# Version TBD
+## New Features
+* Android Resolver: Auto-resolution now displays a window for a few seconds
+  allowing the user to skip the resolution process.  The delay time can be
+  configured via the settings menu.
+
 # Version 1.2.116 - Jun 7, 2019
 ## Bug Fixes
 * Android Resolver: Fixed resolution of Android dependencies without version
