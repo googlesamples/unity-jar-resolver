@@ -1,4 +1,4 @@
-﻿// <copyright file="PlayServicesResolver.cs" company="Google Inc.">
+// <copyright file="PlayServicesResolver.cs" company="Google Inc.">
 // Copyright (C) 2015 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -149,14 +149,12 @@ namespace GooglePlayServices {
                                 return true;
                             } else if (elementName == "package" &&
                                        parentElementName == "packages") {
-                                if (isStart && reader.Read() &&
-                                    reader.NodeType == XmlNodeType.Text) {
+                                if (reader.Read() && reader.NodeType == XmlNodeType.Text) {
                                     packages.Add(reader.ReadContentAsString());
                                 }
                                 return true;
                             } else if (elementName == "file" && parentElementName == "files") {
-                                if (isStart && reader.Read() &&
-                                    reader.NodeType == XmlNodeType.Text) {
+                                if (reader.Read() && reader.NodeType == XmlNodeType.Text) {
                                     files.Add(reader.ReadContentAsString());
                                 }
                                 return true;
@@ -928,32 +926,69 @@ namespace GooglePlayServices {
         /// Defaults to 1 second.</param>
         private static void ScheduleAutoResolve(double delayInMilliseconds = 1000.0) {
             lock (typeof(PlayServicesResolver)) {
-                if (!autoResolving) {
-                    RunOnMainThread.Cancel(autoResolveJobId);
-                    autoResolveJobId = RunOnMainThread.Schedule(
-                        () => {
-                            lock (typeof(PlayServicesResolver)) {
-                                autoResolving = true;
-                            }
-                            RunOnMainThread.PollOnUpdateUntilComplete(() => {
-                                if (EditorApplication.isCompiling) return false;
-                                // Only run AutoResolve() if we have a valid autoResolveJobId.
-                                // If autoResolveJobId is 0, ScheduleResolve()
-                                // has already been run and we should not run AutoResolve()
-                                // again.
-                                if (autoResolveJobId != 0) {
-                                    AutoResolve(() => {
-                                        lock (typeof(PlayServicesResolver)) {
-                                            autoResolving = false;
-                                            autoResolveJobId = 0;
-                                        }
-                                    });
-                                }
-                                return true;
-                            });
-                        },
-                        delayInMilliseconds);
+                if (autoResolving) {
+                    return;
                 }
+
+                RunOnMainThread.Cancel(autoResolveJobId);
+                autoResolveJobId = RunOnMainThread.Schedule(() => {
+                    lock (typeof(PlayServicesResolver)) {
+                        autoResolving = true;
+                    }
+
+                    int delaySec = GooglePlayServices.SettingsDialog.AutoResolutionDelay;
+                    DateTimeOffset resolveTime = DateTimeOffset.Now.AddSeconds(delaySec);
+                    bool shouldResolve = true;
+                    AlertModal alert = null;
+                    RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                        if (resolveTime > DateTimeOffset.Now && Resolver.AutomaticResolutionEnabled()) {
+                            int countDown = (int)(resolveTime - DateTimeOffset.Now).TotalSeconds;
+                            if(alert == null) {
+                                alert = new AlertModal {
+                                    Title = "Resolve or Skip dependency?",
+                                    Message = "Auto Resolve Dependency in : " + countDown,
+                                    Ok = new AlertModal.LabeledAction {
+                                        Label = "Resolve",
+                                        DelegateAction = () => {
+                                            resolveTime = DateTimeOffset.Now;
+                                            shouldResolve = true;
+                                        }
+                                    },
+                                    Cancel = new AlertModal.LabeledAction {
+                                        Label = "Skip",
+                                        DelegateAction = () => {
+                                            resolveTime = DateTimeOffset.Now;
+                                            shouldResolve = false;
+                                        }
+                                    }
+                                };
+
+                                alert.Display();
+                            }
+
+                            if(alert != null) {
+                                alert.Message = "Auto Resolve Dependency in : " + countDown;
+                                return false;
+                            }
+                        }
+
+                        if (EditorApplication.isCompiling) return false;
+                        // Only run AutoResolve() if we have a valid autoResolveJobId.
+                        // If autoResolveJobId is 0, ScheduleResolve()
+                        // has already been run and we should not run AutoResolve()
+                        // again.
+
+                        if (shouldResolve && autoResolveJobId != 0) {
+                            AutoResolve(() => {
+                                lock (typeof(PlayServicesResolver)) {
+                                    autoResolving = false;
+                                    autoResolveJobId = 0;
+                                }
+                            });
+                        }
+                        return true;
+                    });
+                },delayInMilliseconds);
             }
         }
 
@@ -1353,19 +1388,19 @@ namespace GooglePlayServices {
         /// <param name="complete">Delegate called when delete is complete.</param>
         public static void DeleteResolvedLibraries(System.Action complete = null) {
             RunOnMainThread.Schedule(() => {
-                    if (Resolver.AutomaticResolutionEnabled()) {
-                        Log("Disabling auto-resolution to prevent libraries from being " +
-                            "resolved after deletion.", level: LogLevel.Warning);
-                        GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
-                    }
-                    DeleteLabeledAssets();
-                    LocalMavenRepository.PatchPomFilesInLocalRepos(
-                        PlayServicesSupport.GetAllDependencies().Values);
-                    if (GradleTemplateEnabled) {
-                        GradleTemplateResolver.InjectDependencies(new List<Dependency>());
-                    }
-                    if (complete != null) complete();
-                }, 0);
+                if (Resolver.AutomaticResolutionEnabled()) {
+                    Log("Disabling auto-resolution to prevent libraries from being " +
+                        "resolved after deletion.", level: LogLevel.Warning);
+                    GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
+                }
+                DeleteLabeledAssets();
+                LocalMavenRepository.PatchPomFilesInLocalRepos(
+                    PlayServicesSupport.GetAllDependencies().Values);
+                if (GradleTemplateEnabled) {
+                    GradleTemplateResolver.InjectDependencies(new List<Dependency>());
+                }
+                if (complete != null) complete();
+            }, 0);
         }
 
         /// <summary>
@@ -1397,9 +1432,7 @@ namespace GooglePlayServices {
                 RunOnMainThread.Cancel(autoResolveJobId);
                 autoResolveJobId = 0;
                 // Remove any enqueued auto-resolve jobs.
-                resolutionJobs.RemoveAll((jobInfo) => {
-                        return jobInfo != null && jobInfo.IsAutoResolveJob;
-                    });
+                resolutionJobs.RemoveAll((jobInfo) => jobInfo == null || jobInfo.IsAutoResolveJob);
                 firstJob = resolutionJobs.Count == 0;
 
                 resolutionJobs.Add(
