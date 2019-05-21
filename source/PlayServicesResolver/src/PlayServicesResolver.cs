@@ -926,37 +926,37 @@ namespace GooglePlayServices {
         /// Defaults to 1 second.</param>
         private static void ScheduleAutoResolve(double delayInMilliseconds = 1000.0) {
             lock (typeof(PlayServicesResolver)) {
-                if (autoResolving)
-					return;
+                if (autoResolving) {
+                    return;
+                }
 
-				RunOnMainThread.Cancel(autoResolveJobId);
+                RunOnMainThread.Cancel(autoResolveJobId);
                 autoResolveJobId = RunOnMainThread.Schedule(() => {
                     lock (typeof(PlayServicesResolver)) {
                         autoResolving = true;
                     }
 
-                    DateTimeOffset delay = DateTimeOffset.Now.AddSeconds(Math.Min(30,GooglePlayServices.SettingsDialog.AutoResolutionDelay));
+                    int delaySec = GooglePlayServices.SettingsDialog.AutoResolutionDelay;
+                    DateTimeOffset resolveTime = DateTimeOffset.Now.AddSeconds(Math.Min(30,delaySec));
                     bool shouldResolve = true;
                     AlertModal alert = null;
                     RunOnMainThread.PollOnUpdateUntilComplete(() => {
-                        if(delay > DateTimeOffset.Now)
-                        {
-                            if(alert == null)
-                            {
+                        if (resolveTime > DateTimeOffset.Now) {
+                            if(alert == null) {
                                 alert = new AlertModal {
                                     Title = "Resolve or Skip dependency?",
-                                    Message = "Auto Resolve Dependency in : " + (delay - DateTimeOffset.Now).TotalSeconds,
+                                    Message = "Auto Resolve Dependency in : " + (resolveTime - DateTimeOffset.Now).TotalSeconds,
                                     Ok = new AlertModal.LabeledAction {
                                         Label = "Resolve",
                                         DelegateAction = () => {
-                                            delay = DateTimeOffset.Now;
+                                            resolveTime = DateTimeOffset.Now;
                                             shouldResolve = true;
                                         }
                                     },
                                     Cancel = new AlertModal.LabeledAction {
                                         Label = "Skip",
                                         DelegateAction = () => {
-                                            delay = DateTimeOffset.Now;
+                                            resolveTime = DateTimeOffset.Now;
                                             shouldResolve = false;
                                         }
                                     }
@@ -965,12 +965,12 @@ namespace GooglePlayServices {
                                 alert.Display();
                             }
 
-							if(alert != null)
-							{
-								alert.Message = "Auto Resolve Dependency in : " + (delay - DateTimeOffset.Now).TotalSeconds;
-								return false;
-							}
-						}
+                            if(alert != null)
+                            {
+                                alert.Message = "Auto Resolve Dependency in : " + (resolveTime - DateTimeOffset.Now).TotalSeconds;
+                                return false;
+                            }
+                        }
 
                         if (EditorApplication.isCompiling) return false;
                         // Only run AutoResolve() if we have a valid autoResolveJobId.
