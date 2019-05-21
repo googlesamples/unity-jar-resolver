@@ -36,6 +36,7 @@ namespace GooglePlayServices {
             internal string packageDir;
             internal bool explodeAars;
             internal bool patchAndroidManifest;
+            internal bool patchMainTemplateGradle;
             internal bool verboseLogging;
             internal bool autoResolutionDisabledWarning;
             internal bool promptBeforeAutoResolution;
@@ -52,6 +53,7 @@ namespace GooglePlayServices {
                 packageDir = SettingsDialog.PackageDir;
                 explodeAars = SettingsDialog.ExplodeAars;
                 patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
+                patchMainTemplateGradle = SettingsDialog.PatchMainTemplateGradle;
                 verboseLogging = SettingsDialog.VerboseLogging;
                 autoResolutionDisabledWarning = SettingsDialog.AutoResolutionDisabledWarning;
                 promptBeforeAutoResolution = SettingsDialog.PromptBeforeAutoResolution;
@@ -69,6 +71,7 @@ namespace GooglePlayServices {
                 if (SettingsDialog.ConfigurablePackageDir) SettingsDialog.PackageDir = packageDir;
                 SettingsDialog.ExplodeAars = explodeAars;
                 SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
+                SettingsDialog.PatchMainTemplateGradle = patchMainTemplateGradle;
                 SettingsDialog.VerboseLogging = verboseLogging;
                 SettingsDialog.AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
                 SettingsDialog.PromptBeforeAutoResolution = promptBeforeAutoResolution;
@@ -83,6 +86,7 @@ namespace GooglePlayServices {
         private const string PackageDirKey = Namespace + "PackageDirectory";
         private const string ExplodeAarsKey = Namespace + "ExplodeAars";
         private const string PatchAndroidManifestKey = Namespace + "PatchAndroidManifest";
+        private const string PatchMainTemplateGradleKey = Namespace + "PatchMainTemplateGradle";
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
         private const string AutoResolutionDisabledWarningKey =
             Namespace + "AutoResolutionDisabledWarning";
@@ -98,6 +102,7 @@ namespace GooglePlayServices {
             PackageDirKey,
             ExplodeAarsKey,
             PatchAndroidManifestKey,
+            PatchMainTemplateGradleKey,
             VerboseLoggingKey,
             AutoResolutionDisabledWarningKey,
             PromptBeforeAutoResolutionKey,
@@ -118,6 +123,8 @@ namespace GooglePlayServices {
 
         // Previously validated package directory.
         private static string previouslyValidatedPackageDir;
+
+        private Vector2 scrollPosition = new Vector2(0, 0);
 
         /// <summary>
         /// Reset settings of this plugin to default values.
@@ -204,6 +211,11 @@ namespace GooglePlayServices {
             get { return projectSettings.GetBool(PatchAndroidManifestKey, true); }
         }
 
+        internal static bool PatchMainTemplateGradle {
+            set { projectSettings.SetBool(PatchMainTemplateGradleKey, value); }
+            get { return projectSettings.GetBool(PatchMainTemplateGradleKey, true); }
+        }
+
         internal static bool VerboseLogging {
             private set { projectSettings.SetBool(VerboseLoggingKey, value); }
             get { return projectSettings.GetBool(VerboseLoggingKey, false); }
@@ -260,13 +272,15 @@ namespace GooglePlayServices {
         /// Called when the GUI should be rendered.
         /// </summary>
         public void OnGUI() {
-            GUI.skin.label.wordWrap = true;
             GUILayout.BeginVertical();
             GUILayout.Label(String.Format("Android Resolver (version {0}.{1}.{2})",
                                           AndroidResolverVersionNumber.Value.Major,
                                           AndroidResolverVersionNumber.Value.Minor,
                                           AndroidResolverVersionNumber.Value.Build));
+            scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
+            GUI.skin.label.wordWrap = true;
+            GUILayout.BeginVertical();
             GUILayout.BeginHorizontal();
             GUILayout.Label("Use Gradle Daemon", EditorStyles.boldLabel);
             settings.useGradleDaemon = EditorGUILayout.Toggle(settings.useGradleDaemon);
@@ -378,6 +392,24 @@ namespace GooglePlayServices {
             }
 
             GUILayout.BeginHorizontal();
+            GUILayout.Label("Patch mainTemplate.gradle", EditorStyles.boldLabel);
+            settings.patchMainTemplateGradle =
+                EditorGUILayout.Toggle(settings.patchMainTemplateGradle);
+            GUILayout.EndHorizontal();
+            if (settings.patchMainTemplateGradle) {
+                GUILayout.Label(
+                    "If Gradle builds are enabled and a mainTemplate.gradle file is present, " +
+                    "the mainTemplate.gradle file will be patched with dependencies managed " +
+                    "by the Android Resolver.");
+            } else {
+                GUILayout.Label(String.Format(
+                    "If Gradle builds are enabled and a mainTemplate.gradle file is present, " +
+                    "the mainTemplate.gradle file will not be modified.  Instead dependencies " +
+                    "managed by the Android Resolver will be added to the project under {0}",
+                    settings.packageDir));
+            }
+
+            GUILayout.BeginHorizontal();
             GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
             settings.verboseLogging = EditorGUILayout.Toggle(settings.verboseLogging);
             GUILayout.EndHorizontal();
@@ -408,6 +440,9 @@ namespace GooglePlayServices {
             }
             if (closeWindow) Close();
             GUILayout.EndHorizontal();
+
+            GUILayout.EndVertical();
+            EditorGUILayout.EndScrollView();
             GUILayout.EndVertical();
         }
     }

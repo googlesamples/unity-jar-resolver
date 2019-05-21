@@ -1358,6 +1358,18 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Remove libraries references from Gradle template files and patch POM files to work
+        /// with the Gradle template.
+        /// </summary>
+        private static void DeleteResolvedLibrariesFromGradleTemplate() {
+            LocalMavenRepository.PatchPomFilesInLocalRepos(
+                PlayServicesSupport.GetAllDependencies().Values);
+            if (GradleTemplateEnabled) {
+                GradleTemplateResolver.InjectDependencies(new List<Dependency>());
+            }
+        }
+
+        /// <summary>
         /// Delete all resolved libraries asynchronously.
         /// </summary>
         /// <param name="complete">Delegate called when delete is complete.</param>
@@ -1369,11 +1381,7 @@ namespace GooglePlayServices {
                         GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
                     }
                     DeleteLabeledAssets();
-                    LocalMavenRepository.PatchPomFilesInLocalRepos(
-                        PlayServicesSupport.GetAllDependencies().Values);
-                    if (GradleTemplateEnabled) {
-                        GradleTemplateResolver.InjectDependencies(new List<Dependency>());
-                    }
+                    DeleteResolvedLibrariesFromGradleTemplate();
                     if (complete != null) complete();
                 }, 0);
         }
@@ -1463,12 +1471,8 @@ namespace GooglePlayServices {
                 if (PlayServicesResolver.FindLabeledAssets() != null) {
                     Log("Stale dependencies exist. Deleting assets...", level: LogLevel.Verbose);
                     DeleteLabeledAssets();
-                    if (GradleTemplateEnabled) {
-                        GradleTemplateResolver.InjectDependencies(
-                            PlayServicesSupport.GetAllDependencies().Values);
-                    }
                 }
-
+                DeleteResolvedLibrariesFromGradleTemplate();
                 if (resolutionComplete != null) {
                     resolutionComplete(true);
                 }
@@ -1565,7 +1569,15 @@ namespace GooglePlayServices {
                 }
             };
 
-            if (GradleTemplateEnabled) {
+            // If a gradle template is present but patching is disabled, remove managed libraries
+            // from the template.
+            if (GradleTemplateEnabled &&
+                !GooglePlayServices.SettingsDialog.PatchMainTemplateGradle) {
+                DeleteResolvedLibrariesFromGradleTemplate();
+            }
+
+            if (GradleTemplateEnabled &&
+                GooglePlayServices.SettingsDialog.PatchMainTemplateGradle) {
                 RunOnMainThread.Run(() => {
                         finishResolution(GradleTemplateResolver.InjectDependencies(
                             PlayServicesSupport.GetAllDependencies().Values), "");
