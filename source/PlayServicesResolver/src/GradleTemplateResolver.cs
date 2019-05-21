@@ -18,6 +18,7 @@ namespace GooglePlayServices {
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Text.RegularExpressions;
 
     using Google;
     using Google.JarResolver;
@@ -48,7 +49,8 @@ namespace GooglePlayServices {
         /// <summary>
         /// Line that indicates where to initially inject repos in the default template.
         /// </summary>
-        private const string ReposInjectionLine = "apply plugin: 'com.android.application'";
+        private const string ReposInjectionLine =
+            @".*apply plugin: 'com\.android\.(application|library)'.*";
 
         /// <summary>
         /// Line that indicates the start of the injected dependencies block in the template.
@@ -65,7 +67,7 @@ namespace GooglePlayServices {
         /// If this isn't present in the template dependencies will not be injected or they'll
         /// be removed.
         /// </summary>
-        private const string DependenciesToken = "**DEPS**";
+        private const string DependenciesToken = @".*\*\*DEPS\*\*.*";
 
 
         /// <summary>
@@ -133,7 +135,7 @@ namespace GooglePlayServices {
         private class TextFileLineInjector {
             // Token which, if found within a line, indicates where to inject the block of text if
             // the start / end block isn't found
-            private string injectionToken;
+            private Regex injectionToken;
             // Line that indicates the start of the block to replace.
             private string startBlockLine;
             // Line that indicates the end of the block to replace.
@@ -152,8 +154,9 @@ namespace GooglePlayServices {
             /// <summary>
             /// Construct the injector.
             /// </summary>
-            /// <param name="injectionToken">Token which, if found within a line, indicates where
-            /// to inject the block of text if the start / end block isn't found.</param>
+            /// <param name="injectionToken">Regular expression, if found within a line,
+            /// indicates where to inject the block of text if the start / end block isn't
+            /// found.</param>
             /// <param name="startBlockLine">Line which indicates the start of the block to
             /// replace.</param>
             /// <param name="endBlockLine">Line which indicates the end of the block to replace.
@@ -167,7 +170,7 @@ namespace GooglePlayServices {
                                         ICollection<string> replacementLines,
                                         string replacementName,
                                         string fileDescription) {
-                this.injectionToken = injectionToken;
+                this.injectionToken = new Regex(injectionToken);
                 this.startBlockLine = startBlockLine;
                 this.endBlockLine = endBlockLine;
                 this.replacementLines = new List<string>();
@@ -198,7 +201,7 @@ namespace GooglePlayServices {
                     if (trimmedLine.StartsWith(startBlockLine)) {
                         inBlock = true;
                         outputLines.Clear();
-                    } else if (trimmedLine.Contains(injectionToken)) {
+                    } else if (injectionToken.IsMatch(trimmedLine)) {
                         injectBlock = true;
                     }
                 } else {
@@ -245,9 +248,10 @@ namespace GooglePlayServices {
                                                    fileDescription),
                                      level: LogLevel.Verbose);
             // Determine whether dependencies should be injected.
+            var dependenciesToken = new Regex(DependenciesToken);
             bool containsDeps = false;
             foreach (var line in lines) {
-                if (line.Contains(DependenciesToken)) {
+                if (dependenciesToken.IsMatch(line)) {
                     containsDeps = true;
                     break;
                 }

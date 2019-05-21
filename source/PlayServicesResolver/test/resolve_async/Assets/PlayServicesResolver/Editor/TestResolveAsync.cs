@@ -129,10 +129,16 @@ public class TestResolveAsync {
     private const string ADDITIONAL_DEPENDENCIES_FILENAME = "TestAdditionalDependencies";
 
     /// <summary>
-    /// Disabled Gradle template file.
+    /// Disabled application Gradle template file.
     /// </summary>
     private const string GRADLE_TEMPLATE_DISABLED =
         "Assets/Plugins/Android/mainTemplateDISABLED.gradle";
+
+    /// <summary>
+    /// Disabled library Gradle template file.
+    /// </summary>
+    private const string GRADLE_TEMPLATE_LIBRARY_DISABLED =
+        "Assets/Plugins/Android/mainTemplateLibraryDISABLED.gradle";
 
     /// <summary>
     /// Enabled Gradle template file.
@@ -168,7 +174,8 @@ public class TestResolveAsync {
         // Set of files to ignore (relative to the Assets/Plugins/Android directory) in all tests
         // that do not use the Gradle template.
         var nonGradleTemplateFilesToIgnore = new HashSet<string>() {
-            Path.GetFileName(GRADLE_TEMPLATE_DISABLED)
+            Path.GetFileName(GRADLE_TEMPLATE_DISABLED),
+            Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
         };
 
         UnityEngine.Debug.Log("Setting up test cases for execution.");
@@ -196,11 +203,33 @@ public class TestResolveAsync {
                         SetupDependencies();
 
                         ResolveWithGradleTemplate(
+                            GRADLE_TEMPLATE_DISABLED,
                             "ExpectedArtifacts/NoExport/GradleTemplate",
                             testCase, testCaseComplete,
                             otherExpectedFiles: new [] {
                                 "Assets/Firebase/m2repository/com/google/firebase/" +
-                                "firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" });
+                                "firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
+                            filesToIgnore: new HashSet<string> {
+                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
+                            });
+                    }
+                },
+                new TestCase {
+                    Name = "ResolveForGradleBuildSystemLibraryWithTemplate",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies();
+
+                        ResolveWithGradleTemplate(
+                            GRADLE_TEMPLATE_LIBRARY_DISABLED,
+                            "ExpectedArtifacts/NoExport/GradleTemplateLibrary",
+                            testCase, testCaseComplete,
+                            otherExpectedFiles: new [] {
+                                "Assets/Firebase/m2repository/com/google/firebase/" +
+                                "firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
+                            filesToIgnore: new HashSet<string> {
+                                Path.GetFileName(GRADLE_TEMPLATE_DISABLED)
+                            });
                     }
                 },
                 new TestCase {
@@ -225,10 +254,14 @@ public class TestResolveAsync {
                             }
                             ClearAllDependencies();
                             ResolveWithGradleTemplate(
+                                GRADLE_TEMPLATE_DISABLED,
                                 "ExpectedArtifacts/NoExport/GradleTemplateEmpty",
                                 testCase, (testCaseResult) => {
                                     enableDependencies();
                                     testCaseComplete(testCaseResult);
+                                },
+                                filesToIgnore: new HashSet<string> {
+                                    Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
                                 });
                         } finally {
                             enableDependencies();
@@ -327,20 +360,26 @@ public class TestResolveAsync {
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
                         SetupDependencies();
+                        var filesToIgnore = new HashSet<string> {
+                            Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
+                        };
 
                         ResolveWithGradleTemplate(
+                            GRADLE_TEMPLATE_DISABLED,
                             "ExpectedArtifacts/NoExport/GradleTemplate",
                             testCase, (testCaseResult) => {
                                 Google.VersionHandler.InvokeStaticMethod(
                                         AndroidResolverClass, "DeleteResolvedLibrariesSync", null);
                                 testCaseResult.ErrorMessages.AddRange(CompareDirectoryContents(
                                             "ExpectedArtifacts/NoExport/GradleTemplateEmpty",
-                                            "Assets/Plugins/Android", null));
+                                            "Assets/Plugins/Android", filesToIgnore));
                                 if (File.Exists(GRADLE_TEMPLATE_ENABLED)) {
                                     File.Delete(GRADLE_TEMPLATE_ENABLED);
                                 }
                                 testCaseComplete(testCaseResult);
-                            }, deleteGradleTemplate: false);
+                            },
+                            deleteGradleTemplate: false,
+                            filesToIgnore: filesToIgnore);
                     }
                 },
             });
@@ -803,6 +842,7 @@ public class TestResolveAsync {
     /// <summary>
     /// Resolve for Gradle using a template .gradle file.
     /// </summary>
+    /// <param name="gradleTemplate">Gradle template to use.</param>
     /// <param name="expectedAssetsDir">Directory that contains the assets expected from the
     /// resolution step.</param>
     /// <param name="testCase">Object executing this method.</param>
@@ -811,11 +851,14 @@ public class TestResolveAsync {
     /// project.</param>
     /// <param name="deleteGradleTemplate">Whether to delete the gradle template before
     /// testCaseComplete is called.</param>
-    private static void ResolveWithGradleTemplate(string expectedAssetsDir,
+    /// <param name="filesToIgnore">Set of files to relative to the generatedAssetsDir.</param>
+    private static void ResolveWithGradleTemplate(string gradleTemplate,
+                                                  string expectedAssetsDir,
                                                   TestCase testCase,
                                                   Action<TestCaseResult> testCaseComplete,
                                                   IEnumerable<string> otherExpectedFiles = null,
-                                                  bool deleteGradleTemplate = true) {
+                                                  bool deleteGradleTemplate = true,
+                                                  ICollection<string> filesToIgnore = null) {
         var cleanUpFiles = new List<string>();
         if (deleteGradleTemplate) cleanUpFiles.Add(GRADLE_TEMPLATE_ENABLED);
         if (otherExpectedFiles != null) cleanUpFiles.AddRange(otherExpectedFiles);
@@ -825,9 +868,9 @@ public class TestResolveAsync {
             }
         };
         try {
-            File.Copy(GRADLE_TEMPLATE_DISABLED, GRADLE_TEMPLATE_ENABLED);
-            Resolve("Gradle", false, expectedAssetsDir,
-                    null, null, testCase, (TestCaseResult testCaseResult) => {
+            File.Copy(gradleTemplate, GRADLE_TEMPLATE_ENABLED);
+            Resolve("Gradle", false, expectedAssetsDir, null, filesToIgnore, testCase,
+                    (TestCaseResult testCaseResult) => {
                         if (otherExpectedFiles != null) {
                             foreach (var expectedFile in otherExpectedFiles) {
                                 if (!File.Exists(expectedFile)) {
