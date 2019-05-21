@@ -649,19 +649,29 @@ namespace GooglePlayServices {
         /// </summary>
         public static event EventHandler<AndroidSdkRootChangedArgs> AndroidSdkRootChanged;
 
+        // Backing store to cache AndroidPlaybackEngineDirectory.
+        // This is set to either null (Android player not installed) or the path of the
+        // playback engine directory when AndroidPlaybackEngineDirectory is first accessed.
+        private static string androidPlaybackEngineDirectory = "";
+
         /// <summary>
         /// Get the Android playback engine directory.
         /// </summary>
         /// <returns>Get the playback engine directory.</returns>
         public static string AndroidPlaybackEngineDirectory {
             get {
-                try {
-                    return (string)VersionHandler.InvokeStaticMethod(
-                        typeof(BuildPipeline), "GetPlaybackEngineDirectory",
-                        new object[] { BuildTarget.Android, BuildOptions.None });
-                } catch (Exception) {
-                    return null;
+                if (androidPlaybackEngineDirectory != null &&
+                    androidPlaybackEngineDirectory == "") {
+                    try {
+                        androidPlaybackEngineDirectory =
+                            (string)VersionHandler.InvokeStaticMethod(
+                                typeof(BuildPipeline), "GetPlaybackEngineDirectory",
+                                new object[] { BuildTarget.Android, BuildOptions.None });
+                    } catch (Exception) {
+                        androidPlaybackEngineDirectory = null;
+                    }
                 }
+                return androidPlaybackEngineDirectory;
             }
         }
 
