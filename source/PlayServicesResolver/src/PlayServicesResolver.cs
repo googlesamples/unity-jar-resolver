@@ -941,11 +941,12 @@ namespace GooglePlayServices {
                     bool shouldResolve = true;
                     AlertModal alert = null;
                     RunOnMainThread.PollOnUpdateUntilComplete(() => {
-                        if (resolveTime > DateTimeOffset.Now) {
+                        int countDown = (int)(resolveTime - DateTimeOffset.Now).TotalSeconds;
+                        if (countDown > 0) {
                             if(alert == null) {
                                 alert = new AlertModal {
                                     Title = "Resolve or Skip dependency?",
-                                    Message = "Auto Resolve Dependency in : " + (resolveTime - DateTimeOffset.Now).TotalSeconds,
+                                    Message = "Auto Resolve Dependency in : " + countDown,
                                     Ok = new AlertModal.LabeledAction {
                                         Label = "Resolve",
                                         DelegateAction = () => {
@@ -965,9 +966,8 @@ namespace GooglePlayServices {
                                 alert.Display();
                             }
 
-                            if(alert != null)
-                            {
-                                alert.Message = "Auto Resolve Dependency in : " + (resolveTime - DateTimeOffset.Now).TotalSeconds;
+                            if(alert != null) {
+                                alert.Message = "Auto Resolve Dependency in : " + countDown;
                                 return false;
                             }
                         }
