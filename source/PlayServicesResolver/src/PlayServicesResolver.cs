@@ -1746,14 +1746,33 @@ namespace GooglePlayServices {
         internal static IList<string> GradleMavenReposLines(ICollection<Dependency> dependencies) {
             var lines = new List<string>();
             if (dependencies.Count > 0) {
-                lines.Add("allprojects {");
-                lines.Add("    repositories {");
+                var exportEnabled = GradleProjectExportEnabled;
+                var projectPath = Path.GetFullPath(".").Replace("\\", "/");
+                const string fileScheme = "file:///";
+                var projectFileUri = fileScheme + projectPath;
+                lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
+                lines.Add("    project.repositories {");
+                // projectPath will point to the Unity project root directory as Unity will
+                // generate the root Gradle project in "Temp/gradleOut" when *not* exporting a
+                // gradle project.
+                lines.Add(String.Format(
+                          "        def unityProjectPath = \"{0}\" + " +
+                          "file(rootProject.projectDir.path + \"/../../\").absolutePath",
+                          fileScheme));
                 lines.Add("        maven {");
                 lines.Add("            url \"https://maven.google.com\"");
                 lines.Add("        }");
                 foreach (var repoAndSources in GetRepos(dependencies: dependencies)) {
+                    string repoUri;
+                    if (repoAndSources.Key.StartsWith(projectFileUri) && !exportEnabled) {
+                        repoUri = String.Format(
+                            "(unityProjectPath + \"/{0}\")",
+                            repoAndSources.Key.Substring(projectFileUri.Length + 1));
+                    } else {
+                        repoUri = String.Format("\"{0}\"", repoAndSources.Key);
+                    }
                     lines.Add("        maven {");
-                    lines.Add(String.Format("            url \"{0}\" // {1}", repoAndSources.Key,
+                    lines.Add(String.Format("            url {0} // {1}", repoUri,
                                             repoAndSources.Value));
                     lines.Add("        }");
                 }

@@ -20,8 +20,9 @@ allprojects {
 }
 
 // Android Resolver Repos Start
-allprojects {
-    repositories {
+([rootProject] + (rootProject.subprojects as List)).each { project ->
+    project.repositories {
+        def unityProjectPath = "file:///" + file(rootProject.projectDir.path + "/../../").absolutePath
         maven {
             url "https://maven.google.com"
         }
@@ -29,10 +30,10 @@ allprojects {
             url "file:///my/nonexistant/test/repo" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:15
         }
         maven {
-            url "file:///PROJECT_DIR/project_relative_path/repo" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:15
+            url (unityProjectPath + "/project_relative_path/repo") // Assets/PlayServicesResolver/Editor/TestDependencies.xml:15
         }
         maven {
-            url "file:///PROJECT_DIR/Assets/Firebase/m2repository" // Assets/PlayServicesResolver/Editor/TestDependencies.xml:10
+            url (unityProjectPath + "/Assets/Firebase/m2repository") // Assets/PlayServicesResolver/Editor/TestDependencies.xml:10
         }
         mavenLocal()
         jcenter()

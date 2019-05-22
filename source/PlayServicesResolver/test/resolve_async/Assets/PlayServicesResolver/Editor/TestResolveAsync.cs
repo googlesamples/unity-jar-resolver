@@ -951,20 +951,6 @@ public class TestResolveAsync {
     }
 
     /// <summary>
-    /// In .gradle file contents, replace file:///PROJECT_DIR URIs with the absolute path to the
-    /// project directory.
-    /// </summary>
-    /// <param name="filename">Name of the file.</param>
-    /// <param name="contents">Contents of the file to search and replace.</param>
-    private static string ReplaceFileProjectDirUri(string filename, string contents) {
-        if (filename.ToLower().EndsWith(".gradle")) {
-            return contents.Replace("file:///PROJECT_DIR",
-                                    "file:///" + Path.GetFullPath(".").Replace("\\", "/"));
-        }
-        return contents;
-    }
-
-    /// <summary>
     /// Compare the contents of two directories.
     /// </summary>
     /// <param name="expectedAssetsDir">Directory that contains expected assets.</param>
@@ -1053,12 +1039,10 @@ public class TestResolveAsync {
                         }
                     }
                     if (displayContents) {
-                        expectedContentsAsString = ReplaceFileProjectDirUri(
-                            expectedFile,
-                            System.Text.Encoding.Default.GetString(expectedContents));
-                        resolvedContentsAsString = ReplaceFileProjectDirUri(
-                            expectedFile,
-                            System.Text.Encoding.Default.GetString(resolvedContents));
+                        expectedContentsAsString =
+                            System.Text.Encoding.Default.GetString(expectedContents);
+                        resolvedContentsAsString =
+                            System.Text.Encoding.Default.GetString(resolvedContents);
                         differs = expectedContentsAsString != resolvedContentsAsString;
                     }
                     if (differs) {
