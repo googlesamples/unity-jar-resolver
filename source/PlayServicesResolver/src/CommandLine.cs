@@ -650,8 +650,14 @@ namespace GooglePlayServices
             result.exitCode = process.ExitCode;
             result.message = FormatResultMessage(toolPath, arguments, result.stdout,
                                                  result.stderr, result.exitCode);
-            Console.InputEncoding = inputEncoding;
-            Console.OutputEncoding = outputEncoding;
+            try {
+                Console.InputEncoding = inputEncoding;
+                Console.OutputEncoding = outputEncoding;
+            } catch (Exception e) {
+                UnityEngine.Debug.LogWarning(String.Format(
+                    "Unable to restore console input / output  encoding to {0} & {1}. {2}",
+                    inputEncoding, outputEncoding, e));
+            }
             return result;
         }
 

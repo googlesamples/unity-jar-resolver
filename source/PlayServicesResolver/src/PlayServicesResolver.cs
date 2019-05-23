@@ -430,6 +430,40 @@ namespace GooglePlayServices {
             }
         }
 
+
+        // Backing store for GradleVersion property.
+        private static string gradleVersion = null;
+        // Extracts a version number from a gradle distribution jar file.
+        private static Regex gradleJarVersionExtract = new Regex(@"^gradle-core-([0-9.]+)\.jar$");
+
+        /// <summary>
+        /// Get / set the Gradle version.
+        /// This property is populated when it's first read by parsing the version number of the
+        /// gradle-core-*.jar in the AndroidPlayer directory.
+        /// </summary>
+        public static string GradleVersion {
+            set { gradleVersion = value; }
+            get {
+                if (!String.IsNullOrEmpty(gradleVersion)) return gradleVersion;
+                var engineDir = AndroidPlaybackEngineDirectory;
+                if (String.IsNullOrEmpty(engineDir)) return null;
+
+                var gradleLibDir =
+                    Path.Combine(Path.Combine(Path.Combine(engineDir, "Tools"), "gradle"), "lib");
+                if (Directory.Exists(gradleLibDir)) {
+                    foreach (var path in Directory.GetFiles(gradleLibDir, "gradle-core-*.jar",
+                                                            SearchOption.TopDirectoryOnly)) {
+                        var match = gradleJarVersionExtract.Match(Path.GetFileName(path));
+                        if (match != null) {
+                            gradleVersion = match.Result("$1");
+                            break;
+                        }
+                    }
+                }
+                return gradleVersion;
+            }
+        }
+
         /// <summary>
         /// Whether project export is enabled.
         /// </summary>
@@ -647,19 +681,29 @@ namespace GooglePlayServices {
         /// </summary>
         public static event EventHandler<AndroidSdkRootChangedArgs> AndroidSdkRootChanged;
 
+        // Backing store to cache AndroidPlaybackEngineDirectory.
+        // This is set to either null (Android player not installed) or the path of the
+        // playback engine directory when AndroidPlaybackEngineDirectory is first accessed.
+        private static string androidPlaybackEngineDirectory = "";
+
         /// <summary>
         /// Get the Android playback engine directory.
         /// </summary>
         /// <returns>Get the playback engine directory.</returns>
         public static string AndroidPlaybackEngineDirectory {
             get {
-                try {
-                    return (string)VersionHandler.InvokeStaticMethod(
-                        typeof(BuildPipeline), "GetPlaybackEngineDirectory",
-                        new object[] { BuildTarget.Android, BuildOptions.None });
-                } catch (Exception) {
-                    return null;
+                if (androidPlaybackEngineDirectory != null &&
+                    androidPlaybackEngineDirectory == "") {
+                    try {
+                        androidPlaybackEngineDirectory =
+                            (string)VersionHandler.InvokeStaticMethod(
+                                typeof(BuildPipeline), "GetPlaybackEngineDirectory",
+                                new object[] { BuildTarget.Android, BuildOptions.None });
+                    } catch (Exception) {
+                        androidPlaybackEngineDirectory = null;
+                    }
                 }
+                return androidPlaybackEngineDirectory;
             }
         }
 
@@ -1383,24 +1427,32 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Remove libraries references from Gradle template files and patch POM files to work
+        /// with the Gradle template.
+        /// </summary>
+        private static void DeleteResolvedLibrariesFromGradleTemplate() {
+            LocalMavenRepository.PatchPomFilesInLocalRepos(
+                PlayServicesSupport.GetAllDependencies().Values);
+            if (GradleTemplateEnabled) {
+                GradleTemplateResolver.InjectDependencies(new List<Dependency>());
+            }
+        }
+
+        /// <summary>
         /// Delete all resolved libraries asynchronously.
         /// </summary>
         /// <param name="complete">Delegate called when delete is complete.</param>
         public static void DeleteResolvedLibraries(System.Action complete = null) {
             RunOnMainThread.Schedule(() => {
-                if (Resolver.AutomaticResolutionEnabled()) {
-                    Log("Disabling auto-resolution to prevent libraries from being " +
-                        "resolved after deletion.", level: LogLevel.Warning);
-                    GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
-                }
-                DeleteLabeledAssets();
-                LocalMavenRepository.PatchPomFilesInLocalRepos(
-                    PlayServicesSupport.GetAllDependencies().Values);
-                if (GradleTemplateEnabled) {
-                    GradleTemplateResolver.InjectDependencies(new List<Dependency>());
-                }
-                if (complete != null) complete();
-            }, 0);
+                    if (Resolver.AutomaticResolutionEnabled()) {
+                        Log("Disabling auto-resolution to prevent libraries from being " +
+                            "resolved after deletion.", level: LogLevel.Warning);
+                        GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
+                    }
+                    DeleteLabeledAssets();
+                    DeleteResolvedLibrariesFromGradleTemplate();
+                    if (complete != null) complete();
+                }, 0);
         }
 
         /// <summary>
@@ -1486,12 +1538,8 @@ namespace GooglePlayServices {
                 if (PlayServicesResolver.FindLabeledAssets() != null) {
                     Log("Stale dependencies exist. Deleting assets...", level: LogLevel.Verbose);
                     DeleteLabeledAssets();
-                    if (GradleTemplateEnabled) {
-                        GradleTemplateResolver.InjectDependencies(
-                            PlayServicesSupport.GetAllDependencies().Values);
-                    }
                 }
-
+                DeleteResolvedLibrariesFromGradleTemplate();
                 if (resolutionComplete != null) {
                     resolutionComplete(true);
                 }
@@ -1588,7 +1636,15 @@ namespace GooglePlayServices {
                 }
             };
 
-            if (GradleTemplateEnabled) {
+            // If a gradle template is present but patching is disabled, remove managed libraries
+            // from the template.
+            if (GradleTemplateEnabled &&
+                !GooglePlayServices.SettingsDialog.PatchMainTemplateGradle) {
+                DeleteResolvedLibrariesFromGradleTemplate();
+            }
+
+            if (GradleTemplateEnabled &&
+                GooglePlayServices.SettingsDialog.PatchMainTemplateGradle) {
                 RunOnMainThread.Run(() => {
                         finishResolution(GradleTemplateResolver.InjectDependencies(
                             PlayServicesSupport.GetAllDependencies().Values), "");
@@ -1723,14 +1779,33 @@ namespace GooglePlayServices {
         internal static IList<string> GradleMavenReposLines(ICollection<Dependency> dependencies) {
             var lines = new List<string>();
             if (dependencies.Count > 0) {
-                lines.Add("allprojects {");
-                lines.Add("    repositories {");
+                var exportEnabled = GradleProjectExportEnabled;
+                var projectPath = Path.GetFullPath(".").Replace("\\", "/");
+                const string fileScheme = "file:///";
+                var projectFileUri = fileScheme + projectPath;
+                lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
+                lines.Add("    project.repositories {");
+                // projectPath will point to the Unity project root directory as Unity will
+                // generate the root Gradle project in "Temp/gradleOut" when *not* exporting a
+                // gradle project.
+                lines.Add(String.Format(
+                          "        def unityProjectPath = \"{0}\" + " +
+                          "file(rootProject.projectDir.path + \"/../../\").absolutePath",
+                          fileScheme));
                 lines.Add("        maven {");
                 lines.Add("            url \"https://maven.google.com\"");
                 lines.Add("        }");
                 foreach (var repoAndSources in GetRepos(dependencies: dependencies)) {
+                    string repoUri;
+                    if (repoAndSources.Key.StartsWith(projectFileUri) && !exportEnabled) {
+                        repoUri = String.Format(
+                            "(unityProjectPath + \"/{0}\")",
+                            repoAndSources.Key.Substring(projectFileUri.Length + 1));
+                    } else {
+                        repoUri = String.Format("\"{0}\"", repoAndSources.Key);
+                    }
                     lines.Add("        maven {");
-                    lines.Add(String.Format("            url \"{0}\" // {1}", repoAndSources.Key,
+                    lines.Add(String.Format("            url {0} // {1}", repoUri,
                                             repoAndSources.Value));
                     lines.Add("        }");
                 }
@@ -1754,11 +1829,21 @@ namespace GooglePlayServices {
                 ICollection<Dependency> dependencies, bool includeDependenciesBlock = true) {
             var lines = new List<string>();
             if (dependencies.Count > 0) {
+                // Select the appropriate dependency include statement based upon the Gradle
+                // version.  "implementation" was introduced in Gradle 3.4 that is used by the
+                // Android Gradle plugin 3.0.0 and newer:
+                // https://docs.gradle.org/3.4/release-notes.html#the-java-library-plugin
+                // https://developer.android.com/studio/releases/gradle-plugin#3-0-0
+                var version = GradleVersion;
+                var includeStatement =
+                    !String.IsNullOrEmpty(version) &&
+                    (new Dependency.VersionComparer()).Compare("3.4", version) >= 0 ?
+                    "implementation" : "compile";
                 if (includeDependenciesBlock) lines.Add("dependencies {");
                 foreach (var packageSpecAndSources in GetPackageSpecs(dependencies: dependencies)) {
                     lines.Add(String.Format(
-                        "    compile '{0}' // {1}",
-                        packageSpecAndSources.Key, packageSpecAndSources.Value));
+                        "    {0} '{1}' // {2}", includeStatement, packageSpecAndSources.Key,
+                        packageSpecAndSources.Value));
                 }
                 if (includeDependenciesBlock) lines.Add("}");
             }

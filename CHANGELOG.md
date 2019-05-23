@@ -1,3 +1,22 @@
+# Version 1.2.112 - May 22, 2019
+## New Features:
+* Android Resolver: Added option to disable addition of dependencies to
+  mainTemplate.gradle.
+  See `Assets > Play Services Resolver > Android Resolver > Settings`.
+* Android Resolver: Made paths to local maven repositories in
+  mainTemplate.gradle relative to the Unity project when a project is not
+  being exported.
+## Bug Fixes
+* Android Resolver: Fixed builds with mainTemplate.gradle integration in
+  Unity 2019.
+* Android Resolver: Changed dependency inclusion in mainTemplate.gradle to
+  use "implementation" or "compile" depending upon the version of Gradle
+  included with Unity.
+* Android Resolver: Gracefully handled exceptions if the console encoding
+  can't be modified.
+* Android Resolver: Now gracefully fails if the AndroidPlayer directory
+  can't be found.
+
 # Version 1.2.111 - May 9, 2019
 ## Bug Fixes
 * Version Handler: Fixed invocation of methods with named arguments.

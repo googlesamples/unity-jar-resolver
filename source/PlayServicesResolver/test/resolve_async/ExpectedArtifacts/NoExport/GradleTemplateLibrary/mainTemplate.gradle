@@ -41,7 +41,7 @@ allprojects {
     }
 }
 // Android Resolver Repos End
-apply plugin: 'com.android.application'
+apply plugin: 'com.android.library'
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
