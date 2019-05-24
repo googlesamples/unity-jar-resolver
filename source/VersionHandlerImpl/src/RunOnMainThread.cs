@@ -28,7 +28,7 @@ namespace Google {
 /// thread.
 /// </summary>
 [InitializeOnLoad]
-class RunOnMainThread {
+public class RunOnMainThread {
 
     /// <summary>
     /// Job that is executed in the future.
