@@ -1,3 +1,13 @@
+# Version 1.2.113 - May 24, 2019
+## New Features:
+* Android Resolver: If local repos are moved, the plugin will search the
+  project for matching directories in an attempt to correct the error.
+* Version Handler: Files can be now targeted to multiple build targets
+  using multiple "gvh_" asset labels.
+## Bug Fixes
+* Android Resolver: "implementation" or "compile" are now added correctly
+  to mainTemplate.gradle in Unity versions prior to 2019.
+
 # Version 1.2.112 - May 22, 2019
 ## New Features:
 * Android Resolver: Added option to disable addition of dependencies to
