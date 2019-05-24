@@ -703,6 +703,13 @@ namespace GooglePlayServices {
                                 new object[] { BuildTarget.Android, BuildOptions.None });
                     } catch (Exception) {
                         androidPlaybackEngineDirectory = null;
+                        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+                            if (assembly.GetName().Name == "UnityEditor.Android.Extensions") {
+                                androidPlaybackEngineDirectory =
+                                    Path.GetDirectoryName(assembly.Location);
+                                break;
+                            }
+                        }
                     }
                 }
                 return androidPlaybackEngineDirectory;
