@@ -552,11 +552,14 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Convert a repo path to a valid URI
+        /// Convert a repo path to a valid URI.
+        /// If the specified repo is a local directory and it doesn't exist, search the project
+        /// for a match.
         /// </summary>
         /// <param name="repoPath">Repo path to convert.</param>
+        /// <param name="sourceLocation>XML or source file this path is referenced from.</param>
         /// <returns>URI to the repo.</returns>
-        private static string RepoPathToUri(string repoPath) {
+        private static string RepoPathToUri(string repoPath, string sourceLocation) {
             // Filter Android SDK repos as they're supplied in the build script.
             if (repoPath.StartsWith(PlayServicesSupport.SdkVariable)) return null;
             // Since we need a URL, determine whether the repo has a scheme.  If not,
@@ -566,6 +569,27 @@ namespace GooglePlayServices
                 validScheme |= repoPath.StartsWith(scheme);
             }
             if (!validScheme) {
+                // If the directory isn't found, it is possible the user has moved the repository
+                // in the project, so try searching for it.
+                string searchDir = "Assets" + Path.DirectorySeparatorChar;
+                if (!Directory.Exists(repoPath) &&
+                    FileUtils.NormalizePathSeparators(repoPath.ToLower()).StartsWith(
+                        searchDir.ToLower())) {
+                    var foundPath = FileUtils.FindPathUnderDirectory(
+                        searchDir, repoPath.Substring(searchDir.Length));
+                    string warningMessage;
+                    if (!String.IsNullOrEmpty(foundPath)) {
+                        repoPath = searchDir + foundPath;
+                        warningMessage = String.Format(
+                            "{0}: Repo path '{1}' does not exist, will try using '{2}' instead.",
+                            sourceLocation, repoPath, foundPath);
+                    } else {
+                        warningMessage = String.Format(
+                            "{0}: Repo path '{1}' does not exist.", sourceLocation, repoPath);
+                    }
+                    PlayServicesResolver.Log(warningMessage, level: LogLevel.Warning);
+                }
+
                 repoPath = "file:///" + Path.GetFullPath(repoPath).Replace("\\", "/");
             }
             // Escape the URI to handle special characters like spaces and percent escape
@@ -597,7 +621,7 @@ namespace GooglePlayServices
             };
             // Add global repos first.
             foreach (var kv in PlayServicesSupport.AdditionalRepositoryPaths) {
-                addToSourcesByRepo(RepoPathToUri(kv.Key), kv.Value);
+                addToSourcesByRepo(RepoPathToUri(kv.Key, kv.Value), kv.Value);
             }
             // Build array of repos to search, they're interleaved across all dependencies as the
             // order matters.
@@ -609,8 +633,8 @@ namespace GooglePlayServices
                 foreach (var dependency in dependencies) {
                     var repos = dependency.Repositories;
                     if (i >= repos.Length) continue;
-                    addToSourcesByRepo(RepoPathToUri(repos[i]),
-                                       CommandLine.SplitLines(dependency.CreatedBy)[0]);
+                    var createdBy = CommandLine.SplitLines(dependency.CreatedBy)[0];
+                    addToSourcesByRepo(RepoPathToUri(repos[i], createdBy), createdBy);
                 }
             }
             var sourcesByRepoList = new List<KeyValuePair<string, string>>();
