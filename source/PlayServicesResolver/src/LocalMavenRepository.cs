@@ -36,10 +36,14 @@ namespace GooglePlayServices {
         public static HashSet<string> FindLocalRepos(ICollection<Dependency> dependencies) {
             // Find all repositories embedded in the project.
             var repos = new HashSet<string>();
-            foreach (var dependency in dependencies) {
-                foreach (var repo in dependency.Repositories) {
-                    if (repo.Replace("\\", "/").ToLower().StartsWith("assets/")) {
-                        repos.Add(repo);
+            var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
+            foreach (var reposAndSources in
+                     PlayServicesResolver.GetRepos(dependencies: dependencies)) {
+                var repoUri = reposAndSources.Key;
+                if (repoUri.StartsWith(PlayServicesResolver.FILE_SCHEME)) {
+                    var fullPath = repoUri.Substring(PlayServicesResolver.FILE_SCHEME.Length);
+                    if (fullPath.StartsWith(projectPath)) {
+                        repos.Add(fullPath.Substring(projectPath.Length + 1));
                     }
                 }
             }
@@ -53,12 +57,17 @@ namespace GooglePlayServices {
         /// <returns>A list of found aar and srcaar files.</returns>
         public static List<string> FindAars(string directory) {
             var foundFiles = new List<string>();
-            foreach (string filename in Directory.GetFiles(directory)) {
-                var packaging = Path.GetExtension(filename).ToLower();
-                if (packaging == ".aar" || packaging == ".srcaar") foundFiles.Add(filename);
-            }
-            foreach (string currentDirectory in Directory.GetDirectories(directory)) {
-                foundFiles.AddRange(FindAars(currentDirectory));
+            if (Directory.Exists(directory)) {
+                foreach (string filename in Directory.GetFiles(directory)) {
+                    var packaging = Path.GetExtension(filename).ToLower();
+                    if (packaging == ".aar" || packaging == ".srcaar") foundFiles.Add(filename);
+                }
+                foreach (string currentDirectory in Directory.GetDirectories(directory)) {
+                    foundFiles.AddRange(FindAars(currentDirectory));
+                }
+            } else {
+                PlayServicesResolver.Log(String.Format("Repo directory %s not found", directory),
+                                         LogLevel.Warning);
             }
             return foundFiles;
         }

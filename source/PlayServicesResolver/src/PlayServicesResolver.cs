@@ -1747,6 +1747,11 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// File scheme that can be concatenated with an absolute path on the local filesystem.
+        /// </summary>
+        internal const string FILE_SCHEME = "file:///";
+
+        /// <summary>
         /// Get the included dependency repos as lines that can be included in a Gradle file.
         /// </summary>
         /// <returns>Lines that can be included in a gradle file.</returns>
@@ -1754,9 +1759,8 @@ namespace GooglePlayServices {
             var lines = new List<string>();
             if (dependencies.Count > 0) {
                 var exportEnabled = GradleProjectExportEnabled;
-                var projectPath = Path.GetFullPath(".").Replace("\\", "/");
-                const string fileScheme = "file:///";
-                var projectFileUri = fileScheme + projectPath;
+                var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
+                var projectFileUri = FILE_SCHEME + projectPath;
                 lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
                 lines.Add("    project.repositories {");
                 // projectPath will point to the Unity project root directory as Unity will
@@ -1765,7 +1769,7 @@ namespace GooglePlayServices {
                 lines.Add(String.Format(
                           "        def unityProjectPath = \"{0}\" + " +
                           "file(rootProject.projectDir.path + \"/../../\").absolutePath",
-                          fileScheme));
+                          FILE_SCHEME));
                 lines.Add("        maven {");
                 lines.Add("            url \"https://maven.google.com\"");
                 lines.Add("        }");
@@ -1824,6 +1828,70 @@ namespace GooglePlayServices {
             return lines;
         }
 
+        // Extracts the ABI from a native library path in an AAR.
+        // In an AAR, native libraries are under the jni directory, in an APK they're placed under
+        // the lib directory.
+        private static Regex nativeLibraryPath = new Regex(@"^jni/([^/]+)/.*\.so$");
+
+        /// <summary>
+        /// Get the Android packaging options as lines that can be included in a Gradle file.
+        /// </summary>
+        internal static IList<string> PackagingOptionsLines(ICollection<Dependency> dependencies) {
+            var lines = new List<string>();
+            if (dependencies.Count > 0) {
+                var currentAbis = AndroidAbis.Current.ToSet();
+                var excludeFiles = new HashSet<string>();
+                // Support for wildcard based excludes were added in Android Gradle plugin 3.0.0
+                // which requires Gradle 4.1+.  Also, version 2.3.0 was locked to Gradle 2.1.+ so
+                // it's possible to infer the Android Gradle plugin from the Gradle version.
+                var version = GradleVersion;
+                var wildcardExcludesSupported =
+                    !String.IsNullOrEmpty(version) &&
+                    (new Dependency.VersionComparer()).Compare("4.1", version) >= 0;
+                if (wildcardExcludesSupported) {
+                    var allAbis = new HashSet<string>(AndroidAbis.AllSupported);
+                    allAbis.ExceptWith(currentAbis);
+                    foreach (var abi in allAbis) {
+                        excludeFiles.Add(String.Format("/lib/{0}/**", abi));
+                    }
+                } else {
+                    // Android Gradle plugin 2.x only supported exclusion of packaged files using
+                    // APK relative paths.
+                    foreach (var aar in LocalMavenRepository.FindAarsInLocalRepos(dependencies)) {
+                        foreach (var path in ListZip(aar)) {
+                            var posixPath = FileUtils.PosixPathSeparators(path);
+                            var match = nativeLibraryPath.Match(posixPath);
+                            if (match != null && match.Success) {
+                                var abi = match.Result("$1");
+                                if (!currentAbis.Contains(abi)) {
+                                    excludeFiles.Add(
+                                        String.Format(
+                                            "lib/{0}", posixPath.Substring("jni/".Length)));
+                                }
+                            }
+                        }
+                    }
+                }
+                if (excludeFiles.Count > 0) {
+                    var sortedExcludeFiles = new List<string>(excludeFiles);
+                    sortedExcludeFiles.Sort();
+                    lines.Add("android {");
+                    lines.Add("  packagingOptions {");
+                    foreach (var filename in sortedExcludeFiles) {
+                        // Unity's Android extension replaces ** in the template with an empty
+                        // string presumably due to the token expansion it performs.  It's not
+                        // possible to escape the expansion so we workaround it by concatenating
+                        // strings.
+                        lines.Add(String.Format("      exclude ('{0}')",
+                                                filename.Replace("**", "*' + '*")));
+                    }
+                    lines.Add("  }");
+                    lines.Add("}");
+                }
+            }
+            return lines;
+        }
+
         /// <summary>
         /// Display the set of dependncies / libraries currently included in the project.
         /// This prints out the set of libraries in a form that can be easily included in a Gradle
@@ -1836,8 +1904,9 @@ namespace GooglePlayServices {
             var dependencies = PlayServicesSupport.GetAllDependencies().Values;
 
             var lines = new List<string>();
-            lines.AddRange(GradleMavenReposLines(dependencies: dependencies));
-            lines.AddRange(GradleDependenciesLines(dependencies: dependencies));
+            lines.AddRange(GradleMavenReposLines(dependencies));
+            lines.AddRange(GradleDependenciesLines(dependencies));
+            lines.AddRange(PackagingOptionsLines(dependencies));
             var dependenciesString = String.Join("\n", lines.ToArray());
             Log(dependenciesString);
             var window = TextAreaDialog.CreateTextAreaDialog("Android Libraries");
@@ -1968,6 +2037,34 @@ namespace GooglePlayServices {
         /// </summary>
         internal static void DeleteLabeledAssets() {
             DeleteFiles(PlayServicesResolver.FindLabeledAssets());
+        }
+
+        /// <summary>
+        /// List the contents of a zip file.
+        /// </summary>
+        /// <param name="zipFile">Name of the zip file to query.</param>
+        /// <returns>List of zip file contents.</returns>
+        internal static IEnumerable<string> ListZip(string zipFile) {
+            var contents = new List<string>();
+            try {
+                string zipPath = Path.GetFullPath(zipFile);
+                Log(String.Format("Listing {0}", zipFile), level: LogLevel.Verbose);
+                CommandLine.Result result = CommandLine.Run(
+                    JavaUtilities.JarBinaryPath, String.Format(" tf \"{0}\"", zipPath));
+                if (result.exitCode == 0) {
+                    foreach (var path in CommandLine.SplitLines(result.stdout)) {
+                        contents.Add(FileUtils.PosixPathSeparators(path));
+                    }
+                } else {
+                    Log(String.Format("Error listing \"{0}\"\n" +
+                                      "{1}", zipPath, result.message), level: LogLevel.Error);
+                }
+            }
+            catch (Exception e) {
+                Log(String.Format("Failed with exception {0}", e.ToString()));
+                throw e;
+            }
+            return contents;
         }
 
         /// <summary>

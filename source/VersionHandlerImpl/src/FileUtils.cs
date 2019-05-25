@@ -198,6 +198,15 @@ namespace Google {
         }
 
         /// <summary>
+        /// Convert path to use POSIX directory separators.
+        /// </summary>
+        /// <param name="path">Path to convert.</param>
+        /// <returns>Path with POSIX directory separators.</returns>
+        public static string PosixPathSeparators(string path) {
+            return path != null ? path.Replace("\\", "/") : null;
+        }
+
+        /// <summary>
         /// Find a path under the specified directory.
         /// </summary>
         /// <param name="directory">Directory to search.</param>
@@ -209,7 +218,6 @@ namespace Google {
             if (directory.EndsWith(Path.DirectorySeparatorChar.ToString())) {
                 directory = directory.Substring(0, directory.Length - 1);
             }
-            var normalizePathToFind = NormalizePathSeparators(pathToFind);
             var foundPaths = new List<string>();
             foreach (string path in
                      Directory.GetDirectories(directory, "*", SearchOption.AllDirectories)) {

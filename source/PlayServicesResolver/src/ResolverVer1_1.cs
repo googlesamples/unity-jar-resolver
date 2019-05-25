@@ -455,8 +455,9 @@ namespace GooglePlayServices
                     if (currentHeader == COPIED_ARTIFACTS_HEADER) {
                         // Store the POSIX path of the copied package to handle Windows
                         // path variants.
-                        copiedArtifacts.Add(Path.Combine(destinationDirectory,
-                                                         line.Trim()).Replace("\\", "/"));
+                        copiedArtifacts.Add(
+                            FileUtils.PosixPathSeparators(
+                                Path.Combine(destinationDirectory, line.Trim())));
                     } else if (currentHeader == MISSING_ARTIFACTS_HEADER) {
                         missingArtifacts.Add(line.Trim());
                     } else if (currentHeader == MODIFIED_ARTIFACTS_HEADER) {
@@ -590,7 +591,8 @@ namespace GooglePlayServices
                     PlayServicesResolver.Log(warningMessage, level: LogLevel.Warning);
                 }
 
-                repoPath = "file:///" + Path.GetFullPath(repoPath).Replace("\\", "/");
+                repoPath = PlayServicesResolver.FILE_SCHEME +
+                    FileUtils.PosixPathSeparators(Path.GetFullPath(repoPath));
             }
             // Escape the URI to handle special characters like spaces and percent escape
             // all characters that are interpreted by gradle.
@@ -776,7 +778,7 @@ namespace GooglePlayServices
                 var staleArtifacts = new HashSet<string>();
                 foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
                     if (!resolutionState.copiedArtifactsSet.Contains(
-                            assetPath.Replace("\\", "/"))) {
+                            FileUtils.PosixPathSeparators(assetPath))) {
                         staleArtifacts.Add(assetPath);
                     }
                 }

@@ -69,6 +69,20 @@ namespace GooglePlayServices {
         /// </summary>
         private const string DependenciesToken = @".*\*\*DEPS\*\*.*";
 
+        /// <summary>
+        /// Line that indicates the start of the injected exclusions block in the template.
+        /// </summary>
+        private const string PackagingOptionsStartLine = "// Android Resolver Exclusions Start";
+
+        /// <summary>
+        /// Line that indicates the end of the injected exclusions block in the template.
+        /// </summary>
+        private const string PackagingOptionsEndLine = "// Android Resolver Exclusions End";
+
+        /// <summary>
+        /// Token that indicates where exclusions should be injected.
+        /// </summary>
+        private const string PackagingOptionsToken = @"android +{";
 
         /// <summary>
         /// Copy srcaar files to aar files that are excluded from Unity's build process.
@@ -278,7 +292,11 @@ namespace GooglePlayServices {
                                          DependenciesEndLine,
                                          PlayServicesResolver.GradleDependenciesLines(
                                              dependencies, includeDependenciesBlock: false),
-                                         "Dependencies", fileDescription)
+                                         "Dependencies", fileDescription),
+                new TextFileLineInjector(PackagingOptionsToken, PackagingOptionsStartLine,
+                                         PackagingOptionsEndLine,
+                                         PlayServicesResolver.PackagingOptionsLines(dependencies),
+                                         "Packaging Options", fileDescription),
             };
             // Lines that will be written to the output file.
             var outputLines = new List<string>();
