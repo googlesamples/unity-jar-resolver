@@ -1,5 +1,11 @@
+# Version 1.2.114 - May 27, 2019
+## New Features
+* Android Resolver: Added support for ABI stripping when using
+  mainTemplate.gradle. This only works with AARs stored in repos
+  on the local filesystem.
+
 # Version 1.2.113 - May 24, 2019
-## New Features:
+## New Features
 * Android Resolver: If local repos are moved, the plugin will search the
   project for matching directories in an attempt to correct the error.
 * Version Handler: Files can be now targeted to multiple build targets
@@ -9,7 +15,7 @@
   to mainTemplate.gradle in Unity versions prior to 2019.
 
 # Version 1.2.112 - May 22, 2019
-## New Features:
+## New Features
 * Android Resolver: Added option to disable addition of dependencies to
   mainTemplate.gradle.
   See `Assets > Play Services Resolver > Android Resolver > Settings`.
