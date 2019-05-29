@@ -157,6 +157,12 @@ project.ext {
     cacheProperties.store(projectPropertiesFile.newWriter(), null)
   }
 
+  // UnityAssetUploader required environment variables.
+  unityUsername = findProperty("UNITY_USERNAME")
+  unityPassword = findProperty("UNITY_PASSWORD")
+  unityPackageId = findProperty("UNITY_PACKAGE_ID")
+  unityPackagePath = findFileProperty("UNITY_PACKAGE_PATH", null)
+
   // Whether debug symbols should be included.
   debugEnabled = findProperty("NDEBUG") == null
 
@@ -1011,6 +1017,15 @@ task cleanPackageManagerTests() {
 task testDownloadArtifacts(type: GradleBuild) {
   description "Run tests for the download_artifacts.gradle script."
   buildFile "source/PlayServicesResolver/scripts/download_artifacts_test.gradle"
+}
+
+task testPackageUploaderTests(type: Exec) {
+    def outputDir = buildDir
+    def script = "source/UnityAssetUploader/unity_asset_uploader_test.py"
+    inputs.file script
+    outputs.dir outputDir
+    commandLine "python", script
+    workingDir = projectDir
 }
 
 task updateEmbeddedGradleWrapper(type: Zip) {
