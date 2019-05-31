@@ -1,3 +1,8 @@
+# Version 1.2.115 - May 28, 2019
+## Bug Fixes
+* Android Resolver: Fixed exception due to Unity 2019.3.0a4 removing
+  x86 from the set of supported ABIs.
+
 # Version 1.2.114 - May 27, 2019
 ## New Features
 * Android Resolver: Added support for ABI stripping when using
