@@ -70,11 +70,20 @@ internal class AndroidAbis {
                                                        "UnityEditor.AndroidArchitecture");
             if (Property != null && EnumType != null) {
                 SelectionMode = Mode.AnyOfArmX86Arm64;
-                SupportedAbiToAbiEnumValue = new Dictionary<string, string>() {
-                    {"armeabi-v7a", "ARMv7"},
-                    {"arm64-v8a", "ARM64"},
-                    {"x86", "X86"}
-                };
+                var supportedAbis = new Dictionary<string, string>();
+                foreach (var abi in new Dictionary<string, string>() {
+                             {"armeabi-v7a", "ARMv7"},
+                             {"arm64-v8a", "ARM64"},
+                             {"x86", "X86"}
+                         }) {
+                    try {
+                        EnumValueStringToULong(EnumType, abi.Value);
+                        supportedAbis[abi.Key] = abi.Value;
+                    } catch (ArgumentException) {
+                        // Ignore unsupported ABIs.
+                    }
+                }
+                SupportedAbiToAbiEnumValue = supportedAbis;
                 return;
             }
             // Unity 5.0 and above should support targetDevice.
