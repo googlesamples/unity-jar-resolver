@@ -745,9 +745,10 @@ namespace GooglePlayServices {
                 AndroidAbisChanged += ResolveOnAndroidAbisChanged;
                 AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
                 ScheduleAutoResolve();
+
+                if (GooglePlayServices.SettingsDialog.EnableAutoResolution) LinkAutoResolution();
             }
 
-            if (GooglePlayServices.SettingsDialog.EnableAutoResolution) LinkAutoResolution();
         }
 
         // Unregister events to monitor build system changes for the Android Resolver and other
