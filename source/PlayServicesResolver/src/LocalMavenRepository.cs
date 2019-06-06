@@ -66,7 +66,7 @@ namespace GooglePlayServices {
                     foundFiles.AddRange(FindAars(currentDirectory));
                 }
             } else {
-                PlayServicesResolver.Log(String.Format("Repo directory %s not found", directory),
+                PlayServicesResolver.Log(String.Format("Repo directory {0} not found", directory),
                                          LogLevel.Warning);
             }
             return foundFiles;
