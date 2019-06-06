@@ -82,13 +82,13 @@ configurations {
 @ToString(includeNames=true, includeFields=true)
 public class Version implements Comparable {
   // Version string to parse.
-  public String version
+  public String version = ""
 
   /*
    * Construct a version class from a string.
    */
   public Version(String version = null) {
-    this.version = version
+    this.version = version ? version : ""
   }
 
   /*
@@ -268,13 +268,14 @@ public enum VersionExpressionMatchType {
 @ToString(includeNames=true, includeFields=true)
 public class VersionRange {
   // Parsed version expression.
-  public String versionExpression
+  public String versionExpression = ""
   // Minimum version parsed from a version expression.
-  public String minimum
+  public String minimum = "0"
   // Maximum version parsed from a version expression.
-  public String maximum
+  public String maximum = "+"
   // Type of version expression parsed.
-  public VersionExpressionMatchType matchType
+  public VersionExpressionMatchType matchType =
+    VersionExpressionMatchType.NONE
 
   /*
    * Get the minimum and maximum version from a maven / ivy version expression.
@@ -394,6 +395,8 @@ public class VersionRange {
    * @returns true if the version is in range, false otherwise.
    */
   boolean inRange(Version version) {
+    // If there are no constraints or the version is empty, always match.
+    if (!versionExpression || !version.version) return true
     switch (matchType) {
     case VersionExpressionMatchType.NONE:
       return false
@@ -415,13 +418,13 @@ public class VersionRange {
 @ToString(includeNames=true, includeFields=true)
 public class PackageSpecifier implements Comparable {
   // Group component of a maven package.
-  public String group
+  public String group = ""
   // Artifact component of a maven package.
-  public String artifact
+  public String artifact = ""
   // Version expression of a maven package.
-  public String versionExpression
+  public String versionExpression = ""
   // Type of the artifact.
-  public String artifactType
+  public String artifactType = ""
 
   /*
    * Extract the components of a package specifier string.
@@ -438,12 +441,12 @@ public class PackageSpecifier implements Comparable {
     List<String> components = packageSpecifierString ?
       packageSpecifierString.split(/[:@]/) : []
     // Fill the list of components with null elements.
-    components += ([null] * Math.min(4, (4 - components.size())))
+    components += ([""] * Math.min(4, (4 - components.size())))
     return new PackageSpecifier(
       group: components[0],
       artifact: components[1],
       versionExpression: components[2] ? (VersionRange.fromExpression(
-                                            components[2])).expression : null,
+                                            components[2])).expression : "",
       artifactType: components[3])
   }
 
@@ -473,7 +476,7 @@ public class PackageSpecifier implements Comparable {
         group: group,
         artifact: module,
         versionExpression: (version ?
-          (VersionRange.fromExpression(version)).expression : null))
+          (VersionRange.fromExpression(version)).expression : ""))
     }
   }
 
@@ -507,7 +510,7 @@ public class PackageSpecifier implements Comparable {
         group: group,
         artifact: name,
         versionExpression: (version ?
-          (VersionRange.fromExpression(version)).expression : null))
+          (VersionRange.fromExpression(version)).expression : ""))
     }
   }
 
@@ -530,12 +533,11 @@ public class PackageSpecifier implements Comparable {
   /*
    * Get the range from the version.
    *
-   * @returns Version range parsed from version component of this class or null
-   * if no version is set.
+   * @returns Version range parsed from version component of this class or an
+   * empty string if no version is set.
    */
   public VersionRange getVersionRange() {
-    return versionExpression ?
-      VersionRange.fromExpression(versionExpression) : null
+    return VersionRange.fromExpression(versionExpression)
   }
 
   /*
@@ -1170,15 +1172,17 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
       String groupArtifact =
         PackageSpecifier.fromModuleComponentSelector(
           dependency.requested as ModuleComponentSelector).groupArtifactString
+      ResolvedComponentResult resolved =
+        (dependency instanceof ResolvedDependencyResult) ?
+          (dependency as ResolvedDependencyResult).selected : null
       logger.info(
         sprintf(
           "%s* %s (new: %s, conflicting: %b (parents: %s))",
           "  ".multiply(parents.size()),
-          (dependency instanceof ResolvedDependencyResult) &&
-          dependency.selected.toString() != dependency.requested.toString() ?
-          sprintf("%s --> %s", dependency.requested.toString(),
-                  dependency.selected.toString()) :
-          dependency.requested.toString(),
+          resolved && resolved.toString() != dependency.requested.toString() ?
+            sprintf("%s --> %s (%s)", dependency.requested.toString(),
+                    resolved.toString(), resolved.selectionReason) :
+            dependency.requested.toString(),
           packages[groupArtifact]?.specString,
           conflictingByGroupArtifact[groupArtifact],
           parents.collect {
@@ -1425,17 +1429,17 @@ def testGetComponentsFromPackage() {
     new PackageSpecifier(group: "org.test.psr",
                          artifact: "something-neat",
                          versionExpression: "1.2.3",
-                         artifactType: null)],
+                         artifactType: "")],
    ["org.test.psr:something-neat",
     new PackageSpecifier(group: "org.test.psr",
                          artifact: "something-neat",
-                         versionExpression: null,
-                         artifactType: null)],
+                         versionExpression: "",
+                         artifactType: "")],
    ["org.test.psr",
     new PackageSpecifier(group: "org.test.psr",
-                         artifact: null,
-                         versionExpression: null,
-                         artifactType: null)],
+                         artifact: "",
+                         versionExpression: "",
+                         artifactType: "")],
    ["", new PackageSpecifier()]].each {
     String packageSpecifier, PackageSpecifier expected ->
       PackageSpecifier result = PackageSpecifier.fromString(packageSpecifier)
@@ -1465,6 +1469,19 @@ def testPackageSpecifierStrings() {
       if (result != expected) {
         throw new Exception(
           sprintf("Invalid strings returned %s, expected %s for %s",
+                  result, expected, pkg))
+      }
+  }
+}
+
+def testPackageSpecifierVersionRange() {
+  [[PackageSpecifier.fromString("a-b:c-d:[1.2.3,4.5.6]"), "[1.2.3,4.5.6]"],
+   [PackageSpecifier.fromString("a-b:c-d:"), ""]].each {
+    pkg, expected ->
+      String result = pkg.versionRange.versionExpression
+      if (result != expected) {
+        throw new Exception(
+          sprintf("Invalid version range %s, expected %s for %s",
                   result, expected, pkg))
       }
   }
@@ -1658,9 +1675,11 @@ def testSortPackagesByVersion() {
     "a.b.c:e-f:1.0.0",
     "a.b.c:e-f:[0.5.2,3.2.0]",
     "a.b.c:e-f:2.1.+",
+    "a.b.c:e-f",
     "a.b.c:e-f:1.0.1",
   ]
   List<String> expectedSortedByVersion = [
+    "a.b.c:e-f",
     "a.b.c:e-f:1.0.0",
     "a.b.c:e-f:1.0.1",
     "a.b.c:e-f:2.1.+",
@@ -1858,7 +1877,10 @@ def testVersionRangeMaximumVersionOfRange() {
 }
 
 def testVersionRangeVersionInRange() {
-  [[VersionRange.fromExpression("1.2.3+"), new Version("1.2.3"), true],
+  [[VersionRange.fromExpression(""), new Version(""), true],
+   [VersionRange.fromExpression(""), new Version("1.2.3"), true],
+   [VersionRange.fromExpression("1.2.3+"), new Version(), true],
+   [VersionRange.fromExpression("1.2.3+"), new Version("1.2.3"), true],
    [VersionRange.fromExpression("1.2.3+"), new Version("1.2.4"), true],
    [VersionRange.fromExpression("1.2.3+"), new Version("1.1.0"), false],
    [VersionRange.fromExpression("1.2.3"), new Version("1.2.3"), true],
@@ -1950,6 +1972,7 @@ def runTests() {
   testVersionRangeVersionInRange()
   testGetComponentsFromPackage()
   testPackageSpecifierStrings()
+  testPackageSpecifierVersionRange()
   testSortPackagesByVersion()
   testMostRecentVersionLockedPackagesFromSet()
   testVersionLockPackages()
@@ -2162,13 +2185,14 @@ project.ext {
       resolvedConfiguration.lenientConfiguration.
       getArtifacts(Specs.satisfyAll()).each { ResolvedArtifact artifact ->
     PackageSpecifier pkg = PackageSpecifier.fromResolvedArtifact(artifact)
-    String artifactTargetFilename = pkg.filename
+    File artifactTargetFile = new File(targetDir, pkg.filename)
     // If the target file does not exist generate a task to copy it.
+    if (artifactTargetFile.exists()) return
     Task copyTask = tasks.create(
-      name: "copy_" + artifactTargetFilename,
+      name: "copy_" + pkg.filename,
         type: Copy,
         description: sprintf("Copy %s (%s) to %s", pkg.specString,
-                             artifact.file, artifactTargetFilename))
+                             artifact.file, artifactTargetFile))
     copyTask.with {
       from artifact.file
       into targetDir
@@ -2179,9 +2203,8 @@ project.ext {
         {
           String filename ->
             copiedFileArtifacts.add(
-              new Tuple2<File, PackageSpecifier>(
-                new File(artifactTargetFilename), pkg))
-            return artifactTargetFilename
+              new Tuple2<File, PackageSpecifier>(artifactTargetFile, pkg))
+            return artifactTargetFile.toString()
         }
       )
       doFirst { logger.info(description) }
