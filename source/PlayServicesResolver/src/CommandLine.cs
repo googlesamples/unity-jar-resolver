@@ -559,6 +559,10 @@ namespace GooglePlayServices
                 toolPath.Contains("\'")) {
                 useShellExecution = true;
                 stdoutRedirectionInShellMode = true;
+            } else if (!(toolPath.StartsWith("\"") || toolPath.StartsWith("'"))) {
+                // If the path isn't quoted normalize separators.
+                // Windows can't execute commands using POSIX paths.
+                toolPath = FileUtils.NormalizePathSeparators(toolPath);
             }
 
             string stdoutFileName = null;
