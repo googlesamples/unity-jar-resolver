@@ -1,3 +1,11 @@
+# Version 1.2.116 - Jun 7, 2019
+## Bug Fixes
+* Android Resolver: Fixed resolution of Android dependencies without version
+  specifiers.
+* Android Resolver: Fixed Maven repo not found warning in Android Resolver.
+* Android Resolver: Fixed Android Player directory not found exception in
+  Unity 2019.x when the Android Player isn't installed.
+
 # Version 1.2.115 - May 28, 2019
 ## Bug Fixes
 * Android Resolver: Fixed exception due to Unity 2019.3.0a4 removing
