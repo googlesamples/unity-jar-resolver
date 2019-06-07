@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-import groovy.transform.AutoClone
-import groovy.transform.EqualsAndHashCode
-import groovy.transform.ToString
-
 String helpText = """
 This Gradle script performs the following:
 - Adds Android maven repositories to search locations for artifacts.
@@ -48,6 +44,13 @@ USE_REMOTE_MAVEN_REPOS (optional project property):
   Optional property which, when not set to 1, disables the implicit use of
   remote repositories (maven.google.com, jcenter and maven central) when
   fetching artifacts.  By default remote repositories are enabled.
+USE_JETIFIER (optional project property):
+  Optional project which, when not set to 1, disables the Jetifier tool to
+  convert references to the legacy Android Support libraries to Jetpack
+  (AndroidX).  This defaults to 0.
+DATA_BINDING_VERSION (required when USE_JETIFIER is 1):
+  Data binding library version to use when applying conversions from the legacy
+  Android support libraries to Jetpack (AndroidX).
 PACKAGES_TO_COPY (required project property):
   Semicolon separated list of Maven artifact specifications.  This will
   result in the script attempting to download the set of artifacts to
@@ -68,8 +71,21 @@ buildscript {
     mavenLocal()
     mavenCentral()
     jcenter()
+    google()
+  }
+  dependencies {
+    classpath "com.android.tools.build.jetifier:jetifier-processor:1.0.+"
   }
 }
+
+import groovy.transform.AutoClone
+import groovy.transform.EqualsAndHashCode
+import groovy.transform.ToString
+
+import com.android.tools.build.jetifier.core.config.Config
+import com.android.tools.build.jetifier.core.config.ConfigParser
+import com.android.tools.build.jetifier.processor.FileMapping
+import com.android.tools.build.jetifier.processor.Processor
 
 configurations {
   // Configuration used to resolve the final set of transitive dependencies.
@@ -515,6 +531,25 @@ public class PackageSpecifier implements Comparable {
   }
 
   /*
+   * Convert a Gradle DirectDependencyMetadata to a PackageSpecifier.
+   *
+   * @param directDependencyMetadata DirectDependencyMetadata to convert.
+   *
+   * @returns PackageSpecifier instance.
+   */
+  public static PackageSpecifier fromDirectDependencyMetadata(
+      DirectDependencyMetadata directDependencyMetadata) {
+    return directDependencyMetadata.with {
+      return new PackageSpecifier(
+        group: group,
+        artifact: name,
+        versionExpression: (versionConstraint ?
+          (VersionRange.fromExpression(
+            versionConstraint.requiredVersion).expression) : ""))
+    }
+  }
+
+  /*
    * Sort a list of package specifiers by version.
    *
    * @param packages Package specifiers to sort.
@@ -692,6 +727,284 @@ public class PackageSpecifier implements Comparable {
    */
   public static List<String> specStrings(Iterable<PackageSpecifier> packages) {
     return packages.collect { it.specString }
+  }
+}
+
+// Maps a package to another package name.
+public class PackageMapper {
+  // Map of "group:artifact" to absolute package spec (coordinate) in the form
+  // "group:artifact:version".
+  public Map<String, String> dependenciesMap = [:]
+  // Inverse mapping of absolute package spec in the form "group:artifact" to
+  // "group:artifact".  This is the inverse of dependenciesMap.
+  private Map<String, String> inverseDependenciesMap = null
+  // Set of packages that should be ignored when applying mapping in the form
+  // "group:artifact".
+  public Set<String> blackList = [].toSet()
+
+  /*
+   * Apply this mapping to the specified package.
+   *
+   * @param dependenciesMap Package mapping to apply. This maps strings of the
+   * form "group:artifact" to absolute package specs (coordinates)
+   * "group:artifact:version".
+   * @param blackList Packages to *not* map in the form "group:artifact".
+   * @param pkg Package specification to map.
+   *
+   * @return Package specification mapped via the dependenciesMap.
+   */
+  public PackageSpecifier map(PackageSpecifier pkg) {
+    String groupArtifact = pkg.groupArtifactString
+    if (!blackList.contains(groupArtifact)) {
+      String mappedPackageSpec = dependenciesMap[groupArtifact]
+      if (mappedPackageSpec) {
+        return PackageSpecifier.fromString(mappedPackageSpec)
+      }
+    }
+    return pkg
+  }
+
+  /*
+   * Lookup the inverse mapping of a package to the original "group:artifact".
+   *
+   * @param pkg Package specification to apply reverse mapping.
+   *
+   * @return Package specification before mapping was applied.
+   */
+  public PackageSpecifier inverseMap(PackageSpecifier pkg) {
+    String groupArtifact = pkg.groupArtifactString
+    if (!blackList.contains(groupArtifact)) {
+      if (inverseDependenciesMap == null) {
+        inverseDependenciesMap = dependenciesMap.collectEntries {
+          String sourceGroupArtifact, String targetPackageSpec ->
+            return [PackageSpecifier.fromString(
+                      targetPackageSpec).groupArtifactString,
+                    sourceGroupArtifact]
+        }
+      }
+      String mappedPackageSpec = inverseDependenciesMap[groupArtifact]
+      if (mappedPackageSpec) {
+        return PackageSpecifier.fromString(mappedPackageSpec)
+      }
+    }
+    return PackageSpecifier.fromString(groupArtifact)
+  }
+
+  /*
+   * Apply this mapping to the specified Gradle project configuration.
+   *
+   * Substitutes dependencies that match this mapping in the specified
+   * configuration.
+   *
+   * @param configuration Configuration to apply the mapping to.
+   * @param project Project to apply the configuration to.  This is only
+   * required to apply a workaround for
+   * https://github.com/gradle/gradle/issues/5174 .
+   */
+  public void applyToProjectConfiguration(Configuration configuration,
+                                          Project project) {
+    // Workaround https://github.com/gradle/gradle/issues/5174 by remapping all
+    // indirect dependency metadata directly.
+    // When #5174 is resolved it should be possible to remove this in preference
+    // of the dependency closure below.
+    project.dependencies.components.all { ComponentMetadataDetails component ->
+      component.allVariants { VariantMetadata variant ->
+        variant.withDependencies {
+          DirectDependenciesMetadata dependenciesMetadata ->
+            List<PackageSpecifier> currentDeps = dependenciesMetadata.collect {
+              PackageSpecifier.fromDirectDependencyMetadata(it)
+            }
+            Set<PackageSpecifier> depsToRemove = [].toSet()
+            List<PackageSpecifier> depsToAdd = currentDeps.findResults {
+              PackageSpecifier mapped = map(it)
+              if (mapped != it) {
+                depsToRemove.add(it)
+                return mapped
+              }
+              return null
+            }
+            // dependenciesMetadata.removeAll(oldDeps) does not work, so
+            // remove each old dependency manually.
+            depsToRemove.forEach { PackageSpecifier remove ->
+              dependenciesMetadata.removeIf {
+                DirectDependencyMetadata dependencyMetadata ->
+                  return PackageSpecifier.fromDirectDependencyMetadata(
+                    dependencyMetadata) == remove
+              }
+            }
+            depsToAdd.forEach { dependenciesMetadata.add(it.specString) }
+        }
+      }
+    }
+    // Use the dependency substitution closure to apply replacements.
+    configuration.resolutionStrategy.dependencySubstitution.all {
+      DependencySubstitution dependencySubstitution ->
+        ModuleComponentSelector requestedSelector =
+          dependencySubstitution.requested as ModuleComponentSelector
+        if (requestedSelector) {
+          PackageSpecifier requested =
+            PackageSpecifier.fromModuleComponentSelector(requestedSelector)
+          PackageSpecifier mapped = map(requested)
+          if (requested != mapped) {
+            dependencySubstitution.useTarget(mapped.specString,
+                                             "USE_JETIFIER is enabled")
+          }
+        }
+    }
+  }
+
+  /*
+   * Create a mapper using a Jetifier (Jetpack / AndroidX) processor.
+   *
+   * @param dataBindingVersion Version of the Jetpack Data Binding Library to
+   * use. All components of the data binding library must be pinned to the same
+   * version. These libraries are versioned in lock step with the Android Gradle
+   * plugin.
+   * https://android.googlesource.com/platform/tools/base/+/\
+   * f831317e99f/build-system/gradle-core/src/main/java/com/\
+   * android/build/gradle/internal/dependency/\
+   * AndroidXDepedencySubstitution.kt#56
+   *
+   * @returns PackageMapper initialized with the Jetpack processor's mapping.
+   */
+  public static PackageMapper fromJetifierProcessor(
+      String dataBindingVersion) {
+    Processor processor = Processor.Companion.newInstance().createProcessor3(
+      (new ConfigParser()).loadDefaultConfig(), /* config */
+      false, /* reversedMode */
+      false, /* rewritingSupportLib */
+      true, /* useFallbackIfTypeIsMissing */
+      false, /* allowAmbiguousPackages */
+      false, /* stripSignatures */
+      dataBindingVersion /* dataBindingVersion */)
+    Map<String, String> jetifierDependenciesMap = processor.getDependenciesMap(
+      false /* filterOutBaseLibrary */)
+    Set<String> blackList = [
+      // androidx.databinding:databinding-compiler has a transitive dependency
+      // on com.android.databinding:baseLibrary, which shouldn't be replaced
+      // with AndroidX.
+      // https://issuetracker.google.com/78202536
+      // https://android.googlesource.com/platform/tools/base/+/\
+      // f831317e99f/build-system/gradle-core/src/main/java/com/\
+      // android/build/gradle/internal/dependency/\
+      // AndroidXDepedencySubstitution.kt#143
+      "com.android.databinding:baseLibrary",
+    ].toSet()
+    return new PackageMapper(dependenciesMap: jetifierDependenciesMap,
+                             blackList: blackList)
+  }
+}
+
+// Processor which simply copies a file to an output path.
+public class DefaultPackageProcessor {
+  /*
+   * Generate a task to copy a file.
+   *
+   * @param project Project to add the task to.
+   * @param artifact Artifact to copy.
+   * @param pkg Package specifier of the artifact to copy.
+   * @param artifactTargetFile Path to copy to.
+   * @param copiedFileArtifacts List to add copied file and package specifier
+   * when the copy task is complete.
+   */
+  public Task createTask(
+      Project project, ResolvedArtifact artifact, PackageSpecifier pkg,
+      File artifactTargetFile,
+      List<Tuple2<File, PackageSpecifier>> copiedFileArtifacts) {
+    Task copyTask = project.tasks.create(
+      name: "copy_" + pkg.filename,
+      type: Copy,
+      description: sprintf("Copy %s (%s) to %s", pkg.specString,
+                           artifact.file, artifactTargetFile))
+    copyTask.with {
+      from artifact.file
+      into artifactTargetFile.parent
+      rename(
+        // Rename the file to the target filename and log the copied file &
+        // artifact so that they can be summarized when all copy artifact
+        // tasks are complete.
+        {
+          String filename ->
+            copiedFileArtifacts.add(
+              new Tuple2<File, PackageSpecifier>(artifactTargetFile, pkg))
+            return artifactTargetFile.toString()
+        }
+      )
+      doFirst { project.logger.info(description) }
+    }
+    return copyTask
+  }
+}
+
+// Processor an Android library to reference Jetpack / AndroidX using the
+// Jetifier.
+public class JetpackPackageProcessor extends DefaultPackageProcessor {
+  // Jetifier processor.
+  private Processor processor;
+
+  /*
+   * Construct a Jetifier (Jetpack / AndroidX) processor.
+   *
+   * @param dataBindingVersion Version of the Jetpack Data Binding Library to
+   * use. All components of the data binding library must be pinned to the same
+   * version. These libraries are versioned in lock step with the Android Gradle
+   * plugin.
+   */
+  JetpackPackageProcessor(String dataBindingVersion) {
+    // NOTE: This needs to strip library signatures as libraries will be
+    // rewritten and without the signing key it's not possible to resign them.
+    processor = Processor.Companion.newInstance().createProcessor3(
+      (new ConfigParser()).loadDefaultConfig(), /* config */
+      false, /* reversedMode */
+      false, /* rewritingSupportLib */
+      true, /* useFallbackIfTypeIsMissing */
+      false, /* allowAmbiguousPackages */
+      true, /* stripSignatures */
+      dataBindingVersion /* dataBindingVersion */)
+  }
+
+  /*
+   * Generate a task to process a file.
+   *
+   * @param project Project to add the task to.
+   * @param artifact Artifact to copy.
+   * @param pkg Package specifier of the artifact to copy.
+   * @param artifactTargetFile Path to copy to.
+   * @param copiedFileArtifacts List to add copied file and package specifier
+   * when the copy task is complete.
+   */
+  public Task createTask(
+      Project project, ResolvedArtifact artifact, PackageSpecifier pkg,
+      File artifactTargetFile,
+      List<Tuple2<File, PackageSpecifier>> copiedFileArtifacts) {
+    // If this is a file that should not be processed, (i.e is a new AndroidX
+    // library or an old support library that has been blacklisted) create a
+    // copy task instead.
+    if (processor.isNewDependencyFile(artifact.file) ||
+        processor.isOldDependencyFile(artifact.file)) {
+      return super.createTask(project, artifact, pkg, artifactTargetFile,
+                              copiedFileArtifacts)
+    }
+    Task processTask = project.tasks.create(
+      name: "process_" + pkg.filename,
+      type: Task,
+      description: sprintf("Jetify %s (%s) to %s", pkg.specString,
+                           artifact.file, artifactTargetFile))
+    processTask.with {
+      inputs.file artifact.file
+      outputs.file artifactTargetFile
+      doFirst { project.logger.info(description) }
+      doLast {
+        Set<FileMapping> sourceAndTargetFile =
+          [new FileMapping(artifact.file, /* from */
+                           artifactTargetFile /* to */)].toSet()
+        processor.transform(sourceAndTargetFile, /* inputs */
+                            true /* copyUnmodifiedLibsAlso */)
+        copiedFileArtifacts.add(
+          new Tuple2<File, PackageSpecifier>(artifactTargetFile, pkg))
+      }
+    }
+    return processTask
   }
 }
 
@@ -1166,29 +1479,32 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
       conflictPaths.each { logger.quiet(sprintf("- %s", it)) }
     }
   }
-  // Dump the current dependency graph and the conflict state of each node.
-  summaryGraph.each {
-    DependencyResult dependency, List<DependencyResult> parents ->
-      String groupArtifact =
-        PackageSpecifier.fromModuleComponentSelector(
-          dependency.requested as ModuleComponentSelector).groupArtifactString
-      ResolvedComponentResult resolved =
-        (dependency instanceof ResolvedDependencyResult) ?
-          (dependency as ResolvedDependencyResult).selected : null
-      logger.info(
-        sprintf(
-          "%s* %s (new: %s, conflicting: %b (parents: %s))",
-          "  ".multiply(parents.size()),
-          resolved && resolved.toString() != dependency.requested.toString() ?
-            sprintf("%s --> %s (%s)", dependency.requested.toString(),
-                    resolved.toString(), resolved.selectionReason) :
-            dependency.requested.toString(),
-          packages[groupArtifact]?.specString,
-          conflictingByGroupArtifact[groupArtifact],
-          parents.collect {
-            PackageSpecifier.fromModuleComponentSelector(
-              it.requested as ModuleComponentSelector).specString
-          }))
+  // Dump the complete dependency graph and the conflict state of each node.
+  if (project.hasProperty("DUMP_DEBUG_GRAPH") &&
+      project.getProperty("DUMP_DEBUG_GRAPH") == "1") {
+    summaryGraph.each {
+      DependencyResult dependency, List<DependencyResult> parents ->
+        String groupArtifact =
+          PackageSpecifier.fromModuleComponentSelector(
+            dependency.requested as ModuleComponentSelector).groupArtifactString
+        ResolvedComponentResult resolved =
+          (dependency instanceof ResolvedDependencyResult) ?
+            (dependency as ResolvedDependencyResult).selected : null
+        logger.quiet(
+          sprintf(
+            "%s* %s (new: %s, conflicting: %b (parents: %s))",
+            "  ".multiply(parents.size()),
+            resolved && resolved.toString() != dependency.requested.toString() ?
+              sprintf("%s --> %s (%s)", dependency.requested.toString(),
+                      resolved.toString(), resolved.selectionReason) :
+              dependency.requested.toString(),
+            packages[groupArtifact]?.specString,
+            conflictingByGroupArtifact[groupArtifact],
+            parents.collect {
+              PackageSpecifier.fromModuleComponentSelector(
+                it.requested as ModuleComponentSelector).specString
+            }))
+    }
   }
 
   logger.info(sprintf("=== Selected dependencies: %s",
@@ -1208,6 +1524,8 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
  *
  * @param oldPackages Package specifications prior to the version change.
  * @param newPackages Package specifications after the version change.
+ * @param packageMapper Object that applied mapping to packages when they were
+ * resolved.
  *
  * @returns Map of [oldVersion, newVersion] tuples indexed by the group:artifact
  * of each package with a modified version.
@@ -1215,15 +1533,28 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
 Map<String, List<Tuple2<PackageSpecifier,
                         PackageSpecifier>>> getModifiedPackageVersions(
     Iterable<PackageSpecifier> oldPackages,
-    Iterable<PackageSpecifier> newPackages) {
+    Iterable<PackageSpecifier> newPackages, PackageMapper packageMapper) {
   // Track package specifications that were modified.
   Map<String, List<Tuple2<PackageSpecifier,
                           PackageSpecifier>>> packagesModified = [:]
   // Bucket old and new versions by group artifact name.
   Map<String, List<PackageSpecifier>> oldPackagesByGroupArtifact =
     PackageSpecifier.byGroupArtifact(oldPackages)
+  // This performs the inverse mapping from each new package to the original
+  // package name so that it's possible to track the replacement.
+  // For example, if foo:bar:1.2.3 is mapped to foox:bish:1.0.0 this will
+  // generate the dictionary ["foo:bar", ["foox:bish:1.0.0"] so that when
+  // the code below looks for modifications to the package "foo:bar" it will
+  // map to "foox:bish".
   Map<String, List<PackageSpecifier>> newPackagesByGroupArtifact =
-    PackageSpecifier.byGroupArtifact(newPackages)
+    PackageSpecifier.byGroupArtifact(newPackages).collectEntries {
+      String groupArtifact, List<PackageSpecifier> pkgs ->
+        // There should only be *one* new version of the package selected.
+        assert pkgs.size() == 1
+        PackageSpecifier oldPkg = packageMapper.inverseMap(
+          PackageSpecifier.fromString(pkgs[0].groupArtifactString))
+        return [oldPkg.groupArtifactString, pkgs]
+    }
 
   oldPackagesByGroupArtifact.each {
     String groupArtifact, List<PackageSpecifier> oldItems ->
@@ -1272,6 +1603,7 @@ Map<String, List<Tuple2<PackageSpecifier,
  * if resolution fails due to conflict package versions.
  *
  * @param packages Packages to resolve the dependencies of.
+ * @param packageMapper Package mapping to apply on dependency resolution.
  *
  * @returns Tuple of [packages, configuration] where:
  * packages is the set of package specifications that were successfully resolved
@@ -1280,12 +1612,12 @@ Map<String, List<Tuple2<PackageSpecifier,
  * configuration is the Gradle configuration used to resolve the packages.
  */
 Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
-    Iterable<PackageSpecifier> packages) {
+    Iterable<PackageSpecifier> packages, PackageMapper packageMapper) {
+  // Substitute top level packages.
+  packages = packages.collect { packageMapper.map(it) }
   // Select the most recent package for each of the specified set of packages.
   Set<PackageSpecifier> currentPackages =
     PackageSpecifier.mostRecentByGroupArtifact(packages).values().toSet()
-  // Save the set of packages requested by the user.
-  Set<String> initialPackages = currentPackages.clone().toSet()
   int resolutionAttempt = 1
   Configuration userPackagesToQuery = null
   boolean resolutionComplete = false
@@ -1294,16 +1626,21 @@ Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
     // Copy the configuration to query the set of required dependencies.
     userPackagesToQuery = project.configurations.create(
       "userPackagesToQuery" + resolutionAttempt.toString())
+    packageMapper.applyToProjectConfiguration(userPackagesToQuery, project)
     // Add user specified packages to the userPackages configuration.
     // This allows us to resolve during the configuration phase.
-    logger.quiet(sprintf("Resolution attempt %d: packages %s",
-                         resolutionAttempt,
-                         PackageSpecifier.specStrings(
-                           currentPackages).toString()))
+    if (!resolutionComplete) {
+      logger.quiet(sprintf("Resolution attempt %d: packages %s",
+                           resolutionAttempt,
+                           PackageSpecifier.specStrings(
+                             currentPackages).toString()))
+    }
     PackageSpecifier.specStrings(currentPackages).each {
       project.dependencies.add(userPackagesToQuery.name, it)
     }
+
     if (resolutionComplete) break
+
     ResolutionResult resolutionResult =
       userPackagesToQuery.incoming.resolutionResult
     // Warn the user of missing dependencies.
@@ -1315,6 +1652,7 @@ Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
                 "to use %s, failed due to %s", it.requested, it.from,
                 it.attempted, it.failure))
     }
+
     Set<PackageSpecifier> newPackages = currentPackages
     boolean conflictsFound = false
     (conflictsFound, newPackages) = loosenVersionContraintsForConflicts(
@@ -1360,12 +1698,13 @@ Tuple2<Set<PackageSpecifier>, Configuration> resolveConflictingPackages(
  * the missing packages.
  *
  * @param packages Package specifications to resolve.
+ * @param packageMapper Package mapping to apply on dependency resolution.
  *
  * @returns Package specifications with the @srcaar artifact specifier for each
  * artifact where a fallback package exists.
  */
 Set<PackageSpecifier> fallbackToSrcAarArtifacts(
-    Iterable<PackageSpecifier> packages) {
+    Iterable<PackageSpecifier> packages, PackageMapper packageMapper) {
   // Search for all packages, excluding those with explicit artifact types and
   // find the missing set.
   Map<String, PackageSpecifier> searchPackages =
@@ -1374,6 +1713,7 @@ Set<PackageSpecifier> fallbackToSrcAarArtifacts(
     }
 
   Configuration findMissingConfig = project.configurations.create("findMissing")
+  packageMapper.applyToProjectConfiguration(findMissingConfig, project)
   PackageSpecifier.specStrings(packages).each {
     project.dependencies.add(findMissingConfig.name, it)
   }
@@ -1398,6 +1738,7 @@ Set<PackageSpecifier> fallbackToSrcAarArtifacts(
   // Search for missing packages using the srcaar artifact type.
   Configuration searchForSrcAarConfig =
     project.configurations.create("searchForSrcAars")
+  packageMapper.applyToProjectConfiguration(searchForSrcAarConfig, project)
   PackageSpecifier.specStrings(fallbackPackages.values()).each {
     project.dependencies.add(searchForSrcAarConfig.name, it)
   }
@@ -1699,6 +2040,8 @@ def testSortPackagesByVersion() {
 }
 
 def testGetModifiedPackageVersions() {
+  PackageMapper packageMapper =
+    new PackageMapper(dependenciesMap: ["foo:bar": "foox:bish:1.0.0"])
   List<String> oldPackages = [
     "a.b.c:e-f:1.2.3",
     "a.b.c:f-h:4.5.6",
@@ -1709,14 +2052,16 @@ def testGetModifiedPackageVersions() {
     "z.z.z:x-y:5.0.1",
     "z.z.z:x-y:6.0.0",
     "com.android.support:appcompat-v7:23.0.+",
+    "foo:bar:1.2.3",
+    "foo:bar:2.0+",
   ]
   List<String> newPackages = [
     "a.b.c:e-f:1.3.0",
     "a.b.c:f-h:4.6.2",
-    "e.f.g:a-b:0.1.0",
     "e.f.g:a-b:[0.1.0]",
     "z.z.z:x-y:6.0.0",
     "com.android.support:appcompat-v7:23.0.1@aar",
+    "foox:bish:1.0.0",
   ]
   Map<String, List<String>> expectedModifiedPackages = [
     "a.b.c:e-f": [[PackageSpecifier.fromString("a.b.c:e-f:1.2.3"),
@@ -1727,11 +2072,16 @@ def testGetModifiedPackageVersions() {
                    PackageSpecifier.fromString("z.z.z:x-y:6.0.0")],
                   [PackageSpecifier.fromString("z.z.z:x-y:5.0.1"),
                    PackageSpecifier.fromString("z.z.z:x-y:6.0.0")]],
+    "foo:bar": [[PackageSpecifier.fromString("foo:bar:1.2.3"),
+                 PackageSpecifier.fromString("foox:bish:1.0.0")],
+                [PackageSpecifier.fromString("foo:bar:2.0+"),
+                 PackageSpecifier.fromString("foox:bish:1.0.0")]],
   ]
   Map<String,
       List<Tuple2<PackageSpecifier, PackageSpecifier>>> modifiedPackages =
     getModifiedPackageVersions(PackageSpecifier.fromStrings(oldPackages),
-                               PackageSpecifier.fromStrings(newPackages))
+                               PackageSpecifier.fromStrings(newPackages),
+                               packageMapper)
   if (modifiedPackages != expectedModifiedPackages) {
     throw new Exception(
       sprintf("Invalid modified packages %s, expected %s for %s",
@@ -1962,6 +2312,58 @@ def testVersionRangeFromExpression() {
   }
 }
 
+def testPackageMapperEmpty() {
+  PackageMapper packageMapper = new PackageMapper()
+  ["com.android.databinding:baseLibrary:3.4.0",
+   "com.android.support:appcompat-v7:26.0.1",
+   "com.android.support:leanback-v17:25.2.0",
+   "com.android.support:support-v4:25.2.0",
+   "androidx.legacy:legacy-support-v4:1.0.0"].each { String source ->
+     String expected = PackageSpecifier.fromString(source).groupArtifactString
+     PackageSpecifier pkg = packageMapper.map(
+       PackageSpecifier.fromString(expected))
+     String value = pkg.specString
+     if (value != expected) {
+       throw new Exception(sprintf("Invalid mapped package %s vs %s for %s",
+                                   value, expected, source))
+     }
+     String inverseSpec = packageMapper.inverseMap(pkg).specString
+     if (inverseSpec != expected) {
+       throw new Exception(sprintf("Invalid inverse mapped package %s vs %s " +
+                                   "for %s", inverseSpec, expected, source))
+     }
+  }
+}
+
+def testPackageMapperFromJetifierProcessor() {
+  PackageMapper packageMapper = PackageMapper.fromJetifierProcessor("3.4.0")
+  [["com.android.databinding:baseLibrary:3.4.0",
+    "com.android.databinding:baseLibrary:3.4.0"],
+   ["com.android.support:appcompat-v7:26.0.1",
+    "androidx.appcompat:appcompat:1.0.0"],
+   ["com.android.support:leanback-v17:25.2.0",
+    "androidx.leanback:leanback:1.0.0"],
+   ["com.android.support:support-v4:25.2.0",
+    "androidx.legacy:legacy-support-v4:1.0.0"]].each { String source,
+                                                       String expected ->
+      PackageSpecifier pkg = packageMapper.map(
+        PackageSpecifier.fromString(source))
+      String value = pkg.specString
+      if (value != expected) {
+        throw new Exception(
+          sprintf("Invalid mapped package %s vs %s for %s",
+                  value, expected, source))
+      }
+      expected = PackageSpecifier.fromString(source).groupArtifactString
+      String inverseSpec = packageMapper.inverseMap(pkg).specString
+      if (inverseSpec != expected) {
+        throw new Exception(
+          sprintf("Invalid inverse mapped package %s vs %s for %s (%s)",
+                  inverseSpec, expected, value, source))
+      }
+  }
+}
+
 // Run unit tests
 // TODO(b/79267099): Factor the tests out of this script.
 def runTests() {
@@ -1983,6 +2385,8 @@ def runTests() {
   testAddVersionLockedPackageToSet()
   testCreateVersionLockedSetBlacklist()
   testAddVersionLockedPackageToSetWithBlacklist()
+  testPackageMapperEmpty()
+  testPackageMapperFromJetifierProcessor()
 }
 
 // Configure project properties.
@@ -2034,6 +2438,32 @@ project.ext {
   if (project.hasProperty("USE_REMOTE_MAVEN_REPOS")) {
     useRemoteMavenRepos = project.getProperty("USE_REMOTE_MAVEN_REPOS") == "1"
   }
+  boolean useJetifier = false
+  if (project.hasProperty("USE_JETIFIER")) {
+    useJetifier = project.getProperty("USE_JETIFIER") == "1"
+  }
+  String dataBindingVersion = ""
+  if (useJetifier) {
+    if (project.hasProperty("DATA_BINDING_VERSION")) {
+      dataBindingVersion =
+        project.getProperty("DATA_BINDING_VERSION")
+    }
+    if (!dataBindingVersion) {
+      println helpText
+      logger.error("Project property DATA_BINDING_VERSION must be " +
+                   "specified if USE_JETIFIER is enabled.")
+      throw new InvalidUserDataException("Missing DATA_BINDING_VERSION")
+    }
+  }
+  // Create package mapper for Jetifier package substitutions.
+  PackageMapper packageMapper = useJetifier ?
+    PackageMapper.fromJetifierProcessor(dataBindingVersion) :
+    new PackageMapper()
+  // Apply package mapper to predeclared configurations.
+  [project.configurations.transitivePackagesConfig,
+   project.configurations.copyPackagesConfig].each { Configuration config ->
+    packageMapper.applyToProjectConfiguration(config, project)
+  }
 
   // Construct a list of local Maven URIs in the Android SDK.
   if (androidSdkRoot) {
@@ -2044,7 +2474,7 @@ project.ext {
   }
   // Add Google maven repositories.
   if (useRemoteMavenRepos) {
-    mavenUris.push(new URI("https://maven.google.com"))
+    mavenUris.push(project.project.repositories.google().url)
   }
 
   // List of URIs to add to the set of maven sources.
@@ -2073,7 +2503,7 @@ project.ext {
   if (!project.hasProperty("PACKAGES_TO_COPY")) {
     println helpText
     logger.error("Project property PACKAGES_TO_COPY must be specified.")
-    System.exit(1)
+    throw new InvalidUserDataException("Missing PACKAGES_TO_COPY")
   }
   Set<PackageSpecifier> userSpecifiedPackages =
     PackageSpecifier.fromStrings(
@@ -2086,7 +2516,7 @@ project.ext {
   if (!project.hasProperty("TARGET_DIR")) {
     println helpText
     logger.error("Project property TARGET_DIR must be specified.")
-    System.exit(1)
+    throw new InvalidUserDataException("Missing TARGET_DIR")
   }
   targetDir = project.getProperty("TARGET_DIR")
   if (targetDir && !(new File(targetDir)).isAbsolute()) {
@@ -2098,14 +2528,15 @@ project.ext {
   // Fallback to search for srcaar artifacts when an artifact is missing.
   // We update the user specified package set here as this operation should be
   // transparent to the user.
-  userSpecifiedPackages = fallbackToSrcAarArtifacts(userSpecifiedPackages)
+  userSpecifiedPackages = fallbackToSrcAarArtifacts(userSpecifiedPackages,
+                                                    packageMapper)
 
   // Resolve while searching for a set of non-conflicting package
   // specifications.
   Set<PackageSpecifier> resolvedConflictingPackages
   Configuration resolveConflictConfig
   (resolvedConflictingPackages, resolveConflictConfig) =
-    resolveConflictingPackages(userSpecifiedPackages)
+    resolveConflictingPackages(userSpecifiedPackages, packageMapper)
   Map<String, PackageSpecifier> resolvedConflictingPackagesByArtifactGroup =
     PackageSpecifier.mostRecentByGroupArtifact(resolvedConflictingPackages)
 
@@ -2143,13 +2574,27 @@ project.ext {
 
   // Determine which, if any, package specs were modified.
   packagesModified = getModifiedPackageVersions(userSpecifiedPackages,
-                                                finalSelectedPackages.values())
+                                                finalSelectedPackages.values(),
+                                                packageMapper)
 
   // Gather transitive dependencies of all selected packages.
-  PackageSpecifier.specStrings(finalSelectedPackages.values()).each {
-    project.dependencies.transitivePackagesConfig it
+  Map<String, PackageSpecifier> userSpecifiedPackagesByGroupArtifact =
+    PackageSpecifier.mostRecentByGroupArtifact(userSpecifiedPackages)
+  finalSelectedPackages.each { String pkgKey, PackageSpecifier selected ->
+    // Gradle doesn't resolve transitive dependencies for artifacts with a
+    // classifier https://github.com/gradle/gradle/issues/1487 so only use
+    // the artifact type it's specified directly by user or we're using a
+    // .srcaar artifact.
+    PackageSpecifier userPkg = userSpecifiedPackagesByGroupArtifact[pkgKey]
+    String specString =
+      ((userPkg && userPkg.artifactType) || selected.artifactType == "srcaar") ?
+        selected.specString :
+        (new PackageSpecifier(
+          group: selected.group,
+          artifact: selected.artifact,
+          versionExpression: selected.versionExpression)).specString
+    project.dependencies.transitivePackagesConfig specString
   }
-
   packagesToCopy = (project.configurations.transitivePackagesConfig.
     resolvedConfiguration.lenientConfiguration.
       getArtifacts(Specs.satisfyAll()).findResults {
@@ -2179,6 +2624,10 @@ project.ext {
     project.dependencies.copyPackagesConfig it
   }
 
+  // Create a package processor to generate processing tasks.
+  DefaultPackageProcessor packageProcessor =
+    useJetifier ? new JetpackPackageProcessor(dataBindingVersion) :
+    new DefaultPackageProcessor()
   // Generate tasks to copy each artifact to a unique filename in the target
   // directory.
   project.configurations.copyPackagesConfig.
@@ -2186,30 +2635,12 @@ project.ext {
       getArtifacts(Specs.satisfyAll()).each { ResolvedArtifact artifact ->
     PackageSpecifier pkg = PackageSpecifier.fromResolvedArtifact(artifact)
     File artifactTargetFile = new File(targetDir, pkg.filename)
-    // If the target file does not exist generate a task to copy it.
+    // If the target file does not exist, generate a task to copy or process it.
     if (artifactTargetFile.exists()) return
-    Task copyTask = tasks.create(
-      name: "copy_" + pkg.filename,
-        type: Copy,
-        description: sprintf("Copy %s (%s) to %s", pkg.specString,
-                             artifact.file, artifactTargetFile))
-    copyTask.with {
-      from artifact.file
-      into targetDir
-      rename(
-        // Rename the file to the target filename and log the copied file &
-        // artifact so that they can be summarized when all copy artifact
-        // tasks are complete.
-        {
-          String filename ->
-            copiedFileArtifacts.add(
-              new Tuple2<File, PackageSpecifier>(artifactTargetFile, pkg))
-            return artifactTargetFile.toString()
-        }
-      )
-      doFirst { logger.info(description) }
-    }
-    copyTasks.add(copyTask)
+
+    copyTasks.add(packageProcessor.createTask(
+                    project, artifact, pkg, artifactTargetFile,
+                    copiedFileArtifacts))
   }
 }
 

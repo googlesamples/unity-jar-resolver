@@ -15,33 +15,53 @@
  */
 
 import java.security.MessageDigest
+import java.io.BufferedInputStream
+import java.io.FileInputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
 
 // Logger which captures standard output or error streams to a buffer.
 class StandardOutputErrorLogger implements StandardOutputListener {
   // List of lines captured by this logger.
   private List<String> outputList = []
 
-  // Implements StandardOutputListener to capture a log message in
-  // outputList.
+  /*
+   * Implements StandardOutputListener to capture a log message in
+   * outputList.
+   *
+   * @param output Data to capture.
+   */
   void onOutput(CharSequence output) {
     outputList.add(output)
   }
 
-  // Retrieve a string containing the lines aggregated by this logger.
+  /*
+   * Retrieve a string containing the lines aggregated by this logger.
+   *
+   * @returns All data aggregated by this logger.
+   */
   String getOutput() {
     return outputList.join("")
   }
 
-  // Install the logger on the standard output and error streams of a task and
-  // clear the internal buffer.
+  /*
+   * Install the logger on the standard output and error streams of a task and
+   * clear the internal buffer.
+   *
+   * @param taskToLog Task to install this logger on.
+   */
   void install(Task taskToLog) {
     outputList = []
     taskToLog.logging.addStandardOutputListener(this)
     taskToLog.logging.addStandardErrorListener(this)
   }
 
-  // Remove the logger from the standard output and error streams of a task and
-  // clear the internal buffer.
+  /*
+   * Remove the logger from the standard output and error streams of a task and
+   * clear the internal buffer.
+   *
+   * @param taskToLog Task to remove this logger from.
+   */
   void uninstall(Task taskToLog) {
     taskToLog.logging.removeStandardOutputListener(this)
     taskToLog.logging.removeStandardErrorListener(this)
@@ -81,9 +101,15 @@ project.ext {
   modifiedArtifactsHeader = "Modified artifacts:"
 }
 
-// Generate a task to create the specified directory File.
-def createDirectoryTask(directoryFile) {
-  def createDirectory = tasks.create(
+/*
+ * Generate a task to create the specified directory File.
+ *
+ * @param directoryFile Directory to create.
+ *
+ * @returns Task to create the specified directory.
+ */
+Task createDirectoryTask(File directoryFile) {
+  Task createDirectory = tasks.create(
     name: "create_" + directoryFile.path.replaceAll(/[\/\\:]/, "-"),
     description: "Creates the directory " + directoryFile.path)
   createDirectory.with {
@@ -101,15 +127,9 @@ task copyTestScript(
   into outputDir
 }
 
-// Generate a task to create a test output directory.
-def createTestDirectoryTask(directoryFile) {
-  def createDirectory = createDirectoryTask(directoryFile)
-  createDirectory.dependsOn copyTestScript
-  return createDirectory
-}
-
 // Create GradleBuild task StartParameter to execute download_artifacts.build.
-def createStartParameters(packagesToCopy, targetDir) {
+StartParameter createStartParameters(String packagesToCopy, File targetDir,
+                                     boolean useJetifier) {
   def startParameters = new StartParameter()
   startParameters.projectProperties = [
     "ANDROID_HOME": project.ext.androidHome,
@@ -121,14 +141,21 @@ def createStartParameters(packagesToCopy, targetDir) {
     // repos.
     "USE_MAVEN_LOCAL_REPO": "0",
     "USE_REMOTE_MAVEN_REPOS": "0",
+    "USE_JETIFIER": useJetifier ? "1" : "0",
+    "DATA_BINDING_VERSION": useJetifier ? "3.4.0" : "",
   ]
   startParameters.logLevel = logging.level
   return startParameters
 }
 
-// Calculate the MD5 checksum of the specified file returning the checksum as
-// a string.
-def md5ChecksumFile(fileToRead) {
+/*
+ * Calculate the MD5 checksum of the specified file.
+ *
+ * @param fileToRead File to calculate checksum from.
+ *
+ * @returns Checksum as a string.
+ */
+String md5ChecksumFile(File fileToRead) {
   MessageDigest digest = MessageDigest.getInstance("MD5")
   def contents = fileToRead.bytes
   digest.update(contents, 0, contents.length)
@@ -137,20 +164,95 @@ def md5ChecksumFile(fileToRead) {
   return bigInt.toString(16).padLeft(32, '0')
 }
 
-// Validate each target files for each source file yielded by the specified task
-// are the same.  If outputInputFileMap yields null for an output file, the
-// file contents is not validated.
-def validateFilesMatch(taskToValidate, outputInputFileMap) {
-  def mismatchingFiles = []
-  taskToValidate.outputs.files.each {
-    def inputFile = outputInputFileMap[it]
-    if (inputFile != null && it.exists()) {
-      def inputFileChecksum = md5ChecksumFile(inputFile)
-      def outputFileChecksum = md5ChecksumFile(it)
+/*
+ * Determine whether a filename is a zip file.
+ *
+ * @param fileObj File object to query.
+ *
+ * @returns true if the file is a zip file, false otherwise.
+ */
+boolean isZipFile(File fileObj) {
+  String filename = fileObj.name
+  return filename.endsWith(".zip") ||
+         filename.endsWith(".jar") ||
+         filename.endsWith(".aar") ||
+         filename.endsWith(".srcaar")
+}
+
+/*
+ * Reads all zip file entry metadata into a map.
+ *
+ * @param fileToRead File to read zip file entries from.
+ *
+ * @returns Map of entry filename to "size:crc32" strings.
+ */
+Map<String, String> readZipEntries(File fileToRead) {
+  ZipInputStream inputStream = new ZipInputStream(
+    new BufferedInputStream(new FileInputStream(fileToRead)))
+  Map<String, String> entries = [:]
+  while (true) {
+    ZipEntry entry = inputStream.nextEntry
+    if (entry == null) break
+    entries[entry.name] = sprintf("%ld:%ld", entry.size, entry.crc)
+  }
+  return entries
+}
+
+
+/*
+ * Validate the content of two zip files match.
+ *
+ * @param inputFile File with expected contents.
+ * @param outputFile File to compare with inputFile.
+ *
+ * @returns List of error messages if the content of the files do not match.
+ */
+List<String> validateZipFilesMatch(File inputFile, File outputFile) {
+  Map<String, String> inputEntries = readZipEntries(inputFile)
+  Map<String, String> outputEntries = readZipEntries(outputFile)
+  List<String> errors = []
+  outputEntries.each { String entryName, String outputMetadata ->
+    String inputMetadata = inputEntries[entryName]
+    if (!inputMetadata) {
+      errors.add(sprintf("%s %s (%s) does not exist in %s",
+                         outputFile.path, entryName, outputMetadata,
+                         inputFile.path))
+    } else if (inputMetadata != outputMetadata) {
+      errors.add(sprintf("%s %s (%s) != %s %s (%s)",
+                         inputFile.path, entryName, inputMetadata,
+                         outputFile.path, entryName, outputMetadata))
+    }
+  }
+  return errors
+}
+
+/* Compare files yield by a task match the expected input files.
+ *
+ * Validate each target files for each source file yielded by the specified task
+ * are the same.  If outputInputFileMap yields null for an output file, the
+ * file contents is not validated.
+ *
+ * @param taskToValidate Task to retrieve the set of output files from.
+ * @param outputInputFileMap Map of output to input files for the task.
+ *
+ * @throws TaskExecutionException if the files don't match.
+ */
+void validateFilesMatch(Task taskToValidate,
+                        Map<File, File> outputInputFileMap) {
+  List<File> mismatchingFiles = []
+  taskToValidate.outputs.files.each { File outputFile
+    File inputFile = outputInputFileMap[outputFile]
+    if (inputFile != null && outputFile.exists()) {
+      String inputFileChecksum = md5ChecksumFile(inputFile)
+      String outputFileChecksum = md5ChecksumFile(outputFile)
       if (inputFileChecksum != outputFileChecksum) {
-        mismatchingFiles.add(sprintf("%s (%s) != %s (%s)",
-                                     inputFile.path, inputFileChecksum,
-                                     it.path, outputFileChecksum))
+        if (isZipFile(inputFile) && isZipFile(outputFile)) {
+          mismatchingFiles += validateZipFilesMatch(inputFile, outputFile)
+        } else {
+          mismatchingFiles.add(sprintf("%s (%s) != %s (%s)",
+                                       inputFile.path, inputFileChecksum,
+                                       outputFile.path, outputFileChecksum))
+        }
       }
     }
   }
@@ -163,9 +265,14 @@ def validateFilesMatch(taskToValidate, outputInputFileMap) {
   }
 }
 
-// Validate all output files of a task exist.
-def validateOutputFilesExist(taskToValidate) {
-  def missingFiles = []
+/*
+ * Validate all output files of a task exist.
+ *
+ * @param taskToValidate Task to check that all output files specified
+ * by the task are present.
+ */
+void validateOutputFilesExist(Task taskToValidate) {
+  List<File> missingFiles = []
   taskToValidate.outputs.files.each {
     if (!it.exists()) { missingFiles.add(it) }
   }
@@ -178,15 +285,22 @@ def validateOutputFilesExist(taskToValidate) {
   }
 }
 
-// Split the output of the download script into sections.
-def downloadScriptOutputToSectionsList(output) {
-  def validSections = [
+/*
+ * Split the output of the download script into sections.
+ *
+ * @param Output of the download_artifacts.gradle script.
+ *
+ * @returns Up to a list of 3 elements, for the sections
+ * "Copied artifacts:", "Missing artifacts:", "Modified artifacts:".
+ */
+List<String> downloadScriptOutputToSectionsList(String output) {
+  Set<String> validSections = [
     "Copied artifacts:",
     "Missing artifacts:",
     "Modified artifacts:",
   ].toSet()
-  def sections = []
-  def currentSection = []
+  List<String> sections = []
+  List<String>currentSection = []
   // Adds the current section to the list of sections and flushes the list.
   def endSectionClosure = {
     if (currentSection) {
@@ -208,34 +322,51 @@ def downloadScriptOutputToSectionsList(output) {
   return sections
 }
 
-// Generates a test case that:
-// * Attempts to download a set of artifacts specified by packageSpecification
-//   into a target directory (derived from taskName) using the downloader
-//   script.
-// * Validates the expected artifacts are downloaded and match the specified
-//   set of source files specified by outputInputFileMap.
-// * Validates the script output matches expectedScriptOutput (list of strings where
-//   each element is a section of the script's parsed output).
-def createTestTask(taskName, taskDescription, packageSpecification,
-                   outputInputFileMap, expectedScriptOutput, iterations=1) {
+/*
+ * Generates a test case that:
+ * * Attempts to download a set of artifacts specified by packageSpecification
+ *   into a target directory (derived from taskName) using the downloader
+ *   script.
+ * * Validates the expected artifacts are downloaded and match the specified
+ *   set of source files specified by outputInputFileMap.
+ * * Validates the script output matches expectedScriptOutput (list of strings where
+ *   each element is a section of the script's parsed output).
+ *
+ * @param taskName Name of the task to create.
+ * @param taskDescription Verbose description of the task.
+ * @param outputInputFileMap Map of output files to expected (input) files.
+ * @param expectedScriptOutput List of 3 sections (copied, missing, modified)
+ * which match the output of the script.
+ * See downloadScriptOutputToSectionsList()
+ * @param iterations Number of times to run the test task.
+ * @param useJetifier Whether to use the Jetifier to substitute and rewrite
+ * libraries.
+ */
+void createTestTask(String taskName, String taskDescription,
+                    String packageSpecification,
+                    Map<String, String> outputInputFileMap,
+                    List<String> expectedScriptOutput,
+                    int iterations=1, boolean useJetifier=false) {
   // Create a target directory relative to the output directory.
   def targetDirFile = new File(project.ext.outputDir, taskName)
   // Move output file paths relative to the target directory and input paths
   // relative to the local maven repo.
-  def movedOutputInputFileMap = [:]
+  Map<File, File> movedOutputInputFileMap = [:]
   outputInputFileMap.each {
     outputFile, inputFile ->
       movedOutputInputFileMap[new File(targetDirFile, outputFile)] =
         inputFile != null ? new File(project.ext.mavenRepo, inputFile) : null
   }
-  def createDirectoryTask = createTestDirectoryTask(targetDirFile)
+  Task createDirectoryTask = createDirectoryTask(targetDirFile)
+  createDirectoryTask.dependsOn copyTestScript
   iterations.times {
-    def currentIteration = it + 1
-    def currentTaskName = taskName + (iterations > 1 ? "$currentIteration" : "")
-    def testTask = tasks.create(name: currentTaskName,
-                                description: taskDescription,
-                                type: GradleBuild,
-                                dependsOn: createDirectoryTask)
+    int currentIteration = it + 1
+    String currentTaskName =
+      taskName + (iterations > 1 ? "$currentIteration" : "")
+    Task testTask = tasks.create(name: currentTaskName,
+                                 description: taskDescription,
+                                 type: GradleBuild,
+                                 dependsOn: createDirectoryTask)
     testTask.with {
       // Logger which captures the output of a task.
       // This doesn't work in parallel builds at the moment.
@@ -244,7 +375,7 @@ def createTestTask(taskName, taskDescription, packageSpecification,
 
       outputs.files movedOutputInputFileMap.keySet()
       startParameter createStartParameters(packageSpecification,
-                                           targetDirFile)
+                                           targetDirFile, useJetifier)
       buildFile project.ext.buildFile
       dir project.ext.outputDir
       doFirst { ext.standardOutputErrorLogger.install(it) }
@@ -321,7 +452,7 @@ createTestTask(
   "testDownloadUnavailable",
   "Attempts to download a non-existant artifact.",
   "apackage.thatdoes:notexist:9.9.9",
-  [],
+  [:],
   ["Missing artifacts:\n" +
    "apackage.thatdoes:notexist:+",
    "Modified artifacts:\n" +
@@ -526,7 +657,7 @@ createTestTask(
   "packages ordering should not change the resolution result.",
   "com.android.support:support-annotations:23.+;" +
   "com.android.support:support-annotations:24.+",
-  [],
+  [:],
   ["Copied artifacts:\n" +
    "com.android.support.support-annotations-24.0.0.jar"])
 
@@ -536,7 +667,7 @@ createTestTask(
   "packages ordering should not change the resolution result.",
   "com.android.support:support-annotations:24.+;" +
   "com.android.support:support-annotations:23.+",
-  [],
+  [:],
   ["Copied artifacts:\n" +
    "com.android.support.support-annotations-24.0.0.jar"])
 
@@ -618,6 +749,132 @@ createTestTask(
    "com.google.android.gms:play-services-basement:15.0.0\n" +
    "com.google.android.gms:play-services-tasks:12.0.0 --> " +
    "com.google.android.gms:play-services-tasks:+"])
+
+createTestTask(
+  "testDirectJetifier",
+  "Verify a direct dependency upon the legacy Android support library is " +
+  "remapped ot the Jetpack libraries by the Jetifier.",
+  "com.android.support:support-annotations:26.1.0",
+  ["androidx.annotation.annotation-1.0.0.jar":
+   "androidx/annotation/annotation/1.0.0/annotation-1.0.0.jar"],
+  ["Copied artifacts:\n" +
+   "androidx.annotation.annotation-1.0.0.jar",
+   "Modified artifacts:\n" +
+   "com.android.support:support-annotations:26.1.0 --> " +
+   "androidx.annotation:annotation:1.0.0"],
+  1 /* iterations */,
+  true /* useJetifier */)
+
+createTestTask(
+  "testTransitiveJetifier",
+  "Verify transitive dependencies of a package are remapped with the " +
+  "Jetifier and the package referencing the legacy support libraries is " +
+  "processed by the Jetifier to reference Jetpack libraries.",
+  "com.google.android.gms:play-services-basement:9.8.0",
+  ["androidx.annotation.annotation-1.0.0.jar":
+   "androidx/annotation/annotation/1.0.0/annotation-1.0.0.jar",
+   "androidx.arch.core.core-common-2.0.0.jar":
+   "androidx/arch/core/core-common/2.0.0/core-common-2.0.0.jar",
+   "androidx.arch.core.core-runtime-2.0.0.aar":
+   "androidx/arch/core/core-runtime/2.0.0/core-runtime-2.0.0.aar",
+   "androidx.asynclayoutinflater.asynclayoutinflater-1.0.0.aar":
+   "androidx/asynclayoutinflater/asynclayoutinflater/1.0.0/" +
+   "asynclayoutinflater-1.0.0.aar",
+   "androidx.collection.collection-1.0.0.jar":
+   "androidx/collection/collection/1.0.0/collection-1.0.0.jar",
+   "androidx.coordinatorlayout.coordinatorlayout-1.0.0.aar":
+   "androidx/coordinatorlayout/coordinatorlayout/1.0.0/" +
+   "coordinatorlayout-1.0.0.aar",
+   "androidx.core.core-1.0.0.aar":
+   "androidx/core/core/1.0.0/core-1.0.0.aar",
+   "androidx.cursoradapter.cursoradapter-1.0.0.aar":
+   "androidx/cursoradapter/cursoradapter/1.0.0/cursoradapter-1.0.0.aar",
+   "androidx.customview.customview-1.0.0.aar":
+   "androidx/customview/customview/1.0.0/customview-1.0.0.aar",
+   "androidx.documentfile.documentfile-1.0.0.aar":
+   "androidx/documentfile/documentfile/1.0.0/documentfile-1.0.0.aar",
+   "androidx.drawerlayout.drawerlayout-1.0.0.aar":
+   "androidx/drawerlayout/drawerlayout/1.0.0/drawerlayout-1.0.0.aar",
+   "androidx.fragment.fragment-1.0.0.aar":
+   "androidx/fragment/fragment/1.0.0/fragment-1.0.0.aar",
+   "androidx.interpolator.interpolator-1.0.0.aar":
+   "androidx/interpolator/interpolator/1.0.0/interpolator-1.0.0.aar",
+   "androidx.legacy.legacy-support-core-ui-1.0.0.aar":
+   "androidx/legacy/legacy-support-core-ui//1.0.0/" +
+   "legacy-support-core-ui-1.0.0.aar",
+   "androidx.legacy.legacy-support-core-utils-1.0.0.aar":
+   "androidx/legacy/legacy-support-core-utils//1.0.0/" +
+   "legacy-support-core-utils-1.0.0.aar",
+   "androidx.legacy.legacy-support-v4-1.0.0.aar":
+   "androidx/legacy/legacy-support-v4/1.0.0/legacy-support-v4-1.0.0.aar",
+   "androidx.lifecycle.lifecycle-common-2.0.0.jar":
+   "androidx/lifecycle/lifecycle-common/2.0.0/lifecycle-common-2.0.0.jar",
+   "androidx.lifecycle.lifecycle-livedata-2.0.0.aar":
+   "androidx/lifecycle/lifecycle-livedata/2.0.0/lifecycle-livedata-2.0.0.aar",
+   "androidx.lifecycle.lifecycle-livedata-core-2.0.0.aar":
+   "androidx/lifecycle/lifecycle-livedata-core/2.0.0/" +
+   "lifecycle-livedata-core-2.0.0.aar",
+   "androidx.lifecycle.lifecycle-runtime-2.0.0.aar":
+   "androidx/lifecycle/lifecycle-runtime/2.0.0/lifecycle-runtime-2.0.0.aar",
+   "androidx.lifecycle.lifecycle-viewmodel-2.0.0.aar":
+   "androidx/lifecycle/lifecycle-viewmodel/2.0.0/lifecycle-viewmodel-2.0.0.aar",
+   "androidx.loader.loader-1.0.0.aar":
+   "androidx/loader/loader/1.0.0/loader-1.0.0.aar",
+   "androidx.localbroadcastmanager.localbroadcastmanager-1.0.0.aar":
+   "androidx/localbroadcastmanager/localbroadcastmanager/1.0.0/" +
+   "localbroadcastmanager-1.0.0.aar",
+   "androidx.media.media-1.0.0.aar":
+   "androidx/media/media/1.0.0/media-1.0.0.aar",
+   "androidx.print.print-1.0.0.aar":
+   "androidx/print/print/1.0.0/print-1.0.0.aar",
+   "androidx.slidingpanelayout.slidingpanelayout-1.0.0.aar":
+   "androidx/slidingpanelayout/slidingpanelayout/1.0.0/" +
+   "slidingpanelayout-1.0.0.aar",
+   "androidx.swiperefreshlayout.swiperefreshlayout-1.0.0.aar":
+   "androidx/swiperefreshlayout/swiperefreshlayout/1.0.0/" +
+   "swiperefreshlayout-1.0.0.aar",
+   "androidx.versionedparcelable.versionedparcelable-1.0.0.aar":
+   "androidx/versionedparcelable/versionedparcelable/1.0.0/" +
+   "versionedparcelable-1.0.0.aar",
+   "androidx.viewpager.viewpager-1.0.0.aar":
+   "androidx/viewpager/viewpager/1.0.0/viewpager-1.0.0.aar",
+   "com.google.android.gms.play-services-basement-9.8.0.aar":
+   "com/google/android/gms/play-services-basement/9.8.0-jetified/" +
+   "com.google.android.gms.play-services-basement-9.8.0.aar",
+  ],
+  ["Copied artifacts:\n" +
+   "androidx.annotation.annotation-1.0.0.jar\n" +
+   "androidx.arch.core.core-common-2.0.0.jar\n" +
+   "androidx.arch.core.core-runtime-2.0.0.aar\n" +
+   "androidx.asynclayoutinflater.asynclayoutinflater-1.0.0.aar\n" +
+   "androidx.collection.collection-1.0.0.jar\n" +
+   "androidx.coordinatorlayout.coordinatorlayout-1.0.0.aar\n" +
+   "androidx.core.core-1.0.0.aar\n" +
+   "androidx.cursoradapter.cursoradapter-1.0.0.aar\n" +
+   "androidx.customview.customview-1.0.0.aar\n" +
+   "androidx.documentfile.documentfile-1.0.0.aar\n" +
+   "androidx.drawerlayout.drawerlayout-1.0.0.aar\n" +
+   "androidx.fragment.fragment-1.0.0.aar\n" +
+   "androidx.interpolator.interpolator-1.0.0.aar\n" +
+   "androidx.legacy.legacy-support-core-ui-1.0.0.aar\n" +
+   "androidx.legacy.legacy-support-core-utils-1.0.0.aar\n" +
+   "androidx.legacy.legacy-support-v4-1.0.0.aar\n" +
+   "androidx.lifecycle.lifecycle-common-2.0.0.jar\n" +
+   "androidx.lifecycle.lifecycle-livedata-2.0.0.aar\n" +
+   "androidx.lifecycle.lifecycle-livedata-core-2.0.0.aar\n" +
+   "androidx.lifecycle.lifecycle-runtime-2.0.0.aar\n" +
+   "androidx.lifecycle.lifecycle-viewmodel-2.0.0.aar\n" +
+   "androidx.loader.loader-1.0.0.aar\n" +
+   "androidx.localbroadcastmanager.localbroadcastmanager-1.0.0.aar\n" +
+   "androidx.media.media-1.0.0.aar\n" +
+   "androidx.print.print-1.0.0.aar\n" +
+   "androidx.slidingpanelayout.slidingpanelayout-1.0.0.aar\n" +
+   "androidx.swiperefreshlayout.swiperefreshlayout-1.0.0.aar\n" +
+   "androidx.versionedparcelable.versionedparcelable-1.0.0.aar\n" +
+   "androidx.viewpager.viewpager-1.0.0.aar\n" +
+   "com.google.android.gms.play-services-basement-9.8.0.aar"],
+  1 /* iterations */,
+  true /* useJetifier */)
 
 task testUnitTests(type: GradleBuild, dependsOn: copyTestScript) {
   def startParameters = new StartParameter()
