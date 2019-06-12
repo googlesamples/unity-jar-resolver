@@ -1,3 +1,9 @@
+# Version 1.2.117 - Jun 12, 2019
+## Bug Fixes
+* Android Resolver: Fix copying of .srcaar to .aar files for
+  mainTemplate.gradle resolution.  PluginImporter configuration was previously
+  not being applied to .aar files unless the Unity project was saved.
+
 # Version 1.2.116 - Jun 7, 2019
 ## Bug Fixes
 * Android Resolver: Fixed resolution of Android dependencies without version
