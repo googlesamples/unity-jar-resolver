@@ -129,6 +129,10 @@ namespace GooglePlayServices {
                     }
                     if (configuredAar) {
                         aarFiles.Add(targetFilename);
+                        // Some versions of Unity do not mark the asset database as dirty when
+                        // plugin importer settings change so reimport the asset to synchronize
+                        // the state.
+                        AssetDatabase.ImportAsset(targetFilename, ImportAssetOptions.ForceUpdate);
                     } else {
                         if (File.Exists(targetFilename)) {
                             AssetDatabase.DeleteAsset(targetFilename);
