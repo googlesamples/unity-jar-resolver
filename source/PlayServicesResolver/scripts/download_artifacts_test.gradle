@@ -19,7 +19,7 @@ import java.security.MessageDigest
 // Logger which captures standard output or error streams to a buffer.
 class StandardOutputErrorLogger implements StandardOutputListener {
   // List of lines captured by this logger.
-  private def outputList = []
+  private List<String> outputList = []
 
   // Implements StandardOutputListener to capture a log message in
   // outputList.
@@ -34,7 +34,7 @@ class StandardOutputErrorLogger implements StandardOutputListener {
 
   // Install the logger on the standard output and error streams of a task and
   // clear the internal buffer.
-  def install(taskToLog) {
+  void install(Task taskToLog) {
     outputList = []
     taskToLog.logging.addStandardOutputListener(this)
     taskToLog.logging.addStandardErrorListener(this)
@@ -42,7 +42,7 @@ class StandardOutputErrorLogger implements StandardOutputListener {
 
   // Remove the logger from the standard output and error streams of a task and
   // clear the internal buffer.
-  def uninstall(taskToLog) {
+  void uninstall(Task taskToLog) {
     taskToLog.logging.removeStandardOutputListener(this)
     taskToLog.logging.removeStandardErrorListener(this)
   }
@@ -79,9 +79,6 @@ project.ext {
   // Header in the download script's output that describes the set of artifacts
   // that were modified from what the user requested.
   modifiedArtifactsHeader = "Modified artifacts:"
-
-  // Logger which captures the output of a task.
-  standardOutputErrorLogger = new StandardOutputErrorLogger()
 }
 
 // Generate a task to create the specified directory File.
@@ -162,7 +159,7 @@ def validateFilesMatch(taskToValidate, outputInputFileMap) {
       taskToValidate, new Exception(
         sprintf("%s failed, unexpected output file(s)\n%s\n\n%s\n",
                 taskToValidate.name, mismatchingFiles.join("\n"),
-                project.ext.standardOutputErrorLogger.output)))
+                taskToValidate.ext.standardOutputErrorLogger.output)))
   }
 }
 
@@ -177,7 +174,7 @@ def validateOutputFilesExist(taskToValidate) {
       taskToValidate, new Exception(
         sprintf("%s failed, missing expected file(s)\n%s\n\n%s\n",
                 taskToValidate.name, missingFiles.join("\n"),
-                project.ext.standardOutputErrorLogger.output)))
+                taskToValidate.ext.standardOutputErrorLogger.output)))
   }
 }
 
@@ -240,20 +237,25 @@ def createTestTask(taskName, taskDescription, packageSpecification,
                                 type: GradleBuild,
                                 dependsOn: createDirectoryTask)
     testTask.with {
+      // Logger which captures the output of a task.
+      // This doesn't work in parallel builds at the moment.
+      // https://github.com/gradle/gradle/issues/6068
+      ext.standardOutputErrorLogger = new StandardOutputErrorLogger()
+
       outputs.files movedOutputInputFileMap.keySet()
       startParameter createStartParameters(packageSpecification,
                                            targetDirFile)
       buildFile project.ext.buildFile
       dir project.ext.outputDir
-      doFirst { project.ext.standardOutputErrorLogger.install(it) }
+      doFirst { ext.standardOutputErrorLogger.install(it) }
       doLast {
-        project.ext.standardOutputErrorLogger.uninstall(it)
+        ext.standardOutputErrorLogger.uninstall(it)
         validateOutputFilesExist(it)
         validateFilesMatch(it, movedOutputInputFileMap)
         if (expectedScriptOutput != null) {
-          assert downloadScriptOutputToSectionsList(
-            project.ext.standardOutputErrorLogger.output) ==
-            expectedScriptOutput
+          List<String> parsedOutput = downloadScriptOutputToSectionsList(
+            ext.standardOutputErrorLogger.output)
+          assert parsedOutput == expectedScriptOutput
         }
       }
     }
@@ -629,4 +631,18 @@ task testUnitTests(type: GradleBuild, dependsOn: copyTestScript) {
   dir project.ext.outputDir
 }
 
-project.defaultTasks = project.ext.testTaskNames
+// Due to https://github.com/gradle/gradle/issues/6068 all test tasks
+// must be run in serial at the moment so the following serializes all
+// tasks.
+// When the bug in Gradle is fixed the following code can be replaced with:
+// project.defaultTasks = project.ext.testTaskNames
+ext.testTaskNames.eachWithIndex { String taskName, int index ->
+  if (index == 0) return
+  project.getTasksByName(ext.testTaskNames[index - 1], false).each {
+    Task previousTask ->
+      project.getTasksByName(taskName, false).each { Task currentTask ->
+        previousTask.dependsOn(currentTask)
+      }
+  }
+}
+project.defaultTasks = [ext.testTaskNames[0]]
