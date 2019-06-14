@@ -525,7 +525,7 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
     if (versionChanged) {
       def guidMatch = (line =~ /^(guid:)\s+(.*)/)
       def versionLabelMatch = (line =~ versionRegEx)
-      if (guidMatch.matches()) {
+      if (guidMatch.matches() && sourceFile.name != targetFile.name) {
         // Update the metadata's GUID.
         // If a file is renamed we want to make sure Unity imports it as a new
         // asset with the new filename.
