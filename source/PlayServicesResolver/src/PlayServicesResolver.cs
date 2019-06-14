@@ -466,6 +466,66 @@ namespace GooglePlayServices {
             }
         }
 
+        // Backing store for the AndroidGradlePluginVersion property.
+        private static string androidGradlePluginVersion = null;
+        // Modification time of mainTemplate.gradle the last time it was searched for the Android
+        // Gradle plugin version.
+        private static DateTime mainTemplateLastWriteTime = default(DateTime);
+        // Extracts an Android Gradle Plugin version number from the contents of a *.gradle file.
+        private static Regex androidGradlePluginVersionExtract = new Regex(
+            @"'com\.android\.tools\.build:gradle:([^']+)'$");
+
+        /// <summary>
+        /// Get the Android Gradle Plugin version used by Unity.
+        /// </summary>
+        public static string AndroidGradlePluginVersion {
+            set {
+                androidGradlePluginVersion = value;
+                mainTemplateLastWriteTime = DateTime.Now;
+            }
+            get {
+                // If the gradle template changed, read the plugin version again.
+                var mainTemplateGradlePath = GradleTemplateResolver.GradleTemplatePath;
+                if (File.Exists(mainTemplateGradlePath)) {
+                    var lastWriteTime = File.GetLastWriteTime(mainTemplateGradlePath);
+                    if (lastWriteTime.CompareTo(mainTemplateLastWriteTime) > 0) {
+                        androidGradlePluginVersion = null;
+                    }
+                }
+                // If the plugin version is cached, return it.
+                if (!String.IsNullOrEmpty(androidGradlePluginVersion)) {
+                    return androidGradlePluginVersion;
+                }
+                // Search the gradle templates for the plugin version.
+                var engineDir = AndroidPlaybackEngineDirectory;
+                if (String.IsNullOrEmpty(engineDir)) return null;
+                var gradleTemplateDir =
+                    Path.Combine(Path.Combine(engineDir, "Tools"), "GradleTemplates");
+                if (Directory.Exists(gradleTemplateDir)) {
+                    var gradleTemplates = new List<string>();
+                    if (File.Exists(mainTemplateGradlePath)) {
+                        gradleTemplates.Add(mainTemplateGradlePath);
+                    }
+                    gradleTemplates.AddRange(Directory.GetFiles(gradleTemplateDir, "*.gradle",
+                                                                SearchOption.TopDirectoryOnly));
+                    foreach (var path in gradleTemplates) {
+                        foreach (var line in File.ReadAllLines(path)) {
+                            var match = androidGradlePluginVersionExtract.Match(line);
+                            if (match != null) {
+                                androidGradlePluginVersion = match.Result("$1");
+                                break;
+                            }
+                        }
+                        if (!String.IsNullOrEmpty(androidGradlePluginVersion)) break;
+                    }
+                }
+                Log(String.Format("Detected Android Gradle Plugin Version {0}.",
+                                  androidGradlePluginVersion),
+                    level: LogLevel.Verbose);
+                return androidGradlePluginVersion;
+            }
+        }
+
         /// <summary>
         /// Whether project export is enabled.
         /// </summary>
