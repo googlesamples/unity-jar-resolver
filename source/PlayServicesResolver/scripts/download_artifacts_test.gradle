@@ -516,6 +516,21 @@ createTestTask(
    "com.google.firebase.firebase-app-unity-4.3.0.aar"])
 
 createTestTask(
+  "testAndroidSupportMultidexNotVersionLocked",
+  "Ensure com.android.support:multidex isn't version locked to other legacy " +
+  "Android support libraries",
+  "com.android.support:multidex:1.0.3;" +
+  "com.android.support:support-annotations:24.0.0",
+  ["com.android.support.multidex-1.0.3.aar":
+   "com/android/support/multidex/1.0.3/multidex-1.0.3.aar",
+   "com.android.support.support-annotations-24.0.0.jar":
+   "com/android/support/support-annotations/24.0.0/" +
+   "support-annotations-24.0.0.jar"],
+  ["Copied artifacts:\n" +
+   "com.android.support.multidex-1.0.3.aar\n" +
+   "com.android.support.support-annotations-24.0.0.jar"])
+
+createTestTask(
   "testDownloadUsingVersionWildcard",
   "Download an artifact using a version wildcard.",
   "com.android.support:appcompat-v7:23.0.+",

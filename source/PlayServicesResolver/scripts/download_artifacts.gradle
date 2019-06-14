@@ -1047,6 +1047,11 @@ int getVersionLockedPackageIndex(PackageSpecifier pkg) {
     if (specString ==~ /^com\.google\.firebase:[^:]+-unity:.*/) {
       continue
     }
+    // com.android.support:multidex is versioned independently of other
+    // legacy Android support libraries.
+    if (specString ==~ /^com\.android\.support:multidex:.*/) {
+      continue
+    }
     // Version 15+ of Google Play Services components are released and
     // versioned individually.
     if (pkg.group && pkg.group ==~ /^com\.google\.(android\.gms|firebase)$/ &&
