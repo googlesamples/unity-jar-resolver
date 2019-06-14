@@ -107,13 +107,36 @@ public class UnityCompat {
     /// from internal Unity APIs. This enum isn't guaranteed to return a value; it may return auto
     /// which means the implementation will have to decide what version to use.
     /// </remarks>
-    /// <returns>The sdk value (ie. 24 for Android 7.0 Nougat). -1 means auto select.</returns>
+    /// <returns>The sdk value (ie. 24 for Android 7.0 Nougat). If the newest Android SDK can't
+    /// be found this returns the value of the AndroidPlatformVersionFallback property.</returns>
     public static int GetAndroidTargetSDKVersion() {
         var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetSdkVersion");
-        return property == null ? -1 :
+        int apiLevel = property == null ? -1 :
             VersionFromAndroidSDKVersionsEnum(
                  Enum.GetName(property.PropertyType, property.GetValue(null, null)),
                  ANDROID_PLATFORM_FALLBACK_KEY, AndroidPlatformVersionFallback);
+        if (apiLevel >= 0) return apiLevel;
+        return FindNewestInstalledAndroidSDKVersion();
+    }
+
+    /// <summary>
+    /// Try to set the target Android SDK version.
+    /// </summary>
+    /// <param name="sdkVersion">SDK version to use, -1 for auto (newest installed SDK).</param>
+    /// <returns>true if successful, false otherwise.</returns>
+    public static bool SetAndroidTargetSDKVersion(int sdkVersion) {
+        var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetSdkVersion");
+        if (property == null) return false;
+        var enumValueString = sdkVersion >= 0 ?
+            UNITY_ANDROID_VERSION_ENUM_PREFIX + sdkVersion.ToString() :
+            UNITY_ANDROID_VERSION_ENUM_PREFIX + "Auto";
+        try {
+            property.SetValue(null, Enum.Parse(property.PropertyType, enumValueString), null);
+            return true;
+        } catch (ArgumentException) {
+            // Ignore.
+        }
+        return false;
     }
 
     /// <summary>
@@ -187,8 +210,7 @@ public class UnityCompat {
 
     // Gets the latest SDK version that's currently installed.
     // This is required for generating gradle builds.
-    [Obsolete]
-    public static int GetAndroidPlatform() {
+    public static int FindNewestInstalledAndroidSDKVersion() {
         MethodInfo platformVersionMethod = null;
         Type sdkClass = AndroidSDKToolsClass;
         if (sdkClass != null) {

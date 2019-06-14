@@ -288,10 +288,23 @@ namespace GooglePlayServices {
             // the Gradle build.
             if (!CopySrcAars(dependencies)) return false;
 
+            var repoLines = new List<string>();
+            // Optionally enable the jetifier.
+            if (SettingsDialog.UseJetifier && dependencies.Count > 0) {
+                repoLines.AddRange(new [] {
+                        "([rootProject] + (rootProject.subprojects as List)).each {",
+                        "    ext {",
+                        "        it.setProperty(\"android.useAndroidX\", true)",
+                        "        it.setProperty(\"android.enableJetifier\", true)",
+                        "    }",
+                        "}"
+                    });
+            }
+            repoLines.AddRange(PlayServicesResolver.GradleMavenReposLines(dependencies));
+
             TextFileLineInjector[] injectors = new [] {
                 new TextFileLineInjector(ReposInjectionLine, ReposStartLine, ReposEndLine,
-                                         PlayServicesResolver.GradleMavenReposLines(dependencies),
-                                         "Repos", fileDescription),
+                                         repoLines, "Repos", fileDescription),
                 new TextFileLineInjector(DependenciesToken, DependenciesStartLine,
                                          DependenciesEndLine,
                                          PlayServicesResolver.GradleDependenciesLines(

@@ -37,6 +37,7 @@ namespace GooglePlayServices {
             internal bool explodeAars;
             internal bool patchAndroidManifest;
             internal bool patchMainTemplateGradle;
+            internal bool useJetifier;
             internal bool verboseLogging;
             internal bool autoResolutionDisabledWarning;
             internal bool promptBeforeAutoResolution;
@@ -54,6 +55,7 @@ namespace GooglePlayServices {
                 explodeAars = SettingsDialog.ExplodeAars;
                 patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
                 patchMainTemplateGradle = SettingsDialog.PatchMainTemplateGradle;
+                useJetifier = SettingsDialog.UseJetifier;
                 verboseLogging = SettingsDialog.VerboseLogging;
                 autoResolutionDisabledWarning = SettingsDialog.AutoResolutionDisabledWarning;
                 promptBeforeAutoResolution = SettingsDialog.PromptBeforeAutoResolution;
@@ -72,6 +74,7 @@ namespace GooglePlayServices {
                 SettingsDialog.ExplodeAars = explodeAars;
                 SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
                 SettingsDialog.PatchMainTemplateGradle = patchMainTemplateGradle;
+                SettingsDialog.UseJetifier = useJetifier;
                 SettingsDialog.VerboseLogging = verboseLogging;
                 SettingsDialog.AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
                 SettingsDialog.PromptBeforeAutoResolution = promptBeforeAutoResolution;
@@ -87,6 +90,7 @@ namespace GooglePlayServices {
         private const string ExplodeAarsKey = Namespace + "ExplodeAars";
         private const string PatchAndroidManifestKey = Namespace + "PatchAndroidManifest";
         private const string PatchMainTemplateGradleKey = Namespace + "PatchMainTemplateGradle";
+        private const string UseJetifierKey = Namespace + "UseJetifier";
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
         private const string AutoResolutionDisabledWarningKey =
             Namespace + "AutoResolutionDisabledWarning";
@@ -103,6 +107,7 @@ namespace GooglePlayServices {
             ExplodeAarsKey,
             PatchAndroidManifestKey,
             PatchMainTemplateGradleKey,
+            UseJetifierKey,
             VerboseLoggingKey,
             AutoResolutionDisabledWarningKey,
             PromptBeforeAutoResolutionKey,
@@ -214,6 +219,11 @@ namespace GooglePlayServices {
         internal static bool PatchMainTemplateGradle {
             set { projectSettings.SetBool(PatchMainTemplateGradleKey, value); }
             get { return projectSettings.GetBool(PatchMainTemplateGradleKey, true); }
+        }
+
+        internal static bool UseJetifier {
+            set { projectSettings.SetBool(UseJetifierKey, value); }
+            get { return projectSettings.GetBool(UseJetifierKey, false); }
         }
 
         internal static bool VerboseLogging {
@@ -407,6 +417,23 @@ namespace GooglePlayServices {
                     "the mainTemplate.gradle file will not be modified.  Instead dependencies " +
                     "managed by the Android Resolver will be added to the project under {0}",
                     settings.packageDir));
+            }
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Use Jetifier.", EditorStyles.boldLabel);
+            settings.useJetifier = EditorGUILayout.Toggle(settings.useJetifier);
+            GUILayout.EndHorizontal();
+            if (settings.useJetifier) {
+                GUILayout.Label(
+                    "Legacy Android support libraries and references to them from other " +
+                    "libraries will be rewritten to use Jetpack using the Jetifier tool. " +
+                    "Enabling option allows an application to use Android Jetpack " +
+                    "when other libraries in the project use the Android support libraries.");
+            } else {
+                GUILayout.Label(
+                    "Class References to legacy Android support libraries (pre-Jetpack) will be " +
+                    "left unmodified in the project. This will possibly result in broken Android " +
+                    "builds when mixing legacy Android support libraries and Jetpack libraries.");
             }
 
             GUILayout.BeginHorizontal();

@@ -456,7 +456,7 @@ namespace GooglePlayServices {
                     foreach (var path in Directory.GetFiles(gradleLibDir, "gradle-core-*.jar",
                                                             SearchOption.TopDirectoryOnly)) {
                         var match = gradleJarVersionExtract.Match(Path.GetFileName(path));
-                        if (match != null) {
+                        if (match != null && match.Success) {
                             gradleVersion = match.Result("$1");
                             break;
                         }
@@ -473,7 +473,7 @@ namespace GooglePlayServices {
         private static DateTime mainTemplateLastWriteTime = default(DateTime);
         // Extracts an Android Gradle Plugin version number from the contents of a *.gradle file.
         private static Regex androidGradlePluginVersionExtract = new Regex(
-            @"'com\.android\.tools\.build:gradle:([^']+)'$");
+            @"['""]com\.android\.tools\.build:gradle:([^']+)['""]$");
 
         /// <summary>
         /// Get the Android Gradle Plugin version used by Unity.
@@ -511,7 +511,7 @@ namespace GooglePlayServices {
                     foreach (var path in gradleTemplates) {
                         foreach (var line in File.ReadAllLines(path)) {
                             var match = androidGradlePluginVersionExtract.Match(line);
-                            if (match != null) {
+                            if (match != null && match.Success) {
                                 androidGradlePluginVersion = match.Result("$1");
                                 break;
                             }
@@ -1552,6 +1552,7 @@ namespace GooglePlayServices {
                                           bool forceResolution = false,
                                           bool isAutoResolveJob = false) {
             JavaUtilities.CheckJdkForApiLevel();
+            CanEnableJetifierOrPromptUser();
 
             DeleteFiles(Resolver.OnBuildSettings());
 
@@ -2098,6 +2099,93 @@ namespace GooglePlayServices {
         /// </summary>
         internal static void DeleteLabeledAssets() {
             DeleteFiles(PlayServicesResolver.FindLabeledAssets());
+        }
+
+
+        /// <summary>
+        /// Prompt the user if Jetifier isn't enabled in the current version of Unity with the
+        /// current build settings.
+        /// </summary>
+        /// <returns>true if the Jetifier is enabled, false otherwise</returns>
+        internal static bool CanEnableJetifierOrPromptUser() {
+            bool useJetifier = GooglePlayServices.SettingsDialog.UseJetifier;
+            if (!useJetifier || ExecutionEnvironment.InBatchMode) return useJetifier;
+            // Minimum Android Gradle Plugin required to use the Jetifier.
+            const string MinimumAndroidGradlePluginVersionForJetifier = "3.2.0";
+            if (useJetifier && GradleTemplateEnabled &&
+                GooglePlayServices.SettingsDialog.PatchMainTemplateGradle) {
+                var version = AndroidGradlePluginVersion;
+                if ((new Dependency.VersionComparer()).Compare(
+                        MinimumAndroidGradlePluginVersionForJetifier, version) < 0) {
+                    switch (EditorUtility.DisplayDialogComplex(
+                        "Enable Jetifier",
+                        String.Format(
+                            "Jetifier for Jetpack (AndroidX) libraries is only " +
+                            "available with Android Gradle Plugin (AGP) version {0}. " +
+                            "This Unity installation uses version {1} which does not include the " +
+                            "Jetifier and therefore will not apply transformations to change " +
+                            "all legacy Android Support Library references to use Jetpack " +
+                            "(AndroidX).\n\n" +
+                            "It's possible to use the Jetifier on Android Resolver managed " +
+                            "dependencies by disabling mainTemplate.gradle patching.",
+                            MinimumAndroidGradlePluginVersionForJetifier, version),
+                        "Disable Jetifier", "Ignore", "Disable mainTemplate.gradle patching")) {
+                        case 0:  // Disable Jetifier
+                            useJetifier = false;
+                            break;
+                        case 1:  // Ignore
+                            break;
+                        case 2:  // Disable mainTemplate.gradle patching
+                            GooglePlayServices.SettingsDialog.PatchMainTemplateGradle = false;
+                            break;
+                    }
+                }
+            }
+
+            // Minimum target Android API level required to use Jetpack / AndroidX.
+            const int MinimumApiLevelForJetpack = 28;
+            int apiLevel = UnityCompat.GetAndroidTargetSDKVersion();
+            if (useJetifier && apiLevel < MinimumApiLevelForJetpack) {
+                switch (EditorUtility.DisplayDialogComplex(
+                    "Enable Jetpack",
+                    String.Format(
+                        "Jetpack (AndroidX) libraries are only supported when targeting Android " +
+                        "API {0} and above.  The currently selected target API level is {1}.\n\n" +
+                        "Would you like to set the project's target API level to {0}?",
+                        MinimumApiLevelForJetpack,
+                        apiLevel > 0 ? apiLevel.ToString() : "auto (max. installed)"),
+                    "Yes", "No", "Disable Jetifier")) {
+                    case 0:  // Yes
+                        bool setSdkVersion = UnityCompat.SetAndroidTargetSDKVersion(
+                            MinimumApiLevelForJetpack);
+                        if (!setSdkVersion) {
+                            // Get the highest installed SDK version to see whether it's
+                            // suitable.
+                            if (UnityCompat.FindNewestInstalledAndroidSDKVersion() >=
+                                MinimumApiLevelForJetpack) {
+                                // Set the mode to "auto" to use the latest installed
+                                // version.
+                                setSdkVersion = UnityCompat.SetAndroidTargetSDKVersion(-1);
+                            }
+                        }
+                        if (!setSdkVersion) {
+                            PlayServicesResolver.Log(
+                                String.Format(
+                                    "Failed to set the Android Target API level to {0}, " +
+                                    "disabled the Jetifier.", MinimumApiLevelForJetpack),
+                                level: LogLevel.Error);
+                            useJetifier = false;
+                        }
+                        break;
+                    case 1:  // No
+                        break;
+                    case 2:  // Disable Jetifier
+                        useJetifier = false;
+                        break;
+                }
+            }
+            GooglePlayServices.SettingsDialog.UseJetifier = useJetifier;
+            return useJetifier;
         }
 
         /// <summary>

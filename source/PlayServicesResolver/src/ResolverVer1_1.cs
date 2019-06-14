@@ -907,11 +907,20 @@ namespace GooglePlayServices
             var packageSpecs =
                 new List<string>(DependenciesToPackageSpecs(allDependencies.Values).Keys);
 
+            var androidGradlePluginVersion = PlayServicesResolver.AndroidGradlePluginVersion;
+            // If this version of Unity doesn't support Gradle builds use a relatively
+            // recent (June 2019) version of the data binding library.
+            if (String.IsNullOrEmpty(androidGradlePluginVersion)) {
+                androidGradlePluginVersion = "2.3.0";
+            }
+
             var gradleProjectProperties = new Dictionary<string, string>() {
                 { "ANDROID_HOME", androidSdkPath },
                 { "TARGET_DIR", Path.GetFullPath(destinationDirectory) },
                 { "MAVEN_REPOS", String.Join(";", repoList.ToArray()) },
-                { "PACKAGES_TO_COPY", String.Join(";", packageSpecs.ToArray()) }
+                { "PACKAGES_TO_COPY", String.Join(";", packageSpecs.ToArray()) },
+                { "USE_JETIFIER", SettingsDialog.UseJetifier ? "1" : "0" },
+                { "DATA_BINDING_VERSION", androidGradlePluginVersion }
             };
             var gradleArguments = new List<string> {
                 String.Format("-b \"{0}\"", buildScript),
