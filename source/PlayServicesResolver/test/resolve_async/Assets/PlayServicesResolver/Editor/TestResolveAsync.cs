@@ -215,6 +215,25 @@ public class TestResolveAsync {
                     }
                 },
                 new TestCase {
+                    Name = "ResolverForGradleBuildSystemWithTemplateUsingJetifier",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies();
+                        UseJetifier = true;
+
+                        ResolveWithGradleTemplate(
+                            GRADLE_TEMPLATE_DISABLED,
+                            "ExpectedArtifacts/NoExport/GradleTemplateJetifier",
+                            testCase, testCaseComplete,
+                            otherExpectedFiles: new [] {
+                                "Assets/Firebase/m2repository/com/google/firebase/" +
+                                "firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
+                            filesToIgnore: new HashSet<string> {
+                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
+                            });
+                    }
+                },
+                new TestCase {
                     Name = "ResolveForGradleBuildSystemLibraryWithTemplate",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -296,6 +315,19 @@ public class TestResolveAsync {
                                 AarsWithNativeLibrariesSupported ?
                                     "ExpectedArtifacts/NoExport/InternalNativeAars" :
                                     "ExpectedArtifacts/NoExport/InternalNativeAarsExploded",
+                                null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
+                    }
+                },
+                new TestCase {
+                    Name = "ResolveForInternalBuildSystemUsingJetifier",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies();
+                        UseJetifier = true;
+                        Resolve("Internal", false,
+                                AarsWithNativeLibrariesSupported ?
+                                    "ExpectedArtifacts/NoExport/InternalNativeAarsJetifier" :
+                                    "ExpectedArtifacts/NoExport/InternalNativeAarsExplodedJetifier",
                                 null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
@@ -453,6 +485,25 @@ public class TestResolveAsync {
     private static string AndroidAbisCurrentString {
         set { AndroidAbisCurrentStringProperty.SetValue(null, value, null); }
         get { return (string)AndroidAbisCurrentStringProperty.GetValue(null, null); }
+    }
+
+    /// <summary>
+    /// Get the property that gets and sets whether the Jetifier is enabled.
+    /// </summary>
+    private static PropertyInfo UseJetifierBoolProperty {
+        get {
+            return Google.VersionHandler.FindClass(
+                "Google.JarResolver", "GooglePlayServices.SettingsDialog").GetProperty(
+                    "UseJetifier", BindingFlags.Static | BindingFlags.NonPublic);
+        }
+    }
+
+    /// <summary>
+    /// Get / set jetifier setting.
+    /// </summary>
+    private static bool UseJetifier {
+        set { UseJetifierBoolProperty.SetValue(null, value, null); }
+        get { return (bool)UseJetifierBoolProperty.GetValue(null, null); }
     }
 
     /// <summary>
@@ -645,6 +696,7 @@ public class TestResolveAsync {
     /// </summary>
     private static void ClearAllDependencies() {
         UnityEngine.Debug.Log("Clear all loaded dependencies");
+        UseJetifier = false;
         AndroidResolverSupport.GetType().GetMethod(
             "ResetDependencies",
             BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
