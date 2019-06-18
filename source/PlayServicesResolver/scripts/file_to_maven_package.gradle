@@ -1,0 +1,1645 @@
+/*
+ * Copyright 2019 Google Inc. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+String helpText = """
+This script searches for libraries in Maven Central and Google Maven indexes,
+if they are found the mapping of the local file to remote package is displayed.
+If the local file isn't found a local Maven repository is created for the file
+in TARGET_DIR so that it can be referenced as a Maven package.
+
+./gradlew -b """ + project.buildscript.sourceFile + """ \\
+  \"-PTARGET_DIR=[target directory]\" \\
+  \"-PFILE_TO_MAVEN_PACKAGE_SPEC=[fn0@spec0;fnN@specN]\" \\
+  install
+
+TARGET_DIR (required project property):
+  Directory to create maven repository.
+  e.g -PTARGET_DIR=maven/repo/dir
+FILE_TO_MAVEN_PACKAGE (required project property):
+  Semicolon separated filename to package spec map.
+  For example...
+  FILE_TO_MAVEN_PACKAGE=my/package.jar@org.foo:bar:1.2.3
+  would create the maven package \"org.foo.bar:1.2.3\" in the TARGET_DIR with
+  the artifact \"my/package.jar\".
+  It's possible to omit the package spec e.g \"somelibrary.jar:;otherlib.aar:\"
+  and a placeholder package spec will be generated.
+  If the specified files are found in Maven Central or Google Maven's index
+  the remote resource will be used instead of the local file.
+  Since this property semicolon separated it needs to be quoted correctly
+  when specified via some command line shells.
+MAVEN_REPOS (optional project property):
+  Optional property which adds to the list of Maven repositories to search.
+  Repositories must support the search-maven-org API
+  (see https://github.com/sonatype-nexus-community/search-maven-org/)
+  or support Google's Maven format.
+  This is a semicolon separated list of URIs e.g
+  \"-PMAVEN_REPOS=http://search.maven.org;\"
+  Since this property semicolon separated it needs to be quoted correctly
+  when specified via some command line shells.
+MAVEN_INDEXES_DIR (optional project property):
+  Optional property that specifies the directory which contains the set of
+  maven indexes. This defaults to './maven-indexes'.
+GOOGLE_MAVEN_INDEX_URI (optional project property):
+  Optional property which specifies a URI to a Google Maven Index JSON file
+  compressed with zip.
+  If this is not specified this defaults to
+  https://raw.githubusercontent.com/googlesamples/unity-jar-resolver/\
+master/google-maven-index.zip
+"""
+
+buildscript {
+  repositories {
+    mavenLocal()
+    mavenCentral()
+    jcenter()
+  }
+  dependencies {
+    classpath "commons-io:commons-io:2.6"
+  }
+}
+
+
+import groovy.json.JsonBuilder
+import groovy.json.JsonSlurper
+import groovy.util.XmlSlurper
+import groovy.util.slurpersupport.GPathResult
+import java.nio.charset.Charset
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.util.zip.ZipEntry
+import java.util.zip.ZipException
+import java.util.zip.ZipFile
+import org.apache.commons.io.FilenameUtils
+import org.apache.commons.io.input.BOMInputStream
+import org.slf4j.LoggerFactory
+import org.xml.sax.SAXException
+
+apply plugin: 'maven'
+
+// Indexes maven.google.com.
+public class GoogleMavenIndexer {
+
+  // Version of a Maven package.
+  public class Version {
+    // Package containing the version.
+    public Package containerPackage
+    // Version string.
+    public String version
+    // Backing store for the SHA-1 property.
+    private String sha1Store = ""
+
+    /*
+     * Construct a package version.
+     *
+     * @param containerPackage Package is a version of.
+     * @param version Version string.
+     */
+    public Version(Package containerPackage, String version) {
+      this.containerPackage = containerPackage
+      this.version = version
+    }
+
+    /*
+     * Copy this version.
+     *
+     * @param ownerPackage Owner of the new version.
+     *
+     * @returns Copy of this version.
+     */
+    public Version copy(Package ownerPackage) {
+      Version newVersion = new Version(ownerPackage, version)
+      newVersion.sha1 = sha1Cached
+      return newVersion
+    }
+
+    /*
+     * Set the SHA-1 of the artifact.
+     *
+     * @param hash SHA-1 of the artifact.
+     */
+    public void setSha1(String hash) {
+      sha1Store = hash
+    }
+
+    /*
+     * Get the SHA-1 of the artifact.
+     *
+     * If the SHA-1 of the artifact isn't cached this will download the
+     * artifact.
+     *
+     * @returns SHA-1 of the artifact if successful, null otherwise.
+     */
+    public String getSha1() {
+      if (sha1Store) return sha1Store
+      try {
+        File outputFile = getArtifact(
+          containerPackage.group.index.indexer.indexDir)
+        if (outputFile) {
+          sha1Store = outputFile.bytes.digest("SHA-1")
+          outputFile.delete()
+        }
+      } catch (FileNotFoundException error) {
+        // Store an invalid SHA-1 hash to prevent this artifact from being
+        // indexed again.
+        sha1Store = "missingresource"
+      }
+      return sha1Store
+    }
+
+    /*
+     * Get the cached SHA-1 of this artifact.
+     *
+     * @returns Cached SHA-1 of this artifact.
+     */
+    public String getSha1Cached() {
+      return sha1Store
+    }
+
+    /*
+     * Get the package spec for this version.
+     *
+     * @return String package specifier (coordinate).
+     */
+    public String toString() {
+      return [containerPackage.group.name,
+              containerPackage.name,
+              version].join(":")
+    }
+
+    /*
+     * Get the POM URI
+     *
+     * @return Maven POM URI.
+     */
+    public URI getPomUri() {
+      return containerPackage.group.getUri(
+        [containerPackage.name,
+         version,
+         sprintf("%s-%s.pom", containerPackage.name, version)].join("/"))
+    }
+
+    /*
+     * Get an artifact URI for this version.
+     *
+     * @param packaging Packaging of the artifact.
+     *
+     * @return URI to the artifact.
+     */
+    public URI getArtifactUri(String packaging) {
+      return containerPackage.group.getUri(
+        [containerPackage.name,
+         version,
+         sprintf("%s-%s.%s", containerPackage.name, version,
+                 packaging)].join("/"))
+    }
+
+    /*
+     * Download the artifact associated with this package.
+     *
+     * @param outputDir Directory to download the artifact to.
+     *
+     * @returns Artifact file if successful, null otherwise.
+     *
+     * @throws FileNotFoundException if the file referenced by the uri isn't
+     * found.
+     */
+    public File getArtifact(File outputDir) throws FileNotFoundException {
+      logger.debug(sprintf("Downloading POM for %s from %s", toString(),
+                           pomUri))
+      Tuple2<GPathResult, Long> xmlAndModifiedTime = getXml(pomUri)
+      if (!xmlAndModifiedTime) return null
+      def (GPathResult xml, Long modifiedTime) = xmlAndModifiedTime
+      String packaging = null
+      for (def node in xml.childNodes()) {
+        if (node.name() == "packaging") {
+          packaging = node.text()
+          break
+        }
+      }
+      if (!packaging) {
+        packaging = "jar"
+        logger.debug(sprintf("Packaging for artifact %s not found in POM %s, " +
+                             "assuming %s", toString(), pomUri, packaging))
+      }
+      URI artifactUri = getArtifactUri(packaging)
+      File outputFile = new File(outputDir, (toString().tokenize(":") +
+                                                    [packaging]).join("."))
+      logger.debug(sprintf("Downloading %s (%s) to %s", toString(),
+                           artifactUri, outputFile))
+      return containerPackage.group.index.indexer.getBinaryContents(
+        artifactUri, outputFile)
+    }
+
+    /*
+     * Get the logger.
+     *
+     * @returns Logger for this object.
+     */
+    public Logger getLogger() {
+      return containerPackage.logger
+    }
+  }
+
+  // Maven package.
+  public class Package {
+    // Group containing the package.
+    public Group group
+    // Name of the package.
+    public String name
+    // List of versions in the package.
+    private List<Version> versionsStore = []
+
+    /*
+     * Construct a package.
+     *
+     * @param group Group the package is part of.
+     * @param name Name of this group.
+     */
+    public Package(Group group, String name) {
+      this.group = group
+      this.name = name
+    }
+
+    /*
+     * Copy this package.
+     *
+     * @param ownerGroup Owner of the new package.
+     *
+     * @returns Copy of this package.
+     */
+    public Package copy(Group ownerGroup) {
+      Package newPackage = new Package(ownerGroup, name)
+      newPackage.versionsStore = versionsStore.collect {
+        return it.copy(newPackage)
+      }
+      return newPackage
+    }
+
+    /*
+     * Add a version to the package.
+     *
+     * @param version Versions available for this package.
+     *
+     * @return List of newly added version instances.
+     */
+    public List<Version> addVersions(List<String> versions) {
+      List<Version> newVersions = versions.collect { new Version(this, it) }
+      versionsStore += newVersions
+      return newVersions
+    }
+
+    /*
+     * Get the list of versions available for this package.
+     *
+     * @returns List of versions of this package.
+     */
+    public List<Version> getVersions() {
+      return versionsStore
+    }
+
+    /*
+     * Get the logger.
+     *
+     * @returns Logger for this object.
+     */
+    public Logger getLogger() {
+      return group.logger
+    }
+  }
+
+  // Group in the index.
+  public class Group {
+    // Index containing the group
+    public Index index
+    // Name of the group
+    public String name
+    // Time the group was last updated in milliseconds since the Unix epoch.
+    public long lastModifiedTime = -1
+    // List of packages in the group.
+    private List<Package> packagesStore = []
+
+    /*
+     * Construct a group
+     *
+     * @param index Index that the group is part of.
+     * @param name Name of the group.
+     */
+    public Group(Index index, String name) {
+      this.index = index
+      this.name = name
+    }
+
+    /*
+     * Copy an existing group into this group.
+     *
+     * @param group Group to copy from.
+     */
+    public void copyFrom(Group group) {
+      name = group.name
+      lastModifiedTime = group.lastModifiedTime
+      packagesStore = group.packagesStore.collect {
+        return it.copy(this)
+      }
+    }
+
+    /*
+     * Get a URI to this group's index.
+     *
+     * @return Index URI.
+     */
+    public URI getIndexUri() {
+      return getUri("group-index.xml")
+    }
+
+    /*
+     * Add a package to this group.
+     *
+     * @param packageName Name of the package.
+     * @param versions List of versions available for this package.
+     */
+    public Package addPackage(String packageName, List<String> versions) {
+      Package pkg = new Package(this, packageName)
+      pkg.addVersions(versions)
+      packagesStore.add(pkg)
+      return pkg
+    }
+
+    /*
+     * Get the set of cached packages for this group.
+     *
+     * @returns List of packages associated with this group.
+     */
+    public List<Package> getPackagesCached() {
+      return packagesStore
+    }
+
+    /*
+     * Get the packages associated with this group, downloading them if
+     * neccesary.
+     *
+     * @returns List of packages associated with this group if successful,
+     * null otherwise.
+     */
+    public List<Package> getPackages() {
+      // If the group has already been downloaded just return the set of
+      // packages.
+      if (packagesStore) return packagesStore
+      logger.info(
+        sprintf("Downloading group index from %s", indexUri))
+      Tuple2<GPathResult, Long> xmlAndModifiedTime = getXml(indexUri)
+      if (xmlAndModifiedTime == null) return null
+
+      def (GPathResult xml, Long modifiedTime) = xmlAndModifiedTime
+      lastModifiedTime = modifiedTime
+      packagesStore = []
+      xml.childNodes().each { node ->
+        String packageName = node.name()
+        String commaSeparatedVersions = node.attributes["versions"]
+        if (commaSeparatedVersions) {
+          addPackage(packageName, commaSeparatedVersions.tokenize(","))
+        } else {
+          logger.warn(sprintf("In %s no versions found for package %s",
+                              indexUri, packageName))
+        }
+      }
+      return packagesStore
+    }
+
+    /*
+     * Get a URI relative to this group.
+     *
+     * @param path Path to append to this URI of this group.
+     *
+     * @return URI to the path relative to this group.
+     */
+    public URI getUri(String path) {
+      return index.indexer.buildUri(name.tokenize(".").join("/"), path)
+    }
+
+    /*
+     * Get the logger.
+     *
+     * @returns Logger for this object.
+     */
+    public Logger getLogger() {
+      return index.logger
+    }
+  }
+
+  // Master index of the repository.
+  public class Index {
+    // Indexer this was created from.
+    public GoogleMavenIndexer indexer
+    // Time the index was last updated in milliseconds since the Unix epoch.
+    public long lastModifiedTime
+    // List of groups in the index.
+    private List<Group> groupsStore = []
+    // Artifact version by SHA-1, updated by performIndex().
+    private Map<String, List<Version>> versionBySha1 = [:]
+
+    /*
+     * Construct an index.
+     *
+     * @param indexer Indexer this index was read from.
+     * @param lastModifiedTime Last time the index was updated in milliseconds
+     * since the Unix epoch.
+     */
+    public Index(GoogleMavenIndexer indexer, long lastModifiedTime) {
+      this.indexer = indexer
+      this.lastModifiedTime = lastModifiedTime
+    }
+
+    /*
+     * Add a groups to the index.
+     *
+     * @param names List of group names.
+     *
+     * @return List of newly added groups.
+     */
+    List<Group> addGroups(List<String> names) {
+      List<Group> newGroups = names.collect { return new Group(this, it) }
+      groupsStore += newGroups
+      return newGroups
+    }
+
+    /*
+     * Get the groups in this index.
+     *
+     * @return List of groups.
+     */
+    List<Group> getGroups() {
+      return groupsStore
+    }
+
+    /*
+     * Search this index for an artifact by SHA-1
+     *
+     * @param hash SHA-1 to search for.
+     *
+     * @returns List of matching versions.
+     */
+    List<Version> findVersionsBySha1(String hash) {
+      List<Version> matches = versionBySha1[hash]
+      return matches ?: []
+    }
+
+    /*
+     * Update the SHA-1 to artifact map.
+     */
+    void updateSha1ArtifactMap() {
+      versionBySha1 = [:]
+      groups.each { Group group ->
+        group.packagesCached.each { Package pkg ->
+          pkg.versions.each { Version version ->
+            String sha1 = version.sha1Cached
+            if (sha1) {
+              List<Version> matches = versionBySha1[sha1]
+              if (matches) {
+                matches.add(version)
+              } else {
+                matches = [version]
+              }
+              versionBySha1[sha1] = matches
+            }
+          }
+        }
+      }
+    }
+
+    /*
+     * Index all artifacts.
+     *
+     * This method writes a checkpoint of the index to a file before downloading
+     * each group index or indexing an artifact.
+     *
+     * @param indexFile File to write to while creating the index.
+     *
+     * @returns true if successful, false otherwise.
+     */
+    public boolean performIndex(File indexFile) {
+      // Calculate the total number of artifacts with and without SHA1s
+      // so that it's possible to display progress when downloading artifacts to
+      // calculate hashes.
+      int totalArtifacts = 0
+      int cachedSha1s = 0
+      for (Group group in groups) {
+        // If this is going to download the group index, checkpoint.
+        if (!group.packagesCached && !writeIndex(indexFile)) return false
+        List<Package> packages = group.packages
+        if (packages == null) {
+          logger.error(
+            sprintf("Failed to download packages for group %s (%s)",
+                    group.name, indexer.repo))
+          return false
+        }
+        group.packages.each { Package pkg ->
+          pkg.versions.each { Version version ->
+            if (version.sha1Cached) {
+              cachedSha1s++
+            }
+            totalArtifacts++
+          }
+        }
+      }
+
+      int totalProgress = 0
+      int sha1CacheProgress = 0
+      int sha1sToCache = totalArtifacts - cachedSha1s
+      for (Group group in groups) {
+        for (Package pkg in group.packages) {
+          for (Version version in pkg.versions) {
+            totalProgress++
+            if (!version.sha1Cached) {
+              if (!writeIndex(indexFile)) return false;
+              sha1CacheProgress++
+              logger.info(
+                sprintf(
+                  "Indexing % 5.1f%% (%d/%d) complete " +
+                  "(% 5.1f%% %d/%d indexed)",
+                  ((float)totalProgress / (float)totalArtifacts) * 100.0,
+                  totalProgress, totalArtifacts,
+                  ((float)sha1CacheProgress / (float)sha1sToCache) * 100.0,
+                  sha1CacheProgress, sha1sToCache))
+            }
+            if (!version.sha1) {
+              logger.error(sprintf("Failed to calculate SHA-1 of artifact %s " +
+                                   "(%s).", version, indexer.repo))
+              return false
+            }
+          }
+        }
+      }
+      updateSha1ArtifactMap()
+      if (sha1sToCache) {
+        if (!writeIndex(indexFile)) return false
+        logger.info(sprintf("Indexing of %s complete", indexer.repo))
+      }
+      return true
+    }
+
+    /*
+     * Convert the index to a data structure that can be stored in JSON.
+     *
+     * The last modified time set to -1 for all groups that are not completely
+     * indexed. This forces the group to be fetched from a remote index when
+     * initialized.
+     *
+     * @returns object which can be written to JSON using the JsonBuilder class.
+     */
+    public def toJsonData() {
+      // Convert to JSON
+      def jsonData = ["update_time": lastModifiedTime, "groups": []]
+      groups.each { Group group ->
+        def packagesJson = []
+        boolean allVersionsIndexed = true
+        group.packagesCached.each { Package pkg ->
+          def versionsJson = []
+          pkg.versions.each { Version version ->
+            if (!version.sha1Cached) {
+              allVersionsIndexed = false
+            }
+            versionsJson += ["version": version.version,
+                             "sha1": version.sha1Cached]
+          }
+          packagesJson += ["package": pkg.name,
+                           "versions": versionsJson]
+        }
+        jsonData["groups"] += ["group": group.name,
+                               "update_time": (allVersionsIndexed ?
+                                                 group.lastModifiedTime : -1),
+                               "packages": packagesJson]
+      }
+      return jsonData
+    }
+
+    /*
+     * Write the specified index to a JSON file.
+     *
+     * @param indexFile File to write to.
+     *
+     * @returns true if the index is written successfully, false otherwise.
+     */
+    public boolean writeIndex(File indexFile) {
+      logger.debug(sprintf("Write index of %s to file %s", indexer.repo,
+                           indexFile))
+      // Write the index file.
+      try {
+        indexFile.parentFile.mkdirs()
+        indexFile.write((new JsonBuilder(toJsonData())).toString())
+      } catch (IOException error) {
+        logger.error(sprintf("Failed to write index for %s to file %s (%s)",
+                             indexer.repo, indexFile, error))
+        return false
+      }
+      return true
+    }
+
+    /*
+     * Clear the index.
+     */
+    public void clear() {
+      lastModifiedTime = -1
+      groupsStore = []
+      versionBySha1 = [:]
+    }
+
+    /*
+     * Read the index from a JSON string into this instance.
+     *
+     * @param indexJson JSON string containing the index.
+     * @param indexFilename Name of the file the JSON string was read from.
+     *
+     * @returns Index if successful, null otherwise.
+     */
+    public Index fromJsonString(String indexJson, String indexFilename) {
+      clear()
+      def jsonData
+      try {
+        jsonData = (new JsonSlurper()).parseText(indexJson)
+      } catch (Exception error) {
+        logger.error(sprintf("Failed to parse index from %s for repo %s (%s)",
+                             indexFilename, indexer.repo, error))
+        return null
+      }
+      def lastModifiedTimeJson = jsonData["update_time"]
+      if (!(lastModifiedTimeJson instanceof Number)) {
+        logger.error(sprintf("'update_time' (%s) not an integer in %s",
+                             lastModifiedTimeJson.class, indexFilename))
+        return null
+      }
+      lastModifiedTime = lastModifiedTimeJson
+      def groupsJson = jsonData["groups"]
+      if (!(groupsJson instanceof ArrayList)) {
+        logger.error(sprintf("'groups' (%s) map invalid in %s",
+                             groupsJson.class, indexFilename))
+        clear()
+        return null
+      }
+      for (def groupJson in groupsJson) {
+        def groupName = groupJson["group"]
+        def groupLastModifiedTime = groupJson["update_time"]
+        def packagesJson = groupJson["packages"]
+        if (!(groupName instanceof String &&
+              groupLastModifiedTime instanceof Number &&
+              packagesJson instanceof ArrayList)) {
+          logger.error(
+            sprintf("'group' (%s), 'update_time' (%s) or 'packages' (%s) " +
+                    "invalid in %s", groupName.class, groupLastModifiedTime.class,
+                    packagesJson.class, indexFilename))
+          clear()
+          return null
+        }
+        Group group = addGroups([groupName])[0]
+        group.lastModifiedTime = groupLastModifiedTime
+        for (def packageJson in packagesJson) {
+          def packageName = packageJson["package"]
+          def versionsJson = packageJson["versions"]
+          if (!(packageName instanceof String &&
+                versionsJson instanceof ArrayList)) {
+            logger.error(
+              sprintf("'package' (%s) or 'versions' (%s) invalid in %s",
+                      packageName.class, versionsJson.class, indexFilename))
+            clear()
+            return null
+          }
+          Package pkg = group.addPackage(packageName, [])
+          for (def versionJson in versionsJson) {
+            def versionId = versionJson["version"]
+            def sha1 = versionJson["sha1"]
+            if (!(versionId instanceof String &&
+                  sha1 instanceof String)) {
+              logger.error(sprintf("'version' (%s) or 'sha1' (%s) invalid in %s",
+                                   versionId.class, sha1.class, indexFilename))
+              clear()
+              return null
+            }
+            pkg.addVersions([versionId])[0].sha1 = sha1
+          }
+        }
+      }
+      updateSha1ArtifactMap()
+      return this
+    }
+
+
+    /*
+     * Get the logger.
+     *
+     * @returns Logger for this object.
+     */
+    public Logger getLogger() {
+      return indexer.logger
+    }
+  }
+
+  // Canonical URI to the Google Maven repo.
+  public static URI googleMaven =
+    new URI("https://dl.google.com/dl/android/maven2")
+  // HTTP connection and read timeout
+  public static int httpTimeoutMilliseconds = 20 * 1000
+  // URI for the cached Maven index zip file.
+  public static URI googleMavenIndexUri =
+    new URI("https://raw.githubusercontent.com/googlesamples/" +
+            "unity-jar-resolver/master/google-maven-index.zip")
+
+  // Repo URI.
+  public URI repo
+  // Directory to store the index and temporary files.
+  public File indexDir
+  // Index JSON file within the index directory.
+  public File indexFile
+  // Logs indexer operations.
+  public Logger logger = LoggerFactory.getLogger(this.class.name)
+  // Index cached for this object.
+  private Index indexStore = null
+  // Index read from local storage.
+  private Index localIndex = null
+
+  /*
+   * Indexes a Google Maven repo.
+   *
+   * @param repo Repository to index.
+   * @param indexDir Directory to load / save index and store temporary files.
+   * @param logger If non-null, overrides this classes's logger.
+   */
+  public GoogleMavenIndexer(URI repo, File indexDir, Logger logger) {
+    this.repo = repo
+    this.indexDir = indexDir
+    if (logger != null) this.logger = logger
+    indexFile = new File(indexDir, "index.json")
+  }
+
+  /*
+   * Get the master index URI.
+   *
+   * @return URI to the master index XML file.
+   */
+  public URI getMasterIndexUri() {
+    return new URI(repo.toString() + "/master-index.xml")
+  }
+
+  /*
+   * Get the master index.
+   *
+   * @return Tuple of index contents and last modified time in milliseconds
+   * since the Unix epoch if successful, null otherwise.
+   */
+  public Index getMasterIndex() {
+    if (indexStore) return indexStore
+    localIndex = readIndex()
+
+    // If we have a cached index, and it isn't out of date return it.
+    if (localIndex) {
+      long remoteLastModifiedTime = getLastModifiedTime(masterIndexUri)
+      logger.debug(sprintf("Remote index modified %d vs. local %d",
+                           remoteLastModifiedTime,
+                           localIndex.lastModifiedTime))
+      if (remoteLastModifiedTime <= localIndex.lastModifiedTime) {
+        indexStore = localIndex
+        return indexStore
+      }
+    }
+
+    logger.info(sprintf("Downloading root index %s", masterIndexUri))
+    Tuple2<GPathResult, Long> xmlAndModifiedTime = getXml(masterIndexUri)
+    if (xmlAndModifiedTime == null) return null
+    def (GPathResult xml, Long lastModifiedTime) = xmlAndModifiedTime
+    indexStore = new Index(this, lastModifiedTime)
+    indexStore.addGroups(xml.childNodes().collect { it.name })
+
+    // If we have a cached index, try merging the existing data.
+    if (localIndex) {
+      Map<String, Group> groupByName = indexStore.groups.collectEntries {
+        return [it.name, it]
+      }
+      localIndex.groups.each { Group localGroup ->
+        Group newGroup = groupByName[localGroup.name]
+        lastModifiedTime = getLastModifiedTime(localGroup.indexUri)
+        if (lastModifiedTime <= localGroup.lastModifiedTime) {
+          newGroup.copyFrom(localGroup)
+        }
+      }
+    }
+    return indexStore
+  }
+
+  /*
+   * Download and parse XML from handling parse exceptions.
+   *
+   * @param uri URI to download XML from.
+   *
+   * @returns Tuple of the result and last modified time if successful,
+   * null otherwise.
+   */
+  public Tuple2<GPathResult, Long> getXml(URI uri) {
+    Tuple2<String, Long> contentsAndModifiedTime = getContents(uri)
+    if (contentsAndModifiedTime == null) return null
+    def (String contents, Long lastModifiedTime) = contentsAndModifiedTime
+    try {
+      return new Tuple2<GPathResult, Long>(
+        (new XmlSlurper()).parseText(contents), lastModifiedTime)
+    } catch (SAXException error) {
+      logger.error(sprintf("Failed to parse XML downloaded from %s (%s)",
+                           uri, error))
+      return null
+    }
+  }
+
+  /*
+   * Read the index from the local or remote cache.
+   *
+   * @returns Index if successful, null otherwise.
+   */
+  public Index readIndex() {
+    Index newIndex = new Index(this, -1)
+    if (!indexFile.exists()) {
+      // Try downloading the index.
+      File indexArchive = new File(indexFile.path + ".zip")
+      try {
+        logger.info(sprintf("Downloading index snapshot %s --> %s",
+                            googleMavenIndexUri, indexArchive))
+        indexArchive = getBinaryContents(googleMavenIndexUri, indexArchive)
+      } catch (FileNotFoundException error) {
+        indexArchive = null
+      }
+      if (indexArchive) {
+        try {
+          ZipFile zipFile = new ZipFile(indexArchive)
+          for (ZipEntry zipEntry in zipFile.entries()) {
+            if ((new File(zipEntry.name)).name == indexFile.name) {
+              copyStream(zipFile.getInputStream(zipEntry),
+                         indexFile.newOutputStream())
+              break
+            }
+          }
+        } catch (IOException error) {
+          logger.error(sprintf("Failed while reading index %s into %s (%s)",
+                               indexArchive, indexFile, error))
+          if (indexFile.exists()) indexFile.delete()
+        } catch (ZipException error) {
+          logger.error(sprintf("Detected corrupt index zip file %s while " +
+                               "unpacking to %s (%s)", indexArchive, indexFile,
+                               error))
+          if (indexFile.exists()) indexFile.delete()
+        } finally {
+          indexArchive.delete()
+        }
+      }
+    }
+    if (indexFile.exists()) {
+      try {
+        return newIndex.fromJsonString(indexFile.text, indexFile.path)
+      } catch (IOException error) {
+        logger.error(sprintf("Unable to read index file %s for repo %s (%s)",
+                             indexFile, repo, error))
+        return null
+      }
+    }
+  }
+
+  /*
+   * Update the specified index file.
+   *
+   * @return Index instance if successful, null otherwise
+   */
+  Index updateIndex() {
+    Index index = masterIndex
+    return index && index.performIndex(indexFile) ? index : null
+  }
+
+  /*
+   * Builds a URI in the form host/group/path.
+   *
+   * @param group Period separated group that is converted to a / separated
+   * path in the URI.
+   * @param path Path to append to the URI..
+   */
+  public URI buildUri(String group, String path) {
+    List<String> components = [repo.toString()]
+    if (group) components += group.tokenize(".")
+    if (path) components += [path]
+    return new URI(components.join("/"))
+  }
+
+  /*
+   * Open a HTTP connection.
+   *
+   * @param uri URI to connect to.
+   *
+   * @return Connection instance.
+   */
+  public HttpURLConnection openConnection(URI uri) {
+    HttpURLConnection connection = uri.toURL().openConnection()
+    connection.connectTimeout = httpTimeoutMilliseconds
+    connection.readTimeout = httpTimeoutMilliseconds
+    return connection
+  }
+
+  /*
+   * Read a character stream into a string.
+   *
+   * @param inputStream Stream to read.
+   *
+   * @return String read from the stream.
+   */
+  public String readInputStreamToString(InputStream inputStream) {
+    StringBuilder content = new StringBuilder()
+    BOMInputStream bomInputStream = new BOMInputStream(inputStream)
+    Charset charset = Charset.defaultCharset()
+    if (bomInputStream.hasBOM()) {
+      charset = Charset.availableCharsets()[
+        bomInputStream.getBOMCharsetName()]
+    }
+    BufferedReader reader = new BufferedReader(
+      new InputStreamReader(bomInputStream))
+    String line
+    while ((line = reader.readLine()) != null) {
+      content.append(line + "\n")
+    }
+    return content.toString()
+  }
+
+  /*
+   * Read the text contents of a URI and retrieve the last modified time.
+   *
+   * @param url URI to query.
+   *
+   * @return Tuple of URI contents and last modified time in milliseconds
+   * since the Unix epoch if successful, null otherwise.
+   */
+  public Tuple2<String, Long> getContents(URI uri) {
+    if (uri.scheme == "file") {
+      File inputFile = new File(uri)
+      try {
+        return new Tuple2<String, Long>(
+          readInputStreamToString(inputFile.inputStream),
+          inputFile.lastModified)
+      } catch (IOException error) {
+        logger.error(sprintf("Failed to read %s (%s)", uri, error))
+        return null
+      }
+    }
+    HttpURLConnection connection = null
+    long lastModifiedTime
+    String content
+    try {
+      connection = openConnection(uri)
+      connection.requestMethod = "GET"
+      content = readInputStreamToString(connection.inputStream)
+      lastModifiedTime = connection.lastModified
+    } catch (IOException error) {
+      logger.error(sprintf("Failed to fetch %s (%s)", uri, error))
+      return null
+    } finally {
+      if (connection != null) connection.disconnect()
+    }
+    return new Tuple2<String, Long>(content, lastModifiedTime)
+  }
+
+  /*
+   * Copy from an input stream to an output stream.
+   *
+   * @param inputStream Stream to copy from.
+   * @param outputStream Stream to write to.
+   */
+  public static void copyStream(InputStream inputStream,
+                                OutputStream outputStream) {
+    byte[] buffer = new byte[4096]
+    int readSize
+    try {
+      while ((readSize = inputStream.read(buffer)) != -1) {
+        outputStream.write(buffer, 0, readSize)
+      }
+    } finally {
+      outputStream.close()
+      inputStream.close()
+    }
+  }
+
+  /*
+   * Read binary contents of a URI and save to a file.
+   *
+   * @param uri URI to query.
+   * @param outputFile File to write to.
+   *
+   * @return Reference to the supplied outputFile if successful, null otherwise.
+   *
+   * @throws FileNotFoundException if the file referenced by the uri isn't
+   * found.
+   */
+  public File getBinaryContents(URI uri, File outputFile)
+      throws FileNotFoundException {
+    if (uri.scheme == "file") {
+      File inputFile = new File(uri)
+      try {
+        outputFile.parentFile.mkdirs()
+        copyStream(inputFile.newInputStream(), outputFile.newOutputStream())
+      } catch (IOException error) {
+        if (outputFile.exists()) outputFile.delete()
+        logger.warn(sprintf("Failed to copy %s to %s (%s)",
+                            uri, outputFile, error))
+        if (error instanceof FileNotFoundException) throw error
+        return null
+      }
+      return outputFile
+    }
+    HttpURLConnection connection = null
+    OutputStream outputStream = null
+    InputStream inputStream = null
+    try {
+      connection = openConnection(uri)
+      connection.requestMethod = "GET"
+      outputFile.parentFile.mkdirs()
+      copyStream(connection.inputStream, outputFile.newOutputStream())
+    } catch (IOException error) {
+      if (outputFile.exists()) outputFile.delete()
+      logger.warn(sprintf("Failed to download %s to %s (%s)",
+                          uri, outputFile, error))
+      if (error instanceof FileNotFoundException) throw error
+      return null
+    } finally {
+      if (inputStream != null) inputStream.close()
+      if (outputStream != null) outputStream.close()
+      if (connection != null) connection.disconnect()
+    }
+    return outputFile
+  }
+
+  /*
+   * Get the last modified time of the specified URI
+   *
+   * @param uri URI to query.
+   *
+   * @return Last modified time in milliseconds since the Unix epoch if
+   * successful, -1 otherwise.
+   */
+  public long getLastModifiedTime(URI uri) {
+    if (uri.scheme == "file") {
+      File inputFile = new File(uri)
+      try {
+        return inputFile.lastModified()
+      } catch (IOException error) {
+        logger.warn(sprintf("Failed to get last modified time of %s (%s)",
+                            uri, error))
+        return -1
+      }
+    }
+    HttpURLConnection connection
+    long lastModifiedTime = -1
+    try {
+      connection = openConnection(uri)
+      connection.setRequestMethod("HEAD")
+      if (connection.responseCode == HttpURLConnection.HTTP_OK) {
+        lastModifiedTime = connection.lastModified
+      } else {
+        logger.warn(sprintf("Failed to get last modified time of %s " +
+                            "(HTTP status=%s)", uri, connection.responseCode))
+      }
+      connection.disconnect()
+    } catch (IOException error) {
+      logger.warn(sprintf("Failed to get last modified time of %s (%s)",
+                          uri, error))
+    }
+    return lastModifiedTime
+  }
+
+  /*
+   * Generate a local file path from a directory and URI.
+   *
+   * @param containerDir Directory that is the root of the path.
+   * @param uri URI to convert to a path to store under the directory.
+   */
+  public static File uriToPath(File containerDir, URI uri) {
+    return new File(containerDir,
+                    uri.host + File.separator +
+                    uri.path.replaceAll('/', File.separator))
+  }
+}
+
+// Maven package specifier.
+public class MavenPackage {
+  // Google Maven Indexer, this should typically not be accessed directly.
+  // Instead use the thread safe accessor methods in this class.
+  public static GoogleMavenIndexer googleMavenIndexerInstance = null
+  // Whether the index is fresh.
+  private static boolean googleMavenIndexerUpdated = false
+  // The Google Maven Indexer is not thread safe so this ensures we only
+  // access it from one thread.
+  private static Object googleMavenIndexerLock = new Object()
+
+  public Logger logger = LoggerFactory.getLogger(this.class.name)
+
+  // Source file for a maven package.
+  public File sourceFile = null
+  // Group component of a maven package.
+  public String group = ""
+  // Artifact component of a maven package.
+  public String artifact = ""
+  // Version a maven package.
+  public String version = ""
+  // Type of the artifact.
+  public String artifactType = ""
+  // Maven repo where this is found.
+  public URI repo = null
+
+  /*
+   * Create a package specifier from a string.
+   *
+   * @param packageSpecString String in the form group:artifact:version.
+   * If this is an empty string or null, the package spec is generated from
+   * the sourceFile name.
+   * @param repo Repo where this package is hosted or null if it's unknown.
+   * @param sourceFile Filename to parse the artifact type (extension)
+   * from.
+   * @param logger If non-null, overrides this classes's logger.
+   *
+   * @throws InvalidUserDataException if package spec format is invalid or
+   * sourceFile does not exist.
+   */
+  public MavenPackage(String packageSpecString, URI repo, File sourceFile,
+                      Logger logger) throws InvalidUserDataException {
+    if (!packageSpecString) {
+      packageSpecString = generatePackageName(sourceFile, "org.psr", "0.0.0")
+    }
+    List<String> components = packageSpecString.tokenize(":")
+    if (components.size() != 3) {
+      throw new InvalidUserDataException(sprintf("Invalid package spec %s",
+                                                 packageSpecString))
+    }
+    if (!sourceFile.exists()) {
+      throw new InvalidUserDataException(sprintf("%s does not exist",
+                                                 sourceFile))
+    }
+    this.repo = repo
+    this.sourceFile = sourceFile
+    if (logger != null) this.logger = logger
+    group = components[0]
+    artifact = components[1]
+    version = components[2]
+    artifactType = sourceFile.name.substring(
+      sourceFile.name.lastIndexOf('.') + 1)
+  }
+
+  /*
+   * Generate a Maven package spec from a filename.
+   *
+   * @param sourceFile File to generate the Maven package name from.
+   * @param group Group to use in the generated spec.
+   * @param version Version to use in the generated spec.
+   *
+   * @return Maven package spec string.
+   */
+  private static String generatePackageName(File sourceFile, String group,
+                                            String version) {
+    // Generate a package name from the file path.
+    List<String> sourceFilePathComponents =
+      FilenameUtils.getPath(
+        FilenameUtils.separatorsToUnix(sourceFile.path))
+      .tokenize("/").collect { it.toLowerCase() }
+    String packageName = sourceFilePathComponents.join(".")
+
+    // Try trimming the path starting at common directory names used to host
+    // libraries.
+    for (String component in ["assets", "m2repository"]) {
+      int offset = sourceFilePathComponents.indexOf(component)
+      if (offset >= 0) {
+        packageName = sourceFilePathComponents.subList(
+          offset + 1, sourceFilePathComponents.size()).join(".")
+        break
+      }
+    }
+    return [group, packageName, version].join(':')
+  }
+
+  /*
+   * Search the source artifact in a set of maven repos.
+   *
+   * @param repos List of repo URIs to search.
+   *
+   * @return MavenPackage instance if it's found, null otherwise.
+   */
+  public MavenPackage search(List<URI> repos) {
+    String sha1 = sourceFileSha1
+    for (URI repo in repos) {
+      for (List<MavenPackage> foundPackages in [
+             searchGoogleMaven(sha1),
+             searchUsingMavenSolr(repo, sha1)
+           ]) {
+        if (foundPackages) {
+          if (foundPackages.size() > 1) {
+            logger.warn(
+              sprintf("Found multiple matches for %s in repo %s [%s], ignoring",
+                      sourceFile, repo,
+                      foundPackages.collect { it.toString() }.join(", ")))
+            continue
+          }
+          MavenPackage foundPackage = foundPackages[0]
+          logger.debug(sprintf("Found %s in repo %s (%s)", sourceFile, repo,
+                               foundPackage))
+          return foundPackage
+        }
+      }
+      logger.debug(sprintf("%s not found in repo %s", sourceFile, repo))
+    }
+    return null
+  }
+
+  /*
+   * Attempts to search a Maven repo that is indexed by Apache Solr.
+   *
+   * @param repo Repo URI to search.
+   * @param sha1 SHA1 of the artifact to find.
+   *
+   * @return List of MavenPackage instances that are found.
+   */
+  private List<MavenPackage> searchUsingMavenSolr(URI repo, String sha1) {
+    List<MavenPackage> foundPackages = []
+    URI searchRepo = repo
+    // Search using the Maven REST API https://search.maven.org/classic/#api
+    // To search Maven central we need to hit search.maven.org.
+    if (repo.host == "maven.org" || repo.host == "repo.maven.apache.org") {
+      searchRepo = new URI("https://search.maven.org")
+    }
+    try {
+      URL searchUrl =
+        (new URI(searchRepo.scheme, searchRepo.host, "/solrsearch/select",
+                 sprintf("q=1:\"%s\"&rows=20&wt=json", sha1), "")).toURL()
+      logger.debug(sprintf("Searching %s for %s (%s)",
+                           searchUrl, sourceFile, sha1))
+      def json = (new JsonSlurper()).parseText(searchUrl.text)
+      def docs = json.response["docs"] as List<Object>
+      if (docs) {
+        for (def doc in docs) {
+          String foundGroup = doc["g"] as String
+          String foundArtifact = doc["a"] as String
+          String foundVersion = doc["v"] as String
+          String foundPackaging = doc["p"] as String
+          if (foundGroup && foundArtifact && foundVersion && foundPackaging) {
+            foundPackages.add(
+              new MavenPackage(
+                sprintf("%s:%s:%s", foundGroup, foundArtifact, foundVersion),
+                repo, sourceFile, logger))
+          }
+        }
+      }
+    } catch (Exception e) {
+      logger.warn(sprintf("Search of %s failed (%s)", repo.toString(),
+                          e.toString()))
+    }
+    return foundPackages
+  }
+
+  /*
+   * Assign the Google Maven indexer.
+   *
+   * @param googleMavenIndexer Index to search for artifacts.
+   */
+  public static void setGoogleMavenIndexer(
+      GoogleMavenIndexer googleMavenIndexer) {
+    synchronized (MavenPackage.googleMavenIndexerLock) {
+      MavenPackage.googleMavenIndexerInstance = googleMavenIndexer
+    }
+  }
+
+  /*
+   * Update the Google Maven index.
+   *
+   * @returns Reference to the index file if successful, null otherwise.
+   */
+  public static File updateGoogleMavenIndex() {
+    synchronized (MavenPackage.googleMavenIndexerLock) {
+      GoogleMavenIndexer indexer = MavenPackage.googleMavenIndexerInstance
+      if (indexer != null) {
+        if (MavenPackage.googleMavenIndexerUpdated ||
+            indexer.updateIndex() != null) {
+          MavenPackage.googleMavenIndexerUpdated = true
+          return indexer.indexFile
+        }
+      }
+    }
+    return null
+  }
+
+  /*
+   * Attempts to index and subsequently search a Maven repo.
+   *
+   * @param sha1 SHA1 of the artifact to find.
+   *
+   * @return List of MavenPackage instances that are found.
+   */
+  private List<MavenPackage> searchGoogleMaven(String sha1) {
+    synchronized (MavenPackage.googleMavenIndexerLock) {
+      updateGoogleMavenIndex()
+      GoogleMavenIndexer indexer = MavenPackage.googleMavenIndexerInstance
+      if (indexer != null) {
+        GoogleMavenIndexer.Index index = indexer.masterIndex
+        if (index) {
+          List<GoogleMavenIndexer.Version> matches =
+            index.findVersionsBySha1(sha1)
+          if (matches) {
+            return matches.collect {
+              new MavenPackage(it.toString(), indexer.repo, sourceFile, logger)
+            }
+          }
+        }
+      }
+    }
+    return []
+  }
+
+  /*
+   * Convert to a package spec string.
+   *
+   * @return Package spec string.
+   */
+  public String toString() {
+    return sprintf("%s:%s:%s", group, artifact, version)
+  }
+
+  /*
+   * Convert to a string that can be used in a task name.
+   *
+   * @return Name friendly for tasks.
+   */
+  public String getTaskName() {
+    return sprintf("%s.%s", group, artifact)
+  }
+
+  /*
+   * Generate a path to a Maven POM directory given package spec components.
+   *
+   * @return Path to the Maven POM directory.
+   */
+  public File getPomDirectory() {
+    return new File(sprintf("%s/%s/%s", group, artifact, version))
+  }
+
+  /*
+   * Generate a path to a Maven POM file given package spec components.
+   *
+   * @return Path to the Maven POM.
+   */
+  public File getPomFile() {
+    return new File(sprintf("%s/%s-%s.pom", pomDirectory, artifact, version))
+  }
+
+  /*
+   * Generate a path to the Maven artifact file.
+   *
+   * @return Path to the Maven artifact.
+   */
+  public File getArtifactFile() {
+    return new File(sprintf("%s/%s-%s.%s", pomDirectory, artifact, version,
+                            artifactType))
+  }
+
+  /*
+   * Get the SHA1 of the source file.
+   *
+   * @return SHA1 string of the source file.
+   */
+  public String getSourceFileSha1() {
+    return sourceFile.bytes.digest("SHA-1")
+  }
+}
+
+project.ext {
+  // Parse the target directory.
+  project.ext.targetDir = null
+  if (project.hasProperty("TARGET_DIR")) {
+    project.ext.targetDir = new File(project.getProperty("TARGET_DIR"))
+  }
+
+  List<URI> mavenSearchUris = [project.project.repositories.mavenCentral().url]
+  // Retrieve a list of command line specified maven repo URIs.
+  if (project.hasProperty("MAVEN_REPOS")) {
+    mavenSearchUris = []
+    project.getProperty("MAVEN_REPOS").tokenize(";").each {
+      mavenSearchUris.push(new URI(it))
+    }
+  }
+  project.ext.mavenSearchUris = mavenSearchUris
+
+  // Override the default indexes directory.
+  project.ext.indexesDir = new File("maven-indexes")
+  if (project.hasProperty("MAVEN_INDEXES_DIR")) {
+    project.ext.indexesDir = new File(project.getProperty("MAVEN_INDEXES_DIR"))
+  }
+
+  // Override the default Google maven index zip file.
+  if (project.hasProperty("GOOGLE_MAVEN_INDEX_URI")) {
+    GoogleMavenIndexer.googleMavenIndexUri =
+      new URI(project.getProperty("GOOGLE_MAVEN_INDEX_URI"))
+  }
+
+  // Propagate Gradle's default connection timeout to the indexer.
+  if (project.hasProperty("http.connectionTimeout")) {
+    GoogleMavenIndexer.httpTimeoutMilliseconds =
+      Integer.parseInt(project.getProperty("http.connectionTimeout"))
+  }
+
+  // Propagate Gradle's Google Maven URI to the indexer.
+  GoogleMavenIndexer.googleMaven = project.project.repositories.google().url
+
+  // Create the Google Maven Indexer and assign ownership to MavenPackage.
+  MavenPackage.setGoogleMavenIndexer(
+    new GoogleMavenIndexer(
+      GoogleMavenIndexer.googleMaven,
+      GoogleMavenIndexer.uriToPath(
+        project.ext.indexesDir, GoogleMavenIndexer.googleMaven), logger))
+
+  // Parse the file to maven package spec map.
+  project.ext.mavenPackages = []
+  if (project.hasProperty("FILE_TO_MAVEN_PACKAGE")) {
+    String fileToMavenPackageSpec =
+      project.getProperty("FILE_TO_MAVEN_PACKAGE")
+    project.ext.mavenPackages =
+        fileToMavenPackageSpec.tokenize(";").findResults {
+      List<String> tokens = it.tokenize("@")
+      if (tokens.size() > 2) {
+        logger.error(
+          sprintf("Ignoring invalid file and package spec %s", it))
+        return null
+      }
+      File sourceFile = new File(tokens[0])
+      String packageSpec = tokens.size() > 1 && tokens[1] ? tokens[1] : null
+      try {
+        return new MavenPackage(packageSpec, null, sourceFile, logger)
+      } catch (InvalidUserDataException e) {
+        logger.error(sprintf("Ignoring %s (%s)", e.message, it))
+        return null
+      }
+    }
+  }
+
+  // Display parsed arguments.
+  if (project.ext.targetDir) {
+    logger.info(sprintf("TARGET_DIR: %s", project.ext.targetDir))
+  }
+  project.ext.mavenPackages.each {
+    logger.info(sprintf("FILE_TO_MAVEN_PACKAGE: file=%s package=%s",
+                         it.sourceFile, it.toString()))
+  }
+  project.ext.mavenSearchUris.each {
+    logger.info(sprintf("MAVEN_REPOS: url=%s", it))
+  }
+  logger.info(sprintf("MAVEN_INDEXES_DIR: %s", project.ext.indexesDir))
+  logger.info(sprintf("GOOGLE_MAVEN_INDEX_URI: %s",
+                      GoogleMavenIndexer.googleMavenIndexUri))
+}
+
+// Register a task to generate a Maven package for each source artifact.
+// These tasks will only generate a Maven package for the source artifact
+// if the artifact isn't found in a remote Maven repository.
+List<TaskProvider> createMavenPackageTasks =
+  project.ext.mavenPackages.collect { MavenPackage mavenPackage ->
+    String taskName = "createPomFor" + mavenPackage.taskName
+
+    // Register the task with a provider so that it isn't configured unless
+    // it's going to be executed.
+    TaskProvider createPomTaskProvider = tasks.register(taskName)
+    createPomTaskProvider.configure(
+      {
+        // Search for the package in a remote repository.
+        MavenPackage foundPackage =
+          mavenPackage.search(project.ext.mavenSearchUris)
+        // If the package is in a remote repository, just report the remote
+        // location.
+        if (foundPackage) {
+          description sprintf("Print the location of the Maven artifact %s (%s)",
+                              foundPackage.sourceFile, foundPackage)
+
+          ext.mavenPackage = foundPackage
+          doLast {
+            println sprintf("Not creating POM for %s, found at %s (%s)",
+                            foundPackage.sourceFile, foundPackage,
+                            foundPackage.repo)
+          }
+        } else {
+          description sprintf("Create a Maven POM for %s at %s in " +
+                              "TARGET_DIR (%s)",
+                              mavenPackage.sourceFile, mavenPackage,
+                              project.ext.targetDir ?: "not set")
+
+          if (!project.ext.targetDir) {
+            logger.error(
+              sprintf("TARGET_DIR must be specified to create task %s. " +
+                      "This task will do nothing!", taskName))
+            return
+          }
+
+          File pomFile = new File(project.ext.targetDir,
+                                  mavenPackage.pomFile.path)
+          File artifactFile = new File(project.ext.targetDir,
+                                       mavenPackage.artifactFile.path)
+
+          // Create a MavenPackage that points at the generated repository.
+          ext.mavenPackage = new MavenPackage(
+            mavenPackage.toString(), project.ext.targetDir.toURI(),
+            mavenPackage.sourceFile, logger)
+
+          // Generate a local Maven POM for the package.
+          inputs.files files([mavenPackage.sourceFile])
+          outputs.files files([pomFile, artifactFile])
+          doLast {
+            pom {
+              setGroupId(mavenPackage.group)
+              setArtifactId(mavenPackage.artifact)
+              setVersion(mavenPackage.version)
+              setPackaging(mavenPackage.artifactType)
+            }.writeTo(pomFile.absolutePath)
+            Files.copy(mavenPackage.sourceFile.toPath(),
+                       artifactFile.toPath(),
+                       StandardCopyOption.COPY_ATTRIBUTES,
+                       StandardCopyOption.REPLACE_EXISTING)
+          }
+        }
+      }
+    )
+    return createPomTaskProvider
+  }
+
+task usage {
+  description "Display help text for this script"
+  doLast {
+    println helpText
+  }
+}
+
+task install {
+  description ("Install the artifacts specified by FILE_TO_MAVEN_PACKAGE in " +
+               "the local Maven repository located in TARGET_DIR. If an " +
+               "artifact is found in a remote Maven repository, it will not " +
+               "installed in the local Maven repository.  Instead, the " +
+               "location of the artifact be printed in this task's summary.")
+  dependsOn createMavenPackageTasks
+
+  doLast {
+    List<MavenPackage> sortedResults = createMavenPackageTasks.collect {
+      it.get().ext.has("mavenPackage") ? it.get().ext.mavenPackage : null
+    }.findAll { it != null }.sort {
+      it.repo.toString() + it.toString()
+    }
+    if (sortedResults) {
+      println "Packages:"
+      sortedResults.each {
+        println sprintf("%s %s", it, it.repo)
+      }
+    }
+  }
+}
+
+task updateGoogleMavenIndex {
+  description "Create / update the Google Maven index in MAVEN_INDEXES_DIR"
+
+  outputs.files files(MavenPackage.googleMavenIndexerInstance.indexFile)
+
+  doLast {
+    File indexFile = MavenPackage.updateGoogleMavenIndex()
+    if (!indexFile) {
+      throw new GradleException(
+        sprintf("Failed to update Google Maven index %s", indexFile))
+    }
+    logger.info(sprintf("Updated Google Maven index %s", indexFile))
+  }
+}
+
+task searchMavenIndexes {
+  description ("Search Maven indexes in for artifacts specified by " +
+               "FILE_TO_MAVEN_PACKAGE.")
+
+  doLast {
+    List<MavenPackage> searchResults = project.ext.mavenPackages.collect {
+      return it.search(project.ext.mavenSearchUris) ?: it
+    }
+    List<MavenPackage> found = searchResults.findAll { it.repo }
+    if (found) {
+      println "Found artifacts:"
+      found.each {
+        println sprintf("%s --> %s (%s)", it.sourceFile, it, it.repo)
+      }
+    }
+    List<MavenPackage> missing = searchResults.findAll { it.repo == null }
+    if (missing) {
+      println "Missing artifacts:"
+      missing.each {
+        println sprintf("%s", it.sourceFile)
+      }
+    }
+  }
+}
+
+project.defaultTasks = [install.name]
