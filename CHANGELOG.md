@@ -1,3 +1,37 @@
+# Version 1.2.118 - Jun 18, 2019
+## New Features
+* Android Resolver: Added initial
+  [Jetifier](https://developer.android.com/studio/command-line/jetifier)
+  integration which simplifies
+  [migration](ttps://developer.android.com/jetpack/androidx/migrate)
+  to Jetpack ([AndroidX](https://developer.android.com/jetpack/androidx))
+  libraries in cases where all dependencies are managed by the Android
+  Resolver.
+  This can be enabled via the `Use Jetifier` option in the
+  `Assets > Play Services Resolver > Android Resolver > Settings` menu.
+  Caveats:
+  - If your project contains legacy Android Support Library .jar and .aar
+    files, these files will need to be removed and replaced with references to
+    artifacts on Maven via `*Dependencies.xml` files so that the Jetifier
+    can map them to Jetpack (AndroidX) libraries.
+    For example, remove the file `support-v4-27.0.2.jar` and replace it with
+    `<androidPackage spec="com.android.support:support-v4:27.0.2"/>` in a
+    `*Dependencies.xml` file.
+  - If your project contains .jar or .aar files that use the legacy Android
+    Support Libraries, these will need to be moved into a local Maven repo
+    [See this guide](https://maven.apache.org/guides/mini/guide-3rd-party-jars-local.html)
+    and then these files should be removed from your Unity project and instead
+    referenced via `*Dependencies.xml` files so that the Jetifier can
+    patch them to reference the Jetpack lirbaries.
+
+## Bug Fixes
+* Android Resolver: Disabled version locking of com.android.support:multidex
+  does not use the same versioning scheme as other legacy Android support
+  libraries.
+* Version Handler: Made Google.VersionHandler.dll's asset GUID stable across
+  releases.  This faciliates error-free import into projects where
+  Google.VersionHandler.dll is moved from the default install location.
+
 # Version 1.2.117 - Jun 12, 2019
 ## Bug Fixes
 * Android Resolver: Fix copying of .srcaar to .aar files for
