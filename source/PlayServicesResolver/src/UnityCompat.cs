@@ -37,6 +37,7 @@ public class UnityCompat {
 
     private const string UNITY_ANDROID_VERSION_ENUM_PREFIX = "AndroidApiLevel";
     private const string UNITY_ANDROID_EXTENSION_ASSEMBLY = "UnityEditor.Android.Extensions";
+    private const string UNITY_ANDROID_JAVA_TOOLS_CLASS = "UnityEditor.Android.AndroidJavaTools";
     private const string UNITY_ANDROID_SDKTOOLS_CLASS = "UnityEditor.Android.AndroidSDKTools";
     private const string UNITY_ANDROID_POST_PROCESS_ANDROID_PLAYER_CLASS =
         "UnityEditor.Android.PostProcessAndroidPlayer";
@@ -145,6 +146,24 @@ public class UnityCompat {
     [ObsoleteAttribute("InBatchMode is obsolete, use ExecutionEnvironment.InBatchMode instead")]
     public static bool InBatchMode { get { return ExecutionEnvironment.InBatchMode; } }
 
+    private static Type AndroidJavaToolsClass {
+        get {
+            return Type.GetType(
+                UNITY_ANDROID_JAVA_TOOLS_CLASS + ", " + UNITY_ANDROID_EXTENSION_ASSEMBLY);
+        }
+    }
+
+    private static object AndroidJavaToolsInstance {
+        get {
+            try {
+                return VersionHandler.InvokeStaticMethod(AndroidJavaToolsClass, "GetInstance",
+                                                         null);
+            } catch (Exception) {
+                return null;
+            }
+        }
+    }
+
     private static Type AndroidSDKToolsClass {
         get {
             Type sdkTools = Type.GetType(
@@ -158,20 +177,21 @@ public class UnityCompat {
         }
     }
 
-    private static object SDKToolsInst {
+    private static object AndroidSDKToolsInstance {
         get {
-            MethodInfo getInstanceMethod = null;
-            Type sdkClass = AndroidSDKToolsClass;
-            if (sdkClass != null)
-                getInstanceMethod = sdkClass.GetMethod("GetInstance");
-            if (getInstanceMethod == null) {
-                Debug.LogError("Could not find the " +
-                    "AndroidSDKToolsClass.GetInstance method via reflection. " + WRITE_A_BUG);
-                return null;
+            try {
+                return VersionHandler.InvokeStaticMethod(AndroidSDKToolsClass, "GetInstance", null);
+            } catch (Exception) {
             }
-
-            return getInstanceMethod.Invoke(null, BindingFlags.NonPublic | BindingFlags.Static,
-                                            null, new object[] {}, null);
+            // Unity 2018+ requires the AndroidJavaTools instance to get the SDK tools instance.
+            try {
+                return VersionHandler.InvokeStaticMethod(AndroidSDKToolsClass, "GetInstance",
+                                                         new object[] { AndroidJavaToolsInstance });
+            } catch (Exception e) {
+                Debug.LogError(String.Format("Failed while calling {0}.GetInstance() ({1}). {2}",
+                                             UNITY_ANDROID_SDKTOOLS_CLASS, e, WRITE_A_BUG));
+            }
+            return null;
         }
     }
 
@@ -190,7 +210,7 @@ public class UnityCompat {
         }
     }
 
-    private static object PostProcessAndroidPlayerInst {
+    private static object PostProcessAndroidPlayerInstance {
         get {
             Type androidPlayerClass = PostProcessAndroidPlayerClass;
             ConstructorInfo constructor = null;
@@ -211,34 +231,73 @@ public class UnityCompat {
     // Gets the latest SDK version that's currently installed.
     // This is required for generating gradle builds.
     public static int FindNewestInstalledAndroidSDKVersion() {
-        MethodInfo platformVersionMethod = null;
-        Type sdkClass = AndroidSDKToolsClass;
-        if (sdkClass != null) {
-            platformVersionMethod = sdkClass.GetMethod("GetTopAndroidPlatformAvailable");
-            if (platformVersionMethod != null) {
-                return (int)platformVersionMethod.Invoke(SDKToolsInst,
-                    BindingFlags.NonPublic, null, new object[] { null }, null);
+        var androidSdkToolsClass = AndroidSDKToolsClass;
+        if (androidSdkToolsClass != null) {
+            // Unity 2019+ only has a method to list the installed targets, so we need to parse
+            // the returned list to determine the newest Android SDK version.
+            var listTargetPlatforms = androidSdkToolsClass.GetMethod(
+                "ListTargetPlatforms", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (listTargetPlatforms != null) {
+                var sdkVersionList = new List<int>();
+                const string PLATFORM_STRING_PREFIX = "android-";
+                IEnumerable<string> platformStrings = null;
+                try {
+                    // Unity 2019+
+                    platformStrings = (IEnumerable<string>)listTargetPlatforms.Invoke(
+                        AndroidSDKToolsInstance, null);
+                } catch (Exception) {
+                }
+                if (platformStrings != null) {
+                    try {
+                        // Unity 2018+
+                        platformStrings = (IEnumerable<string>)listTargetPlatforms.Invoke(
+                            AndroidSDKToolsInstance, new object[] { AndroidJavaToolsInstance });
+                    } catch (Exception) {
+                    }
+                }
+                if (platformStrings != null) {
+                    foreach (var platformString in platformStrings) {
+                        if (platformString.StartsWith(PLATFORM_STRING_PREFIX)) {
+                            int sdkVersion;
+                            if (Int32.TryParse(
+                                    platformString.Substring(PLATFORM_STRING_PREFIX.Length),
+                                    out sdkVersion)) {
+                                sdkVersionList.Add(sdkVersion);
+                            }
+                        }
+                    }
+                    sdkVersionList.Sort();
+                    var numberOfSdks = sdkVersionList.Count;
+                    if (numberOfSdks > 0) {
+                        return sdkVersionList[numberOfSdks - 1];
+                    }
+                }
+            }
+            var getTopAndroidPlatformAvailable =
+                androidSdkToolsClass.GetMethod("GetTopAndroidPlatformAvailable");
+            if (getTopAndroidPlatformAvailable != null) {
+                return (int)getTopAndroidPlatformAvailable.Invoke(
+                    AndroidSDKToolsInstance, BindingFlags.NonPublic, null,
+                    new object[] { null }, null);
             }
         }
 
         // In Unity 4.x the method to get the platform was different and complex enough that
         // another function was was made to get the value unfortunately on another class.
-        sdkClass = PostProcessAndroidPlayerClass;
-        if (sdkClass != null) {
-            platformVersionMethod = sdkClass.GetMethod("GetAndroidPlatform",
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            if (platformVersionMethod != null) {
-                object inst = PostProcessAndroidPlayerInst;
-                return (int)platformVersionMethod.Invoke(inst,
-                    BindingFlags.NonPublic, null, new object[] {}, null);
-            }
+        var postProcessAndroidPlayerClass = PostProcessAndroidPlayerClass;
+        MethodInfo getAndroidPlatform =
+            postProcessAndroidPlayerClass != null ?
+            postProcessAndroidPlayerClass.GetMethod(
+                "GetAndroidPlatform", BindingFlags.Instance | BindingFlags.NonPublic) : null;
+        if (getAndroidPlatform != null) {
+            return (int)getAndroidPlatform.Invoke(
+                PostProcessAndroidPlayerInstance, BindingFlags.NonPublic, null,
+                new object[] {}, null);
         }
 
         Debug.LogError(String.Format(
-            "Could not find the {0}.GetTopAndroidPlatformAvailable or " +
-            "{1}.GetAndroidPlatform methods via reflection. {2} Resorting to reading a fallback " +
-            "value from the editor preferences {3}: {4}",
-            UNITY_ANDROID_SDKTOOLS_CLASS, UNITY_ANDROID_POST_PROCESS_ANDROID_PLAYER_CLASS,
+            "Failed to determine the most recently installed Android SDK version. {0} " +
+            "Resorting to reading a fallback value from the editor preferences {1}: {2}",
             WRITE_A_BUG, ANDROID_PLATFORM_FALLBACK_KEY, AndroidPlatformVersionFallback));
 
         return AndroidPlatformVersionFallback;
@@ -256,7 +315,7 @@ public class UnityCompat {
         if (sdkClass != null)
             buildToolsVersionMethod = sdkClass.GetMethod("BuildToolsVersion");
         if (buildToolsVersionMethod != null) {
-            return (string)buildToolsVersionMethod.Invoke(SDKToolsInst,
+            return (string)buildToolsVersionMethod.Invoke(AndroidSDKToolsInstance,
                 BindingFlags.NonPublic, null, new object[] { null }, null);
         }
 
