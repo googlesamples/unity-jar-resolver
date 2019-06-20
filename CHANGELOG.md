@@ -1,3 +1,8 @@
+# Version 1.2.119 - Jun 19, 2019
+## Bug Fixes
+* Android Resolver: Fixed error reported when using Jetifier integration
+  in Unity 2018+ if the target SDK is set to "highest installed".
+
 # Version 1.2.118 - Jun 18, 2019
 ## New Features
 * Android Resolver: Added initial
