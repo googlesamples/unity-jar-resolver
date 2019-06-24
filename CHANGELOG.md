@@ -1,4 +1,9 @@
 # Version TBD - TBD
+## New Features
+* Android Resolver: Added support for loading *Dependencies.xml files from
+  Unity Package Manager packages.
+* iOS Resolver: Added support for loading *Dependencies.xml files from
+  Unity Package Manager packages.
 ## Bug Fixes
 * Android Resolver: Fixed generation of relative repo paths when using
   mainTemplate.gradle resolver.
