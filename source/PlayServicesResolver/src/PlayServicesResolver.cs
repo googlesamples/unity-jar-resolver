@@ -1874,7 +1874,7 @@ namespace GooglePlayServices {
             if (dependencies.Count > 0) {
                 var exportEnabled = GradleProjectExportEnabled;
                 var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
-                var projectFileUri = FILE_SCHEME + projectPath;
+                var projectFileUri = ResolverVer1_1.RepoPathToUri(projectPath);
                 lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
                 lines.Add("    project.repositories {");
                 // projectPath will point to the Unity project root directory as Unity will

@@ -36,15 +36,12 @@ namespace GooglePlayServices {
         public static HashSet<string> FindLocalRepos(ICollection<Dependency> dependencies) {
             // Find all repositories embedded in the project.
             var repos = new HashSet<string>();
-            var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
+            var projectUri = ResolverVer1_1.RepoPathToUri(Path.GetFullPath("."));
             foreach (var reposAndSources in
                      PlayServicesResolver.GetRepos(dependencies: dependencies)) {
                 var repoUri = reposAndSources.Key;
-                if (repoUri.StartsWith(PlayServicesResolver.FILE_SCHEME)) {
-                    var fullPath = repoUri.Substring(PlayServicesResolver.FILE_SCHEME.Length);
-                    if (fullPath.StartsWith(projectPath)) {
-                        repos.Add(fullPath.Substring(projectPath.Length + 1));
-                    }
+                if (repoUri.StartsWith(projectUri)) {
+                    repos.Add(Uri.UnescapeDataString(repoUri.Substring(projectUri.Length + 1)));
                 }
             }
             return repos;

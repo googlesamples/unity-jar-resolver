@@ -1,3 +1,11 @@
+# Version TBD - TBD
+## Bug Fixes
+* Android Resolver: Fixed generation of relative repo paths when using
+  mainTemplate.gradle resolver.
+* Android Resolver: Fixed copy of .srcaar to .aar files in repos embedded in a
+  project when a project path has characters (e.g whitespace) that are escaped
+  during conversion to URIs.
+
 # Version 1.2.119 - Jun 19, 2019
 ## Bug Fixes
 * Android Resolver: Fixed error reported when using Jetifier integration

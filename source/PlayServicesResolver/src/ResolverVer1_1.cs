@@ -558,9 +558,15 @@ namespace GooglePlayServices
         /// for a match.
         /// </summary>
         /// <param name="repoPath">Repo path to convert.</param>
-        /// <param name="sourceLocation>XML or source file this path is referenced from.</param>
+        /// <param name="sourceLocation>XML or source file this path is referenced from. If this is
+        /// null the calling method's source location is used when logging the source of this
+        /// repo declaration.</param>
         /// <returns>URI to the repo.</returns>
-        private static string RepoPathToUri(string repoPath, string sourceLocation) {
+        internal static string RepoPathToUri(string repoPath, string sourceLocation=null) {
+            if (sourceLocation == null) {
+                // Get the caller's stack frame.
+                sourceLocation = System.Environment.StackTrace.Split(new char[] { '\n' })[1];
+            }
             // Filter Android SDK repos as they're supplied in the build script.
             if (repoPath.StartsWith(PlayServicesSupport.SdkVariable)) return null;
             // Since we need a URL, determine whether the repo has a scheme.  If not,
@@ -623,7 +629,7 @@ namespace GooglePlayServices
             };
             // Add global repos first.
             foreach (var kv in PlayServicesSupport.AdditionalRepositoryPaths) {
-                addToSourcesByRepo(RepoPathToUri(kv.Key, kv.Value), kv.Value);
+                addToSourcesByRepo(RepoPathToUri(kv.Key, sourceLocation: kv.Value), kv.Value);
             }
             // Build array of repos to search, they're interleaved across all dependencies as the
             // order matters.
@@ -636,7 +642,8 @@ namespace GooglePlayServices
                     var repos = dependency.Repositories;
                     if (i >= repos.Length) continue;
                     var createdBy = CommandLine.SplitLines(dependency.CreatedBy)[0];
-                    addToSourcesByRepo(RepoPathToUri(repos[i], createdBy), createdBy);
+                    addToSourcesByRepo(RepoPathToUri(repos[i], sourceLocation: createdBy),
+                                       createdBy);
                 }
             }
             var sourcesByRepoList = new List<KeyValuePair<string, string>>();
