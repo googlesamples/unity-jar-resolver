@@ -288,6 +288,8 @@ namespace GooglePlayServices {
             /// changed.</param>
             public delegate void Changed(T previousValue, T currentValue);
 
+            // Whether the previous value has been initialized.
+            private bool previousValueInitialized = false;
             // Previous value of the property.
             private T previousValue = default(T);
             // Previous value of the property when it was last polled.
@@ -306,16 +308,14 @@ namespace GooglePlayServices {
             /// <summary>
             /// Create the poller.
             /// </summary>
-            /// <param name="initialValue">Initial value of the property being polled.</param>
             /// <param name="propertyName">Name of the property being polled.</param>
             /// <param name="delayTimeInSeconds">Time to wait before signalling that the value
             /// has changed.</param>
             /// <param name="checkIntervalInSeconds">Time to check the value of the property for
             /// changes.<param>
-            public PropertyPoller(T initialValue, string propertyName,
+            public PropertyPoller(string propertyName,
                                   int delayTimeInSeconds = 3,
                                   int checkIntervalInSeconds = 1) {
-                previousValue = initialValue;
                 this.propertyName = propertyName;
                 this.delayTimeInSeconds = delayTimeInSeconds;
                 this.checkIntervalInSeconds = checkIntervalInSeconds;
@@ -334,6 +334,13 @@ namespace GooglePlayServices {
                 }
                 previousCheckTime = currentTime;
                 T currentValue = getCurrentValue();
+                // If the poller isn't initailized, store the current value before polling for
+                // changes.
+                if (!previousValueInitialized) {
+                    previousValueInitialized = true;
+                    previousValue = currentValue;
+                    return;
+                }
                 if (!currentValue.Equals(previousValue)) {
                     if (currentValue.Equals(previousPollValue)) {
                         if (currentTime.Subtract(previousPollTime).TotalSeconds >=
@@ -421,8 +428,8 @@ namespace GooglePlayServices {
         /// <summary>
         /// Polls for changes in the bundle ID.
         /// </summary>
-        private static PropertyPoller<string> bundleIdPoller = new PropertyPoller<string>(
-            GetAndroidApplicationId(), "Bundle ID");
+        private static PropertyPoller<string> bundleIdPoller =
+            new PropertyPoller<string>("Bundle ID");
 
         /// <summary>
         /// Arguments for the bundle ID update event.
@@ -669,8 +676,7 @@ namespace GooglePlayServices {
         /// Polls for changes in build system settings.
         /// </summary>
         private static PropertyPoller<AndroidBuildSystemSettings> androidBuildSystemPoller =
-            new PropertyPoller<AndroidBuildSystemSettings>(
-                AndroidBuildSystemSettings.Current, "Android Build Settings");
+            new PropertyPoller<AndroidBuildSystemSettings>("Android Build Settings");
 
         /// <summary>
         /// Arguments for the Android build system changed event.
@@ -717,7 +723,7 @@ namespace GooglePlayServices {
         /// Polls for changes in the Android device ABI.
         /// </summary>
         private static PropertyPoller<AndroidAbis> androidAbisPoller =
-            new PropertyPoller<AndroidAbis>(new AndroidAbis(), "Android Target Device ABI");
+            new PropertyPoller<AndroidAbis>("Android Target Device ABI");
 
         /// <summary>
         /// Logger for this module.
@@ -773,7 +779,7 @@ namespace GooglePlayServices {
         /// Polls for changes in AndroidSdkRoot.
         /// </summary>
         private static PropertyPoller<string> androidSdkRootPoller =
-            new PropertyPoller<string>(AndroidSdkRoot, "Android SDK Path");
+            new PropertyPoller<string>("Android SDK Path");
 
         /// <summary>
         /// Arguments for the AndroidSdkRootChanged event.
@@ -1682,14 +1688,17 @@ namespace GooglePlayServices {
             }
 
             if (forceResolution) {
+                Log("Forcing resolution...", level: LogLevel.Verbose);
                 DeleteLabeledAssets();
             } else {
+                Log("Checking for changes from previous resolution...", level: LogLevel.Verbose);
                 // Only resolve if user specified dependencies changed or the output files
                 // differ to what is present in the project.
                 var currentState = DependencyState.GetState();
                 var previousState = DependencyState.ReadFromFile();
                 if (previousState != null) {
                     if (currentState.Equals(previousState)) {
+                        Log("No changes found, resolution skipped.", level: LogLevel.Verbose);
                         if (resolutionComplete != null) resolutionComplete(true);
                         return;
                     }
@@ -1703,6 +1712,9 @@ namespace GooglePlayServices {
                     // Delete all labeled assets to make sure we don't leave any stale transitive
                     // dependencies in the project.
                     DeleteLabeledAssets();
+                } else {
+                    Log("Failed to parse previous resolution state, running resolution...",
+                        level: LogLevel.Verbose);
                 }
             }
 

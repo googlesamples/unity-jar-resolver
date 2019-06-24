@@ -105,9 +105,20 @@ internal class AndroidAbis {
                 {"x86", ""}
             };
         }
-    }
 
-    private static PropertyConfiguration propertyConfiguration = null;
+        // Backing store for the Instance property.
+        private static PropertyConfiguration instance = null;
+
+        // Get the property configuration singleton.
+        public static PropertyConfiguration Instance {
+            get {
+                lock (typeof(PropertyConfiguration)) {
+                    if (instance == null) instance = new PropertyConfiguration();
+                }
+                return instance;
+            }
+        }
+    }
 
     /// <summary>
     /// Set of selected ABIs.
@@ -118,9 +129,6 @@ internal class AndroidAbis {
     /// Create the default ABI set.
     /// </summary>
     public AndroidAbis() {
-        lock (typeof(AndroidAbis)) {
-            if (propertyConfiguration == null) propertyConfiguration = new PropertyConfiguration();
-        }
         abis = new HashSet<string>(Supported);
     }
 
@@ -185,7 +193,7 @@ internal class AndroidAbis {
     // UnityEditor.AndroidArchitecture enumeration value name.
     /// </summary>
     private static Dictionary<string, string> SupportedAbiToAbiEnumValue {
-        get { return propertyConfiguration.SupportedAbiToAbiEnumValue; }
+        get { return PropertyConfiguration.Instance.SupportedAbiToAbiEnumValue; }
     }
 
     /// <summary>
@@ -236,6 +244,7 @@ internal class AndroidAbis {
     /// </summary>
     public static AndroidAbis Current {
         set {
+            var propertyConfiguration = PropertyConfiguration.Instance;
             var property = propertyConfiguration.Property;
             var enumType = propertyConfiguration.EnumType;
             var supportedAbis = SupportedAbiToAbiEnumValue;
@@ -275,6 +284,7 @@ internal class AndroidAbis {
         }
 
         get {
+            var propertyConfiguration = PropertyConfiguration.Instance;
             var property = propertyConfiguration.Property;
             var enumType = propertyConfiguration.EnumType;
             var supportedAbis = SupportedAbiToAbiEnumValue;

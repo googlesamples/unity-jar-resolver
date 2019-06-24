@@ -10,6 +10,8 @@
 * Android Resolver: Fixed copy of .srcaar to .aar files in repos embedded in a
   project when a project path has characters (e.g whitespace) that are escaped
   during conversion to URIs.
+* Android Resolver: Fixed auto-resolution always running if the Android SDK
+  is managed by Unity Hub.
 
 # Version 1.2.119 - Jun 19, 2019
 ## Bug Fixes
