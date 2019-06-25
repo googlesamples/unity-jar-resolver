@@ -1,4 +1,4 @@
-# Version TBD - TBD
+# Version 1.2.120 - Jun 26, 2019
 ## New Features
 * Android Resolver: Added support for loading *Dependencies.xml files from
   Unity Package Manager packages.
