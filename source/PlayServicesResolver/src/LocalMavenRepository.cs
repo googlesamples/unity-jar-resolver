@@ -36,7 +36,7 @@ namespace GooglePlayServices {
         public static HashSet<string> FindLocalRepos(ICollection<Dependency> dependencies) {
             // Find all repositories embedded in the project.
             var repos = new HashSet<string>();
-            var projectUri = ResolverVer1_1.RepoPathToUri(Path.GetFullPath("."));
+            var projectUri = GradleResolver.RepoPathToUri(Path.GetFullPath("."));
             foreach (var reposAndSources in
                      PlayServicesResolver.GetRepos(dependencies: dependencies)) {
                 var repoUri = reposAndSources.Key;

@@ -364,20 +364,10 @@ namespace GooglePlayServices {
         /// </summary>
         private static PlayServicesSupport svcSupport;
 
-        /// <summar>
-        /// Selects between different types of IResolver implementations that can be used.
-        /// </summary>
-        public enum ResolverType
-        {
-            Default,            // Standard versioned resolver
-        }
-
         /// <summary>
-        /// The resolver to use, injected to allow for version updating.
+        /// Resolver that uses Gradle to download libraries and embed them within a Unity project.
         /// </summary>
-        private static Dictionary<ResolverType, IResolver> _resolvers =
-            new Dictionary<ResolverType, IResolver>();
-
+        private static GradleResolver gradleResolver;
 
         /// <summary>
         /// Resoluton job.
@@ -835,12 +825,24 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Returns true if automatic resolution is enabled.
+        /// Auto-resolution is never enabled in batch mode.  Each build setting change must be
+        /// manually followed by DoResolution().
+        /// </summary>
+        public static bool AutomaticResolutionEnabled {
+            get {
+                return SettingsDialogObj.EnableAutoResolution &&
+                    !ExecutionEnvironment.InBatchMode;
+            }
+        }
+
+        /// <summary>
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver() {
             // Create the resolver.
             if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) {
-                RegisterResolver(new ResolverVer1_1());
+                gradleResolver = new GradleResolver();
                 // Monitor Android dependency XML files to perform auto-resolution.
                 AddAutoResolutionFilePatterns(xmlDependencies.fileRegularExpressions);
 
@@ -928,48 +930,6 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
-        /// Registers the resolver.
-        /// </summary>
-        /// <remarks>
-        /// The resolver with the greatest version number is retained
-        /// </remarks>
-        /// <returns>The resolver.</returns>
-        /// <param name="resolverImpl">Resolver impl.</param>
-        public static IResolver RegisterResolver(IResolver resolverImpl,
-                                                 ResolverType resolverType = ResolverType.Default) {
-            if (resolverImpl == null) {
-                return Resolver;
-            }
-
-            IResolver destResolver;
-            if (!_resolvers.TryGetValue(resolverType, out destResolver) ||
-                destResolver.Version() < resolverImpl.Version()) {
-                _resolvers[resolverType] = resolverImpl;
-            }
-            return resolverImpl;
-        }
-
-        private static ResolverType CurrentResolverType {
-            get { return ResolverType.Default; }
-        }
-
-        /// <summary>
-        /// Gets the resolver.
-        /// </summary>
-        /// <value>The resolver.</value>
-        public static IResolver Resolver {
-            get {
-                IResolver resolver = null;
-                if (resolver == null) {
-                    _resolvers.TryGetValue(ResolverType.Default, out resolver);
-                }
-
-                return resolver;
-            }
-        }
-
-
-        /// <summary>
         /// Patterns of files that are monitored to trigger auto resolution.
         /// </summary>
         private static HashSet<Regex> autoResolveFilePatterns = new HashSet<Regex>();
@@ -1019,7 +979,7 @@ namespace GooglePlayServices {
                                                    string[] deletedAssets,
                                                    string[] movedAssets,
                                                    string[] movedFromAssetPaths) {
-            if (Resolver != null) {
+            if (gradleResolver != null) {
                 // If the manifest changed, try patching it.
                 var manifestPath = FileUtils.NormalizePathSeparators(
                     SettingsDialogObj.AndroidManifestPath);
@@ -1030,7 +990,7 @@ namespace GooglePlayServices {
                     }
                 }
 
-                if (Resolver.AutomaticResolutionEnabled()) {
+                if (AutomaticResolutionEnabled) {
                     // If anything has been removed from the packaging directory schedule
                     // resolution.
                     foreach (string asset in deletedAssets) {
@@ -1078,7 +1038,7 @@ namespace GooglePlayServices {
             if (UnityEngine.Application.isPlaying) return;
             // If the Android resolver isn't enabled or automatic resolution is disabled,
             // do nothing.
-            if (Resolver == null || !SettingsDialogObj.AutoResolveOnBuild) {
+            if (gradleResolver == null || !SettingsDialogObj.AutoResolveOnBuild) {
                 return;
             }
             // If post-processing has already been executed since this module was loaded, don't
@@ -1086,7 +1046,7 @@ namespace GooglePlayServices {
             scenesProcessed++;
             if (scenesProcessed > 1) return;
             Log("Starting auto-resolution before scene build...", level: LogLevel.Verbose);
-            bool success = ResolveSync(false);
+            bool success = ResolveSync(false, true);
             Log(String.Format("Android resolution {0}.", success ? "succeeded" : "failed"),
                     level: LogLevel.Verbose);
         }
@@ -1132,9 +1092,9 @@ namespace GooglePlayServices {
         /// </summary>
         /// <param name="resolutionComplete">Called when resolution is complete.</param>
         private static void AutoResolve(Action resolutionComplete) {
-            if (Resolver.AutomaticResolutionEnabled()) {
+            if (AutomaticResolutionEnabled) {
                 ScheduleResolve(
-                    false, (success) => {
+                    false, false, (success) => {
                         if (resolutionComplete != null) resolutionComplete();
                     }, true);
             }
@@ -1159,8 +1119,8 @@ namespace GooglePlayServices {
         /// Auto-resolve if any packages need to be resolved.
         /// </summary>
         private static void Reresolve() {
-            if (Resolver.AutomaticResolutionEnabled()) {
-                if (DeleteFiles(Resolver.OnBuildSettings())) ScheduleAutoResolve();
+            if (AutomaticResolutionEnabled && gradleResolver != null) {
+                if (DeleteFiles(gradleResolver.OnBuildSettings())) ScheduleAutoResolve();
             }
         }
 
@@ -1406,7 +1366,7 @@ namespace GooglePlayServices {
         /// </summary>
         private static void ResolveOnAndroidSdkRootChange(
                 object sender, AndroidSdkRootChangedArgs args) {
-            ScheduleResolve(true, null, true);
+            ScheduleResolve(true, false, null, true);
         }
 
         /// <summary>
@@ -1474,7 +1434,7 @@ namespace GooglePlayServices {
         public static void Resolve(Action resolutionComplete = null,
                                    bool forceResolution = false,
                                    Action<bool> resolutionCompleteWithResult = null) {
-            ScheduleResolve(forceResolution,
+            ScheduleResolve(forceResolution, false,
                             (success) => {
                                 if (resolutionComplete != null) {
                                     resolutionComplete();
@@ -1505,16 +1465,29 @@ namespace GooglePlayServices {
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
         /// <returns>true if successful, false otherwise.</returns>
-        public static bool ResolveSync(bool forceResolution) {
+        private static bool ResolveSync(bool forceResolution, bool closeWindowOnCompletion) {
             bool successful = false;
             var completeEvent = new ManualResetEvent(false);
-            ScheduleResolve(forceResolution, (success) => {
+            ScheduleResolve(forceResolution, closeWindowOnCompletion, (success) => {
                     successful = success;
                     completeEvent.Set();
                 }, false);
             PollManualResetEvent(completeEvent);
             return successful;
+        }
+
+        /// <summary>
+        /// Resolve dependencies synchronously.
+        /// </summary>
+        /// <param name="forceResolution">Whether resolution should be executed when no dependencies
+        /// have changed.  This is useful if a dependency specifies a wildcard in the version
+        /// expression.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        public static bool ResolveSync(bool forceResolution) {
+            return ResolveSync(forceResolution, false);
         }
 
         /// <summary>
@@ -1535,7 +1508,7 @@ namespace GooglePlayServices {
         /// <param name="complete">Delegate called when delete is complete.</param>
         public static void DeleteResolvedLibraries(System.Action complete = null) {
             RunOnMainThread.Schedule(() => {
-                    if (Resolver.AutomaticResolutionEnabled()) {
+                    if (AutomaticResolutionEnabled) {
                         Log("Disabling auto-resolution to prevent libraries from being " +
                             "resolved after deletion.", level: LogLevel.Warning);
                         SettingsDialogObj.EnableAutoResolution = false;
@@ -1563,10 +1536,12 @@ namespace GooglePlayServices {
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
         /// <param name="resolutionCompleteWithResult">Delegate called when resolution is complete
         /// with a parameter that indicates whether it succeeded or failed.</param>
         /// <param name="isAutoResolveJob">Whether this is an auto-resolution job.</param>
-        private static void ScheduleResolve(bool forceResolution,
+        private static void ScheduleResolve(bool forceResolution, bool closeWindowOnCompletion,
                                             Action<bool> resolutionCompleteWithResult,
                                             bool isAutoResolveJob) {
             bool firstJob;
@@ -1584,15 +1559,17 @@ namespace GooglePlayServices {
                     new ResolutionJob(
                         isAutoResolveJob,
                         () => {
-                            ResolveUnsafe(resolutionComplete: (success) => {
+                            ResolveUnsafe(
+                                (success) => {
                                     SignalResolveJobComplete(() => {
                                             if (resolutionCompleteWithResult != null) {
                                                 resolutionCompleteWithResult(success);
                                             }
                                         });
                                 },
-                                forceResolution: forceResolution,
-                                isAutoResolveJob: isAutoResolveJob);
+                                forceResolution,
+                                isAutoResolveJob,
+                                closeWindowOnCompletion);
                         }));
             }
             if (firstJob) ExecuteNextResolveJob();
@@ -1606,13 +1583,16 @@ namespace GooglePlayServices {
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
-        private static void ResolveUnsafe(Action<bool> resolutionComplete = null,
-                                          bool forceResolution = false,
-                                          bool isAutoResolveJob = false) {
+        /// <param name="isAutoResolveJob">Whether this is an auto-resolution job.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
+        private static void ResolveUnsafe(Action<bool> resolutionComplete,
+                                          bool forceResolution, bool isAutoResolveJob,
+                                          bool closeWindowOnCompletion) {
             JavaUtilities.CheckJdkForApiLevel();
             CanEnableJetifierOrPromptUser();
 
-            DeleteFiles(Resolver.OnBuildSettings());
+            DeleteFiles(gradleResolver.OnBuildSettings());
 
             // If the internal build system is being used and AAR explosion is disabled the build
             // is going to fail so warn and enable explosion.
@@ -1751,8 +1731,9 @@ namespace GooglePlayServices {
                     });
             } else {
                 lastError = "";
-                Resolver.DoResolution(
-                    svcSupport, SettingsDialogObj.PackageDir,
+                gradleResolver.DoResolution(
+                    SettingsDialogObj.PackageDir,
+                    closeWindowOnCompletion,
                     () => {
                         RunOnMainThread.Run(() => {
                                 finishResolution(String.IsNullOrEmpty(lastError), lastError);
@@ -1786,26 +1767,22 @@ namespace GooglePlayServices {
         [MenuItem("Assets/Play Services Resolver/Android Resolver/Settings")]
         public static void SettingsDialog()
         {
-            if (Resolver != null)
-            {
-                Resolver.ShowSettingsDialog();
-            }
-            else
-            {
-                DefaultResolver.ShowSettings();
-            }
+            SettingsDialog window = (SettingsDialog)EditorWindow.GetWindow(
+                typeof(SettingsDialog), true, "Android Resolver Settings");
+            window.Initialize();
+            window.Show();
         }
 
         /// <summary>
         /// Interactive resolution of dependencies.
         /// </summary>
         private static void ExecuteMenuResolve(bool forceResolution) {
-            if (Resolver == null) {
+            if (gradleResolver == null) {
                 NotAvailableDialog();
                 return;
             }
             ScheduleResolve(
-                forceResolution, (success) => {
+                forceResolution, false, (success) => {
                     EditorUtility.DisplayDialog(
                         "Android Dependencies",
                         String.Format("Resolution {0}", success ? "Succeeded" :
@@ -1860,7 +1837,7 @@ namespace GooglePlayServices {
         public static IList<KeyValuePair<string, string>> GetPackageSpecs(
                 IEnumerable<Dependency> dependencies = null) {
             return new List<KeyValuePair<string, string>>(new SortedList<string, string>(
-                ResolverVer1_1.DependenciesToPackageSpecs(GetOrReadDependencies(dependencies))));
+                GradleResolver.DependenciesToPackageSpecs(GetOrReadDependencies(dependencies))));
         }
 
         /// <summary>
@@ -1869,7 +1846,7 @@ namespace GooglePlayServices {
         /// <returns>List of repo, source pairs.</returns>
         public static IList<KeyValuePair<string, string>> GetRepos(
                 IEnumerable<Dependency> dependencies = null) {
-            return ResolverVer1_1.DependenciesToRepoUris(GetOrReadDependencies(dependencies));
+            return GradleResolver.DependenciesToRepoUris(GetOrReadDependencies(dependencies));
         }
 
         /// <summary>
@@ -1886,7 +1863,7 @@ namespace GooglePlayServices {
             if (dependencies.Count > 0) {
                 var exportEnabled = GradleProjectExportEnabled;
                 var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
-                var projectFileUri = ResolverVer1_1.RepoPathToUri(projectPath);
+                var projectFileUri = GradleResolver.RepoPathToUri(projectPath);
                 lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
                 lines.Add("    project.repositories {");
                 // projectPath will point to the Unity project root directory as Unity will
@@ -2153,7 +2130,7 @@ namespace GooglePlayServices {
                 SettingsDialogObj.VerboseLogging ||
                 ExecutionEnvironment.InBatchMode;
             logger.Verbose = SettingsDialogObj.VerboseLogging;
-            if (Resolver != null) {
+            if (gradleResolver != null) {
                 PatchAndroidManifest(GetAndroidApplicationId(), null);
                 ScheduleAutoResolve(delayInMilliseconds: 0);
             }

@@ -2,6 +2,8 @@
 ## New Features
 * Android Resolver: Added support for loading *Dependencies.xml files from
   Unity Package Manager packages.
+* Android Resolver: Resolution window is now closed if resolution runs as
+  a pre-build step.
 * iOS Resolver: Added support for loading *Dependencies.xml files from
   Unity Package Manager packages.
 ## Bug Fixes

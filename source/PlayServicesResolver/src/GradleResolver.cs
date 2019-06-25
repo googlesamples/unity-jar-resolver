@@ -28,7 +28,7 @@ namespace GooglePlayServices
     using System.Text.RegularExpressions;
     using System.Xml;
 
-    public class ResolverVer1_1 : DefaultResolver
+    public class GradleResolver
     {
         // Caches data associated with an aar so that it doesn't need to be queried to determine
         // whether it should be expanded / exploded if it hasn't changed.
@@ -225,7 +225,7 @@ namespace GooglePlayServices
         // Lock for resolveUpdateQueue and resolveActionActive.
         private static object resolveLock = new object();
 
-        public ResolverVer1_1() {
+        public GradleResolver() {
             RunOnMainThread.Run(LoadAarExplodeCache, false);
         }
 
@@ -403,19 +403,6 @@ namespace GooglePlayServices
                     "Auto-resolution will be slower after recompilation.\n", aarExplodeDataFile,
                     e.ToString()), level: LogLevel.Warning);
             }
-        }
-
-        #region IResolver implementation
-
-        /// <summary>
-        /// Version of the resolver. - 1.1.0
-        /// </summary>
-        /// <remarks>The resolver with the greatest version is used when resolving.
-        /// The value of the version is calculated using MakeVersion in DefaultResolver</remarks>
-        /// <seealso cref="DefaultResolver.MakeVersionNumber"></seealso>
-        public override int Version()
-        {
-            return MakeVersionNumber(MajorVersion, MinorVersion, PointVersion);
         }
 
         /// <summary>
@@ -675,12 +662,17 @@ namespace GooglePlayServices
         /// <param name="androidSdkPath">Path to the Android SDK.  This is required as
         /// PlayServicesSupport.SDK can only be called from the main thread.</param>
         /// <param name="logErrorOnMissingArtifacts">Log errors when artifacts are missing.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
         /// <param name="resolutionComplete">Called when resolution is complete with a list of
         /// packages that were not found.</param>
         private void GradleResolution(
                 string destinationDirectory, string androidSdkPath,
-                bool logErrorOnMissingArtifacts,
+                bool logErrorOnMissingArtifacts, bool closeWindowOnCompletion,
                 System.Action<List<Dependency>> resolutionComplete) {
+            // Namespace for resources under the src/scripts directory embedded within this
+            // assembly.
+            const string EMBEDDED_RESOURCES_NAMESPACE = "PlayServicesResolver.scripts.";
             var gradleWrapper = Path.GetFullPath(Path.Combine(
                 gradleBuildDirectory,
                 UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform ?
@@ -771,9 +763,9 @@ namespace GooglePlayServices
                 PlayServicesResolver.logger.LogMessage -= logToWindow;
                 // If the command completed successfully or the log level is info or above close
                 // the window, otherwise leave it open for inspection.
-                if (resolutionState.commandLineResult.exitCode == 0 &&
-                    PlayServicesResolver.logger.Level >= LogLevel.Info &&
-                    !resolutionState.errorOrWarningLogged) {
+                if ((resolutionState.commandLineResult.exitCode == 0 &&
+                     PlayServicesResolver.logger.Level >= LogLevel.Info &&
+                     !resolutionState.errorOrWarningLogged) || closeWindowOnCompletion) {
                     window.Close();
                 }
                 resolutionComplete(resolutionState.missingArtifactsAsDependencies);
@@ -1140,9 +1132,12 @@ namespace GooglePlayServices
         /// <summary>
         /// Perform the resolution and the exploding/cleanup as needed.
         /// </summary>
-        public override void DoResolution(
-            PlayServicesSupport svcSupport, string destinationDirectory,
-            System.Action resolutionComplete) {
+        /// <param name="destinationDirectory">Destination directory.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
+        /// <param name="resolutionComplete">Delegate called when resolution is complete.</param>
+        public void DoResolution(string destinationDirectory, bool closeWindowOnCompletion,
+                                 System.Action resolutionComplete) {
             // Run resolution on the main thread to serialize the operation as DoResolutionUnsafe
             // is not thread safe.
             System.Action resolve = () => {
@@ -1153,7 +1148,7 @@ namespace GooglePlayServices
                     }
                     resolutionComplete();
                 };
-                DoResolutionUnsafe(svcSupport, destinationDirectory,
+                DoResolutionUnsafe(destinationDirectory, closeWindowOnCompletion,
                                    unlockResolveAndSignalResolutionComplete);
             };
             lock (resolveLock) {
@@ -1178,9 +1173,12 @@ namespace GooglePlayServices
         /// Perform the resolution and the exploding/cleanup as needed.
         /// This is *not* thread safe.
         /// </summary>
-         private void DoResolutionUnsafe(
-            PlayServicesSupport svcSupport, string destinationDirectory,
-            System.Action resolutionComplete)
+        /// <param name="destinationDirectory">Directory to store results of resolution.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
+        /// <param name="resolutionComplete">Action called when resolution completes.</param>
+        private void DoResolutionUnsafe(string destinationDirectory, bool closeWindowOnCompletion,
+                                        System.Action resolutionComplete)
         {
             // Cache the setting as it can only be queried from the main thread.
             var sdkPath = PlayServicesResolver.AndroidSdkRoot;
@@ -1200,7 +1198,7 @@ namespace GooglePlayServices
             System.Action resolve = () => {
                 PlayServicesResolver.Log("Performing Android Dependency Resolution",
                                          LogLevel.Verbose);
-                GradleResolution(destinationDirectory, sdkPath, true,
+                GradleResolution(destinationDirectory, sdkPath, true, closeWindowOnCompletion,
                                  (missingArtifacts) => { resolutionComplete(); });
             };
 
@@ -1239,7 +1237,7 @@ namespace GooglePlayServices
 
                 // If no packages need to be installed or Android SDK package installation is
                 // disabled.
-                if (installPackages.Count == 0 || !AndroidPackageInstallationEnabled()) {
+                if (installPackages.Count == 0 || !SettingsDialog.InstallAndroidPackages) {
                     // Report missing packages as warnings and try to resolve anyway.
                     foreach (var pkg in requiredPackages.Keys) {
                         var packageNameVersion = new AndroidSdkPackageNameVersion {
@@ -1272,7 +1270,7 @@ namespace GooglePlayServices
             };
 
             GradleResolution(destinationDirectory, sdkPath,
-                             !AndroidPackageInstallationEnabled(),
+                             !SettingsDialog.InstallAndroidPackages, closeWindowOnCompletion,
                              reportOrInstallMissingArtifacts);
         }
 
@@ -1358,7 +1356,7 @@ namespace GooglePlayServices
         /// </summary>
         /// <returns>Array of packages that should be re-resolved if resolution should occur,
         /// null otherwise.</returns>
-        public override string[] OnBuildSettings() {
+        public string[] OnBuildSettings() {
             // Determine which packages need to be updated.
             List<string> packagesToUpdate = new List<string>();
             List<string> aarsToResolve = new List<string>();
@@ -1391,8 +1389,6 @@ namespace GooglePlayServices
                 level: LogLevel.Verbose);
             return packagesToUpdateArray;
         }
-
-        #endregion
 
         /// <summary>
         /// Convert an AAR filename to package name.
@@ -1626,6 +1622,26 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Gets a value indicating whether this version of Unity supports aar files.
+        /// </summary>
+        /// <value><c>true</c> if supports aar files; otherwise, <c>false</c>.</value>
+        internal bool SupportsAarFiles
+        {
+            get
+            {
+                // Get the version number.
+                string majorVersion = Application.unityVersion.Split('.')[0];
+                int ver;
+                if (!int.TryParse(majorVersion, out ver))
+                {
+                    ver = 4;
+                }
+                return ver >= 5;
+            }
+        }
+
+
+        /// <summary>
         /// Determines whether an aar file should be exploded (extracted).
         ///
         /// This is required for some aars so that the Unity Jar Resolver can perform variable
@@ -1755,6 +1771,270 @@ namespace GooglePlayServices
             aarExplodeData[AarPathToPackageName(aarPath)] = aarData;
             SaveAarExplodeCache();
             return explode;
+        }
+
+
+        /// <summary>
+        /// Create an AAR from the specified directory.
+        /// </summary>
+        /// <param name="aarFile">AAR file to create.</param>
+        /// <param name="inputDirectory">Directory which contains the set of files to store
+        /// in the AAR.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        internal static bool ArchiveAar(string aarFile, string inputDirectory) {
+            try {
+                string aarPath = Path.GetFullPath(aarFile);
+                CommandLine.Result result = CommandLine.Run(
+                    JavaUtilities.JarBinaryPath,
+                    String.Format("cvf{0} \"{1}\" -C \"{2}\" .",
+                                  aarFile.ToLower().EndsWith(".jar") ? "" : "M", aarPath,
+                                  inputDirectory));
+                if (result.exitCode != 0) {
+                    Debug.LogError(String.Format("Error archiving {0}\n" +
+                                                 "Exit code: {1}\n" +
+                                                 "{2}\n" +
+                                                 "{3}\n",
+                                                 aarPath, result.exitCode, result.stdout,
+                                                 result.stderr));
+                    return false;
+                }
+            } catch (Exception e) {
+                Debug.LogError(e);
+                throw e;
+            }
+            return true;
+        }
+
+        // Native library ABI subdirectories supported by Unity.
+        // Directories that contain native libraries within a Unity Android library project.
+        private static string[] NATIVE_LIBRARY_DIRECTORIES = new string[] { "libs", "jni" };
+
+        /// <summary>
+        /// Get the set of native library ABIs in an exploded AAR.
+        /// </summary>
+        /// <param name="aarDirectory">Directory to search for ABIs.</param>
+        /// <returns>Set of ABI directory names in the exploded AAR or null if none are
+        /// found.</returns>
+        internal static AndroidAbis AarDirectoryFindAbis(string aarDirectory) {
+            var foundAbis = new HashSet<string>();
+            foreach (var libDirectory in NATIVE_LIBRARY_DIRECTORIES) {
+                foreach (var abiDir in AndroidAbis.AllSupported) {
+                    if (Directory.Exists(Path.Combine(aarDirectory,
+                                                      Path.Combine(libDirectory, abiDir)))) {
+                        foundAbis.Add(abiDir);
+                    }
+                }
+            }
+            return foundAbis.Count > 0 ? new AndroidAbis(foundAbis) : null;
+        }
+
+        /// <summary>
+        /// Explodes a single aar file.  This is done by calling the
+        /// JDK "jar" command, then moving the classes.jar file.
+        /// </summary>
+        /// <param name="dir">The directory to unpack / explode the AAR to.  If antProject is true
+        /// the ant project will be located in Path.Combine(dir, Path.GetFileName(aarFile)).</param>
+        /// <param name="aarFile">Aar file to explode.</param>
+        /// <param name="antProject">true to explode into an Ant style project or false
+        /// to repack the processed AAR as a new AAR.</param>
+        /// <param name="abis">ABIs in the AAR or null if it's universal.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        internal static bool ProcessAar(string dir, string aarFile, bool antProject,
+                                        out AndroidAbis abis) {
+            PlayServicesResolver.Log(String.Format("ProcessAar {0} {1} antProject={2}",
+                                                   dir, aarFile, antProject),
+                                     level: LogLevel.Verbose);
+            abis = null;
+            string aarDirName = Path.GetFileNameWithoutExtension(aarFile);
+            // Output directory for the contents of the AAR / JAR.
+            string outputDir = Path.Combine(dir, aarDirName);
+            string stagingDir = FileUtils.CreateTemporaryDirectory();
+            if (stagingDir == null) {
+                PlayServicesResolver.Log(String.Format(
+                        "Unable to create temporary directory to process AAR {0}", aarFile),
+                    level: LogLevel.Error);
+                return false;
+            }
+            try {
+                string workingDir = Path.Combine(stagingDir, aarDirName);
+                var deleteError = FileUtils.FormatError(
+                    String.Format("Failed to create working directory to process AAR {0}",
+                                  aarFile), FileUtils.DeleteExistingFileOrDirectory(workingDir));
+                if (!String.IsNullOrEmpty(deleteError)) {
+                    PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                    return false;
+                }
+                Directory.CreateDirectory(workingDir);
+                if (!PlayServicesResolver.ExtractZip(aarFile, null, workingDir)) return false;
+                PlayServicesResolver.ReplaceVariablesInAndroidManifest(
+                    Path.Combine(workingDir, "AndroidManifest.xml"),
+                    PlayServicesResolver.GetAndroidApplicationId(),
+                    new Dictionary<string, string>());
+
+                string nativeLibsDir = null;
+                if (antProject) {
+                    // Create the libs directory to store the classes.jar and non-Java shared
+                    // libraries.
+                    string libDir = Path.Combine(workingDir, "libs");
+                    nativeLibsDir = libDir;
+                    Directory.CreateDirectory(libDir);
+
+                    // Move the classes.jar file to libs.
+                    string classesFile = Path.Combine(workingDir, "classes.jar");
+                    string targetClassesFile = Path.Combine(libDir, Path.GetFileName(classesFile));
+                    if (File.Exists(targetClassesFile)) File.Delete(targetClassesFile);
+                    if (File.Exists(classesFile)) {
+                        FileUtils.MoveFile(classesFile, targetClassesFile);
+                    } else {
+                        // Some libraries publish AARs that are poorly formatted (e.g missing
+                        // a classes.jar file).  Firebase's license AARs at certain versions are
+                        // examples of this.  When Unity's internal build system detects an Ant
+                        // project or AAR without a classes.jar, the build is aborted.  This
+                        // generates an empty classes.jar file to workaround the issue.
+                        string emptyClassesDir = Path.Combine(stagingDir, "empty_classes_jar");
+                        Directory.CreateDirectory(emptyClassesDir);
+                        if (!ArchiveAar(targetClassesFile, emptyClassesDir)) return false;
+                    }
+                }
+
+                // Copy non-Java shared libraries (.so) files from the "jni" directory into the
+                // lib directory so that Unity's legacy (Ant-like) build system includes them in the
+                // built APK.
+                string jniLibDir = Path.Combine(workingDir, "jni");
+                nativeLibsDir = nativeLibsDir ?? jniLibDir;
+                if (Directory.Exists(jniLibDir)) {
+                    var abisInArchive = AarDirectoryFindAbis(workingDir);
+                    if (jniLibDir != nativeLibsDir) {
+                        FileUtils.CopyDirectory(jniLibDir, nativeLibsDir);
+                        deleteError = FileUtils.FormatError(
+                            String.Format("Unable to delete JNI directory from AAR {0}", aarFile),
+                            FileUtils.DeleteExistingFileOrDirectory(jniLibDir));
+                        if (!String.IsNullOrEmpty(deleteError)) {
+                            PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                            return false;
+                        }
+                    }
+                    if (abisInArchive != null) {
+                        // Remove shared libraries for all ABIs that are not required for the
+                        // selected ABIs.
+                        var activeAbisSet = AndroidAbis.Current.ToSet();
+                        var abisInArchiveSet = abisInArchive.ToSet();
+                        var abisInArchiveToRemoveSet = new HashSet<string>(abisInArchiveSet);
+                        abisInArchiveToRemoveSet.ExceptWith(activeAbisSet);
+
+                        Func<IEnumerable<string>, string> setToString = (setToConvert) => {
+                            return String.Join(", ", (new List<string>(setToConvert)).ToArray());
+                        };
+                        PlayServicesResolver.Log(
+                            String.Format(
+                                "Target ABIs [{0}], ABIs [{1}] in {2}, will remove [{3}] ABIs",
+                                setToString(activeAbisSet),
+                                setToString(abisInArchiveSet),
+                                aarFile,
+                                setToString(abisInArchiveToRemoveSet)),
+                            level: LogLevel.Verbose);
+
+                        foreach (var abiToRemove in abisInArchiveToRemoveSet) {
+                            abisInArchiveSet.Remove(abiToRemove);
+                            deleteError = FileUtils.FormatError(
+                                String.Format("Unable to remove unused ABIs from {0}", aarFile),
+                                FileUtils.DeleteExistingFileOrDirectory(
+                                    Path.Combine(nativeLibsDir, abiToRemove)));
+                            if (!String.IsNullOrEmpty(deleteError)) {
+                                PlayServicesResolver.Log(deleteError, LogLevel.Warning);
+                            }
+                        }
+                        abis = new AndroidAbis(abisInArchiveSet);
+                    }
+                }
+
+                if (antProject) {
+                    // Create the project.properties file which indicates to Unity that this
+                    // directory is a plugin.
+                    string projectProperties = Path.Combine(workingDir, "project.properties");
+                    if (!File.Exists(projectProperties)) {
+                        File.WriteAllLines(projectProperties, new [] {
+                            "# Project target.",
+                            "target=android-9",
+                            "android.library=true"
+                        });
+                    }
+                    PlayServicesResolver.Log(
+                        String.Format("Creating Ant project: Replacing {0} with {1}", aarFile,
+                                      outputDir), level: LogLevel.Verbose);
+                    // Clean up the aar file.
+                    deleteError = FileUtils.FormatError(
+                        String.Format("Failed to clean up AAR file {0} after generating " +
+                                      "Ant project {1}", aarFile, outputDir),
+                        FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile)));
+                    if (!String.IsNullOrEmpty(deleteError)) {
+                        PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                        return false;
+                    }
+                    // Create the output directory.
+                    FileUtils.MoveDirectory(workingDir, outputDir);
+                    // Add a tracking label to the exploded files.
+                    PlayServicesResolver.LabelAssets(new [] { outputDir });
+                } else {
+                    // Add a tracking label to the exploded files just in-case packaging fails.
+                    PlayServicesResolver.Log(String.Format("Repacking {0} from {1}",
+                                                           aarFile, workingDir),
+                                             level: LogLevel.Verbose);
+                    // Create a new AAR file.
+                    deleteError = FileUtils.FormatError(
+                        String.Format("Failed to replace AAR file {0}", aarFile),
+                        FileUtils.DeleteExistingFileOrDirectory(Path.GetFullPath(aarFile)));
+                    if (!String.IsNullOrEmpty(deleteError)) {
+                        PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
+                        return false;
+                    }
+                    if (!ArchiveAar(aarFile, workingDir)) return false;
+                    PlayServicesResolver.LabelAssets(new [] { aarFile });
+                }
+            } catch (Exception e) {
+                PlayServicesResolver.Log(String.Format("Failed to process AAR {0} ({1}",
+                                                       aarFile, e),
+                                         level: LogLevel.Error);
+            } finally {
+                // Clean up the temporary directory.
+                var deleteError = FileUtils.FormatError(
+                    String.Format("Failed to clean up temporary folder while processing {0}",
+                                  aarFile), FileUtils.DeleteExistingFileOrDirectory(stagingDir));
+                if (!String.IsNullOrEmpty(deleteError)) {
+                    PlayServicesResolver.Log(deleteError, level: LogLevel.Warning);
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Extract a list of embedded resources to the specified path creating intermediate
+        /// directories if they're required.
+        /// </summary>
+        /// <param name="resourceNameToTargetPath">Each Key is the resource to extract and each
+        /// Value is the path to extract to.</param>
+        protected static void ExtractResources(List<KeyValuePair<string, string>>
+                                                   resourceNameToTargetPaths) {
+            foreach (var kv in resourceNameToTargetPaths) ExtractResource(kv.Key, kv.Value);
+        }
+
+        /// <summary>
+        /// Extract an embedded resource to the specified path creating intermediate directories
+        /// if they're required.
+        /// </summary>
+        /// <param name="resourceName">Name of the resource to extract.</param>
+        /// <param name="targetPath">Target path.</param>
+        protected static void ExtractResource(string resourceName, string targetPath) {
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
+            var stream = typeof(GradleResolver).Assembly.GetManifestResourceStream(resourceName);
+            if (stream == null) {
+                UnityEngine.Debug.LogError(String.Format("Failed to find resource {0} in assembly",
+                                                         resourceName));
+                return;
+            }
+            var data = new byte[stream.Length];
+            stream.Read(data, 0, (int)stream.Length);
+            File.WriteAllBytes(targetPath, data);
         }
     }
 }
