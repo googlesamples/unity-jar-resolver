@@ -3,6 +3,9 @@
 * Android Resolver: Fixed warning about missing Packages folder when loading
   XML dependencies files in versions of Unity without the package manager.
 * Android Resolver: Fixed resolution window progress bar exceeding 100%.
+* iOS Resolver: Added support for Unity's breaking changes to the Xcode API
+  in 2019.3.+. Cocoapods are now added to build targets, Unity-iPhone and
+  UnityFramework in Unity 2019.3+.
 
 # Version 1.2.120 - Jun 26, 2019
 ## New Features
