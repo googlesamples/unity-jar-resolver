@@ -1229,9 +1229,8 @@ namespace Google.PackageManager {
                     try {
                         LoggingController.Log(
                             string.Format("About to resolve for client: {0}", client.Name));
-                        GooglePlayServices.PlayServicesResolver.Resolver.DoResolution(support,
-                            "Assets/Plugins/Android",
-                            () => {
+                        GooglePlayServices.PlayServicesResolver.Resolve(
+                            resolutionComplete: () => {
                                 AssetDatabase.Refresh();
                                 LoggingController.Log(
                                     string.Format("Android resolution complete for client: {0}",
@@ -1559,8 +1558,6 @@ namespace Google.PackageManager {
             }
 
             // non-version check
-            bool upgrade = IsPluginInstalledInProject(pluginKey);
-
             var versionlessKey = PluginManagerController.VersionedPluginKeyToVersionless(pluginKey);
             PackagedPlugin plugin =
                 PluginManagerController.GetPluginForVersionlessKey(versionlessKey);
@@ -1725,9 +1722,6 @@ namespace Google.PackageManager {
                                                string[] deletedAssets,
                                                string[] movedAssets,
                                                string[] movedFromAssetPaths) {
-
-                bool wasTriggeredByPackageManager =
-                    AssetDatabaseController.ImportInitiatedFromController;
 
                 var depsModels = new List<PackageDependencies>();
                 // look for *gpm.dep.xml in importedAssets
