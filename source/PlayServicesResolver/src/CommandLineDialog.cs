@@ -253,11 +253,12 @@ namespace GooglePlayServices
                 EditorGUILayout.BeginVertical();
                 EditorGUILayout.LabelField(progressTitle, EditorStyles.boldLabel);
                 var progressBarRect = EditorGUILayout.BeginVertical();
+                float progressValue = Math.Min(progress, 1.0f);
                 EditorGUILayout.LabelField(""); // Creates vertical space for the progress bar.
                 EditorGUI.ProgressBar(
-                    progressBarRect, progress,
+                    progressBarRect, progressValue,
                     String.IsNullOrEmpty(progressSummary) ?
-                        String.Format("{0}%... ", (int)(progress * 100.0f)) : progressSummary);
+                        String.Format("{0}%... ", (int)(progressValue * 100.0f)) : progressSummary);
                 EditorGUILayout.EndVertical();
                 EditorGUILayout.Space();
                 EditorGUILayout.EndVertical();

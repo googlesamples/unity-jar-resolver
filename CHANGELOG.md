@@ -1,3 +1,9 @@
+# Version TBD - TBD
+## Bug Fixes
+* Android Resolver: Fixed warning about missing Packages folder when loading
+  XML dependencies files in versions of Unity without the package manager.
+* Android Resolver: Fixed resolution window progress bar exceeding 100%.
+
 # Version 1.2.120 - Jun 26, 2019
 ## New Features
 * Android Resolver: Added support for loading *Dependencies.xml files from
