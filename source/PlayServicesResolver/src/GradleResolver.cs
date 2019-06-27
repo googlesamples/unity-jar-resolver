@@ -653,6 +653,7 @@ namespace GooglePlayServices
             public List<Dependency> missingArtifactsAsDependencies = new List<Dependency>();
             public List<string> modifiedArtifacts = new List<string>();
             public bool errorOrWarningLogged = false;
+            public bool aarsProcessed = false;
         }
 
         /// <summary>
@@ -849,7 +850,10 @@ namespace GooglePlayServices
                     RunOnMainThread.PollOnUpdateUntilComplete(() => {
                             var remaining = artifactsToInspect.Count;
                             if (remaining == 0) {
-                                processAars();
+                                if (!resolutionState.aarsProcessed) {
+                                    resolutionState.aarsProcessed = true;
+                                    processAars();
+                                }
                                 return true;
                             }
                             var artifact = artifactsToInspect[0];
@@ -896,7 +900,42 @@ namespace GooglePlayServices
                 // Label all copied files.
                 PlayServicesResolver.LabelAssets(
                     resolutionState.copiedArtifacts,
-                    complete: (unusedUnlabeled) => { refreshExplodeCache(); },
+                    complete: (unusedUnlabeled) => {
+                        // Check copied files for Jetpack (AndroidX) libraries.
+                        if (PlayServicesResolver.FilesContainJetpackLibraries(
+                            resolutionState.copiedArtifacts)) {
+                            bool jetifierEnabled = SettingsDialog.UseJetifier;
+                            SettingsDialog.UseJetifier = true;
+                            // Make sure Jetpack is supported, prompting the user to configure Unity
+                            // in a supported configuration.
+                            if (PlayServicesResolver.CanEnableJetifierOrPromptUser(
+                                    "Jetpack (AndroidX) libraries detected, ")) {
+                                if (jetifierEnabled != SettingsDialog.UseJetifier) {
+                                    PlayServicesResolver.Log(
+                                        "Detected Jetpack (AndroidX) libraries, enabled the " +
+                                        "jetifier and resolving again.");
+                                    // Run resolution again with the Jetifier enabled.
+                                    PlayServicesResolver.DeleteLabeledAssets();
+                                    GradleResolution(destinationDirectory,
+                                                     androidSdkPath,
+                                                     logErrorOnMissingArtifacts,
+                                                     closeWindowOnCompletion,
+                                                     resolutionComplete);
+                                    return;
+                                }
+                            } else {
+                                // If the user didn't change their configuration, delete all
+                                // resolved libraries and abort resolution as the build will fail.
+                                PlayServicesResolver.DeleteLabeledAssets();
+                                resolutionState.missingArtifactsAsDependencies =
+                                    allDependenciesList;
+                                resolutionCompleteRestoreLogger();
+                                return;
+                            }
+                        }
+                        // Successful, proceed with processing libraries.
+                        refreshExplodeCache();
+                    },
                     synchronous: false,
                     progressUpdate: (progress, message) => {
                         window.SetProgress("Labeling libraries...", progress, message);

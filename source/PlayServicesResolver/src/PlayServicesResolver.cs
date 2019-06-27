@@ -1590,7 +1590,7 @@ namespace GooglePlayServices {
                                           bool forceResolution, bool isAutoResolveJob,
                                           bool closeWindowOnCompletion) {
             JavaUtilities.CheckJdkForApiLevel();
-            CanEnableJetifierOrPromptUser();
+            CanEnableJetifierOrPromptUser("");
 
             DeleteFiles(gradleResolver.OnBuildSettings());
 
@@ -2043,20 +2043,8 @@ namespace GooglePlayServices {
             int totalAssets = assetsToProcess.Count;
             RunOnMainThread.PollOnUpdateUntilComplete(() => {
                     var remainingAssets = assetsToProcess.Count;
-                    // Display summary of processing and call the completion function.
-                    if (remainingAssets == 0) {
-                        if (assetsWithoutAssetImporter.Count > 0 && displayWarning) {
-                            Log(String.Format(
-                                "Failed to add tracking label {0} to some assets.\n\n" +
-                                "The following files will not be managed by this module:\n" +
-                                "{1}\n", ManagedAssetLabel,
-                                String.Join(
-                                    "\n", new List<string>(assetsWithoutAssetImporter).ToArray())),
-                                level: LogLevel.Warning);
-                        }
-                        if (complete != null) complete(assetsWithoutAssetImporter);
-                        return true;
-                    }
+                    // Processing is already complete.
+                    if (remainingAssets == 0) return true;
                     var assetPath = assetsToProcess[0];
                     assetsToProcess.RemoveAt(0);
                     // Ignore asset meta files which are used to store the labels and files that
@@ -2099,6 +2087,21 @@ namespace GooglePlayServices {
                         AssetDatabase.SetLabels(importer, (new List<string>(labels)).ToArray());
                     } else {
                         assetsWithoutAssetImporter.Add(assetPath);
+                    }
+
+                    // Display summary of processing and call the completion function.
+                    if (assetsToProcess.Count == 0) {
+                        if (assetsWithoutAssetImporter.Count > 0 && displayWarning) {
+                            Log(String.Format(
+                                "Failed to add tracking label {0} to some assets.\n\n" +
+                                "The following files will not be managed by this module:\n" +
+                                "{1}\n", ManagedAssetLabel,
+                                String.Join(
+                                    "\n", new List<string>(assetsWithoutAssetImporter).ToArray())),
+                                level: LogLevel.Warning);
+                        }
+                        if (complete != null) complete(assetsWithoutAssetImporter);
+                        return true;
                     }
                     return false;
                 }, synchronous: synchronous);
@@ -2158,12 +2161,28 @@ namespace GooglePlayServices {
             };
         }
 
+        // Matches Jetpack (AndroidX) library filenames.
+        private static Regex androidXLibrary = new Regex(@"^androidx\..*\.(jar|aar)$");
+
         /// <summary>
-        /// Prompt the user if Jetifier isn't enabled in the current version of Unity with the
-        /// current build settings.
+        /// Determine whether a list of files contains Jetpack libraries.
         /// </summary>
+        /// <returns>true if any files are androidx libraries, false otherwise.</returns>
+        internal static bool FilesContainJetpackLibraries(IEnumerable<string> filenames) {
+            foreach (var path in filenames) {
+                var match = androidXLibrary.Match(Path.GetFileName(path));
+                if (match != null && match.Success) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Prompt the user to change Unity's build settings, if the Jetifier is enabled but not
+        /// supported with Unity's current build settings.
+        /// </summary>
+        /// <param name="titlePrefix">Prefix added to dialogs shown by this method.</param>
         /// <returns>true if the Jetifier is enabled, false otherwise</returns>
-        internal static bool CanEnableJetifierOrPromptUser() {
+        internal static bool CanEnableJetifierOrPromptUser(string titlePrefix) {
             bool useJetifier = SettingsDialogObj.UseJetifier;
             if (!useJetifier || ExecutionEnvironment.InBatchMode) return useJetifier;
             // Minimum Android Gradle Plugin required to use the Jetifier.
@@ -2173,7 +2192,7 @@ namespace GooglePlayServices {
                 if ((new Dependency.VersionComparer()).Compare(
                         MinimumAndroidGradlePluginVersionForJetifier, version) < 0) {
                     switch (EditorUtility.DisplayDialogComplex(
-                        "Enable Jetifier",
+                        titlePrefix + "Enable Jetifier?",
                         String.Format(
                             "Jetifier for Jetpack (AndroidX) libraries is only " +
                             "available with Android Gradle Plugin (AGP) version {0}. " +
@@ -2202,7 +2221,7 @@ namespace GooglePlayServices {
             int apiLevel = UnityCompat.GetAndroidTargetSDKVersion();
             if (useJetifier && apiLevel < MinimumApiLevelForJetpack) {
                 switch (EditorUtility.DisplayDialogComplex(
-                    "Enable Jetpack",
+                    titlePrefix + "Enable Jetpack?",
                     String.Format(
                         "Jetpack (AndroidX) libraries are only supported when targeting Android " +
                         "API {0} and above.  The currently selected target API level is {1}.\n\n" +
@@ -2233,7 +2252,8 @@ namespace GooglePlayServices {
                         }
                         break;
                     case 1:  // No
-                        break;
+                        // Don't change the settings but report that AndroidX will not work.
+                        return false;
                     case 2:  // Disable Jetifier
                         useJetifier = false;
                         break;
