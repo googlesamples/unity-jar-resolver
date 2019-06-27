@@ -1,4 +1,4 @@
-# Version TBD - TBD
+# Version 1.2.121 - Jun 27, 2019
 ## Bug Fixes
 * Android Resolver: Fixed warning about missing Packages folder when loading
   XML dependencies files in versions of Unity without the package manager.
