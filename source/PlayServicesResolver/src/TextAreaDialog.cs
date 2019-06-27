@@ -168,10 +168,10 @@ namespace GooglePlayServices
             const int chunkSize = 5000;  // Conservative chunk size < 65k characters.
             while (bodyTextOffset < bodyText.Length)
             {
-                int readSize = chunkSize;
-                readSize = bodyTextOffset + readSize >= bodyText.Length ?
-                    bodyText.Length - bodyTextOffset : readSize;
-                bodyTextList.Add(bodyText.Substring(bodyTextOffset, readSize));
+                int searchSize = Math.Min(bodyText.Length - bodyTextOffset, chunkSize);
+                int readSize = bodyText.LastIndexOf("\n", bodyTextOffset + searchSize, searchSize);
+                readSize = readSize >= 0 ? readSize - bodyTextOffset + 1 : searchSize;
+                bodyTextList.Add(bodyText.Substring(bodyTextOffset, readSize).TrimEnd());
                 bodyTextOffset += readSize;
             }
             foreach (string bodyTextChunk in bodyTextList)

@@ -5,6 +5,7 @@
 * Android Resolver: Fixed resolution window progress bar exceeding 100%.
 * Android Resolver: If AndroidX is detected in the set of resolved libraries,
   the user will be prompted to enable the Jetifier.
+* Android Resolver: Improved text splitting in text area windows.
 * iOS Resolver: Added support for Unity's breaking changes to the Xcode API
   in 2019.3.+. Cocoapods are now added to build targets, Unity-iPhone and
   UnityFramework in Unity 2019.3+.
