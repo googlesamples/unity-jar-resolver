@@ -1069,46 +1069,29 @@ namespace GooglePlayServices {
                     int delaySec = GooglePlayServices.SettingsDialog.AutoResolutionDelay;
                     DateTimeOffset resolveTime = DateTimeOffset.Now.AddSeconds(delaySec);
                     bool shouldResolve = true;
-                    AlertModal alert = null;
                     RunOnMainThread.PollOnUpdateUntilComplete(() => {
-                        if (resolveTime > DateTimeOffset.Now && Resolver.AutomaticResolutionEnabled()) {
-                            int countDown = (int)(resolveTime - DateTimeOffset.Now).TotalSeconds;
-                            if(alert == null) {
-                                alert = new AlertModal {
-                                    Title = "Resolve or Skip dependency?",
-                                    Message = "Auto Resolve Dependency in : " + countDown,
-                                    Ok = new AlertModal.LabeledAction {
-                                        Label = "Resolve",
-                                        DelegateAction = () => {
-                                            resolveTime = DateTimeOffset.Now;
-                                            shouldResolve = true;
-                                        }
-                                    },
-                                    Cancel = new AlertModal.LabeledAction {
-                                        Label = "Skip",
-                                        DelegateAction = () => {
-                                            resolveTime = DateTimeOffset.Now;
-                                            shouldResolve = false;
-                                        }
-                                    }
-                                };
-
-                                alert.Display();
-                            }
-
-                            if(alert != null) {
-                                alert.Message = "Auto Resolve Dependency in : " + countDown;
-                                return false;
-                            }
-                        }
-
-                        if (EditorApplication.isCompiling) return false;
                         // Only run AutoResolve() if we have a valid autoResolveJobId.
                         // If autoResolveJobId is 0, ScheduleResolve()
                         // has already been run and we should not run AutoResolve()
                         // again.
+                        if(autoResolveJobId == 0)
+                            return true;
 
-                        if (shouldResolve && autoResolveJobId != 0) {
+                        DateTimeOffset now  = DateTimeOffset.Now;
+                        if (resolveTime > now && PlayServicesResolver.AutomaticResolutionEnabled) {
+                            float countDown = (float)(resolveTime - now).TotalSeconds;
+                            if(EditorUtility.DisplayCancelableProgressBar("Skip dependency?","Auto Resolve Dependency in : " + (int)countDown,countDown / delaySec)) {
+                                resolveTime = now;
+                                shouldResolve   = false;
+                            }
+
+                            return false;
+                        }
+                        
+                        EditorUtility.ClearProgressBar();
+
+                        if (EditorApplication.isCompiling) return false;
+                        if (shouldResolve) {
                             AutoResolve(() => {
                                 lock (typeof(PlayServicesResolver)) {
                                     autoResolving = false;

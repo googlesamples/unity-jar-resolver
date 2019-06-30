@@ -36,7 +36,7 @@ project.ext {
      (OperatingSystem.WINDOWS):
      ["\\Program Files\\Unity\\Editor\\Unity.exe"] +
      (new FileNameFinder()).getFileNames(
-       "\\", "Program Files\\Unity\\Hub\\Editor\\*\\Editor\\Unity.exe"),
+       "\\Program Files\\Unity\\Hub\\Editor", "*\\Editor\\Unity.exe"), // previously don't work on windows
      (OperatingSystem.LINUX): ["/opt/Unity/Editor/Unity"]][operatingSystem]
 
   // Search for the Unity editor executable.
@@ -61,9 +61,10 @@ project.ext {
      (OperatingSystem.MAC_OSX): "Unity.app/Contents/MacOS",
      (OperatingSystem.WINDOWS): "Editor",
      (OperatingSystem.LINUX): "Editor"][operatingSystem]
-  File unityRootDir = findFileProperty(
-    "UNITY_DIR", new File(unityExe.parentFile.absolutePath -
-                          unityExeParentPath), true)
+
+  // (string - string) will remove first occurance. We need to remove last occurance
+  File unityRootDir = findFileProperty("UNITY_DIR",
+    new File(unityExe.parentFile.absolutePath.substring(0,unityExe.parentFile.absolutePath.lastIndexOf(unityExeParentPath))), true)
   if (unityRootDir == null) {
     throw new StopActionException("Unity root directory (UNITY_DIR) not found.")
   }

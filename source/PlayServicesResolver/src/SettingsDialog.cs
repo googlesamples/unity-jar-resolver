@@ -386,7 +386,7 @@ namespace GooglePlayServices {
 
             GUILayout.BeginHorizontal();
             GUILayout.Label("Auto Resolution Delay", EditorStyles.boldLabel);
-            settings.autoResolutionDelay = Math.Min(Math.Max(0,EditorGUILayout.IntField(settings.autoResolutionDelay),MAXIMUM_AUTO_RESOLVE_DELAY_TIME));
+            settings.autoResolutionDelay = Mathf.Clamp(EditorGUILayout.IntField(settings.autoResolutionDelay),0,MAXIMUM_AUTO_RESOLVE_DELAY_TIME);
             GUILayout.EndHorizontal();
             EditorGUI.EndDisabledGroup();
 
