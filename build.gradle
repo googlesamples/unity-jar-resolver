@@ -188,7 +188,7 @@ project.ext {
   // Solution which references all projects used by the plugin.
   pluginSolutionFile = new File(pluginSourceDir, "JarResolver.sln")
   // Version of the plugin (update this with CHANGELOG.md on each release).
-  pluginVersion = "1.2.112.0"
+  pluginVersion = "1.2.121.0"
   // Semantic version of the plugin.
   pluginVersionSemVer = pluginVersion.tokenize(".")[0..2].join(".")
   // Base filename of the released plugin.
@@ -525,7 +525,7 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
     if (versionChanged) {
       def guidMatch = (line =~ /^(guid:)\s+(.*)/)
       def versionLabelMatch = (line =~ versionRegEx)
-      if (guidMatch.matches()) {
+      if (guidMatch.matches() && sourceFile.name != targetFile.name) {
         // Update the metadata's GUID.
         // If a file is renamed we want to make sure Unity imports it as a new
         // asset with the new filename.
@@ -1241,7 +1241,7 @@ task gitCreateReleaseCommit(dependsOn: gitAddReleaseFilesToStaging) {
   }
 }
 
-task gitTagRelease(type: Exec, dependsOn: gitCreateReleaseCommit) {
+task gitTagRelease(type: Exec) {
   description ("Run git to tag a release.  This should be performed " +
                "*after* a release commit has been be created.")
   commandLine "git", "tag", "-a",

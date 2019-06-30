@@ -69,6 +69,20 @@ namespace GooglePlayServices {
         /// </summary>
         private const string DependenciesToken = @".*\*\*DEPS\*\*.*";
 
+        /// <summary>
+        /// Line that indicates the start of the injected exclusions block in the template.
+        /// </summary>
+        private const string PackagingOptionsStartLine = "// Android Resolver Exclusions Start";
+
+        /// <summary>
+        /// Line that indicates the end of the injected exclusions block in the template.
+        /// </summary>
+        private const string PackagingOptionsEndLine = "// Android Resolver Exclusions End";
+
+        /// <summary>
+        /// Token that indicates where exclusions should be injected.
+        /// </summary>
+        private const string PackagingOptionsToken = @"android +{";
 
         /// <summary>
         /// Copy srcaar files to aar files that are excluded from Unity's build process.
@@ -115,6 +129,10 @@ namespace GooglePlayServices {
                     }
                     if (configuredAar) {
                         aarFiles.Add(targetFilename);
+                        // Some versions of Unity do not mark the asset database as dirty when
+                        // plugin importer settings change so reimport the asset to synchronize
+                        // the state.
+                        AssetDatabase.ImportAsset(targetFilename, ImportAssetOptions.ForceUpdate);
                     } else {
                         if (File.Exists(targetFilename)) {
                             AssetDatabase.DeleteAsset(targetFilename);
@@ -270,15 +288,32 @@ namespace GooglePlayServices {
             // the Gradle build.
             if (!CopySrcAars(dependencies)) return false;
 
+            var repoLines = new List<string>();
+            // Optionally enable the jetifier.
+            if (SettingsDialog.UseJetifier && dependencies.Count > 0) {
+                repoLines.AddRange(new [] {
+                        "([rootProject] + (rootProject.subprojects as List)).each {",
+                        "    ext {",
+                        "        it.setProperty(\"android.useAndroidX\", true)",
+                        "        it.setProperty(\"android.enableJetifier\", true)",
+                        "    }",
+                        "}"
+                    });
+            }
+            repoLines.AddRange(PlayServicesResolver.GradleMavenReposLines(dependencies));
+
             TextFileLineInjector[] injectors = new [] {
                 new TextFileLineInjector(ReposInjectionLine, ReposStartLine, ReposEndLine,
-                                         PlayServicesResolver.GradleMavenReposLines(dependencies),
-                                         "Repos", fileDescription),
+                                         repoLines, "Repos", fileDescription),
                 new TextFileLineInjector(DependenciesToken, DependenciesStartLine,
                                          DependenciesEndLine,
                                          PlayServicesResolver.GradleDependenciesLines(
                                              dependencies, includeDependenciesBlock: false),
-                                         "Dependencies", fileDescription)
+                                         "Dependencies", fileDescription),
+                new TextFileLineInjector(PackagingOptionsToken, PackagingOptionsStartLine,
+                                         PackagingOptionsEndLine,
+                                         PlayServicesResolver.PackagingOptionsLines(dependencies),
+                                         "Packaging Options", fileDescription),
             };
             // Lines that will be written to the output file.
             var outputLines = new List<string>();

@@ -36,11 +36,12 @@ namespace GooglePlayServices {
         public static HashSet<string> FindLocalRepos(ICollection<Dependency> dependencies) {
             // Find all repositories embedded in the project.
             var repos = new HashSet<string>();
-            foreach (var dependency in dependencies) {
-                foreach (var repo in dependency.Repositories) {
-                    if (repo.Replace("\\", "/").ToLower().StartsWith("assets/")) {
-                        repos.Add(repo);
-                    }
+            var projectUri = GradleResolver.RepoPathToUri(Path.GetFullPath("."));
+            foreach (var reposAndSources in
+                     PlayServicesResolver.GetRepos(dependencies: dependencies)) {
+                var repoUri = reposAndSources.Key;
+                if (repoUri.StartsWith(projectUri)) {
+                    repos.Add(Uri.UnescapeDataString(repoUri.Substring(projectUri.Length + 1)));
                 }
             }
             return repos;
@@ -53,12 +54,14 @@ namespace GooglePlayServices {
         /// <returns>A list of found aar and srcaar files.</returns>
         public static List<string> FindAars(string directory) {
             var foundFiles = new List<string>();
-            foreach (string filename in Directory.GetFiles(directory)) {
-                var packaging = Path.GetExtension(filename).ToLower();
-                if (packaging == ".aar" || packaging == ".srcaar") foundFiles.Add(filename);
-            }
-            foreach (string currentDirectory in Directory.GetDirectories(directory)) {
-                foundFiles.AddRange(FindAars(currentDirectory));
+            if (Directory.Exists(directory)) {
+                foreach (string filename in Directory.GetFiles(directory)) {
+                    var packaging = Path.GetExtension(filename).ToLower();
+                    if (packaging == ".aar" || packaging == ".srcaar") foundFiles.Add(filename);
+                }
+                foreach (string currentDirectory in Directory.GetDirectories(directory)) {
+                    foundFiles.AddRange(FindAars(currentDirectory));
+                }
             }
             return foundFiles;
         }

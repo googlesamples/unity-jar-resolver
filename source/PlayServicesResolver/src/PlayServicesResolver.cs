@@ -25,6 +25,11 @@ namespace GooglePlayServices {
     using Google.JarResolver;
     using UnityEditor;
     using UnityEngine;
+    // Unforunately, SettingsDialog is a public method of this object so collides with
+    // GooglePlayServices.SettingsDialog when used from this class, so alias this as
+    // SettingsDialogObj.
+    using SettingsDialogObj = GooglePlayServices.SettingsDialog;
+
 
     /// <summary>
     /// Play services resolver.  This is a background post processor
@@ -59,6 +64,11 @@ namespace GooglePlayServices {
             public HashSet<string> Files { get; internal set; }
 
             /// <summary>
+            /// Settings used to resolve these dependencies.
+            /// </summary>
+            public Dictionary<string, string> Settings { get; internal set; }
+
+            /// <summary>
             /// Determine the current state of the project.
             /// </summary>
             /// <returns>DependencyState instance with data derived from the current
@@ -66,7 +76,8 @@ namespace GooglePlayServices {
             public static DependencyState GetState() {
                 return new DependencyState {
                     Packages = new HashSet<string>(PlayServicesSupport.GetAllDependencies().Keys),
-                    Files = new HashSet<string>(PlayServicesResolver.FindLabeledAssets())
+                    Files = new HashSet<string>(PlayServicesResolver.FindLabeledAssets()),
+                    Settings = PlayServicesResolver.GetResolutionSettings(),
                 };
             }
 
@@ -74,7 +85,7 @@ namespace GooglePlayServices {
             /// Sort a string hashset.
             /// </summary>
             /// <param name="setToSort">Set to sort and return via an enumerable.</param>
-            private static IEnumerable<string> SortSet(HashSet<string> setToSort) {
+            private static IEnumerable<string> SortSet(IEnumerable<string> setToSort) {
                 var sorted = new SortedDictionary<string, bool>();
                 foreach (var value in setToSort) sorted[value] = true;
                 return sorted.Keys;
@@ -101,6 +112,14 @@ namespace GooglePlayServices {
                         foreach (var assetPath in SortSet(Files)) {
                             writer.WriteStartElement("file");
                             writer.WriteValue(assetPath);
+                            writer.WriteEndElement();
+                        }
+                        writer.WriteEndElement();
+                        writer.WriteStartElement("settings");
+                        foreach (var settingKey in SortSet(Settings.Keys)) {
+                            writer.WriteStartElement("setting");
+                            writer.WriteAttributeString("name", settingKey);
+                            writer.WriteAttributeString("value", Settings[settingKey]);
                             writer.WriteEndElement();
                         }
                         writer.WriteEndElement();
@@ -138,13 +157,15 @@ namespace GooglePlayServices {
             public static DependencyState ReadFromFile() {
                 var packages = new HashSet<string>();
                 var files = new HashSet<string>();
+                var settings = new Dictionary<string, string>();
                 if (!XmlUtilities.ParseXmlTextFileElements(
                     DEPENDENCY_STATE_FILE, logger,
                     (reader, elementName, isStart, parentElementName, elementNameStack) => {
                         if (isStart) {
                             if (elementName == "dependencies" && parentElementName == "") {
                                 return true;
-                            } else if ((elementName == "packages" || elementName == "files") &&
+                            } else if ((elementName == "packages" || elementName == "files" ||
+                                        elementName == "settings") &&
                                        parentElementName == "dependencies") {
                                 return true;
                             } else if (elementName == "package" &&
@@ -158,15 +179,27 @@ namespace GooglePlayServices {
                                     files.Add(reader.ReadContentAsString());
                                 }
                                 return true;
+                            } else if (elementName == "setting" &&
+                                       parentElementName == "settings") {
+                                if (isStart) {
+                                    string name = reader.GetAttribute("name");
+                                    string value = reader.GetAttribute("value");
+                                    if (!String.IsNullOrEmpty(name) &&
+                                        !String.IsNullOrEmpty(value)) {
+                                        settings[name] = value;
+                                    }
+                                }
+                                return true;
                             }
                         }
                         return false;
                     })) {
                     return null;
                 }
-                return new DependencyState {
+                return new DependencyState() {
                     Packages = packages,
-                    Files = files
+                    Files = files,
+                    Settings = settings
                 };
             }
 
@@ -177,7 +210,16 @@ namespace GooglePlayServices {
             /// <returns>true if both objects have the same contents, false otherwise.</returns>
             public override bool Equals(System.Object obj) {
                 var state = obj as DependencyState;
-                return state != null && Packages.SetEquals(state.Packages) &&
+                bool settingsTheSame = state != null && Settings.Count == state.Settings.Count;
+                if (settingsTheSame) {
+                    foreach (var kv in Settings) {
+                        string value;
+                        settingsTheSame = state.Settings.TryGetValue(kv.Key, out value) &&
+                            value == kv.Value;
+                        if (!settingsTheSame) break;
+                    }
+                }
+                return settingsTheSame && Packages.SetEquals(state.Packages) &&
                     Files.SetEquals(state.Files);
             }
 
@@ -193,6 +235,9 @@ namespace GooglePlayServices {
                 foreach (var pkg in Packages) {
                     hash ^= pkg.GetHashCode();
                 }
+                foreach (var setting in Settings.Values) {
+                    hash ^= setting.GetHashCode();
+                }
                 return hash;
             }
 
@@ -205,12 +250,25 @@ namespace GooglePlayServices {
             }
 
             /// <summary>
+            /// Convert a dictionary to a sorted comma separated string.
+            /// </summary>
+            /// <returns>Comma separated string in the form key=value.<returns>
+            private static string DictionaryToString(Dictionary<string, string> dict) {
+                var components = new List<string>();
+                foreach (var key in SortSet(dict.Keys)) {
+                    components.Add(String.Format("{0}={1}", key, dict[key]));
+                }
+                return String.Join(", ", components.ToArray());
+            }
+
+            /// <summary>
             /// Display dependencies as a string.
             /// </summary>
             /// <returns>Human readable string.</returns>
             public override string ToString() {
-                return String.Format("packages=({0}), files=({1})", SetToString(Packages),
-                                     SetToString(Files));
+                return String.Format("packages=({0}), files=({1}) settings=({2})",
+                                     SetToString(Packages), SetToString(Files),
+                                     DictionaryToString(Settings));
             }
         }
 
@@ -228,6 +286,8 @@ namespace GooglePlayServices {
             /// changed.</param>
             public delegate void Changed(T previousValue, T currentValue);
 
+            // Whether the previous value has been initialized.
+            private bool previousValueInitialized = false;
             // Previous value of the property.
             private T previousValue = default(T);
             // Previous value of the property when it was last polled.
@@ -246,16 +306,14 @@ namespace GooglePlayServices {
             /// <summary>
             /// Create the poller.
             /// </summary>
-            /// <param name="initialValue">Initial value of the property being polled.</param>
             /// <param name="propertyName">Name of the property being polled.</param>
             /// <param name="delayTimeInSeconds">Time to wait before signalling that the value
             /// has changed.</param>
             /// <param name="checkIntervalInSeconds">Time to check the value of the property for
             /// changes.<param>
-            public PropertyPoller(T initialValue, string propertyName,
+            public PropertyPoller(string propertyName,
                                   int delayTimeInSeconds = 3,
                                   int checkIntervalInSeconds = 1) {
-                previousValue = initialValue;
                 this.propertyName = propertyName;
                 this.delayTimeInSeconds = delayTimeInSeconds;
                 this.checkIntervalInSeconds = checkIntervalInSeconds;
@@ -274,6 +332,13 @@ namespace GooglePlayServices {
                 }
                 previousCheckTime = currentTime;
                 T currentValue = getCurrentValue();
+                // If the poller isn't initailized, store the current value before polling for
+                // changes.
+                if (!previousValueInitialized) {
+                    previousValueInitialized = true;
+                    previousValue = currentValue;
+                    return;
+                }
                 if (!currentValue.Equals(previousValue)) {
                     if (currentValue.Equals(previousPollValue)) {
                         if (currentTime.Subtract(previousPollTime).TotalSeconds >=
@@ -297,20 +362,10 @@ namespace GooglePlayServices {
         /// </summary>
         private static PlayServicesSupport svcSupport;
 
-        /// <summar>
-        /// Selects between different types of IResolver implementations that can be used.
-        /// </summary>
-        public enum ResolverType
-        {
-            Default,            // Standard versioned resolver
-        }
-
         /// <summary>
-        /// The resolver to use, injected to allow for version updating.
+        /// Resolver that uses Gradle to download libraries and embed them within a Unity project.
         /// </summary>
-        private static Dictionary<ResolverType, IResolver> _resolvers =
-            new Dictionary<ResolverType, IResolver>();
-
+        private static GradleResolver gradleResolver;
 
         /// <summary>
         /// Resoluton job.
@@ -361,8 +416,8 @@ namespace GooglePlayServices {
         /// <summary>
         /// Polls for changes in the bundle ID.
         /// </summary>
-        private static PropertyPoller<string> bundleIdPoller = new PropertyPoller<string>(
-            GetAndroidApplicationId(), "Bundle ID");
+        private static PropertyPoller<string> bundleIdPoller =
+            new PropertyPoller<string>("Bundle ID");
 
         /// <summary>
         /// Arguments for the bundle ID update event.
@@ -383,12 +438,6 @@ namespace GooglePlayServices {
         /// Event which is fired when the bundle ID is updated.
         /// </summary>
         public static event EventHandler<BundleIdChangedEventArgs> BundleIdChanged;
-
-        /// <summary>
-        /// Value of the InstallAndroidPackages before settings were changed.
-        /// </summary>
-        private static bool previousInstallAndroidPackages =
-            GooglePlayServices.SettingsDialog.InstallAndroidPackages;
 
         /// <summary>
         /// Asset label applied to files managed by this plugin.
@@ -454,13 +503,73 @@ namespace GooglePlayServices {
                     foreach (var path in Directory.GetFiles(gradleLibDir, "gradle-core-*.jar",
                                                             SearchOption.TopDirectoryOnly)) {
                         var match = gradleJarVersionExtract.Match(Path.GetFileName(path));
-                        if (match != null) {
+                        if (match != null && match.Success) {
                             gradleVersion = match.Result("$1");
                             break;
                         }
                     }
                 }
                 return gradleVersion;
+            }
+        }
+
+        // Backing store for the AndroidGradlePluginVersion property.
+        private static string androidGradlePluginVersion = null;
+        // Modification time of mainTemplate.gradle the last time it was searched for the Android
+        // Gradle plugin version.
+        private static DateTime mainTemplateLastWriteTime = default(DateTime);
+        // Extracts an Android Gradle Plugin version number from the contents of a *.gradle file.
+        private static Regex androidGradlePluginVersionExtract = new Regex(
+            @"['""]com\.android\.tools\.build:gradle:([^']+)['""]$");
+
+        /// <summary>
+        /// Get the Android Gradle Plugin version used by Unity.
+        /// </summary>
+        public static string AndroidGradlePluginVersion {
+            set {
+                androidGradlePluginVersion = value;
+                mainTemplateLastWriteTime = DateTime.Now;
+            }
+            get {
+                // If the gradle template changed, read the plugin version again.
+                var mainTemplateGradlePath = GradleTemplateResolver.GradleTemplatePath;
+                if (File.Exists(mainTemplateGradlePath)) {
+                    var lastWriteTime = File.GetLastWriteTime(mainTemplateGradlePath);
+                    if (lastWriteTime.CompareTo(mainTemplateLastWriteTime) > 0) {
+                        androidGradlePluginVersion = null;
+                    }
+                }
+                // If the plugin version is cached, return it.
+                if (!String.IsNullOrEmpty(androidGradlePluginVersion)) {
+                    return androidGradlePluginVersion;
+                }
+                // Search the gradle templates for the plugin version.
+                var engineDir = AndroidPlaybackEngineDirectory;
+                if (String.IsNullOrEmpty(engineDir)) return null;
+                var gradleTemplateDir =
+                    Path.Combine(Path.Combine(engineDir, "Tools"), "GradleTemplates");
+                if (Directory.Exists(gradleTemplateDir)) {
+                    var gradleTemplates = new List<string>();
+                    if (File.Exists(mainTemplateGradlePath)) {
+                        gradleTemplates.Add(mainTemplateGradlePath);
+                    }
+                    gradleTemplates.AddRange(Directory.GetFiles(gradleTemplateDir, "*.gradle",
+                                                                SearchOption.TopDirectoryOnly));
+                    foreach (var path in gradleTemplates) {
+                        foreach (var line in File.ReadAllLines(path)) {
+                            var match = androidGradlePluginVersionExtract.Match(line);
+                            if (match != null && match.Success) {
+                                androidGradlePluginVersion = match.Result("$1");
+                                break;
+                            }
+                        }
+                        if (!String.IsNullOrEmpty(androidGradlePluginVersion)) break;
+                    }
+                }
+                Log(String.Format("Detected Android Gradle Plugin Version {0}.",
+                                  androidGradlePluginVersion),
+                    level: LogLevel.Verbose);
+                return androidGradlePluginVersion;
             }
         }
 
@@ -555,8 +664,7 @@ namespace GooglePlayServices {
         /// Polls for changes in build system settings.
         /// </summary>
         private static PropertyPoller<AndroidBuildSystemSettings> androidBuildSystemPoller =
-            new PropertyPoller<AndroidBuildSystemSettings>(
-                AndroidBuildSystemSettings.Current, "Android Build Settings");
+            new PropertyPoller<AndroidBuildSystemSettings>("Android Build Settings");
 
         /// <summary>
         /// Arguments for the Android build system changed event.
@@ -603,7 +711,7 @@ namespace GooglePlayServices {
         /// Polls for changes in the Android device ABI.
         /// </summary>
         private static PropertyPoller<AndroidAbis> androidAbisPoller =
-            new PropertyPoller<AndroidAbis>(new AndroidAbis(), "Android Target Device ABI");
+            new PropertyPoller<AndroidAbis>("Android Target Device ABI");
 
         /// <summary>
         /// Logger for this module.
@@ -659,7 +767,7 @@ namespace GooglePlayServices {
         /// Polls for changes in AndroidSdkRoot.
         /// </summary>
         private static PropertyPoller<string> androidSdkRootPoller =
-            new PropertyPoller<string>(AndroidSdkRoot, "Android SDK Path");
+            new PropertyPoller<string>("Android SDK Path");
 
         /// <summary>
         /// Arguments for the AndroidSdkRootChanged event.
@@ -701,9 +809,28 @@ namespace GooglePlayServices {
                                 new object[] { BuildTarget.Android, BuildOptions.None });
                     } catch (Exception) {
                         androidPlaybackEngineDirectory = null;
+                        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+                            if (assembly.GetName().Name == "UnityEditor.Android.Extensions") {
+                                androidPlaybackEngineDirectory =
+                                    Path.GetDirectoryName(assembly.Location);
+                                break;
+                            }
+                        }
                     }
                 }
                 return androidPlaybackEngineDirectory;
+            }
+        }
+
+        /// <summary>
+        /// Returns true if automatic resolution is enabled.
+        /// Auto-resolution is never enabled in batch mode.  Each build setting change must be
+        /// manually followed by DoResolution().
+        /// </summary>
+        public static bool AutomaticResolutionEnabled {
+            get {
+                return SettingsDialogObj.EnableAutoResolution &&
+                    !ExecutionEnvironment.InBatchMode;
             }
         }
 
@@ -713,7 +840,7 @@ namespace GooglePlayServices {
         static PlayServicesResolver() {
             // Create the resolver.
             if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) {
-                RegisterResolver(new ResolverVer1_1());
+                gradleResolver = new GradleResolver();
                 // Monitor Android dependency XML files to perform auto-resolution.
                 AddAutoResolutionFilePatterns(xmlDependencies.fileRegularExpressions);
 
@@ -736,9 +863,10 @@ namespace GooglePlayServices {
                 AndroidAbisChanged += ResolveOnAndroidAbisChanged;
                 AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
                 ScheduleAutoResolve();
+
+                if (SettingsDialogObj.EnableAutoResolution) LinkAutoResolution();
             }
 
-            if (GooglePlayServices.SettingsDialog.EnableAutoResolution) LinkAutoResolution();
         }
 
         // Unregister events to monitor build system changes for the Android Resolver and other
@@ -800,48 +928,6 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
-        /// Registers the resolver.
-        /// </summary>
-        /// <remarks>
-        /// The resolver with the greatest version number is retained
-        /// </remarks>
-        /// <returns>The resolver.</returns>
-        /// <param name="resolverImpl">Resolver impl.</param>
-        public static IResolver RegisterResolver(IResolver resolverImpl,
-                                                 ResolverType resolverType = ResolverType.Default) {
-            if (resolverImpl == null) {
-                return Resolver;
-            }
-
-            IResolver destResolver;
-            if (!_resolvers.TryGetValue(resolverType, out destResolver) ||
-                destResolver.Version() < resolverImpl.Version()) {
-                _resolvers[resolverType] = resolverImpl;
-            }
-            return resolverImpl;
-        }
-
-        private static ResolverType CurrentResolverType {
-            get { return ResolverType.Default; }
-        }
-
-        /// <summary>
-        /// Gets the resolver.
-        /// </summary>
-        /// <value>The resolver.</value>
-        public static IResolver Resolver {
-            get {
-                IResolver resolver = null;
-                if (resolver == null) {
-                    _resolvers.TryGetValue(ResolverType.Default, out resolver);
-                }
-
-                return resolver;
-            }
-        }
-
-
-        /// <summary>
         /// Patterns of files that are monitored to trigger auto resolution.
         /// </summary>
         private static HashSet<Regex> autoResolveFilePatterns = new HashSet<Regex>();
@@ -891,10 +977,10 @@ namespace GooglePlayServices {
                                                    string[] deletedAssets,
                                                    string[] movedAssets,
                                                    string[] movedFromAssetPaths) {
-            if (Resolver != null) {
+            if (gradleResolver != null) {
                 // If the manifest changed, try patching it.
                 var manifestPath = FileUtils.NormalizePathSeparators(
-                    GooglePlayServices.SettingsDialog.AndroidManifestPath);
+                    SettingsDialogObj.AndroidManifestPath);
                 foreach (var importedAsset in importedAssets) {
                     if (FileUtils.NormalizePathSeparators(importedAsset) == manifestPath) {
                         PatchAndroidManifest(GetAndroidApplicationId(), null);
@@ -902,11 +988,11 @@ namespace GooglePlayServices {
                     }
                 }
 
-                if (Resolver.AutomaticResolutionEnabled()) {
+                if (AutomaticResolutionEnabled) {
                     // If anything has been removed from the packaging directory schedule
                     // resolution.
                     foreach (string asset in deletedAssets) {
-                        if (asset.StartsWith(GooglePlayServices.SettingsDialog.PackageDir)) {
+                        if (asset.StartsWith(SettingsDialogObj.PackageDir)) {
                             ScheduleAutoResolve();
                             return;
                         }
@@ -950,7 +1036,7 @@ namespace GooglePlayServices {
             if (UnityEngine.Application.isPlaying) return;
             // If the Android resolver isn't enabled or automatic resolution is disabled,
             // do nothing.
-            if (Resolver == null || !GooglePlayServices.SettingsDialog.AutoResolveOnBuild) {
+            if (gradleResolver == null || !SettingsDialogObj.AutoResolveOnBuild) {
                 return;
             }
             // If post-processing has already been executed since this module was loaded, don't
@@ -958,7 +1044,7 @@ namespace GooglePlayServices {
             scenesProcessed++;
             if (scenesProcessed > 1) return;
             Log("Starting auto-resolution before scene build...", level: LogLevel.Verbose);
-            bool success = ResolveSync(false);
+            bool success = ResolveSync(false, true);
             Log(String.Format("Android resolution {0}.", success ? "succeeded" : "failed"),
                     level: LogLevel.Verbose);
         }
@@ -1041,14 +1127,14 @@ namespace GooglePlayServices {
         /// </summary>
         /// <param name="resolutionComplete">Called when resolution is complete.</param>
         private static void AutoResolve(Action resolutionComplete) {
-            if (Resolver.AutomaticResolutionEnabled()) {
+            if (AutomaticResolutionEnabled) {
                 ScheduleResolve(
-                    false, (success) => {
+                    false, false, (success) => {
                         if (resolutionComplete != null) resolutionComplete();
                     }, true);
             }
             else if (!ExecutionEnvironment.InBatchMode &&
-                     GooglePlayServices.SettingsDialog.AutoResolutionDisabledWarning &&
+                     SettingsDialogObj.AutoResolutionDisabledWarning &&
                      PlayServicesSupport.GetAllDependencies().Count > 0) {
                 Debug.LogWarning("Warning: Auto-resolution of Android dependencies is disabled! " +
                                  "Ensure you have manually run the resolver before building." +
@@ -1068,8 +1154,8 @@ namespace GooglePlayServices {
         /// Auto-resolve if any packages need to be resolved.
         /// </summary>
         private static void Reresolve() {
-            if (Resolver.AutomaticResolutionEnabled()) {
-                if (DeleteFiles(Resolver.OnBuildSettings())) ScheduleAutoResolve();
+            if (AutomaticResolutionEnabled && gradleResolver != null) {
+                if (DeleteFiles(gradleResolver.OnBuildSettings())) ScheduleAutoResolve();
             }
         }
 
@@ -1208,7 +1294,7 @@ namespace GooglePlayServices {
         /// Apply variable expansion in the AndroidManifest.xml file.
         /// </summary>
         private static void PatchAndroidManifest(string bundleId, string previousBundleId) {
-            if (!GooglePlayServices.SettingsDialog.PatchAndroidManifest) return;
+            if (!SettingsDialogObj.PatchAndroidManifest) return;
             // We only need to patch the manifest in Unity 2018 and above.
             if (Google.VersionHandler.GetUnityVersionMajorMinor() < 2018.0f) return;
             var replacements = new Dictionary<string, string>();
@@ -1218,7 +1304,7 @@ namespace GooglePlayServices {
             if (!(String.IsNullOrEmpty(previousBundleId) || String.IsNullOrEmpty(bundleId))) {
                 replacements[previousBundleId] = bundleId;
             }
-            ReplaceVariablesInAndroidManifest(GooglePlayServices.SettingsDialog.AndroidManifestPath,
+            ReplaceVariablesInAndroidManifest(SettingsDialogObj.AndroidManifestPath,
                                               bundleId, replacements);
         }
 
@@ -1315,7 +1401,7 @@ namespace GooglePlayServices {
         /// </summary>
         private static void ResolveOnAndroidSdkRootChange(
                 object sender, AndroidSdkRootChangedArgs args) {
-            ScheduleResolve(true, null, true);
+            ScheduleResolve(true, false, null, true);
         }
 
         /// <summary>
@@ -1383,7 +1469,7 @@ namespace GooglePlayServices {
         public static void Resolve(Action resolutionComplete = null,
                                    bool forceResolution = false,
                                    Action<bool> resolutionCompleteWithResult = null) {
-            ScheduleResolve(forceResolution,
+            ScheduleResolve(forceResolution, false,
                             (success) => {
                                 if (resolutionComplete != null) {
                                     resolutionComplete();
@@ -1414,16 +1500,29 @@ namespace GooglePlayServices {
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
         /// <returns>true if successful, false otherwise.</returns>
-        public static bool ResolveSync(bool forceResolution) {
+        private static bool ResolveSync(bool forceResolution, bool closeWindowOnCompletion) {
             bool successful = false;
             var completeEvent = new ManualResetEvent(false);
-            ScheduleResolve(forceResolution, (success) => {
+            ScheduleResolve(forceResolution, closeWindowOnCompletion, (success) => {
                     successful = success;
                     completeEvent.Set();
                 }, false);
             PollManualResetEvent(completeEvent);
             return successful;
+        }
+
+        /// <summary>
+        /// Resolve dependencies synchronously.
+        /// </summary>
+        /// <param name="forceResolution">Whether resolution should be executed when no dependencies
+        /// have changed.  This is useful if a dependency specifies a wildcard in the version
+        /// expression.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        public static bool ResolveSync(bool forceResolution) {
+            return ResolveSync(forceResolution, false);
         }
 
         /// <summary>
@@ -1444,10 +1543,10 @@ namespace GooglePlayServices {
         /// <param name="complete">Delegate called when delete is complete.</param>
         public static void DeleteResolvedLibraries(System.Action complete = null) {
             RunOnMainThread.Schedule(() => {
-                    if (Resolver.AutomaticResolutionEnabled()) {
+                    if (AutomaticResolutionEnabled) {
                         Log("Disabling auto-resolution to prevent libraries from being " +
                             "resolved after deletion.", level: LogLevel.Warning);
-                        GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
+                        SettingsDialogObj.EnableAutoResolution = false;
                     }
                     DeleteLabeledAssets();
                     DeleteResolvedLibrariesFromGradleTemplate();
@@ -1472,10 +1571,12 @@ namespace GooglePlayServices {
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
         /// <param name="resolutionCompleteWithResult">Delegate called when resolution is complete
         /// with a parameter that indicates whether it succeeded or failed.</param>
         /// <param name="isAutoResolveJob">Whether this is an auto-resolution job.</param>
-        private static void ScheduleResolve(bool forceResolution,
+        private static void ScheduleResolve(bool forceResolution, bool closeWindowOnCompletion,
                                             Action<bool> resolutionCompleteWithResult,
                                             bool isAutoResolveJob) {
             bool firstJob;
@@ -1491,15 +1592,17 @@ namespace GooglePlayServices {
                     new ResolutionJob(
                         isAutoResolveJob,
                         () => {
-                            ResolveUnsafe(resolutionComplete: (success) => {
+                            ResolveUnsafe(
+                                (success) => {
                                     SignalResolveJobComplete(() => {
                                             if (resolutionCompleteWithResult != null) {
                                                 resolutionCompleteWithResult(success);
                                             }
                                         });
                                 },
-                                forceResolution: forceResolution,
-                                isAutoResolveJob: isAutoResolveJob);
+                                forceResolution,
+                                isAutoResolveJob,
+                                closeWindowOnCompletion);
                         }));
             }
             if (firstJob) ExecuteNextResolveJob();
@@ -1513,21 +1616,25 @@ namespace GooglePlayServices {
         /// <param name="forceResolution">Whether resolution should be executed when no dependencies
         /// have changed.  This is useful if a dependency specifies a wildcard in the version
         /// expression.</param>
-        private static void ResolveUnsafe(Action<bool> resolutionComplete = null,
-                                          bool forceResolution = false,
-                                          bool isAutoResolveJob = false) {
+        /// <param name="isAutoResolveJob">Whether this is an auto-resolution job.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
+        private static void ResolveUnsafe(Action<bool> resolutionComplete,
+                                          bool forceResolution, bool isAutoResolveJob,
+                                          bool closeWindowOnCompletion) {
             JavaUtilities.CheckJdkForApiLevel();
+            CanEnableJetifierOrPromptUser("");
 
-            DeleteFiles(Resolver.OnBuildSettings());
+            DeleteFiles(gradleResolver.OnBuildSettings());
 
             // If the internal build system is being used and AAR explosion is disabled the build
             // is going to fail so warn and enable explosion.
             if (!AndroidBuildSystemSettings.Current.GradleBuildEnabled &&
-                !GooglePlayServices.SettingsDialog.ExplodeAars) {
+                !SettingsDialogObj.ExplodeAars) {
                 Log("AAR explosion *must* be enabled when the internal build " +
                     "system is selected, otherwise the build will very likely fail. " +
                     "Enabling the 'explode AARs' setting.", level: LogLevel.Warning);
-                GooglePlayServices.SettingsDialog.ExplodeAars = true;
+                SettingsDialogObj.ExplodeAars = true;
             }
 
             xmlDependencies.ReadAll(logger);
@@ -1549,7 +1656,7 @@ namespace GooglePlayServices {
             // If we are not in auto-resolution mode and not in batch mode
             // prompt the user to see if they want to resolve dependencies
             // now or later.
-            if (GooglePlayServices.SettingsDialog.PromptBeforeAutoResolution &&
+            if (SettingsDialogObj.PromptBeforeAutoResolution &&
                 isAutoResolveJob &&
                 !ExecutionEnvironment.InBatchMode) {
                 bool shouldResolve = false;
@@ -1569,14 +1676,14 @@ namespace GooglePlayServices {
                         Label = "Enable",
                         DelegateAction = () => {
                             shouldResolve = true;
-                            GooglePlayServices.SettingsDialog.PromptBeforeAutoResolution = false;
+                            SettingsDialogObj.PromptBeforeAutoResolution = false;
                         }
                     },
                     Cancel = new AlertModal.LabeledAction {
                         Label = "Disable",
                         DelegateAction = () => {
-                            GooglePlayServices.SettingsDialog.EnableAutoResolution = false;
-                            GooglePlayServices.SettingsDialog.PromptBeforeAutoResolution = false;
+                            SettingsDialogObj.EnableAutoResolution = false;
+                            SettingsDialogObj.PromptBeforeAutoResolution = false;
                             shouldResolve = false;
                         }
                     }
@@ -1594,14 +1701,17 @@ namespace GooglePlayServices {
             }
 
             if (forceResolution) {
+                Log("Forcing resolution...", level: LogLevel.Verbose);
                 DeleteLabeledAssets();
             } else {
+                Log("Checking for changes from previous resolution...", level: LogLevel.Verbose);
                 // Only resolve if user specified dependencies changed or the output files
                 // differ to what is present in the project.
                 var currentState = DependencyState.GetState();
                 var previousState = DependencyState.ReadFromFile();
                 if (previousState != null) {
                     if (currentState.Equals(previousState)) {
+                        Log("No changes found, resolution skipped.", level: LogLevel.Verbose);
                         if (resolutionComplete != null) resolutionComplete(true);
                         return;
                     }
@@ -1615,10 +1725,13 @@ namespace GooglePlayServices {
                     // Delete all labeled assets to make sure we don't leave any stale transitive
                     // dependencies in the project.
                     DeleteLabeledAssets();
+                } else {
+                    Log("Failed to parse previous resolution state, running resolution...",
+                        level: LogLevel.Verbose);
                 }
             }
 
-            System.IO.Directory.CreateDirectory(GooglePlayServices.SettingsDialog.PackageDir);
+            System.IO.Directory.CreateDirectory(SettingsDialogObj.PackageDir);
             Log(String.Format("Resolving the following dependencies:\n{0}\n",
                               String.Join("\n", (new List<string>(
                                   PlayServicesSupport.GetAllDependencies().Keys)).ToArray())),
@@ -1639,20 +1752,21 @@ namespace GooglePlayServices {
             // If a gradle template is present but patching is disabled, remove managed libraries
             // from the template.
             if (GradleTemplateEnabled &&
-                !GooglePlayServices.SettingsDialog.PatchMainTemplateGradle) {
+                !SettingsDialogObj.PatchMainTemplateGradle) {
                 DeleteResolvedLibrariesFromGradleTemplate();
             }
 
             if (GradleTemplateEnabled &&
-                GooglePlayServices.SettingsDialog.PatchMainTemplateGradle) {
+                SettingsDialogObj.PatchMainTemplateGradle) {
                 RunOnMainThread.Run(() => {
                         finishResolution(GradleTemplateResolver.InjectDependencies(
                             PlayServicesSupport.GetAllDependencies().Values), "");
                     });
             } else {
                 lastError = "";
-                Resolver.DoResolution(
-                    svcSupport, GooglePlayServices.SettingsDialog.PackageDir,
+                gradleResolver.DoResolution(
+                    SettingsDialogObj.PackageDir,
+                    closeWindowOnCompletion,
                     () => {
                         RunOnMainThread.Run(() => {
                                 finishResolution(String.IsNullOrEmpty(lastError), lastError);
@@ -1686,26 +1800,22 @@ namespace GooglePlayServices {
         [MenuItem("Assets/Play Services Resolver/Android Resolver/Settings")]
         public static void SettingsDialog()
         {
-            if (Resolver != null)
-            {
-                Resolver.ShowSettingsDialog();
-            }
-            else
-            {
-                DefaultResolver.ShowSettings();
-            }
+            SettingsDialog window = (SettingsDialog)EditorWindow.GetWindow(
+                typeof(SettingsDialog), true, "Android Resolver Settings");
+            window.Initialize();
+            window.Show();
         }
 
         /// <summary>
         /// Interactive resolution of dependencies.
         /// </summary>
         private static void ExecuteMenuResolve(bool forceResolution) {
-            if (Resolver == null) {
+            if (gradleResolver == null) {
                 NotAvailableDialog();
                 return;
             }
             ScheduleResolve(
-                forceResolution, (success) => {
+                forceResolution, false, (success) => {
                     EditorUtility.DisplayDialog(
                         "Android Dependencies",
                         String.Format("Resolution {0}", success ? "Succeeded" :
@@ -1760,7 +1870,7 @@ namespace GooglePlayServices {
         public static IList<KeyValuePair<string, string>> GetPackageSpecs(
                 IEnumerable<Dependency> dependencies = null) {
             return new List<KeyValuePair<string, string>>(new SortedList<string, string>(
-                ResolverVer1_1.DependenciesToPackageSpecs(GetOrReadDependencies(dependencies))));
+                GradleResolver.DependenciesToPackageSpecs(GetOrReadDependencies(dependencies))));
         }
 
         /// <summary>
@@ -1769,8 +1879,13 @@ namespace GooglePlayServices {
         /// <returns>List of repo, source pairs.</returns>
         public static IList<KeyValuePair<string, string>> GetRepos(
                 IEnumerable<Dependency> dependencies = null) {
-            return ResolverVer1_1.DependenciesToRepoUris(GetOrReadDependencies(dependencies));
+            return GradleResolver.DependenciesToRepoUris(GetOrReadDependencies(dependencies));
         }
+
+        /// <summary>
+        /// File scheme that can be concatenated with an absolute path on the local filesystem.
+        /// </summary>
+        internal const string FILE_SCHEME = "file:///";
 
         /// <summary>
         /// Get the included dependency repos as lines that can be included in a Gradle file.
@@ -1780,9 +1895,8 @@ namespace GooglePlayServices {
             var lines = new List<string>();
             if (dependencies.Count > 0) {
                 var exportEnabled = GradleProjectExportEnabled;
-                var projectPath = Path.GetFullPath(".").Replace("\\", "/");
-                const string fileScheme = "file:///";
-                var projectFileUri = fileScheme + projectPath;
+                var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
+                var projectFileUri = GradleResolver.RepoPathToUri(projectPath);
                 lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
                 lines.Add("    project.repositories {");
                 // projectPath will point to the Unity project root directory as Unity will
@@ -1791,7 +1905,7 @@ namespace GooglePlayServices {
                 lines.Add(String.Format(
                           "        def unityProjectPath = \"{0}\" + " +
                           "file(rootProject.projectDir.path + \"/../../\").absolutePath",
-                          fileScheme));
+                          FILE_SCHEME));
                 lines.Add("        maven {");
                 lines.Add("            url \"https://maven.google.com\"");
                 lines.Add("        }");
@@ -1850,6 +1964,70 @@ namespace GooglePlayServices {
             return lines;
         }
 
+        // Extracts the ABI from a native library path in an AAR.
+        // In an AAR, native libraries are under the jni directory, in an APK they're placed under
+        // the lib directory.
+        private static Regex nativeLibraryPath = new Regex(@"^jni/([^/]+)/.*\.so$");
+
+        /// <summary>
+        /// Get the Android packaging options as lines that can be included in a Gradle file.
+        /// </summary>
+        internal static IList<string> PackagingOptionsLines(ICollection<Dependency> dependencies) {
+            var lines = new List<string>();
+            if (dependencies.Count > 0) {
+                var currentAbis = AndroidAbis.Current.ToSet();
+                var excludeFiles = new HashSet<string>();
+                // Support for wildcard based excludes were added in Android Gradle plugin 3.0.0
+                // which requires Gradle 4.1+.  Also, version 2.3.0 was locked to Gradle 2.1.+ so
+                // it's possible to infer the Android Gradle plugin from the Gradle version.
+                var version = GradleVersion;
+                var wildcardExcludesSupported =
+                    !String.IsNullOrEmpty(version) &&
+                    (new Dependency.VersionComparer()).Compare("4.1", version) >= 0;
+                if (wildcardExcludesSupported) {
+                    var allAbis = new HashSet<string>(AndroidAbis.AllSupported);
+                    allAbis.ExceptWith(currentAbis);
+                    foreach (var abi in allAbis) {
+                        excludeFiles.Add(String.Format("/lib/{0}/**", abi));
+                    }
+                } else {
+                    // Android Gradle plugin 2.x only supported exclusion of packaged files using
+                    // APK relative paths.
+                    foreach (var aar in LocalMavenRepository.FindAarsInLocalRepos(dependencies)) {
+                        foreach (var path in ListZip(aar)) {
+                            var posixPath = FileUtils.PosixPathSeparators(path);
+                            var match = nativeLibraryPath.Match(posixPath);
+                            if (match != null && match.Success) {
+                                var abi = match.Result("$1");
+                                if (!currentAbis.Contains(abi)) {
+                                    excludeFiles.Add(
+                                        String.Format(
+                                            "lib/{0}", posixPath.Substring("jni/".Length)));
+                                }
+                            }
+                        }
+                    }
+                }
+                if (excludeFiles.Count > 0) {
+                    var sortedExcludeFiles = new List<string>(excludeFiles);
+                    sortedExcludeFiles.Sort();
+                    lines.Add("android {");
+                    lines.Add("  packagingOptions {");
+                    foreach (var filename in sortedExcludeFiles) {
+                        // Unity's Android extension replaces ** in the template with an empty
+                        // string presumably due to the token expansion it performs.  It's not
+                        // possible to escape the expansion so we workaround it by concatenating
+                        // strings.
+                        lines.Add(String.Format("      exclude ('{0}')",
+                                                filename.Replace("**", "*' + '*")));
+                    }
+                    lines.Add("  }");
+                    lines.Add("}");
+                }
+            }
+            return lines;
+        }
+
         /// <summary>
         /// Display the set of dependncies / libraries currently included in the project.
         /// This prints out the set of libraries in a form that can be easily included in a Gradle
@@ -1862,33 +2040,14 @@ namespace GooglePlayServices {
             var dependencies = PlayServicesSupport.GetAllDependencies().Values;
 
             var lines = new List<string>();
-            lines.AddRange(GradleMavenReposLines(dependencies: dependencies));
-            lines.AddRange(GradleDependenciesLines(dependencies: dependencies));
+            lines.AddRange(GradleMavenReposLines(dependencies));
+            lines.AddRange(GradleDependenciesLines(dependencies));
+            lines.AddRange(PackagingOptionsLines(dependencies));
             var dependenciesString = String.Join("\n", lines.ToArray());
             Log(dependenciesString);
             var window = TextAreaDialog.CreateTextAreaDialog("Android Libraries");
             window.bodyText = dependenciesString;
             window.Show();
-        }
-
-        /// <summary>
-        /// Called when settings change.
-        /// </summary>
-        internal static void OnSettingsChanged() {
-            if (previousInstallAndroidPackages !=
-                GooglePlayServices.SettingsDialog.InstallAndroidPackages) {
-                DeleteLabeledAssets();
-            }
-            previousInstallAndroidPackages =
-                GooglePlayServices.SettingsDialog.InstallAndroidPackages;
-            PlayServicesSupport.verboseLogging =
-                GooglePlayServices.SettingsDialog.VerboseLogging ||
-                ExecutionEnvironment.InBatchMode;
-            logger.Verbose = GooglePlayServices.SettingsDialog.VerboseLogging;
-            if (Resolver != null) {
-                PatchAndroidManifest(GetAndroidApplicationId(), null);
-                ScheduleAutoResolve(delayInMilliseconds: 0);
-            }
         }
 
         /// <summary>
@@ -1917,20 +2076,8 @@ namespace GooglePlayServices {
             int totalAssets = assetsToProcess.Count;
             RunOnMainThread.PollOnUpdateUntilComplete(() => {
                     var remainingAssets = assetsToProcess.Count;
-                    // Display summary of processing and call the completion function.
-                    if (remainingAssets == 0) {
-                        if (assetsWithoutAssetImporter.Count > 0 && displayWarning) {
-                            Log(String.Format(
-                                "Failed to add tracking label {0} to some assets.\n\n" +
-                                "The following files will not be managed by this module:\n" +
-                                "{1}\n", ManagedAssetLabel,
-                                String.Join(
-                                    "\n", new List<string>(assetsWithoutAssetImporter).ToArray())),
-                                level: LogLevel.Warning);
-                        }
-                        if (complete != null) complete(assetsWithoutAssetImporter);
-                        return true;
-                    }
+                    // Processing is already complete.
+                    if (remainingAssets == 0) return true;
                     var assetPath = assetsToProcess[0];
                     assetsToProcess.RemoveAt(0);
                     // Ignore asset meta files which are used to store the labels and files that
@@ -1974,6 +2121,21 @@ namespace GooglePlayServices {
                     } else {
                         assetsWithoutAssetImporter.Add(assetPath);
                     }
+
+                    // Display summary of processing and call the completion function.
+                    if (assetsToProcess.Count == 0) {
+                        if (assetsWithoutAssetImporter.Count > 0 && displayWarning) {
+                            Log(String.Format(
+                                "Failed to add tracking label {0} to some assets.\n\n" +
+                                "The following files will not be managed by this module:\n" +
+                                "{1}\n", ManagedAssetLabel,
+                                String.Join(
+                                    "\n", new List<string>(assetsWithoutAssetImporter).ToArray())),
+                                level: LogLevel.Warning);
+                        }
+                        if (complete != null) complete(assetsWithoutAssetImporter);
+                        return true;
+                    }
                     return false;
                 }, synchronous: synchronous);
         }
@@ -1994,6 +2156,172 @@ namespace GooglePlayServices {
         /// </summary>
         internal static void DeleteLabeledAssets() {
             DeleteFiles(PlayServicesResolver.FindLabeledAssets());
+        }
+
+        /// <summary>
+        /// Called when settings change.
+        /// </summary>
+        internal static void OnSettingsChanged() {
+            PlayServicesSupport.verboseLogging =
+                SettingsDialogObj.VerboseLogging ||
+                ExecutionEnvironment.InBatchMode;
+            logger.Verbose = SettingsDialogObj.VerboseLogging;
+            if (gradleResolver != null) {
+                PatchAndroidManifest(GetAndroidApplicationId(), null);
+                ScheduleAutoResolve(delayInMilliseconds: 0);
+            }
+        }
+
+        /// <summary>
+        /// Retrieves the current value of settings that should cause resolution if they change.
+        /// </summary>
+        /// <returns>Map of name to value for settings that affect resolution.</returns>
+        internal static Dictionary<string, string> GetResolutionSettings() {
+            var buildSystemSettings = AndroidBuildSystemSettings.Current;
+            var androidAbis = AndroidAbis.Current;
+            return new Dictionary<string, string> {
+                {"installAndroidPackages", SettingsDialogObj.InstallAndroidPackages.ToString()},
+                {"packageDir", SettingsDialogObj.PackageDir.ToString()},
+                {"explodeAars", SettingsDialogObj.ExplodeAars.ToString()},
+                {"patchAndroidManifest", SettingsDialogObj.PatchAndroidManifest.ToString()},
+                {"patchMainTemplateGradle", SettingsDialogObj.PatchMainTemplateGradle.ToString()},
+                {"useJetifier", SettingsDialogObj.UseJetifier.ToString()},
+                {"bundleId", GetAndroidApplicationId()},
+                {"gradleBuildEnabled", buildSystemSettings.GradleBuildEnabled.ToString()},
+                {"gradleTemplateEnabled", buildSystemSettings.GradleTemplateEnabled.ToString()},
+                {"projectExportEnabled", buildSystemSettings.ProjectExportEnabled.ToString()},
+                {"androidAbis", androidAbis.ToString()},
+            };
+        }
+
+        // Matches Jetpack (AndroidX) library filenames.
+        private static Regex androidXLibrary = new Regex(@"^androidx\..*\.(jar|aar)$");
+
+        /// <summary>
+        /// Determine whether a list of files contains Jetpack libraries.
+        /// </summary>
+        /// <returns>true if any files are androidx libraries, false otherwise.</returns>
+        internal static bool FilesContainJetpackLibraries(IEnumerable<string> filenames) {
+            foreach (var path in filenames) {
+                var match = androidXLibrary.Match(Path.GetFileName(path));
+                if (match != null && match.Success) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Prompt the user to change Unity's build settings, if the Jetifier is enabled but not
+        /// supported with Unity's current build settings.
+        /// </summary>
+        /// <param name="titlePrefix">Prefix added to dialogs shown by this method.</param>
+        /// <returns>true if the Jetifier is enabled, false otherwise</returns>
+        internal static bool CanEnableJetifierOrPromptUser(string titlePrefix) {
+            bool useJetifier = SettingsDialogObj.UseJetifier;
+            if (!useJetifier || ExecutionEnvironment.InBatchMode) return useJetifier;
+            // Minimum Android Gradle Plugin required to use the Jetifier.
+            const string MinimumAndroidGradlePluginVersionForJetifier = "3.2.0";
+            if (useJetifier && GradleTemplateEnabled && SettingsDialogObj.PatchMainTemplateGradle) {
+                var version = AndroidGradlePluginVersion;
+                if ((new Dependency.VersionComparer()).Compare(
+                        MinimumAndroidGradlePluginVersionForJetifier, version) < 0) {
+                    switch (EditorUtility.DisplayDialogComplex(
+                        titlePrefix + "Enable Jetifier?",
+                        String.Format(
+                            "Jetifier for Jetpack (AndroidX) libraries is only " +
+                            "available with Android Gradle Plugin (AGP) version {0}. " +
+                            "This Unity installation uses version {1} which does not include the " +
+                            "Jetifier and therefore will not apply transformations to change " +
+                            "all legacy Android Support Library references to use Jetpack " +
+                            "(AndroidX).\n\n" +
+                            "It's possible to use the Jetifier on Android Resolver managed " +
+                            "dependencies by disabling mainTemplate.gradle patching.",
+                            MinimumAndroidGradlePluginVersionForJetifier, version),
+                        "Disable Jetifier", "Ignore", "Disable mainTemplate.gradle patching")) {
+                        case 0:  // Disable Jetifier
+                            useJetifier = false;
+                            break;
+                        case 1:  // Ignore
+                            break;
+                        case 2:  // Disable mainTemplate.gradle patching
+                            SettingsDialogObj.PatchMainTemplateGradle = false;
+                            break;
+                    }
+                }
+            }
+
+            // Minimum target Android API level required to use Jetpack / AndroidX.
+            const int MinimumApiLevelForJetpack = 28;
+            int apiLevel = UnityCompat.GetAndroidTargetSDKVersion();
+            if (useJetifier && apiLevel < MinimumApiLevelForJetpack) {
+                switch (EditorUtility.DisplayDialogComplex(
+                    titlePrefix + "Enable Jetpack?",
+                    String.Format(
+                        "Jetpack (AndroidX) libraries are only supported when targeting Android " +
+                        "API {0} and above.  The currently selected target API level is {1}.\n\n" +
+                        "Would you like to set the project's target API level to {0}?",
+                        MinimumApiLevelForJetpack,
+                        apiLevel > 0 ? apiLevel.ToString() : "auto (max. installed)"),
+                    "Yes", "No", "Disable Jetifier")) {
+                    case 0:  // Yes
+                        bool setSdkVersion = UnityCompat.SetAndroidTargetSDKVersion(
+                            MinimumApiLevelForJetpack);
+                        if (!setSdkVersion) {
+                            // Get the highest installed SDK version to see whether it's
+                            // suitable.
+                            if (UnityCompat.FindNewestInstalledAndroidSDKVersion() >=
+                                MinimumApiLevelForJetpack) {
+                                // Set the mode to "auto" to use the latest installed
+                                // version.
+                                setSdkVersion = UnityCompat.SetAndroidTargetSDKVersion(-1);
+                            }
+                        }
+                        if (!setSdkVersion) {
+                            PlayServicesResolver.Log(
+                                String.Format(
+                                    "Failed to set the Android Target API level to {0}, " +
+                                    "disabled the Jetifier.", MinimumApiLevelForJetpack),
+                                level: LogLevel.Error);
+                            useJetifier = false;
+                        }
+                        break;
+                    case 1:  // No
+                        // Don't change the settings but report that AndroidX will not work.
+                        return false;
+                    case 2:  // Disable Jetifier
+                        useJetifier = false;
+                        break;
+                }
+            }
+            SettingsDialogObj.UseJetifier = useJetifier;
+            return useJetifier;
+        }
+
+        /// <summary>
+        /// List the contents of a zip file.
+        /// </summary>
+        /// <param name="zipFile">Name of the zip file to query.</param>
+        /// <returns>List of zip file contents.</returns>
+        internal static IEnumerable<string> ListZip(string zipFile) {
+            var contents = new List<string>();
+            try {
+                string zipPath = Path.GetFullPath(zipFile);
+                Log(String.Format("Listing {0}", zipFile), level: LogLevel.Verbose);
+                CommandLine.Result result = CommandLine.Run(
+                    JavaUtilities.JarBinaryPath, String.Format(" tf \"{0}\"", zipPath));
+                if (result.exitCode == 0) {
+                    foreach (var path in CommandLine.SplitLines(result.stdout)) {
+                        contents.Add(FileUtils.PosixPathSeparators(path));
+                    }
+                } else {
+                    Log(String.Format("Error listing \"{0}\"\n" +
+                                      "{1}", zipPath, result.message), level: LogLevel.Error);
+                }
+            }
+            catch (Exception e) {
+                Log(String.Format("Failed with exception {0}", e.ToString()));
+                throw e;
+            }
+            return contents;
         }
 
         /// <summary>

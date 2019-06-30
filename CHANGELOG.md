@@ -1,5 +1,108 @@
+# Version 1.2.121 - Jun 27, 2019
+## Bug Fixes
+* Android Resolver: Fixed warning about missing Packages folder when loading
+  XML dependencies files in versions of Unity without the package manager.
+* Android Resolver: Fixed resolution window progress bar exceeding 100%.
+* Android Resolver: If AndroidX is detected in the set of resolved libraries,
+  the user will be prompted to enable the Jetifier.
+* Android Resolver: Improved text splitting in text area windows.
+* iOS Resolver: Added support for Unity's breaking changes to the Xcode API
+  in 2019.3.+. Cocoapods are now added to build targets, Unity-iPhone and
+  UnityFramework in Unity 2019.3+.
+
+# Version 1.2.120 - Jun 26, 2019
+## New Features
+* Android Resolver: Added support for loading *Dependencies.xml files from
+  Unity Package Manager packages.
+* Android Resolver: Resolution window is now closed if resolution runs as
+  a pre-build step.
+* iOS Resolver: Added support for loading *Dependencies.xml files from
+  Unity Package Manager packages.
+## Bug Fixes
+* Android Resolver: Fixed generation of relative repo paths when using
+  mainTemplate.gradle resolver.
+* Android Resolver: Fixed copy of .srcaar to .aar files in repos embedded in a
+  project when a project path has characters (e.g whitespace) that are escaped
+  during conversion to URIs.
+* Android Resolver: Fixed auto-resolution always running if the Android SDK
+  is managed by Unity Hub.
+
+# Version 1.2.119 - Jun 19, 2019
+## Bug Fixes
+* Android Resolver: Fixed error reported when using Jetifier integration
+  in Unity 2018+ if the target SDK is set to "highest installed".
+
+# Version 1.2.118 - Jun 18, 2019
+## New Features
+* Android Resolver: Added initial
+  [Jetifier](https://developer.android.com/studio/command-line/jetifier)
+  integration which simplifies
+  [migration](ttps://developer.android.com/jetpack/androidx/migrate)
+  to Jetpack ([AndroidX](https://developer.android.com/jetpack/androidx))
+  libraries in cases where all dependencies are managed by the Android
+  Resolver.
+  This can be enabled via the `Use Jetifier` option in the
+  `Assets > Play Services Resolver > Android Resolver > Settings` menu.
+  Caveats:
+  - If your project contains legacy Android Support Library .jar and .aar
+    files, these files will need to be removed and replaced with references to
+    artifacts on Maven via `*Dependencies.xml` files so that the Jetifier
+    can map them to Jetpack (AndroidX) libraries.
+    For example, remove the file `support-v4-27.0.2.jar` and replace it with
+    `<androidPackage spec="com.android.support:support-v4:27.0.2"/>` in a
+    `*Dependencies.xml` file.
+  - If your project contains .jar or .aar files that use the legacy Android
+    Support Libraries, these will need to be moved into a local Maven repo
+    [See this guide](https://maven.apache.org/guides/mini/guide-3rd-party-jars-local.html)
+    and then these files should be removed from your Unity project and instead
+    referenced via `*Dependencies.xml` files so that the Jetifier can
+    patch them to reference the Jetpack lirbaries.
+
+## Bug Fixes
+* Android Resolver: Disabled version locking of com.android.support:multidex
+  does not use the same versioning scheme as other legacy Android support
+  libraries.
+* Version Handler: Made Google.VersionHandler.dll's asset GUID stable across
+  releases.  This faciliates error-free import into projects where
+  Google.VersionHandler.dll is moved from the default install location.
+
+# Version 1.2.117 - Jun 12, 2019
+## Bug Fixes
+* Android Resolver: Fix copying of .srcaar to .aar files for
+  mainTemplate.gradle resolution.  PluginImporter configuration was previously
+  not being applied to .aar files unless the Unity project was saved.
+
+# Version 1.2.116 - Jun 7, 2019
+## Bug Fixes
+* Android Resolver: Fixed resolution of Android dependencies without version
+  specifiers.
+* Android Resolver: Fixed Maven repo not found warning in Android Resolver.
+* Android Resolver: Fixed Android Player directory not found exception in
+  Unity 2019.x when the Android Player isn't installed.
+
+# Version 1.2.115 - May 28, 2019
+## Bug Fixes
+* Android Resolver: Fixed exception due to Unity 2019.3.0a4 removing
+  x86 from the set of supported ABIs.
+
+# Version 1.2.114 - May 27, 2019
+## New Features
+* Android Resolver: Added support for ABI stripping when using
+  mainTemplate.gradle. This only works with AARs stored in repos
+  on the local filesystem.
+
+# Version 1.2.113 - May 24, 2019
+## New Features
+* Android Resolver: If local repos are moved, the plugin will search the
+  project for matching directories in an attempt to correct the error.
+* Version Handler: Files can be now targeted to multiple build targets
+  using multiple "gvh_" asset labels.
+## Bug Fixes
+* Android Resolver: "implementation" or "compile" are now added correctly
+  to mainTemplate.gradle in Unity versions prior to 2019.
+
 # Version 1.2.112 - May 22, 2019
-## New Features:
+## New Features
 * Android Resolver: Added option to disable addition of dependencies to
   mainTemplate.gradle.
   See `Assets > Play Services Resolver > Android Resolver > Settings`.

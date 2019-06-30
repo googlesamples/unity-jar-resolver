@@ -198,6 +198,53 @@ namespace Google {
         }
 
         /// <summary>
+        /// Convert path to use POSIX directory separators.
+        /// </summary>
+        /// <param name="path">Path to convert.</param>
+        /// <returns>Path with POSIX directory separators.</returns>
+        public static string PosixPathSeparators(string path) {
+            return path != null ? path.Replace("\\", "/") : null;
+        }
+
+        /// <summary>
+        /// Find a path under the specified directory.
+        /// </summary>
+        /// <param name="directory">Directory to search.</param>
+        /// <param name="pathToFind">Path to find.<param>
+        /// <returns>The shortest path to the specified directory if found, null
+        /// ptherwise.</returns>
+        public static string FindPathUnderDirectory(string directory, string pathToFind) {
+            directory = NormalizePathSeparators(directory);
+            if (directory.EndsWith(Path.DirectorySeparatorChar.ToString())) {
+                directory = directory.Substring(0, directory.Length - 1);
+            }
+            var foundPaths = new List<string>();
+            foreach (string path in
+                     Directory.GetDirectories(directory, "*", SearchOption.AllDirectories)) {
+                var relativePath = NormalizePathSeparators(path.Substring(directory.Length + 1));
+                if (relativePath.EndsWith(Path.DirectorySeparatorChar + pathToFind) ||
+                    relativePath.Contains(Path.DirectorySeparatorChar + pathToFind +
+                                          Path.DirectorySeparatorChar)) {
+                    foundPaths.Add(relativePath);
+                }
+            }
+            if (foundPaths.Count == 0) return null;
+            foundPaths.Sort((string lhs, string rhs) => {
+                    return lhs.Length - rhs.Length;
+                });
+            return foundPaths[0];
+        }
+
+        /// <summary>
+        /// Split a path into directory components.
+        /// </summary>
+        /// <param name="path">Path to split.</param>
+        /// <returns>Path components.</returns>
+        public static string[] SplitPathIntoComponents(string path) {
+            return NormalizePathSeparators(path).Split(new [] { Path.DirectorySeparatorChar });
+        }
+
+        /// <summary>
         /// Perform a case insensitive search for a path relative to the current directory.
         /// </summary>
         /// <remarks>
@@ -209,8 +256,7 @@ namespace Google {
         public static string FindDirectoryByCaseInsensitivePath(string pathToFind) {
             var searchDirectory = ".";
             // Components of the path.
-            var components = NormalizePathSeparators(pathToFind).Split(
-                    new [] { Path.DirectorySeparatorChar });
+            var components = SplitPathIntoComponents(pathToFind);
             for (int componentIndex = 0;
                  componentIndex < components.Length && searchDirectory != null;
                  componentIndex++) {
