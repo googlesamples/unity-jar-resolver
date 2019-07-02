@@ -1,3 +1,10 @@
+# Version 1.2.122 - Jul 2, 2019
+## Bug Fixes
+* iOS Resolver: Worked around Unity not loading the iOS Resolver DLL as it
+  referenced the Xcode extension in a public interface.  The iOS Resolver
+  DLL still references the Xcode extension internally and just handles
+  missing type exceptions dynamically.
+
 # Version 1.2.121 - Jun 27, 2019
 ## Bug Fixes
 * Android Resolver: Fixed warning about missing Packages folder when loading

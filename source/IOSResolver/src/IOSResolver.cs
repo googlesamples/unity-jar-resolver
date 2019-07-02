@@ -1579,10 +1579,10 @@ public class IOSResolver : AssetPostprocessor {
     /// <summary>
     /// Get Xcode target GUIDs using a method that works across all Unity versions.
     /// </summary>
-    /// <param name="project">Project to query.</param>
+    /// <param name="xcodeProject">UnityEditor.iOS.Xcode.PBXProject project to query.</param>
     /// <returns>List of target GUIDs.</returns>
-    public static IEnumerable<string> GetXcodeTargetGuids(
-            UnityEditor.iOS.Xcode.PBXProject project) {
+    public static IEnumerable<string> GetXcodeTargetGuids(object xcodeProject) {
+        var project = (UnityEditor.iOS.Xcode.PBXProject)xcodeProject;
         var targets = new List<string>();
         if (MultipleXcodeTargetsSupported) {
             // In Unity 2019.3+ TargetGuidByName will throw an exception if the Unity-iPhone target
