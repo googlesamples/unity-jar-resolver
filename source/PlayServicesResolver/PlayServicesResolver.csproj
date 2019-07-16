@@ -59,6 +59,7 @@
     <Compile Include="src\AndroidXmlDependencies.cs" />
     <Compile Include="src\CommandLine.cs" />
     <Compile Include="src\CommandLineDialog.cs" />
+    <Compile Include="src\EmbeddedResource.cs" />
     <Compile Include="src\GradleResolver.cs" />
     <Compile Include="src\GradleTemplateResolver.cs" />
     <Compile Include="src\LocalMavenRepository.cs" />

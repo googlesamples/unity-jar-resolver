@@ -671,6 +671,10 @@ namespace GooglePlayServices
                 string destinationDirectory, string androidSdkPath,
                 bool logErrorOnMissingArtifacts, bool closeWindowOnCompletion,
                 System.Action<List<Dependency>> resolutionComplete) {
+            // Get all dependencies.
+            var allDependencies = PlayServicesSupport.GetAllDependencies();
+            var allDependenciesList = new List<Dependency>(allDependencies.Values);
+
             // Namespace for resources under the src/scripts directory embedded within this
             // assembly.
             const string EMBEDDED_RESOURCES_NAMESPACE = "PlayServicesResolver.scripts.";
@@ -680,30 +684,32 @@ namespace GooglePlayServices
                     "gradlew.bat" : "gradlew"));
             var buildScript = Path.GetFullPath(Path.Combine(
                 gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "download_artifacts.gradle"));
-            // Get all dependencies.
-            var allDependencies = PlayServicesSupport.GetAllDependencies();
-            var allDependenciesList = new List<Dependency>(allDependencies.Values);
+            var gradleTemplateZip = Path.Combine(
+                gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "gradle-template.zip");
+
+            // Extract the gradle wrapper and build script.
+            if (!EmbeddedResource.ExtractResources(
+                typeof(GradleResolver).Assembly,
+                new KeyValuePair<string, string>[] {
+                    new KeyValuePair<string, string>(null, gradleTemplateZip),
+                    new KeyValuePair<string, string>(null, buildScript),
+                }, PlayServicesResolver.logger)) {
+                PlayServicesResolver.Log(String.Format(
+                        "Failed to extract {0} and {1} from assembly {2}",
+                        gradleTemplateZip, buildScript, typeof(GradleResolver).Assembly.FullName),
+                    level: LogLevel.Error);
+                resolutionComplete(allDependenciesList);
+                return;
+            }
 
             // Extract Gradle wrapper and the build script to the build directory.
-            if (!(Directory.Exists(gradleBuildDirectory) && File.Exists(gradleWrapper) &&
-                  File.Exists(buildScript))) {
-                var gradleTemplateZip = Path.Combine(
-                    gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "gradle-template.zip");
-                foreach (var resource in new [] { gradleTemplateZip, buildScript }) {
-                    ExtractResource(Path.GetFileName(resource), resource);
-                }
-                if (!PlayServicesResolver.ExtractZip(gradleTemplateZip, new [] {
-                            "gradle/wrapper/gradle-wrapper.jar",
-                            "gradle/wrapper/gradle-wrapper.properties",
-                            "gradlew",
-                            "gradlew.bat"}, gradleBuildDirectory)) {
-                    PlayServicesResolver.Log(
-                       String.Format("Unable to extract Gradle build component {0}\n\n" +
-                                     "Resolution failed.", gradleTemplateZip),
-                       level: LogLevel.Error);
-                    resolutionComplete(allDependenciesList);
-                    return;
-                }
+            if (PlayServicesResolver.ExtractZip(
+                    gradleTemplateZip, new [] {
+                        "gradle/wrapper/gradle-wrapper.jar",
+                        "gradle/wrapper/gradle-wrapper.properties",
+                        "gradlew",
+                        "gradlew.bat"},
+                    gradleBuildDirectory, true)) {
                 // Files extracted from the zip file don't have the executable bit set on some
                 // platforms, so set it here.
                 // Unfortunately, File.GetAccessControl() isn't implemented, so we'll use
@@ -723,6 +729,13 @@ namespace GooglePlayServices
                         return;
                     }
                 }
+            } else {
+                PlayServicesResolver.Log(
+                   String.Format("Unable to extract Gradle build component {0}\n\n" +
+                                 "Resolution failed.", gradleTemplateZip),
+                   level: LogLevel.Error);
+                resolutionComplete(allDependenciesList);
+                return;
             }
 
             // Build array of repos to search, they're interleaved across all dependencies as the
@@ -1751,7 +1764,7 @@ namespace GooglePlayServices
                         if (aarPath.EndsWith(".aar") &&
                             PlayServicesResolver.ExtractZip(
                                 aarPath, new string[] {manifestFilename, "jni", classesFilename},
-                                temporaryDirectory)) {
+                                temporaryDirectory, false)) {
                             string manifestPath = Path.Combine(temporaryDirectory,
                                                                manifestFilename);
                             if (File.Exists(manifestPath)) {
@@ -1904,7 +1917,9 @@ namespace GooglePlayServices
                     return false;
                 }
                 Directory.CreateDirectory(workingDir);
-                if (!PlayServicesResolver.ExtractZip(aarFile, null, workingDir)) return false;
+                if (!PlayServicesResolver.ExtractZip(aarFile, null, workingDir, false)) {
+                    return false;
+                }
                 PlayServicesResolver.ReplaceVariablesInAndroidManifest(
                     Path.Combine(workingDir, "AndroidManifest.xml"),
                     PlayServicesResolver.GetAndroidApplicationId(),
@@ -2044,36 +2059,6 @@ namespace GooglePlayServices
                 }
             }
             return true;
-        }
-
-        /// <summary>
-        /// Extract a list of embedded resources to the specified path creating intermediate
-        /// directories if they're required.
-        /// </summary>
-        /// <param name="resourceNameToTargetPath">Each Key is the resource to extract and each
-        /// Value is the path to extract to.</param>
-        protected static void ExtractResources(List<KeyValuePair<string, string>>
-                                                   resourceNameToTargetPaths) {
-            foreach (var kv in resourceNameToTargetPaths) ExtractResource(kv.Key, kv.Value);
-        }
-
-        /// <summary>
-        /// Extract an embedded resource to the specified path creating intermediate directories
-        /// if they're required.
-        /// </summary>
-        /// <param name="resourceName">Name of the resource to extract.</param>
-        /// <param name="targetPath">Target path.</param>
-        protected static void ExtractResource(string resourceName, string targetPath) {
-            Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
-            var stream = typeof(GradleResolver).Assembly.GetManifestResourceStream(resourceName);
-            if (stream == null) {
-                UnityEngine.Debug.LogError(String.Format("Failed to find resource {0} in assembly",
-                                                         resourceName));
-                return;
-            }
-            var data = new byte[stream.Length];
-            stream.Read(data, 0, (int)stream.Length);
-            File.WriteAllBytes(targetPath, data);
         }
     }
 }

@@ -2295,16 +2295,38 @@ namespace GooglePlayServices {
         /// Extract a zip file to the specified directory.
         /// </summary>
         /// <param name="zipFile">Name of the zip file to extract.</param>
-        /// <param name="extractFilenames">List of files to extract from the archive.  If this array
-        /// is empty or null all files are extracted.</param>
+        /// <param name="extractFilenames">Enumerable of files to extract from the archive. If this
+        /// array is empty or null all files are extracted.</param>
         /// <param name="outputDirectory">Directory to extract the zip file to.</param>
+        /// <param name="update">If true, this will only extract the zip file if the target paths
+        /// are older than the source paths. If this is false or no extractFilenames are specified
+        /// this method will always extract files from the zip file overwriting the target
+        /// files.</param>
         /// <returns>true if successful, false otherwise.</returns>
-        internal static bool ExtractZip(string zipFile, string[] extractFilenames,
-                                        string outputDirectory) {
+        internal static bool ExtractZip(string zipFile, IEnumerable<string> extractFilenames,
+                                        string outputDirectory, bool update) {
             try {
                 string zipPath = Path.GetFullPath(zipFile);
-                string extractFilesArg = extractFilenames != null && extractFilenames.Length > 0 ?
-                    String.Format("\"{0}\"", String.Join("\" \"", extractFilenames)) : "";
+                var zipFileModificationTime = File.GetLastWriteTime(zipPath);
+                string extractFilesArg = "";
+                if (extractFilenames != null) {
+                    bool outOfDate = !update;
+                    if (update) {
+                        foreach (var filename in extractFilenames) {
+                            var path = Path.Combine(outputDirectory, filename);
+                            if (!File.Exists(path) ||
+                                zipFileModificationTime.CompareTo(
+                                    File.GetLastWriteTime(path)) > 0) {
+                                outOfDate = true;
+                                break;
+                            }
+                        }
+                    }
+                    // If everything is up to date there is nothing to do.
+                    if (!outOfDate) return true;
+                    extractFilesArg = String.Format("\"{0}\"", String.Join("\" \"",
+                                          (new List<string>(extractFilenames)).ToArray()));
+                }
                 Log(String.Format("Extracting {0} ({1}) to {2}", zipFile, extractFilesArg,
                                   outputDirectory), level: LogLevel.Verbose);
                 CommandLine.Result result = CommandLine.Run(

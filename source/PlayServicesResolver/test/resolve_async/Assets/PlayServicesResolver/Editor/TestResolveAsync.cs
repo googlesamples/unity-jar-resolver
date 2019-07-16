@@ -992,7 +992,7 @@ public class TestResolveAsync {
         // ExtractZip is not part of the public API.
         bool successful = (bool)AndroidResolverClass.GetMethod(
             "ExtractZip", BindingFlags.Static | BindingFlags.NonPublic).Invoke(
-            null, new object[]{ zipFile, null, outputDir });
+                null, new object[]{ zipFile, null, outputDir, false });
         if (!successful) {
             failureMessages.Add(String.Format("Unable to extract {0} to {1}",
                                               zipFile, outputDir));
