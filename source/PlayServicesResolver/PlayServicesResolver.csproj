@@ -62,6 +62,7 @@
     <Compile Include="src\EmbeddedResource.cs" />
     <Compile Include="src\GradleResolver.cs" />
     <Compile Include="src\GradleTemplateResolver.cs" />
+    <Compile Include="src\GradleWrapper.cs" />
     <Compile Include="src\LocalMavenRepository.cs" />
     <Compile Include="src\JavaUtilities.cs" />
     <Compile Include="src\PlayServicesPreBuild.cs" />

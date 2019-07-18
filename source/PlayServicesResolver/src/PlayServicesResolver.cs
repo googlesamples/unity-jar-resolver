@@ -360,6 +360,12 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Namespace for embedded resources packaged from the PlayServicesResolver/scripts
+        /// directory.
+        /// </summary>
+        internal const string EMBEDDED_RESOURCES_NAMESPACE = "PlayServicesResolver.scripts.";
+
+        /// <summary>
         /// The instance to the play services support object.
         /// </summary>
         private static PlayServicesSupport svcSupport;
@@ -823,6 +829,17 @@ namespace GooglePlayServices {
                 return androidPlaybackEngineDirectory;
             }
         }
+
+        // Backing store for the GradleWrapper property.
+        private static GradleWrapper gradleWrapper = new GradleWrapper(
+            typeof(PlayServicesResolver).Assembly,
+            PlayServicesResolver.EMBEDDED_RESOURCES_NAMESPACE + "gradle-template.zip",
+            Path.Combine(FileUtils.ProjectTemporaryDirectory, "PlayServicesResolverGradle"));
+
+        /// <summary>
+        /// Class to interface with the embedded Gradle wrapper.
+        /// </summary>
+        internal static GradleWrapper Gradle { get { return gradleWrapper; } }
 
         /// <summary>
         /// Returns true if automatic resolution is enabled.

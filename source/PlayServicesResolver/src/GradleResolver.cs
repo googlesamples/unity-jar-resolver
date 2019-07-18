@@ -199,19 +199,9 @@ namespace GooglePlayServices
         private string aarExplodeDataFile = Path.Combine(FileUtils.ProjectTemporaryDirectory,
                                                          "GoogleAarExplodeCache.xml");
 
-        // Directory used to execute Gradle.
-        private string gradleBuildDirectory = Path.Combine(FileUtils.ProjectTemporaryDirectory,
-                                                           "PlayServicesResolverGradle");
-
         private const int MajorVersion = 1;
         private const int MinorVersion = 1;
         private const int PointVersion = 0;
-
-        // Characters that are parsed by Gradle / Java in property values.
-        // These characters need to be escaped to be correctly interpreted in a property value.
-        private static string[] GradlePropertySpecialCharacters = new string[] {
-            " ", "\\", "#", "!", "=", ":"
-        };
 
         // Special characters that should not be escaped in URIs for Gradle property values.
         private static HashSet<string> GradleUriExcludeEscapeCharacters = new HashSet<string> {
@@ -470,51 +460,6 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Escape all special characters in a gradle property value.
-        /// </summary>
-        /// <param name="value">Value to escape.</param>
-        /// <param name="escapeFunc">Function which generates an escaped character.  By default
-        /// this adds "\\" to each escaped character.</param>
-        /// <param name="charactersToExclude">Characters to exclude from the escaping set.</param>
-        /// <returns>Escaped value.</returns>
-        private static string EscapeGradlePropertyValue(
-                string value, Func<string, string> escapeFunc = null,
-                HashSet<string> charactersToExclude = null) {
-            if (escapeFunc == null) {
-                escapeFunc = (characterToEscape) => { return "\\" + characterToEscape; };
-            }
-            foreach (var characterToEscape in GradlePropertySpecialCharacters) {
-                if (charactersToExclude == null ||
-                    !(charactersToExclude.Contains(characterToEscape))) {
-                    value = value.Replace(characterToEscape, escapeFunc(characterToEscape));
-                }
-            }
-            return value;
-        }
-
-        /// <summary>
-        /// Generates a Gradle (Java) properties string from a dictionary of key value pairs.
-        /// Details of the format is documented in
-        /// http://docs.oracle.com/javase/7/docs/api/java/util/Properties.html#\
-        /// store%28java.io.Writer,%20java.lang.String%29
-        /// </summary>
-        /// <param name="properties">Properties to generate a string from.  Each value must not
-        /// contain a newline.</param>
-        /// <returns>String with Gradle (Java) properties</returns>
-        private string GenerateGradleProperties(Dictionary<string, string> properties) {
-            var lines = new List<string>();
-            foreach (var kv in properties) {
-                var escapedKey = kv.Key.Replace(" ", "\\ ");
-                var elementAfterLeadingWhitespace = kv.Value.TrimStart(new [] { ' ' });
-                var escapedElement =
-                    kv.Value.Substring(elementAfterLeadingWhitespace.Length).Replace(" ", "\\ ") +
-                    EscapeGradlePropertyValue(elementAfterLeadingWhitespace);
-                lines.Add(String.Format("{0}={1}", escapedKey, escapedElement));
-            }
-            return String.Join("\n", lines.ToArray());
-        }
-
-        /// <summary>
         /// From a list of dependencies generate a list of Maven / Gradle / Ivy package spec
         /// strings.
         /// </summary>
@@ -589,9 +534,9 @@ namespace GooglePlayServices
             }
             // Escape the URI to handle special characters like spaces and percent escape
             // all characters that are interpreted by gradle.
-            return EscapeGradlePropertyValue(Uri.EscapeUriString(repoPath),
-                                             escapeFunc: Uri.EscapeDataString,
-                                             charactersToExclude: GradleUriExcludeEscapeCharacters);
+            return GradleWrapper.EscapeGradlePropertyValue(
+                Uri.EscapeUriString(repoPath), escapeFunc: Uri.EscapeDataString,
+                charactersToExclude: GradleUriExcludeEscapeCharacters);
         }
 
         /// <summary>
@@ -675,69 +620,26 @@ namespace GooglePlayServices
             var allDependencies = PlayServicesSupport.GetAllDependencies();
             var allDependenciesList = new List<Dependency>(allDependencies.Values);
 
-            // Namespace for resources under the src/scripts directory embedded within this
-            // assembly.
-            const string EMBEDDED_RESOURCES_NAMESPACE = "PlayServicesResolver.scripts.";
-            var gradleWrapper = Path.GetFullPath(Path.Combine(
-                gradleBuildDirectory,
-                UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform ?
-                    "gradlew.bat" : "gradlew"));
+            var gradleWrapper = PlayServicesResolver.Gradle;
             var buildScript = Path.GetFullPath(Path.Combine(
-                gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "download_artifacts.gradle"));
-            var gradleTemplateZip = Path.Combine(
-                gradleBuildDirectory, EMBEDDED_RESOURCES_NAMESPACE + "gradle-template.zip");
+                gradleWrapper.BuildDirectory,
+                PlayServicesResolver.EMBEDDED_RESOURCES_NAMESPACE + "download_artifacts.gradle"));
 
             // Extract the gradle wrapper and build script.
-            if (!EmbeddedResource.ExtractResources(
-                typeof(GradleResolver).Assembly,
-                new KeyValuePair<string, string>[] {
-                    new KeyValuePair<string, string>(null, gradleTemplateZip),
-                    new KeyValuePair<string, string>(null, buildScript),
-                }, PlayServicesResolver.logger)) {
+            if (!(gradleWrapper.Extract(PlayServicesResolver.logger) &&
+                  EmbeddedResource.ExtractResources(typeof(GradleResolver).Assembly,
+                                                    new KeyValuePair<string, string>[] {
+                                                        new KeyValuePair<string, string>(
+                                                            null, buildScript),
+                                                    }, PlayServicesResolver.logger))) {
                 PlayServicesResolver.Log(String.Format(
                         "Failed to extract {0} and {1} from assembly {2}",
-                        gradleTemplateZip, buildScript, typeof(GradleResolver).Assembly.FullName),
+                        gradleWrapper.Executable, buildScript,
+                        typeof(GradleResolver).Assembly.FullName),
                     level: LogLevel.Error);
                 resolutionComplete(allDependenciesList);
                 return;
             }
-
-            // Extract Gradle wrapper and the build script to the build directory.
-            if (PlayServicesResolver.ExtractZip(
-                    gradleTemplateZip, new [] {
-                        "gradle/wrapper/gradle-wrapper.jar",
-                        "gradle/wrapper/gradle-wrapper.properties",
-                        "gradlew",
-                        "gradlew.bat"},
-                    gradleBuildDirectory, true)) {
-                // Files extracted from the zip file don't have the executable bit set on some
-                // platforms, so set it here.
-                // Unfortunately, File.GetAccessControl() isn't implemented, so we'll use
-                // chmod (OSX / Linux) and on Windows extracted files are executable by default
-                // so we do nothing.
-                if (UnityEngine.RuntimePlatform.WindowsEditor !=
-                    UnityEngine.Application.platform) {
-                    var result = CommandLine.Run("chmod",
-                                                 String.Format("ug+x \"{0}\"", gradleWrapper));
-                    if (result.exitCode != 0) {
-                        PlayServicesResolver.Log(
-                            String.Format("Failed to make \"{0}\" executable.\n\n" +
-                                          "Resolution failed.\n\n{1}", gradleWrapper,
-                                          result.message),
-                            level: LogLevel.Error);
-                        resolutionComplete(allDependenciesList);
-                        return;
-                    }
-                }
-            } else {
-                PlayServicesResolver.Log(
-                   String.Format("Unable to extract Gradle build component {0}\n\n" +
-                                 "Resolution failed.", gradleTemplateZip),
-                   level: LogLevel.Error);
-                resolutionComplete(allDependenciesList);
-                return;
-            }
-
             // Build array of repos to search, they're interleaved across all dependencies as the
             // order matters.
             var repoList = new List<string>();
@@ -964,7 +866,6 @@ namespace GooglePlayServices
             if (String.IsNullOrEmpty(androidGradlePluginVersion)) {
                 androidGradlePluginVersion = "2.3.0";
             }
-
             var gradleProjectProperties = new Dictionary<string, string>() {
                 { "ANDROID_HOME", androidSdkPath },
                 { "TARGET_DIR", Path.GetFullPath(destinationDirectory) },
@@ -973,29 +874,6 @@ namespace GooglePlayServices
                 { "USE_JETIFIER", SettingsDialog.UseJetifier ? "1" : "0" },
                 { "DATA_BINDING_VERSION", androidGradlePluginVersion }
             };
-            var gradleArguments = new List<string> {
-                String.Format("-b \"{0}\"", buildScript),
-                SettingsDialog.UseGradleDaemon ? "--daemon" : "--no-daemon",
-            };
-            foreach (var kv in gradleProjectProperties) {
-                gradleArguments.Add(String.Format("\"-P{0}={1}\"", kv.Key, kv.Value));
-            }
-            var gradleArgumentsString = String.Join(" ", gradleArguments.ToArray());
-
-            // Generate gradle.properties to set properties in the script rather than using
-            // the command line.
-            // Some users of Windows 10 systems have had issues running the Gradle resolver
-            // which is suspected to be caused by command line argument parsing.
-            // Using both gradle.properties and properties specified via command line arguments
-            // works fine.
-            File.WriteAllText(Path.Combine(gradleBuildDirectory, "gradle.properties"),
-                              GenerateGradleProperties(gradleProjectProperties));
-
-            PlayServicesResolver.Log(String.Format("Running dependency fetching script\n" +
-                                                   "\n" +
-                                                   "{0} {1}\n",
-                                                   gradleWrapper, gradleArgumentsString),
-                                     level: LogLevel.Verbose);
 
             // Run the build script to perform the resolution popping up a window in the editor.
             window.summaryText = "Resolving Android Dependencies...";
@@ -1004,11 +882,22 @@ namespace GooglePlayServices
             window.autoScrollToBottom = true;
             window.logger = PlayServicesResolver.logger;
             var maxProgressLines = (allDependenciesList.Count * 10) + 50;
-            window.RunAsync(gradleWrapper, gradleArgumentsString,
+
+            if (gradleWrapper.Run(
+                    SettingsDialog.UseGradleDaemon, buildScript, gradleProjectProperties,
+                    null, PlayServicesResolver.logger,
+                    (string toolPath, string arguments) => {
+                        window.RunAsync(
+                            toolPath, arguments,
                             (result) => { RunOnMainThread.Run(() => { gradleComplete(result); }); },
-                            workingDirectory: gradleBuildDirectory,
+                            workingDirectory: gradleWrapper.BuildDirectory,
                             maxProgressLines: maxProgressLines);
-            window.Show();
+                        return true;
+                    })) {
+                window.Show();
+            } else {
+                resolutionComplete(allDependenciesList);
+            }
         }
 
         /// <summary>
