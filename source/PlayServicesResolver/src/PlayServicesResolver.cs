@@ -2128,9 +2128,7 @@ namespace GooglePlayServices {
         /// Find the set of assets managed by this plugin.
         /// </summary>
         internal static IEnumerable<string> FindLabeledAssets() {
-            foreach (string assetGuid in AssetDatabase.FindAssets("l:" + ManagedAssetLabel)) {
-                yield return AssetDatabase.GUIDToAssetPath(assetGuid);
-            }
+            return VersionHandlerImpl.SearchAssetDatabase("l:" + ManagedAssetLabel);
         }
 
         /// <summary>

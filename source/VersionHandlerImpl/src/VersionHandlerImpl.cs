@@ -1781,13 +1781,29 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </param>
     /// <param name="filter">Optional delegate to filter the returned
     /// list.</param>
+    /// <param name="directories">Directories to search for the assets in the project. Directories
+    /// that don't exist are ignored.</param>
     public static string[] SearchAssetDatabase(string assetsFilter = null,
-                                               VersionHandler.FilenameFilter filter = null) {
+                                               VersionHandler.FilenameFilter filter = null,
+                                               IEnumerable<string> directories = null) {
         HashSet<string> matchingEntries = new HashSet<string>();
         assetsFilter = assetsFilter != null ? assetsFilter : "t:Object";
-        foreach (string assetGuid in AssetDatabase.FindAssets(assetsFilter)) {
+        string[] searchDirectories = null;
+        if (directories != null) {
+            var existingDirectories = new List<string>();
+            foreach (string directory in directories) {
+                if (Directory.Exists(directory)) existingDirectories.Add(directory);
+            }
+            if (existingDirectories.Count > 0) searchDirectories = existingDirectories.ToArray();
+        }
+        var assetGuids = searchDirectories == null ? AssetDatabase.FindAssets(assetsFilter) :
+            AssetDatabase.FindAssets(assetsFilter, searchDirectories);
+        foreach (string assetGuid in assetGuids) {
             string filename = AssetDatabase.GUIDToAssetPath(assetGuid);
-            if (filter == null || filter(filename)) {
+            // Ignore non-existent files as it's possible for the asset database to reference
+            // missing files if it hasn't been refreshed or completed a refresh.
+            if ((File.Exists(filename) || Directory.Exists(filename)) &&
+                (filter == null || filter(filename))) {
                 matchingEntries.Add(filename);
             }
         }

@@ -353,12 +353,16 @@ public class VersionHandler {
     /// </param>
     /// <param name="filter">Optional delegate to filter the returned
     /// list.</param>
+    /// <param name="directories">Directories to search for the assets in the project. Directories
+    /// that don't exist are ignored.</param>
     public static string[] SearchAssetDatabase(string assetsFilter = null,
-                                               FilenameFilter filter = null) {
+                                               FilenameFilter filter = null,
+                                               IEnumerable<string> directories = null) {
         return StringArrayFromObject(InvokeImplMethod("SearchAssetDatabase", null,
                                                       namedArgs: new Dictionary<string, object> {
                                                           { "assetsFilter", assetsFilter },
-                                                          { "filter", filter }
+                                                          { "filter", filter },
+                                                          { "directories", directories },
                                                       }));
     }
 

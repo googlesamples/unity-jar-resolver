@@ -926,14 +926,10 @@ namespace GooglePlayServices
             var managedArtifactFilenames = new HashSet<string>();
             foreach (var filename in PlayServicesResolver.FindLabeledAssets()) {
                 var artifact = getVersionlessArtifactFilename(filename);
-                // Ignore non-existent files as it's possible for the asset database to reference
-                // missing files if it hasn't been refreshed or completed a refresh.
-                if (File.Exists(filename) || Directory.Exists(filename)) {
-                    managedArtifacts[artifact] = filename;
-                    if (artifact.StartsWith("play-services-") ||
-                        artifact.StartsWith("com.google.android.gms.play-services-")) {
-                        managedPlayServicesArtifacts.Add(filename);
-                    }
+                managedArtifacts[artifact] = filename;
+                if (artifact.StartsWith("play-services-") ||
+                    artifact.StartsWith("com.google.android.gms.play-services-")) {
+                    managedPlayServicesArtifacts.Add(filename);
                 }
             }
             managedArtifactFilenames.UnionWith(managedArtifacts.Values);
@@ -946,16 +942,19 @@ namespace GooglePlayServices
             // List of paths to the legacy google-play-services.jar
             var playServicesJars = new List<string>();
             const string playServicesJar = "google-play-services.jar";
-            foreach (var assetGuid in AssetDatabase.FindAssets("t:Object")) {
-                var filename = AssetDatabase.GUIDToAssetPath(assetGuid);
-                // Ignore all assets that are managed by the plugin and, since the asset database
-                // could be stale at this point, check the file exists.
-                if (!managedArtifactFilenames.Contains(filename) &&
-                    (File.Exists(filename) || Directory.Exists(filename))) {
+
+            foreach (var packaging in packagingExtensions) {
+                foreach (var filename in
+                         VersionHandlerImpl.SearchAssetDatabase(
+                             String.Format("{0} t:Object", packaging), (string filtername) => {
+                                 // Ignore all assets that are managed by the plugin and anything
+                                 // that doesn't end with the packaging extension.
+                                 return !managedArtifactFilenames.Contains(filtername) &&
+                                   Path.GetExtension(filtername).ToLower() == packaging;
+                             })) {
                     if (Path.GetFileName(filename).ToLower() == playServicesJar) {
                         playServicesJars.Add(filename);
-                    } else if (packagingExtensions.Contains(
-                                   Path.GetExtension(filename).ToLower())) {
+                    } else {
                         var versionlessFilename = getVersionlessArtifactFilename(filename);
                         List<string> existing;
                         var unmanaged = unmanagedArtifacts.TryGetValue(
