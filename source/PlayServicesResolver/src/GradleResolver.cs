@@ -30,370 +30,7 @@ namespace GooglePlayServices
 
     public class GradleResolver
     {
-        // Caches data associated with an aar so that it doesn't need to be queried to determine
-        // whether it should be expanded / exploded if it hasn't changed.
-        private class AarExplodeData
-        {
-            // Identifier for an ABI independent AAR.
-            public const string ABI_UNIVERSAL = "universal";
-            // Time the file was modified the last time it was inspected.
-            public System.DateTime modificationTime;
-            // Whether the AAR file should be expanded / exploded.
-            public bool explode = false;
-            // Project's bundle ID when this was expanded.
-            public string bundleId = "";
-            // Path of the target AAR package.
-            public string path = "";
-            // Comma separated string that lists the set of *available* ABIs in the source archive.
-            // This is ABI_UNIVERSAL if the archive does not contain any native libraries.
-            public string availableAbis = ABI_UNIVERSAL;
-            // Comma separated string that lists the set of ABIs in the archive.
-            // This is ABI_UNIVERSAL if the archive does not contain any native libraries.
-            public string targetAbis = ABI_UNIVERSAL;
-            // Whether gradle is selected as the build system.
-            public bool gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
-            // Whether gradle export is enabled.
-            public bool gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
-            // Whether the gradle template is enabled.
-            public bool gradleTemplate = PlayServicesResolver.GradleTemplateEnabled;
-            // AAR version that should be ignored when attempting to overwrite an existing
-            // dependency.  This is reset when the dependency is updated to a version different
-            // to this.
-            // NOTE: This is not considered in AarExplodeDataIsDirty() as we do not want to
-            // re-explode an AAR if this changes.
-            public string ignoredVersion = "";
-
-            /// <summary>
-            /// Convert a comma separated list of ABIs to an AndroidAbis instance.
-            /// </summary>
-            /// <param name="abiString">String to convert.</param>
-            /// <returns>AndroidAbis instance if native components are present,
-            /// null otherwise.</returns>
-            private static AndroidAbis AndroidAbisFromString(string abiString) {
-                return abiString == ABI_UNIVERSAL ? null : new AndroidAbis(abiString);
-            }
-
-            /// <summary>
-            /// Convert an AndroidAbis instance to a comma separated string.
-            /// </summary>
-            /// <param name="abis">Instance to convert.</param>
-            /// <returns>Comma separated string.</returns>
-            private static string AndroidAbisToString(AndroidAbis abis) {
-                return abis != null ? abis.ToString() : ABI_UNIVERSAL;
-            }
-
-            /// <summary>
-            /// Get the available native component ABIs in the archive.
-            /// If this is a universal archive it returns null.
-            /// </summary>
-            public AndroidAbis AvailableAbis {
-                get { return AndroidAbisFromString(availableAbis); }
-                set { availableAbis = AndroidAbisToString(value); }
-            }
-
-            /// <summary>
-            /// Get the current native component ABIs in the archive.
-            /// If this is a universal archive it returns null.
-            /// </summary>
-            public AndroidAbis TargetAbis {
-                get { return AndroidAbisFromString(targetAbis); }
-                set { targetAbis = AndroidAbisToString(value); }
-            }
-
-            /// <summary>
-            /// Default constructor.
-            /// </summary>
-            public AarExplodeData() {}
-
-            /// <summary>
-            /// Copy an instance of this object.
-            /// </summary>
-            public AarExplodeData(AarExplodeData dataToCopy) {
-                modificationTime = dataToCopy.modificationTime;
-                explode = dataToCopy.explode;
-                bundleId = dataToCopy.bundleId;
-                path = dataToCopy.path;
-                targetAbis = dataToCopy.targetAbis;
-                gradleBuildSystem = dataToCopy.gradleBuildSystem;
-                gradleExport = dataToCopy.gradleExport;
-                gradleTemplate = dataToCopy.gradleTemplate;
-                ignoredVersion = dataToCopy.ignoredVersion;
-            }
-
-            /// <summary>
-            /// Compare with this object.
-            /// </summary>
-            /// <param name="obj">Object to compare with.</param>
-            /// <returns>true if both objects have the same contents, false otherwise.</returns>
-            public override bool Equals(System.Object obj)  {
-                var data = obj as AarExplodeData;
-                return data != null &&
-                    modificationTime == data.modificationTime &&
-                    explode == data.explode &&
-                    bundleId == data.bundleId &&
-                    path == data.path &&
-                    availableAbis == data.availableAbis &&
-                    targetAbis == data.targetAbis &&
-                    gradleBuildSystem == data.gradleBuildSystem &&
-                    gradleExport == data.gradleExport &&
-                    gradleTemplate == data.gradleTemplate &&
-                    ignoredVersion == data.ignoredVersion;
-            }
-
-            /// <summary>
-            /// Generate a hash of this object.
-            /// </summary>
-            /// <returns></returns>
-            public override int GetHashCode() {
-                return modificationTime.GetHashCode() ^
-                    explode.GetHashCode() ^
-                    bundleId.GetHashCode() ^
-                    path.GetHashCode() ^
-                    availableAbis.GetHashCode() ^
-                    targetAbis.GetHashCode() ^
-                    gradleBuildSystem.GetHashCode() ^
-                    gradleExport.GetHashCode() ^
-                    gradleTemplate.GetHashCode() ^
-                    ignoredVersion.GetHashCode();
-            }
-
-            /// <summary>
-            /// Copy AAR explode data.
-            /// </summary>
-            public static Dictionary<string, AarExplodeData> CopyDictionary(
-                    Dictionary<string, AarExplodeData> dataToCopy) {
-                var copy = new Dictionary<string, AarExplodeData>();
-                foreach (var item in dataToCopy) {
-                    copy[item.Key] = new AarExplodeData(item.Value);
-                }
-                return copy;
-            }
-
-            /// <summary>
-            /// Convert AAR data to a string.
-            /// </summary>
-            /// <returns>String description of the instance.</returns>
-            public override string ToString() {
-                return String.Format("modificationTime={0} " +
-                                     "explode={1} " +
-                                     "bundleId={2} " +
-                                     "path={3} " +
-                                     "availableAbis={4} " +
-                                     "targetAbis={5} " +
-                                     "gradleBuildSystem={6} " +
-                                     "gradleExport={7} " +
-                                     "gradleTemplate={8}",
-                                     modificationTime, explode, bundleId, path, availableAbis,
-                                     targetAbis, gradleBuildSystem, gradleExport, gradleTemplate);
-            }
-        }
-
-        // Data that should be stored in the explode cache.
-        private Dictionary<string, AarExplodeData> aarExplodeData =
-            new Dictionary<string, AarExplodeData>();
-        // Data currently stored in the explode cache.
-        private Dictionary<string, AarExplodeData> aarExplodeDataSaved =
-            new Dictionary<string, AarExplodeData>();
-        // File used to to serialize aarExplodeData.  This is required as Unity will reload classes
-        // in the editor when C# files are modified.
-        private string aarExplodeDataFile = Path.Combine(FileUtils.ProjectTemporaryDirectory,
-                                                         "GoogleAarExplodeCache.xml");
-
-        private const int MajorVersion = 1;
-        private const int MinorVersion = 1;
-        private const int PointVersion = 0;
-
-        // Special characters that should not be escaped in URIs for Gradle property values.
-        private static HashSet<string> GradleUriExcludeEscapeCharacters = new HashSet<string> {
-            ":"
-        };
-
-        // Queue of System.Action objects for resolve actions to execute on the main thread.
-        private static System.Collections.Queue resolveUpdateQueue = new System.Collections.Queue();
-        // Currently active resolution operation.
-        private static System.Action resolveActionActive = null;
-        // Lock for resolveUpdateQueue and resolveActionActive.
-        private static object resolveLock = new object();
-
-        public GradleResolver() {
-            RunOnMainThread.Run(LoadAarExplodeCache, false);
-        }
-
-        /// <summary>
-        /// Compare two dictionaries of AarExplodeData.
-        /// </summary>
-        private bool CompareExplodeData(Dictionary<string, AarExplodeData> explodeData1,
-                                        Dictionary<string, AarExplodeData> explodeData2) {
-            if (explodeData1 == explodeData2) return true;
-            if (explodeData1 == null || explodeData2 == null) return false;
-            if (explodeData1.Count != explodeData2.Count) return false;
-            var keys = new HashSet<string>(explodeData1.Keys);
-            keys.UnionWith(new HashSet<string>(explodeData2.Keys));
-            foreach (var key in keys) {
-                AarExplodeData data1;
-                AarExplodeData data2;
-                if (!(explodeData1.TryGetValue(key, out data1) &&
-                      explodeData2.TryGetValue(key, out data2))) {
-                    return false;
-                }
-                if (!data1.Equals(data2)) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        /// <summary>
-        /// Load data cached in aarExplodeDataFile into aarExplodeData.
-        /// </summary>
-        private void LoadAarExplodeCache() {
-            if (!File.Exists(aarExplodeDataFile)) {
-                // Build aarExplodeData from the current set of AARs in the project.
-                foreach (string path in PlayServicesResolver.FindLabeledAssets()) {
-                    PlayServicesResolver.Log(String.Format("Caching AAR {0} state",
-                                                           path), LogLevel.Verbose);
-                    ShouldExplode(path);
-                }
-                return;
-            }
-
-            try {
-                using (XmlTextReader reader =
-                           new XmlTextReader(new StreamReader(aarExplodeDataFile))) {
-                    aarExplodeData.Clear();
-                    while (reader.Read()) {
-                        if (reader.NodeType == XmlNodeType.Element && reader.Name == "aars") {
-                            while (reader.Read()) {
-                                if (reader.NodeType == XmlNodeType.Element &&
-                                    reader.Name == "explodeData") {
-                                    string aar = "";
-                                    AarExplodeData aarData = new AarExplodeData();
-                                    do {
-                                        if (!reader.Read()) break;
-
-                                        if (reader.NodeType == XmlNodeType.Element) {
-                                            string elementName = reader.Name;
-                                            if (reader.Read() &&
-                                                reader.NodeType == XmlNodeType.Text) {
-                                                if (elementName == "aar") {
-                                                    aar = reader.ReadContentAsString();
-                                                } else if (elementName == "modificationTime") {
-                                                    aarData.modificationTime =
-                                                        reader.ReadContentAsDateTime();
-                                                } else if (elementName == "explode") {
-                                                    aarData.explode = reader.ReadContentAsBoolean();
-                                                } else if (elementName == "bundleId") {
-                                                    aarData.bundleId = reader.ReadContentAsString();
-                                                } else if (elementName == "path") {
-                                                    aarData.path = reader.ReadContentAsString();
-                                                } else if (elementName == "availableAbis") {
-                                                    aarData.availableAbis =
-                                                        reader.ReadContentAsString();
-                                                } else if (elementName == "targetAbi") {
-                                                    aarData.targetAbis =
-                                                        reader.ReadContentAsString();
-                                                } else if (elementName == "gradleBuildSystem") {
-                                                    aarData.gradleBuildSystem =
-                                                        reader.ReadContentAsBoolean();
-                                                } else if (elementName == "gradleExport") {
-                                                    aarData.gradleExport =
-                                                        reader.ReadContentAsBoolean();
-                                                } else if (elementName == "gradleTemplate") {
-                                                    aarData.gradleTemplate =
-                                                        reader.ReadContentAsBoolean();
-                                                } else if (elementName == "ignoredVersion") {
-                                                    aarData.ignoredVersion =
-                                                        reader.ReadContentAsString();
-                                                }
-                                            }
-                                        }
-                                    } while (!(reader.Name == "explodeData" &&
-                                               reader.NodeType == XmlNodeType.EndElement));
-                                    if (aar != "" && aarData.path != "") {
-                                        aarExplodeData[aar] = aarData;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    reader.Close();
-                }
-            } catch (Exception e) {
-                PlayServicesResolver.Log(String.Format(
-                    "Failed to read AAR cache {0} ({1})\n" +
-                    "Auto-resolution will be slower.\n", aarExplodeDataFile, e.ToString()),
-                    level: LogLevel.Warning);
-            }
-            aarExplodeDataSaved = AarExplodeData.CopyDictionary(aarExplodeData);
-        }
-
-        /// <summary>
-        /// Save data from aarExplodeData into aarExplodeDataFile.
-        /// </summary>
-        private void SaveAarExplodeCache()
-        {
-            try {
-                if (File.Exists(aarExplodeDataFile))
-                {
-                    // If the explode data hasn't been modified, don't save.
-                    if (CompareExplodeData(aarExplodeData, aarExplodeDataSaved)) return;
-                    File.Delete(aarExplodeDataFile);
-                }
-                using (XmlTextWriter writer =
-                       new XmlTextWriter(new StreamWriter(aarExplodeDataFile)) {
-                           Formatting = Formatting.Indented
-                       }) {
-                    writer.WriteStartElement("aars");
-                    foreach (KeyValuePair<string, AarExplodeData> kv in aarExplodeData)
-                    {
-                        writer.WriteStartElement("explodeData");
-                        writer.WriteStartElement("aar");
-                        writer.WriteValue(kv.Key);
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("modificationTime");
-                        writer.WriteValue(kv.Value.modificationTime);
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("explode");
-                        writer.WriteValue(kv.Value.explode);
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("bundleId");
-                        writer.WriteValue(PlayServicesResolver.GetAndroidApplicationId());
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("path");
-                        writer.WriteValue(kv.Value.path);
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("availableAbis");
-                        writer.WriteValue(kv.Value.availableAbis);
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("targetAbi");
-                        writer.WriteValue(kv.Value.targetAbis);
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("gradleBuildEnabled");
-                        writer.WriteValue(kv.Value.gradleBuildSystem);
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("gradleExport");
-                        writer.WriteValue(kv.Value.gradleExport);
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("gradleTemplate");
-                        writer.WriteValue(kv.Value.gradleTemplate);
-                        writer.WriteEndElement();
-                        writer.WriteStartElement("ignoredVersion");
-                        writer.WriteValue(kv.Value.ignoredVersion);
-                        writer.WriteEndElement();
-                        writer.WriteEndElement();
-                    }
-                    writer.WriteEndElement();
-                    writer.Flush();
-                    writer.Close();
-                    aarExplodeDataSaved = AarExplodeData.CopyDictionary(aarExplodeData);
-                }
-            } catch (Exception e) {
-                PlayServicesResolver.Log(String.Format(
-                    "Failed to write AAR cache {0} ({1})\n" +
-                    "Auto-resolution will be slower after recompilation.\n", aarExplodeDataFile,
-                    e.ToString()), level: LogLevel.Warning);
-            }
-        }
+        public GradleResolver() {}
 
         /// <summary>
         /// Parse output of download_artifacts.gradle into lists of copied and missing artifacts.
@@ -483,6 +120,11 @@ namespace GooglePlayServices
             }
             return sourcesByPackageSpec;
         }
+
+        // Special characters that should not be escaped in URIs for Gradle property values.
+        private static HashSet<string> GradleUriExcludeEscapeCharacters = new HashSet<string> {
+            ":"
+        };
 
         /// <summary>
         /// Convert a repo path to a valid URI.
@@ -593,12 +235,10 @@ namespace GooglePlayServices
         private class ResolutionState {
             public CommandLine.Result commandLineResult = new CommandLine.Result();
             public List<string> copiedArtifacts = new List<string>();
-            public HashSet<string> copiedArtifactsSet = new HashSet<string>();
             public List<string> missingArtifacts = new List<string>();
             public List<Dependency> missingArtifactsAsDependencies = new List<Dependency>();
             public List<string> modifiedArtifacts = new List<string>();
             public bool errorOrWarningLogged = false;
-            public bool aarsProcessed = false;
         }
 
         /// <summary>
@@ -691,9 +331,9 @@ namespace GooglePlayServices
             Action processAars = () => {
                 // Find all labeled files that were not copied and delete them.
                 var staleArtifacts = new HashSet<string>();
+                var copiedArtifactsSet = new HashSet<string>(resolutionState.copiedArtifacts);
                 foreach (var assetPath in PlayServicesResolver.FindLabeledAssets()) {
-                    if (!resolutionState.copiedArtifactsSet.Contains(
-                            FileUtils.PosixPathSeparators(assetPath))) {
+                    if (!copiedArtifactsSet.Contains(FileUtils.PosixPathSeparators(assetPath))) {
                         staleArtifacts.Add(assetPath);
                     }
                 }
@@ -751,38 +391,6 @@ namespace GooglePlayServices
                         }
                         resolutionCompleteRestoreLogger();
                     });
-            };
-
-            // Executed after labeling copied assets.
-            Action refreshExplodeCache = () => {
-                // Poke the explode cache for each copied file and add the exploded paths to the
-                // output list set.
-                resolutionState.copiedArtifactsSet =
-                    new HashSet<string>(resolutionState.copiedArtifacts);
-                var numberOfCopiedArtifacts = resolutionState.copiedArtifacts.Count;
-                var artifactsToInspect = new List<string>(resolutionState.copiedArtifacts);
-                if (numberOfCopiedArtifacts > 0) {
-                    RunOnMainThread.PollOnUpdateUntilComplete(() => {
-                            var remaining = artifactsToInspect.Count;
-                            if (remaining == 0) {
-                                if (!resolutionState.aarsProcessed) {
-                                    resolutionState.aarsProcessed = true;
-                                    processAars();
-                                }
-                                return true;
-                            }
-                            var artifact = artifactsToInspect[0];
-                            artifactsToInspect.RemoveAt(0);
-                            window.SetProgress("Inspecting libraries...",
-                                               (float)(numberOfCopiedArtifacts - remaining) /
-                                               (float)numberOfCopiedArtifacts, artifact);
-                            if (ShouldExplode(artifact)) {
-                                resolutionState.copiedArtifactsSet.Add(
-                                    DetermineExplodedAarPath(artifact));
-                            }
-                            return false;
-                        });
-                }
             };
 
             // Executed when Gradle finishes execution.
@@ -849,7 +457,7 @@ namespace GooglePlayServices
                             }
                         }
                         // Successful, proceed with processing libraries.
-                        refreshExplodeCache();
+                        processAars();
                     },
                     synchronous: false,
                     progressUpdate: (progress, message) => {
@@ -1080,33 +688,13 @@ namespace GooglePlayServices
                                  System.Action resolutionComplete) {
             // Run resolution on the main thread to serialize the operation as DoResolutionUnsafe
             // is not thread safe.
-            System.Action resolve = () => {
-                System.Action unlockResolveAndSignalResolutionComplete = () => {
-                    FindAndResolveConflicts();
-                    lock (resolveLock) {
-                        resolveActionActive = null;
-                    }
-                    resolutionComplete();
-                };
+            RunOnMainThread.Run(() => {
                 DoResolutionUnsafe(destinationDirectory, closeWindowOnCompletion,
-                                   unlockResolveAndSignalResolutionComplete);
-            };
-            lock (resolveLock) {
-                resolveUpdateQueue.Enqueue(resolve);
-                RunOnMainThread.Run(UpdateTryResolution);
-            }
-        }
-
-        // Try executing a resolution.
-        private static void UpdateTryResolution() {
-            lock (resolveLock) {
-                if (resolveActionActive == null) {
-                    if (resolveUpdateQueue.Count > 0) {
-                        resolveActionActive = (System.Action)resolveUpdateQueue.Dequeue();
-                        resolveActionActive();
-                    }
-                }
-            }
+                                   () => {
+                                       FindAndResolveConflicts();
+                                       resolutionComplete();
+                                   });
+            });
         }
 
         /// <summary>
@@ -1289,47 +877,6 @@ namespace GooglePlayServices
                     });
         }
 
-
-        /// <summary>
-        /// Called during Update to allow the resolver to check any build settings of managed
-        /// packages to see whether resolution should be triggered again.
-        /// </summary>
-        /// <returns>Array of packages that should be re-resolved if resolution should occur,
-        /// null otherwise.</returns>
-        public string[] OnBuildSettings() {
-            // Determine which packages need to be updated.
-            List<string> packagesToUpdate = new List<string>();
-            List<string> aarsToResolve = new List<string>();
-            var aarExplodeDataCopy = new Dictionary<string, AarExplodeData>(aarExplodeData);
-            foreach (var kv in aarExplodeDataCopy) {
-                var aar = kv.Key;
-                var aarData = kv.Value;
-                // If the cached file has been removed, ditch it from the cache.
-                if (!(File.Exists(aarData.path) || Directory.Exists(aarData.path))) {
-                    PlayServicesResolver.Log(String.Format("Found missing AAR {0}", aarData.path),
-                                             level: LogLevel.Verbose);
-                    aarsToResolve.Add(aar);
-                } else if (AarExplodeDataIsDirty(aarData)) {
-                    PlayServicesResolver.Log(String.Format("{0} needs to be refreshed ({1})",
-                                                           aarData.path, aarData.ToString()),
-                                             level: LogLevel.Verbose);
-                    packagesToUpdate.Add(aarData.path);
-                    aarsToResolve.Add(aar);
-                }
-            }
-            // Remove AARs that will be resolved from the dictionary so the next call to
-            // OnBundleId triggers another resolution process.
-            foreach (string aar in aarsToResolve) aarExplodeData.Remove(aar);
-            SaveAarExplodeCache();
-            if (packagesToUpdate.Count == 0) return null;
-            string[] packagesToUpdateArray = packagesToUpdate.ToArray();
-            PlayServicesResolver.Log(
-                String.Format("OnBuildSettings, Packages to update ({0})",
-                              String.Join(", ", packagesToUpdateArray)),
-                level: LogLevel.Verbose);
-            return packagesToUpdateArray;
-        }
-
         /// <summary>
         /// Convert an AAR filename to package name.
         /// </summary>
@@ -1346,105 +893,6 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Search the cache for an entry associated with the specified AAR path.
-        /// </summary>
-        /// <param name="aarPath">Path of the AAR to query.</param>
-        /// <returns>AarExplodeData if the entry is found in the cache, null otherwise.</returns>
-        private AarExplodeData FindAarExplodeDataEntry(string aarPath) {
-            var aarFilename = AarPathToPackageName(aarPath);
-            AarExplodeData aarData = null;
-            // The argument to this method could be the exploded folder rather than the source
-            // package (e.g some-package rather than some-package.aar).  Therefore search the
-            // cache for the original / unexploded package if the specified file isn't found.
-            var packageExtensions = new List<string>();
-            packageExtensions.Add("");  // Search for aarFilename first.
-            packageExtensions.AddRange(Dependency.Packaging);
-            foreach (var extension in packageExtensions) {
-                AarExplodeData data;
-                if (aarExplodeData.TryGetValue(aarFilename + extension, out data)) {
-                    aarData = data;
-                    break;
-                }
-            }
-            return aarData;
-        }
-
-        /// <summary>
-        /// Whether an Ant project should be generated for an artifact.
-        /// </summary>
-        /// <param name="explode">Whether the artifact needs to be exploded so that it can be
-        /// modified.</param>
-        private static bool GenerateAntProject(bool explode) {
-            return explode && !PlayServicesResolver.GradleBuildEnabled;
-        }
-
-        /// <summary>
-        /// Determine whether a package is dirty in the AAR cache.
-        /// </summary>
-        /// <param name="aarData">Path of the AAR to query.</param>
-        /// <returns>true if the cache entry is dirty, false otherwise.</returns>
-        private bool AarExplodeDataIsDirty(AarExplodeData aarData) {
-            if (aarData.bundleId != PlayServicesResolver.GetAndroidApplicationId()) {
-                PlayServicesResolver.Log(
-                    String.Format("{0}: Bundle ID changed {1} --> {2}", aarData.path,
-                                  aarData.bundleId,
-                                  PlayServicesResolver.GetAndroidApplicationId()),
-                    level: LogLevel.Verbose);
-                return true;
-            }
-            var availableAbis = aarData.AvailableAbis;
-            var targetAbis = aarData.TargetAbis;
-            var currentAbis = AndroidAbis.Current;
-            if (targetAbis != null && availableAbis != null &&
-                !targetAbis.Equals(AndroidAbis.Current)) {
-                PlayServicesResolver.Log(
-                    String.Format("{0}: Target ABIs changed {1} --> {2}", aarData.path,
-                                  targetAbis.ToString(), currentAbis.ToString()),
-                    level: LogLevel.Verbose);
-                return true;
-            }
-            if (aarData.gradleBuildSystem != PlayServicesResolver.GradleBuildEnabled) {
-                PlayServicesResolver.Log(
-                    String.Format("{0}: Gradle build system enabled changed {1} --> {2}",
-                                  aarData.path, aarData.gradleBuildSystem,
-                                  PlayServicesResolver.GradleBuildEnabled),
-                    level: LogLevel.Verbose);
-                return true;
-            }
-            if (aarData.gradleExport != PlayServicesResolver.GradleProjectExportEnabled) {
-                PlayServicesResolver.Log(
-                    String.Format("{0}: Gradle export settings changed {1} --> {2}",
-                                  aarData.path, aarData.gradleExport,
-                                  PlayServicesResolver.GradleProjectExportEnabled),
-                    level: LogLevel.Verbose);
-                return true;
-            }
-            if (aarData.gradleTemplate != PlayServicesResolver.GradleTemplateEnabled) {
-                PlayServicesResolver.Log(
-                    String.Format("{0}: Gradle template changed {1} --> {2}",
-                                  aarData.path, aarData.gradleTemplate,
-                                  PlayServicesResolver.GradleTemplateEnabled),
-                    level: LogLevel.Verbose);
-                return true;
-            }
-            bool generateAntProject = GenerateAntProject(aarData.explode);
-            if (generateAntProject && !Directory.Exists(aarData.path)) {
-                PlayServicesResolver.Log(
-                    String.Format("{0}: Should be exploded but artifact directory missing.",
-                                  aarData.path),
-                    level: LogLevel.Verbose);
-                return true;
-            } else if (!generateAntProject && !File.Exists(aarData.path)) {
-                PlayServicesResolver.Log(
-                    String.Format("{0}: Should *not* be exploded but artifact file missing.",
-                                  aarData.path),
-                    level: LogLevel.Verbose);
-                return true;
-            }
-            return false;
-        }
-
-        /// <summary>
         /// Get the target path for an exploded AAR.
         /// </summary>
         /// <param name="aarPath">AAR file to explode.</param>
@@ -1452,21 +900,6 @@ namespace GooglePlayServices
         private string DetermineExplodedAarPath(string aarPath) {
             return Path.Combine(GooglePlayServices.SettingsDialog.PackageDir,
                                 AarPathToPackageName(aarPath));
-        }
-
-        /// <summary>
-        /// Get the path of an existing AAR or exploded directory within the target directory.
-        /// </summary>
-        /// <param name="artifactName">Name of the artifact to search for.</param>
-        /// <returns>Path to the artifact if found, null otherwise.</returns>
-        private string FindAarInTargetPath(string aarPath) {
-            var basePath = DetermineExplodedAarPath(aarPath);
-            if (Directory.Exists(basePath)) return basePath;
-            foreach (var extension in Dependency.Packaging) {
-                var packagePath = basePath + extension;
-                if (File.Exists(packagePath)) return packagePath;
-            }
-            return null;
         }
 
         /// <summary>
@@ -1492,7 +925,6 @@ namespace GooglePlayServices
                                  Action<float, string> progressUpdate, Action complete) {
             // Get set of AAR files and directories we're managing.
             var uniqueAars = new HashSet<string>(PlayServicesResolver.FindLabeledAssets());
-            foreach (var aarData in aarExplodeData.Values) uniqueAars.Add(aarData.path);
             var aars = new Queue<string>(uniqueAars);
 
             int numberOfAars = aars.Count;
@@ -1514,43 +946,16 @@ namespace GooglePlayServices
                 float progress = (float)processedAars / (float)numberOfAars;
                 try {
                     progressUpdate(progress, aarPath);
-                    bool explode = ShouldExplode(aarPath);
-                    var aarData = FindAarExplodeDataEntry(aarPath);
-                    PlayServicesResolver.Log(
-                        String.Format("Processing {0} ({1})", aarPath, aarData.ToString()),
-                        level: LogLevel.Verbose);
-                    if (AarExplodeDataIsDirty(aarData) || updatedFiles.Contains(aarPath)) {
-                        if (explode && File.Exists(aarPath)) {
-                            AndroidAbis abis = null;
-                            if (!ProcessAar(Path.GetFullPath(dir), aarPath,
-                                            GenerateAntProject(explode), out abis)) {
-                                PlayServicesResolver.Log(String.Format(
-                                    "Failed to process {0}, your Android build will fail.\n" +
-                                    "See previous error messages for failure details.\n",
-                                    aarPath));
-                            }
-                            aarData.AvailableAbis = abis;
-                        } else if (aarPath != aarData.path) {
-                            // Clean up previously expanded / exploded versions of the AAR.
-                            PlayServicesResolver.Log(
-                                String.Format("Cleaning up previously exploded AAR {0}",
-                                              aarPath),
-                                level: LogLevel.Verbose);
-                            var explodedPath = DetermineExplodedAarPath(aarPath);
-                            var deleteError = FileUtils.FormatError(
-                                String.Format("Failed to delete exploded AAR directory {0}",
-                                              explodedPath),
-                                FileUtils.DeleteExistingFileOrDirectory(explodedPath));
-                            if (!String.IsNullOrEmpty(deleteError)) {
-                                PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
-                            }
+                    PlayServicesResolver.Log(String.Format("Processing {0}", aarPath),
+                                             level: LogLevel.Verbose);
+                    if (updatedFiles.Contains(aarPath)) {
+                        if (!ProcessAar(aarPath)) {
+                            PlayServicesResolver.Log(String.Format(
+                                "Failed to process {0}, your Android build will fail.\n" +
+                                "See previous error messages for failure details.\n",
+                                aarPath));
                         }
-                        aarData.gradleBuildSystem = PlayServicesResolver.GradleBuildEnabled;
-                        aarData.gradleExport = PlayServicesResolver.GradleProjectExportEnabled;
-                        aarData.gradleTemplate = PlayServicesResolver.GradleTemplateEnabled;
-                        aarData.TargetAbis = AndroidAbis.Current;
                     }
-                    SaveAarExplodeCache();
                 } finally {
                     if (allAarsProcessed) {
                         progressUpdate(1.0f, "Library processing complete");
@@ -1565,7 +970,7 @@ namespace GooglePlayServices
         /// Gets a value indicating whether this version of Unity supports aar files.
         /// </summary>
         /// <value><c>true</c> if supports aar files; otherwise, <c>false</c>.</value>
-        internal bool SupportsAarFiles
+        internal static bool SupportsAarFiles
         {
             get
             {
@@ -1580,27 +985,15 @@ namespace GooglePlayServices
             }
         }
 
-
         /// <summary>
-        /// Determines whether an aar file should be exploded (extracted).
+        /// Determines whether an AAR file should be processed.
         ///
-        /// This is required for some aars so that the Unity Jar Resolver can perform variable
-        /// expansion on manifests in the package before they're merged by aapt.
+        /// This is required for some AAR so that the plugin can perform variable expansion on
+        /// manifests and ABI stripping.
         /// </summary>
-        /// <returns><c>true</c>, if the aar should be exploded, <c>false</c> otherwise.</returns>
-        /// <param name="aarPath">Path of the AAR file to query whether it should be exploded or
-        /// the path to the exploded AAR directory to determine whether the AAR should still be
-        /// exploded.</param>
-        internal virtual bool ShouldExplode(string aarPath) {
-            bool newAarData = false;
-            AarExplodeData aarData = FindAarExplodeDataEntry(aarPath);
-            if (aarData == null) {
-                newAarData = true;
-                aarData = new AarExplodeData();
-                aarData.path = aarPath;
-            }
-            string explodeDirectory = DetermineExplodedAarPath(aarPath);
-            bool explosionEnabled = true;
+        /// <param name="aarDirectory">Path of the unpacked AAR file to query.</param>
+        /// <returns>true, if the AAR should be processed, false otherwise.</returns>
+        internal static bool ShouldProcess(string aarDirectory) {
             // Unfortunately, as of Unity 5.5.0f3, Unity does not set the applicationId variable
             // in the build.gradle it generates.  This results in non-functional libraries that
             // require the ${applicationId} variable to be expanded in their AndroidManifest.xml.
@@ -1608,111 +1001,44 @@ namespace GooglePlayServices
             // AARs that require variable expansion unless this behavior is explicitly disabled
             // in the settings dialog.
             if (PlayServicesResolver.GradleProjectExportEnabled && !SettingsDialog.ExplodeAars) {
-                explosionEnabled = false;
+                return false;
             }
-            AndroidAbis availableAbis = null;
-            bool explode = false;
-            if (explosionEnabled) {
-                explode = !SupportsAarFiles;
-                bool useCachedExplodeData = false;
-                bool aarFile = File.Exists(aarPath);
-                if (!explode) {
-                    System.DateTime modificationTime =
-                        aarFile ? File.GetLastWriteTime(aarPath) : System.DateTime.MinValue;
-                    if (modificationTime.CompareTo(aarData.modificationTime) <= 0 &&
-                        !AarExplodeDataIsDirty(aarData)) {
-                        explode = aarData.explode;
-                        useCachedExplodeData = true;
-                    }
-                }
-                if (!explode) {
-                    // If the path is a directory then the caller is referencing an AAR that has
-                    // already been exploded in which case we keep explosion enabled.
-                    string aarDirectory = Directory.Exists(explodeDirectory) ? explodeDirectory :
-                        Directory.Exists(aarData.path) ? aarData.path : null;
-                    if (!String.IsNullOrEmpty(aarDirectory)) {
-                        // If the directory contains native libraries update the target ABI.
-                        if (!useCachedExplodeData) {
-                            newAarData = true;
-                            availableAbis = AarDirectoryFindAbis(aarDirectory);
-                        }
-                        explode = true;
-                    }
-                }
-                if (!useCachedExplodeData && !explode) {
-                    // If the file doesn't exist we can't interrogate it so we can assume it
-                    // doesn't need to be exploded.
-                    if (!aarFile) return false;
+            // If this version of Unity doesn't support AAR files, always explode.
+            if (!SupportsAarFiles) return true;
 
-                    string temporaryDirectory = FileUtils.CreateTemporaryDirectory();
-                    if (temporaryDirectory == null) return false;
-                    try {
-                        string manifestFilename = "AndroidManifest.xml";
-                        string classesFilename = "classes.jar";
-                        if (aarPath.EndsWith(".aar") &&
-                            PlayServicesResolver.ExtractZip(
-                                aarPath, new string[] {manifestFilename, "jni", classesFilename},
-                                temporaryDirectory, false)) {
-                            string manifestPath = Path.Combine(temporaryDirectory,
-                                                               manifestFilename);
-                            if (File.Exists(manifestPath)) {
-                                string manifest = File.ReadAllText(manifestPath);
-                                explode = manifest.IndexOf("${applicationId}") >= 0;
-                            }
-                            // If the AAR is badly formatted (e.g does not contain classes.jar)
-                            // explode it so that we can create classes.jar.
-                            explode |= !File.Exists(Path.Combine(temporaryDirectory,
-                                                                 classesFilename));
-                            // If the AAR contains more than one ABI and Unity's build is
-                            // targeting a single ABI, explode it so that unused ABIs can be
-                            // removed.
-                            newAarData = true;
-                            availableAbis = AarDirectoryFindAbis(temporaryDirectory);
-                            // Unity 2017's internal build system does not support AARs that contain
-                            // native libraries so force explosion to pick up native libraries using
-                            // Eclipse / Ant style projects.
-                            explode |= availableAbis != null &&
-                                Google.VersionHandler.GetUnityVersionMajorMinor() >= 2017.0f;
-                            // NOTE: Unfortunately as of Unity 5.5 the internal Gradle build
-                            // also blindly includes all ABIs from AARs included in the project
-                            // so we need to explode the AARs and remove unused ABIs.
-                            if (availableAbis != null) {
-                                var abisToRemove = availableAbis.ToSet();
-                                abisToRemove.ExceptWith(AndroidAbis.Current.ToSet());
-                                explode |= abisToRemove.Count > 0;
-                            }
-                            aarData.modificationTime = File.GetLastWriteTime(aarPath);
-                        }
-                    }
-                    catch (System.Exception e) {
-                        PlayServicesResolver.Log(
-                            String.Format("Unable to examine AAR file {0}\n\n{1}", aarPath, e),
-                            level: LogLevel.Error);
-                        throw e;
-                    }
-                    finally {
-                        var deleteError = FileUtils.FormatError(
-                            "Failed to clean up temporary directory",
-                            FileUtils.DeleteExistingFileOrDirectory(temporaryDirectory));
-                        if (!String.IsNullOrEmpty(deleteError)) {
-                            PlayServicesResolver.Log(deleteError, level: LogLevel.Warning);
-                        }
-                    }
-                }
+            const string manifestFilename = "AndroidManifest.xml";
+            const string classesFilename = "classes.jar";
+            string manifestPath = Path.Combine(aarDirectory, manifestFilename);
+            if (File.Exists(manifestPath)) {
+                string manifest = File.ReadAllText(manifestPath);
+                if (manifest.IndexOf("${applicationId}") >= 0) return true;
             }
-            // If this is a new cache entry populate the target ABI and bundle ID fields.
-            if (newAarData) {
-                aarData.AvailableAbis = availableAbis;
-                aarData.TargetAbis = AndroidAbis.Current;
-                aarData.bundleId = PlayServicesResolver.GetAndroidApplicationId();
+
+            // If the AAR is badly formatted (e.g does not contain classes.jar)
+            // explode it so that we can create classes.jar.
+            if (!File.Exists(Path.Combine(aarDirectory, classesFilename))) return true;
+
+            // If the AAR contains more than one ABI and Unity's build is
+            // targeting a single ABI, explode it so that unused ABIs can be
+            // removed.
+            var availableAbis = AarDirectoryFindAbis(aarDirectory);
+            // Unity 2017's internal build system does not support AARs that contain
+            // native libraries so force explosion to pick up native libraries using
+            // Eclipse / Ant style projects.
+            if (availableAbis != null &&
+                Google.VersionHandler.GetUnityVersionMajorMinor() >= 2017.0f) {
+                return true;
             }
-            aarData.path = GenerateAntProject(explode) ? explodeDirectory : aarPath;
-            aarData.explode = explode;
-            aarExplodeData[AarPathToPackageName(aarPath)] = aarData;
-            SaveAarExplodeCache();
-            return explode;
+            // NOTE: Unfortunately as of Unity 5.5 the internal Gradle build also blindly
+            // includes all ABIs from AARs included in the project so we need to explode the
+            // AARs and remove unused ABIs.
+            if (availableAbis != null) {
+                var abisToRemove = availableAbis.ToSet();
+                abisToRemove.ExceptWith(AndroidAbis.Current.ToSet());
+                if (abisToRemove.Count > 0) return true;
+            }
+            return false;
         }
-
 
         /// <summary>
         /// Create an AAR from the specified directory.
@@ -1769,25 +1095,20 @@ namespace GooglePlayServices
         }
 
         /// <summary>
-        /// Explodes a single aar file.  This is done by calling the
-        /// JDK "jar" command, then moving the classes.jar file.
+        /// Process an AAR so that it can be included in a Unity build.
         /// </summary>
-        /// <param name="dir">The directory to unpack / explode the AAR to.  If antProject is true
-        /// the ant project will be located in Path.Combine(dir, Path.GetFileName(aarFile)).</param>
-        /// <param name="aarFile">Aar file to explode.</param>
-        /// <param name="antProject">true to explode into an Ant style project or false
-        /// to repack the processed AAR as a new AAR.</param>
-        /// <param name="abis">ABIs in the AAR or null if it's universal.</param>
+        /// <param name="aarFile">Aar file to process.</param>
         /// <returns>true if successful, false otherwise.</returns>
-        internal static bool ProcessAar(string dir, string aarFile, bool antProject,
-                                        out AndroidAbis abis) {
-            PlayServicesResolver.Log(String.Format("ProcessAar {0} {1} antProject={2}",
-                                                   dir, aarFile, antProject),
+        internal static bool ProcessAar(string aarFile) {
+            PlayServicesResolver.Log(String.Format("ProcessAar {0}", aarFile),
                                      level: LogLevel.Verbose);
-            abis = null;
+
+            // If this isn't an aar ignore it.
+            if (!aarFile.ToLower().EndsWith(".aar")) return true;
+
             string aarDirName = Path.GetFileNameWithoutExtension(aarFile);
             // Output directory for the contents of the AAR / JAR.
-            string outputDir = Path.Combine(dir, aarDirName);
+            string outputDir = Path.Combine(Path.GetDirectoryName(aarFile), aarDirName);
             string stagingDir = FileUtils.CreateTemporaryDirectory();
             if (stagingDir == null) {
                 PlayServicesResolver.Log(String.Format(
@@ -1805,9 +1126,19 @@ namespace GooglePlayServices
                     return false;
                 }
                 Directory.CreateDirectory(workingDir);
+
                 if (!PlayServicesResolver.ExtractZip(aarFile, null, workingDir, false)) {
                     return false;
                 }
+
+                bool process = ShouldProcess(workingDir);
+                // Determine whether an Ant style project should be generated for this artifact.
+                bool antProject = process && !PlayServicesResolver.GradleBuildEnabled;
+
+                // If the AAR doesn't need to be processed or converted into an Ant project,
+                // we're done.
+                if (!(process || antProject)) return true;
+
                 PlayServicesResolver.ReplaceVariablesInAndroidManifest(
                     Path.Combine(workingDir, "AndroidManifest.xml"),
                     PlayServicesResolver.GetAndroidApplicationId(),
@@ -1886,7 +1217,6 @@ namespace GooglePlayServices
                                 PlayServicesResolver.Log(deleteError, LogLevel.Warning);
                             }
                         }
-                        abis = new AndroidAbis(abisInArchiveSet);
                     }
                 }
 

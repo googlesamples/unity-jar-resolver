@@ -881,7 +881,7 @@ namespace GooglePlayServices {
                 AndroidBuildSystemChanged += ResolveOnBuildSystemChanged;
                 AndroidAbisChanged += ResolveOnAndroidAbisChanged;
                 AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
-                ScheduleAutoResolve();
+                Reresolve();
 
                 if (SettingsDialogObj.EnableAutoResolution) LinkAutoResolution();
             }
@@ -979,7 +979,7 @@ namespace GooglePlayServices {
                     }
                 }
             }
-            if (resolve) ScheduleAutoResolve();
+            if (resolve) Reresolve();
 
             return resolve;
         }
@@ -1012,7 +1012,7 @@ namespace GooglePlayServices {
                     // resolution.
                     foreach (string asset in deletedAssets) {
                         if (asset.StartsWith(SettingsDialogObj.PackageDir)) {
-                            ScheduleAutoResolve();
+                            Reresolve();
                             return;
                         }
                     }
@@ -1137,7 +1137,7 @@ namespace GooglePlayServices {
         /// </summary>
         private static void Reresolve() {
             if (AutomaticResolutionEnabled && gradleResolver != null) {
-                if (DeleteFiles(gradleResolver.OnBuildSettings())) ScheduleAutoResolve();
+                ScheduleAutoResolve();
             }
         }
 
@@ -1608,8 +1608,6 @@ namespace GooglePlayServices {
                                           bool closeWindowOnCompletion) {
             JavaUtilities.CheckJdkForApiLevel();
             CanEnableJetifierOrPromptUser("");
-
-            DeleteFiles(gradleResolver.OnBuildSettings());
 
             // If the internal build system is being used and AAR explosion is disabled the build
             // is going to fail so warn and enable explosion.
@@ -2150,7 +2148,7 @@ namespace GooglePlayServices {
             logger.Verbose = SettingsDialogObj.VerboseLogging;
             if (gradleResolver != null) {
                 PatchAndroidManifest(GetAndroidApplicationId(), null);
-                ScheduleAutoResolve(delayInMilliseconds: 0);
+                Reresolve();
             }
         }
 
