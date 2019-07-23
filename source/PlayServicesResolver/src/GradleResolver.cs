@@ -121,11 +121,6 @@ namespace GooglePlayServices
             return sourcesByPackageSpec;
         }
 
-        // Special characters that should not be escaped in URIs for Gradle property values.
-        private static HashSet<string> GradleUriExcludeEscapeCharacters = new HashSet<string> {
-            ":"
-        };
-
         /// <summary>
         /// Convert a repo path to a valid URI.
         /// If the specified repo is a local directory and it doesn't exist, search the project
@@ -145,40 +140,31 @@ namespace GooglePlayServices
             if (repoPath.StartsWith(PlayServicesSupport.SdkVariable)) return null;
             // Since we need a URL, determine whether the repo has a scheme.  If not,
             // assume it's a local file.
-            bool validScheme = false;
             foreach (var scheme in new [] { "file:", "http:", "https:" }) {
-                validScheme |= repoPath.StartsWith(scheme);
+                if (repoPath.StartsWith(scheme)) return GradleWrapper.EscapeUri(repoPath);
             }
-            if (!validScheme) {
-                // If the directory isn't found, it is possible the user has moved the repository
-                // in the project, so try searching for it.
-                string searchDir = "Assets" + Path.DirectorySeparatorChar;
-                if (!Directory.Exists(repoPath) &&
-                    FileUtils.NormalizePathSeparators(repoPath.ToLower()).StartsWith(
-                        searchDir.ToLower())) {
-                    var foundPath = FileUtils.FindPathUnderDirectory(
-                        searchDir, repoPath.Substring(searchDir.Length));
-                    string warningMessage;
-                    if (!String.IsNullOrEmpty(foundPath)) {
-                        repoPath = searchDir + foundPath;
-                        warningMessage = String.Format(
-                            "{0}: Repo path '{1}' does not exist, will try using '{2}' instead.",
-                            sourceLocation, repoPath, foundPath);
-                    } else {
-                        warningMessage = String.Format(
-                            "{0}: Repo path '{1}' does not exist.", sourceLocation, repoPath);
-                    }
-                    PlayServicesResolver.Log(warningMessage, level: LogLevel.Warning);
-                }
 
-                repoPath = PlayServicesResolver.FILE_SCHEME +
-                    FileUtils.PosixPathSeparators(Path.GetFullPath(repoPath));
+            // If the directory isn't found, it is possible the user has moved the repository
+            // in the project, so try searching for it.
+            string searchDir = "Assets" + Path.DirectorySeparatorChar;
+            if (!Directory.Exists(repoPath) &&
+                FileUtils.NormalizePathSeparators(repoPath.ToLower()).StartsWith(
+                    searchDir.ToLower())) {
+                var foundPath = FileUtils.FindPathUnderDirectory(
+                    searchDir, repoPath.Substring(searchDir.Length));
+                string warningMessage;
+                if (!String.IsNullOrEmpty(foundPath)) {
+                    repoPath = searchDir + foundPath;
+                    warningMessage = String.Format(
+                        "{0}: Repo path '{1}' does not exist, will try using '{2}' instead.",
+                        sourceLocation, repoPath, foundPath);
+                } else {
+                    warningMessage = String.Format(
+                        "{0}: Repo path '{1}' does not exist.", sourceLocation, repoPath);
+                }
+                PlayServicesResolver.Log(warningMessage, level: LogLevel.Warning);
             }
-            // Escape the URI to handle special characters like spaces and percent escape
-            // all characters that are interpreted by gradle.
-            return GradleWrapper.EscapeGradlePropertyValue(
-                Uri.EscapeUriString(repoPath), escapeFunc: Uri.EscapeDataString,
-                charactersToExclude: GradleUriExcludeEscapeCharacters);
+            return GradleWrapper.EscapeUri(GradleWrapper.PathToFileUri(repoPath));
         }
 
         /// <summary>

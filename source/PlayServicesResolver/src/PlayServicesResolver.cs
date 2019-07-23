@@ -1865,11 +1865,6 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
-        /// File scheme that can be concatenated with an absolute path on the local filesystem.
-        /// </summary>
-        internal const string FILE_SCHEME = "file:///";
-
-        /// <summary>
         /// Get the included dependency repos as lines that can be included in a Gradle file.
         /// </summary>
         /// <returns>Lines that can be included in a gradle file.</returns>
@@ -1887,7 +1882,7 @@ namespace GooglePlayServices {
                 lines.Add(String.Format(
                           "        def unityProjectPath = \"{0}\" + " +
                           "file(rootProject.projectDir.path + \"/../../\").absolutePath",
-                          FILE_SCHEME));
+                          GradleWrapper.FILE_SCHEME));
                 lines.Add("        maven {");
                 lines.Add("            url \"https://maven.google.com\"");
                 lines.Add("        }");

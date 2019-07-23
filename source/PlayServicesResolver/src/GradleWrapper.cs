@@ -223,5 +223,37 @@ namespace Google {
             }
             return String.Join("\n", lines.ToArray());
         }
+
+        /// <summary>
+        /// File scheme that can be concatenated with an absolute path on the local filesystem.
+        /// </summary>
+        public const string FILE_SCHEME = "file:///";
+
+        /// <summary>
+        /// Convert a local filesystem path to a URI.
+        /// </summary>
+        /// <param name="localPath">Path to convert.</param>
+        /// <returns>File URI.</returns>
+        public static string PathToFileUri(string localPath) {
+            return FILE_SCHEME + FileUtils.PosixPathSeparators(Path.GetFullPath(localPath));
+        }
+
+        // Special characters that should not be escaped in URIs for Gradle property values.
+        private static HashSet<string> GradleUriExcludeEscapeCharacters = new HashSet<string> {
+            ":"
+        };
+
+        /// <summary>
+        /// Escape a URI so that it can be passed to Gradle.
+        /// </summary>
+        /// <param name="uri">URI to escape.</param>
+        /// <returns>Escaped URI.</returns>
+        public static string EscapeUri(string uri) {
+            // Escape the URI to handle special characters like spaces and percent escape
+            // all characters that are interpreted by gradle.
+            return GradleWrapper.EscapeGradlePropertyValue(
+                Uri.EscapeUriString(uri), escapeFunc: Uri.EscapeDataString,
+                charactersToExclude: GradleUriExcludeEscapeCharacters);
+        }
     }
 }
