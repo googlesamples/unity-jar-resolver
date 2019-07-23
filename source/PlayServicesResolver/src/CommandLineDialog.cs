@@ -230,6 +230,7 @@ namespace GooglePlayServices
             progressSummary = "";
             UpdateEvent = null;
             autoScrollToBottom = false;
+            logRedirector.ShouldLogDelegate = () => { return !RunningCommand; };
         }
 
         /// <summary>

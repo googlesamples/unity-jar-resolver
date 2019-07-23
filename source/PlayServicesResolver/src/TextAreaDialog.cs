@@ -99,6 +99,9 @@ namespace GooglePlayServices
         /// </summary>
         private const long REPAINT_PERIOD_IN_MILLISECONDS = 33; // ~30Hz
 
+        // Backing store for the Redirector property.
+        internal LogRedirector logRedirector;
+
         /// <summary>
         /// Get the existing text area window or create a new one.
         /// </summary>
@@ -124,6 +127,7 @@ namespace GooglePlayServices
             minSize = new Vector2(300, 200);
             position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                                 minSize.x * 2, minSize.y * 2);
+            logRedirector = new LogRedirector(this);
         }
 
         // Add to body text.
@@ -222,6 +226,76 @@ namespace GooglePlayServices
                 if (buttonClicked != null) buttonClicked(this);
             }
         }
+
+        /// <summary>
+        /// Redirects logs to a TextAreaDialog window.
+        /// </summary>
+        internal class LogRedirector {
+
+            /// <summary>
+            /// Window to redirect logs to.
+            /// </summary>
+            private TextAreaDialog window;
+
+            /// <summary>
+            /// Create a log redirector associated with this window.
+            /// </summary>
+            public LogRedirector(TextAreaDialog window) {
+                this.window = window;
+                LogToWindow = (string message, LogLevel level) => LogMessage(message, level);
+                ErrorLogged = false;
+                WarningLogged = false;
+                ShouldLogDelegate = () => { return true; };
+            }
+
+            /// <summary>
+            /// Delegate that logs to the window associated with this object.
+            /// </summary>
+            public Google.Logger.LogMessageDelegate LogToWindow { get; private set; }
+
+            /// <summary>
+            /// Whether an error was logged.
+            /// </summary>
+            public bool ErrorLogged { get; private set; }
+
+
+            /// <summary>
+            /// Whether a warning was logged.
+            /// </summary>
+            public bool WarningLogged { get; private set; }
+
+            /// <summary>
+            /// Delegate that determines whether a message should be logged.
+            /// </summary>
+            public Func<bool> ShouldLogDelegate { get; set; }
+
+            /// <summary>
+            /// Log a message to the window associated with this object.
+            /// </summary>
+            private void LogMessage(string message, LogLevel level) {
+                string messagePrefix;
+                switch (level) {
+                    case LogLevel.Error:
+                        messagePrefix = "ERROR: ";
+                        ErrorLogged = true;
+                        break;
+                    case LogLevel.Warning:
+                        messagePrefix = "WARNING: ";
+                        WarningLogged = true;
+                        break;
+                    default:
+                        messagePrefix = "";
+                        break;
+                }
+                if (ShouldLogDelegate()) window.AddBodyText(messagePrefix + message + "\n");
+
+            }
+        }
+
+        /// <summary>
+        /// Get an object that can redirect log messages to this window.
+        /// </summary>
+        internal LogRedirector Redirector { get { return logRedirector; } }
     }
 
 }

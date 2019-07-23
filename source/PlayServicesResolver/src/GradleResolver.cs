@@ -238,7 +238,6 @@ namespace GooglePlayServices
             public List<string> missingArtifacts = new List<string>();
             public List<Dependency> missingArtifactsAsDependencies = new List<Dependency>();
             public List<string> modifiedArtifacts = new List<string>();
-            public bool errorOrWarningLogged = false;
         }
 
         /// <summary>
@@ -293,35 +292,18 @@ namespace GooglePlayServices
                 "Resolving Android Dependencies");
 
             // Register an event to redirect log messages to the resolution window.
-            Google.Logger.LogMessageDelegate logToWindow = (message, logLevel) => {
-                string messagePrefix;
-                switch (logLevel) {
-                    case LogLevel.Error:
-                        messagePrefix = "ERROR: ";
-                        resolutionState.errorOrWarningLogged = true;
-                        break;
-                    case LogLevel.Warning:
-                        messagePrefix = "WARNING: ";
-                        resolutionState.errorOrWarningLogged = true;
-                        break;
-                    default:
-                        messagePrefix = "";
-                        break;
-                }
-                if (!window.RunningCommand) {
-                    window.AddBodyText(messagePrefix + message + "\n");
-                }
-            };
-            PlayServicesResolver.logger.LogMessage += logToWindow;
+            var logRedirector = window.Redirector;
+            PlayServicesResolver.logger.LogMessage += logRedirector.LogToWindow;
 
             // When resolution is complete unregister the log redirection event.
             Action resolutionCompleteRestoreLogger = () => {
-                PlayServicesResolver.logger.LogMessage -= logToWindow;
+                PlayServicesResolver.logger.LogMessage -= logRedirector.LogToWindow;
                 // If the command completed successfully or the log level is info or above close
                 // the window, otherwise leave it open for inspection.
                 if ((resolutionState.commandLineResult.exitCode == 0 &&
                      PlayServicesResolver.logger.Level >= LogLevel.Info &&
-                     !resolutionState.errorOrWarningLogged) || closeWindowOnCompletion) {
+                     !(logRedirector.WarningLogged || logRedirector.ErrorLogged)) ||
+                    closeWindowOnCompletion) {
                     window.Close();
                 }
                 resolutionComplete(resolutionState.missingArtifactsAsDependencies);
