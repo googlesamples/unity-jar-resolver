@@ -516,7 +516,10 @@ public class VersionHandler {
                 if (position < numberOfPositionalArgs) {
                     var positionalArg = args[position];
                     // If the parameter type doesn't match, ignore this method.
-                    if (positionalArg != null && parameterType != positionalArg.GetType()) break;
+                    if (positionalArg != null &&
+                        !parameterType.IsAssignableFrom(positionalArg.GetType())) {
+                        break;
+                    }
                     parameterValues[position] = positionalArg;
                     matchedPositionalArgs ++;
                 } else if (parameter.RawDefaultValue != DBNull.Value) {
@@ -525,7 +528,10 @@ public class VersionHandler {
                         object namedArg;
                         if (namedArgs.TryGetValue(parameter.Name, out namedArg)) {
                             // If the parameter type doesn't match, ignore this method.
-                            if (namedArg != null && parameterType != namedArg.GetType()) break;
+                            if (namedArg != null &&
+                                !parameterType.IsAssignableFrom(namedArg.GetType())) {
+                                break;
+                            }
                             namedValue = namedArg;
                             matchedNamedArgs ++;
                         }

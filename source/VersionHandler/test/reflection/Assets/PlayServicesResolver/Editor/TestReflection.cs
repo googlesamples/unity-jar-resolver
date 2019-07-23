@@ -50,6 +50,16 @@ public class Greeter {
         return String.Format("{0} {1}", GenericHelloWithPronoun(pronoun: pronoun), customerName);
     }
 
+    public static string GenericHelloWithCustomerNameAndSuffixes(
+            string customerName, IEnumerable<string> suffixes = null) {
+        string fullName = Greeter.GenericHelloWithCustomerName(customerName);
+        if (suffixes != null) {
+            foreach (var suffix in suffixes) fullName += " " + suffix;
+        }
+        return fullName;
+    }
+
+
     private string MyNameIs() {
         return String.Format(", my name is {0}", name);
     }
@@ -91,9 +101,10 @@ public class TestReflection {
                     TestInvokeStaticMethodWithNamedArg,
                     TestInvokeStaticMethodWithArgAndNamedArgDefault,
                     TestInvokeStaticMethodWithArgAndNamedArg,
+                    TestInvokeStaticMethodWithArgAndNamedInterfaceArg,
                     TestInvokeInstanceMethodWithNoArgs,
                     TestInvokeInstanceMethodWithNamedArgDefault,
-                    TestInvokeInstanceMethodWithNamedArg
+                    TestInvokeInstanceMethodWithNamedArg,
                  }) {
             var testName = test.Method.Name;
             Exception exception = null;
@@ -211,6 +222,16 @@ public class TestReflection {
                               typeof(Greeter), "GenericHelloWithCustomerNameAndPronoun",
                               new object[] { "Smith" },
                               new Dictionary<string, object> { { "pronoun", "Mrs" } } ));
+    }
+
+    // Invoke a static method with a positional and named interface arg.
+    static bool TestInvokeStaticMethodWithArgAndNamedInterfaceArg() {
+        IEnumerable<string> suffixes = new string[] { "BSc", "Hons", "PhD", "Kt", "MPerf" };
+        return CheckValue("Hello Angie BSc Hons PhD Kt MPerf",
+                          (string)VersionHandler.InvokeStaticMethod(
+                              typeof(Greeter), "GenericHelloWithCustomerNameAndSuffixes",
+                              new object[] { "Angie" },
+                              new Dictionary<string, object> { { "suffixes", suffixes } }));
     }
 
     // Invoke an instance method with no args.
