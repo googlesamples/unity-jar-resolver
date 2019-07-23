@@ -1,3 +1,16 @@
+# Version 1.2.123 - Jul 23, 2019
+## New Features
+* All components: Source control integration for project settings.
+## Changes
+* Android Resolver: Removed AAR cache as it now makes little difference to
+  incremental resolution performance.
+* Android Resolver: Improved embedded resource management so that embedded
+  resources should upgrade when the plugin is updated without restarting
+  the Unity editor.
+## Bug Fixes
+* Version Handler: Fixed InvokeMethod() and InvokeStaticMethod() when calling
+  methods that have interface typed arguments.
+
 # Version 1.2.122 - Jul 2, 2019
 ## Bug Fixes
 * iOS Resolver: Worked around Unity not loading the iOS Resolver DLL as it
