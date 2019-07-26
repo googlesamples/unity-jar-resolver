@@ -1,3 +1,8 @@
+# Version 1.2.124 - Jul 28, 2019
+## Bug Fixes
+* All components: Fixed regression with source control integration when using
+  Unity 2019.1+.
+
 # Version 1.2.123 - Jul 23, 2019
 ## New Features
 * All components: Source control integration for project settings.
