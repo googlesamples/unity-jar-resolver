@@ -129,6 +129,11 @@ namespace GooglePlayServices {
                     updatedPackaging = true;
                 }
             }
+            if (!FileUtils.CheckoutFile(pomFilename))
+            {
+                PlayServicesResolver.Log(String.Format("Unable to checkout '{0}'.", pomFilename), LogLevel.Error);
+                return false;
+            }
             if (updatedPackaging) {
                 try {
                     using (var xmlWriter =

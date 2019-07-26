@@ -288,5 +288,26 @@ namespace Google {
             }
             return NormalizePathSeparators(searchDirectory);
         }
+
+        /// <summary>
+        /// Checks out a file should Version Control be active and valid.
+        /// </summary>
+        /// <param name="path">Path to the file that needs checking out.</param>
+        /// <returns>False should the checkout fail, otherwise true.</returns>
+        public static bool CheckoutFile(string path)
+        {
+            if (UnityEditor.VersionControl.Provider.enabled && UnityEditor.VersionControl.Provider.isActive &&
+                (!UnityEditor.VersionControl.Provider.requiresNetwork ||
+                 UnityEditor.VersionControl.Provider.onlineState == UnityEditor.VersionControl.OnlineState.Online))
+            {
+                var task = UnityEditor.VersionControl.Provider.Checkout(path,
+                    UnityEditor.VersionControl.CheckoutMode.Exact);
+                task.Wait();
+                if (!task.success)
+                    return false;
+            }
+
+            return true;
+        }
     }
 }
