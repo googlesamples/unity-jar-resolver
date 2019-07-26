@@ -97,11 +97,11 @@ namespace GooglePlayServices {
             public void WriteToFile() {
                 try {
                     Directory.CreateDirectory(Path.GetDirectoryName(DEPENDENCY_STATE_FILE));
-                    if (!FileUtils.CheckoutFile(DEPENDENCY_STATE_FILE))
-                    {
-                        logger.Log(
-                            String.Format("Unable to checkout '{0}'. Dependency state has not been saved!",
-                                DEPENDENCY_STATE_FILE), LogLevel.Error);
+                    if (!FileUtils.CheckoutFile(DEPENDENCY_STATE_FILE, logger)) {
+                        logger.Log(String.Format(
+                            "Unable to checkout '{0}'.  Resolution results can't be saved, " +
+                            "disabling auto-resolution.", DEPENDENCY_STATE_FILE), LogLevel.Error);
+                        SettingsDialogObj.EnableAutoResolution = false;
                         return;
                     }
                     using (var writer = new XmlTextWriter(new StreamWriter(DEPENDENCY_STATE_FILE)) {

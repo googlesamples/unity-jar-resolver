@@ -326,10 +326,10 @@ namespace GooglePlayServices {
                 }
                 outputLines.AddRange(currentOutputLines);
             }
-            if (!FileUtils.CheckoutFile(GradleTemplatePath))
-            {
+            if (!FileUtils.CheckoutFile(GradleTemplatePath, PlayServicesResolver.logger)) {
                 PlayServicesResolver.Log(
-                    String.Format("Unable to checkou '{0}'.", GradleTemplatePath), level: LogLevel.Error);
+                    String.Format("Failed to checkout '{0}', unable to patch the file.",
+                                  GradleTemplatePath), level: LogLevel.Error);
                 return false;
             }
             PlayServicesResolver.Log(

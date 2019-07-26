@@ -293,21 +293,44 @@ namespace Google {
         /// Checks out a file should Version Control be active and valid.
         /// </summary>
         /// <param name="path">Path to the file that needs checking out.</param>
+        /// <param name="logger">Logger, used to log any error messages.</param>
         /// <returns>False should the checkout fail, otherwise true.</returns>
-        public static bool CheckoutFile(string path)
-        {
-            if (UnityEditor.VersionControl.Provider.enabled && UnityEditor.VersionControl.Provider.isActive &&
-                (!UnityEditor.VersionControl.Provider.requiresNetwork ||
-                 UnityEditor.VersionControl.Provider.onlineState == UnityEditor.VersionControl.OnlineState.Online))
-            {
-                var task = UnityEditor.VersionControl.Provider.Checkout(path,
-                    UnityEditor.VersionControl.CheckoutMode.Exact);
-                task.Wait();
-                if (!task.success)
-                    return false;
+        public static bool CheckoutFile(string path, Logger logger) {
+            try {
+                if (UnityEditor.VersionControl.Provider.enabled &&
+                    UnityEditor.VersionControl.Provider.isActive &&
+                    (!UnityEditor.VersionControl.Provider.requiresNetwork ||
+                     UnityEditor.VersionControl.Provider.onlineState ==
+                     UnityEditor.VersionControl.OnlineState.Online)) {
+                    // Unity 2019.1+ broke backwards compatibility of Checkout() by adding an
+                    // optional argument to the method so we dynamically invoke the method to add
+                    // the optional
+                    // argument for the Unity 2019.1+ overload at runtime.
+                    var task = (UnityEditor.VersionControl.Task)VersionHandler.InvokeStaticMethod(
+                        typeof(UnityEditor.VersionControl.Provider),
+                        "Checkout",
+                        new object[] { path, UnityEditor.VersionControl.CheckoutMode.Exact },
+                        namedArgs: null);
+                    task.Wait();
+                    if (!task.success) {
+                        var errorMessage = new List<string>();
+                        errorMessage.Add(String.Format("Failed to checkout {0}.", path));
+                        if (task.messages != null) {
+                            foreach (var message in task.messages) {
+                                if (message != null) errorMessage.Add(message.message);
+                            }
+                        }
+                        logger.Log(String.Join("\n", errorMessage.ToArray()),
+                                   level: LogLevel.Warning);
+                        return false;
+                    }
+                }
+                return true;
+            } catch (Exception ex) {
+                logger.Log(String.Format("Failed to checkout {0} ({1}.", path, ex),
+                           level: LogLevel.Warning);
+                return false;
             }
-
-            return true;
         }
     }
 }

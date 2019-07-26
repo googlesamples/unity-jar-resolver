@@ -129,9 +129,10 @@ namespace GooglePlayServices {
                     updatedPackaging = true;
                 }
             }
-            if (!FileUtils.CheckoutFile(pomFilename))
-            {
-                PlayServicesResolver.Log(String.Format("Unable to checkout '{0}'.", pomFilename), LogLevel.Error);
+            if (!FileUtils.CheckoutFile(pomFilename, PlayServicesResolver.logger)) {
+                PlayServicesResolver.Log(
+                    String.Format("Unable to checkout '{0}' to patch the file for inclusion in a " +
+                                  "Gradle project.", pomFilename), LogLevel.Error);
                 return false;
             }
             if (updatedPackaging) {
