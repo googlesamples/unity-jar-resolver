@@ -97,6 +97,13 @@ namespace GooglePlayServices {
             public void WriteToFile() {
                 try {
                     Directory.CreateDirectory(Path.GetDirectoryName(DEPENDENCY_STATE_FILE));
+                    if (!FileUtils.CheckoutFile(DEPENDENCY_STATE_FILE))
+                    {
+                        logger.Log(
+                            String.Format("Unable to checkout '{0}'. Dependency state has not been saved!",
+                                DEPENDENCY_STATE_FILE), LogLevel.Error);
+                        return;
+                    }
                     using (var writer = new XmlTextWriter(new StreamWriter(DEPENDENCY_STATE_FILE)) {
                             Formatting = Formatting.Indented,
                         }) {

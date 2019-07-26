@@ -326,6 +326,12 @@ namespace GooglePlayServices {
                 }
                 outputLines.AddRange(currentOutputLines);
             }
+            if (!FileUtils.CheckoutFile(GradleTemplatePath))
+            {
+                PlayServicesResolver.Log(
+                    String.Format("Unable to checkou '{0}'.", GradleTemplatePath), level: LogLevel.Error);
+                return false;
+            }
             PlayServicesResolver.Log(
                 String.Format("Writing updated {0}", fileDescription),
                 level: LogLevel.Verbose);

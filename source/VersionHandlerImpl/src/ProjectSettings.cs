@@ -406,14 +406,12 @@ namespace Google {
                     return;
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(PROJECT_SETTINGS_FILE));
-                if (UnityEditor.VersionControl.Provider.enabled && UnityEditor.VersionControl.Provider.isActive &&
-                    (!UnityEditor.VersionControl.Provider.requiresNetwork ||
-                     UnityEditor.VersionControl.Provider.onlineState == UnityEditor.VersionControl.OnlineState.Online)) {
-                    var task = UnityEditor.VersionControl.Provider.Checkout(PROJECT_SETTINGS_FILE, 
-                                                                        UnityEditor.VersionControl.CheckoutMode.Exact);
-                    task.Wait();
-                    if (!task.success)
-                        return;
+                if (!FileUtils.CheckoutFile(PROJECT_SETTINGS_FILE))
+                {
+                    logger.Log(
+                        String.Format("Unable to checkout '{0}'. Project settings have not been saved!",
+                            PROJECT_SETTINGS_FILE), LogLevel.Error);
+                    return;
                 }
                 using (var writer = new XmlTextWriter(new StreamWriter(PROJECT_SETTINGS_FILE)) {
                         Formatting = Formatting.Indented,
