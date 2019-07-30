@@ -41,6 +41,7 @@ namespace GooglePlayServices {
             internal bool verboseLogging;
             internal bool autoResolutionDisabledWarning;
             internal bool promptBeforeAutoResolution;
+            internal int autoResolutionDelay;
             internal bool useProjectSettings;
 
             /// <summary>
@@ -59,6 +60,7 @@ namespace GooglePlayServices {
                 verboseLogging = SettingsDialog.VerboseLogging;
                 autoResolutionDisabledWarning = SettingsDialog.AutoResolutionDisabledWarning;
                 promptBeforeAutoResolution = SettingsDialog.PromptBeforeAutoResolution;
+                autoResolutionDelay = SettingsDialog.AutoResolutionDelay;
                 useProjectSettings = SettingsDialog.UseProjectSettings;
             }
 
@@ -78,6 +80,7 @@ namespace GooglePlayServices {
                 SettingsDialog.VerboseLogging = verboseLogging;
                 SettingsDialog.AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
                 SettingsDialog.PromptBeforeAutoResolution = promptBeforeAutoResolution;
+                SettingsDialog.AutoResolutionDelay  = autoResolutionDelay;
                 SettingsDialog.UseProjectSettings = useProjectSettings;
             }
         }
@@ -92,10 +95,9 @@ namespace GooglePlayServices {
         private const string PatchMainTemplateGradleKey = Namespace + "PatchMainTemplateGradle";
         private const string UseJetifierKey = Namespace + "UseJetifier";
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
-        private const string AutoResolutionDisabledWarningKey =
-            Namespace + "AutoResolutionDisabledWarning";
-        private const string PromptBeforeAutoResolutionKey =
-            Namespace + "PromptBeforeAutoResolution";
+        private const string AutoResolutionDisabledWarningKey = Namespace + "AutoResolutionDisabledWarning";
+        private const string PromptBeforeAutoResolutionKey = Namespace + "PromptBeforeAutoResolution";
+        private const string AutoResolutionDelayKey = Namespace + "AutoResolutionDelay";
         private const string UseGradleDaemonKey = Namespace + "UseGradleDaemon";
 
         // List of preference keys, used to restore default settings.
@@ -189,10 +191,14 @@ namespace GooglePlayServices {
         /// display a prompt.
         /// </summary>
         internal static bool PromptBeforeAutoResolution {
-            set {
-                projectSettings.SetBool(PromptBeforeAutoResolutionKey, value);
-            }
+            set { projectSettings.SetBool(PromptBeforeAutoResolutionKey, value); }
             get { return projectSettings.GetBool(PromptBeforeAutoResolutionKey, true); }
+        }
+
+		const int MAXIMUM_AUTO_RESOLVE_DELAY_TIME = 30;
+		internal static int AutoResolutionDelay {
+            set { projectSettings.SetInt(AutoResolutionDelayKey,Math.Min(Math.Max(0,value),MAXIMUM_AUTO_RESOLVE_DELAY_TIME)); }
+            get { return Math.Min(Math.Max(0,projectSettings.GetInt(AutoResolutionDelayKey,0)),MAXIMUM_AUTO_RESOLVE_DELAY_TIME); }
         }
 
         internal static bool UseProjectSettings {
@@ -375,8 +381,12 @@ namespace GooglePlayServices {
             EditorGUI.BeginDisabledGroup(!settings.enableAutoResolution);
             GUILayout.BeginHorizontal();
             GUILayout.Label("Prompt Before Auto-Resolution", EditorStyles.boldLabel);
-            settings.promptBeforeAutoResolution =
-                EditorGUILayout.Toggle(settings.promptBeforeAutoResolution);
+            settings.promptBeforeAutoResolution = EditorGUILayout.Toggle(settings.promptBeforeAutoResolution);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Auto Resolution Delay", EditorStyles.boldLabel);
+            settings.autoResolutionDelay = Mathf.Clamp(EditorGUILayout.IntField(settings.autoResolutionDelay),0,MAXIMUM_AUTO_RESOLVE_DELAY_TIME);
             GUILayout.EndHorizontal();
             EditorGUI.EndDisabledGroup();
 
