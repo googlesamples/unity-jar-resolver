@@ -20,7 +20,7 @@ packages.
 """
 
 import argparse
-from http import client, HTTPStatus
+from http import client
 from urllib import parse
 import json
 import os
@@ -162,7 +162,7 @@ class AssetStoreSession(object):
             else:
                 raise ValueError("Invalid http method provided.")
             response = connection.getresponse()
-            if response.status > HTTPStatus.FOUND:
+            if response.status > client.FOUND:
                 print("Response: {}".format(response.read()))
                 raise Exception("Error making http request: {} {}".format(
                     response.status, response.reason))
@@ -203,7 +203,7 @@ class AssetStoreSession(object):
                 encoded_path,
                 headers={'Accept': 'application/json'})
             response = connection.getresponse()
-            if response.status > HTTPStatus.FOUND:
+            if response.status > client.FOUND:
                 print("Response: {}".format(response.read()))
                 raise RequestError("Error making https request: {} {}".format(
                     response.status, response.reason))
