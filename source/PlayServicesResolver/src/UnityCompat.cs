@@ -36,6 +36,8 @@ public class UnityCompat {
     private const string DEFAULT_BUILD_TOOLS_VERSION = "25.0.2";
 
     private const string UNITY_ANDROID_VERSION_ENUM_PREFIX = "AndroidApiLevel";
+    private const string UNITY_ANDROID_MIN_SDK_VERSION_PROPERTY = "minSdkVersion";
+    private const string UNITY_ANDROID_TARGET_SDK_VERSION_PROPERTY = "targetSdkVersion";
     private const string UNITY_ANDROID_EXTENSION_ASSEMBLY = "UnityEditor.Android.Extensions";
     private const string UNITY_ANDROID_JAVA_TOOLS_CLASS = "UnityEditor.Android.AndroidJavaTools";
     private const string UNITY_ANDROID_SDKTOOLS_CLASS = "UnityEditor.Android.AndroidSDKTools";
@@ -101,6 +103,15 @@ public class UnityCompat {
     }
 
     /// <summary>
+    /// Try to set the min Android SDK version.
+    /// </summary>
+    /// <param name="sdkVersion">SDK version to use, -1 for auto (newest installed SDK).</param>
+    /// <returns>true if successful, false otherwise.</returns>
+    public static bool SetAndroidMinSDKVersion(int sdkVersion) {
+        return SetAndroidSDKVersion(sdkVersion, UNITY_ANDROID_MIN_SDK_VERSION_PROPERTY);
+    }
+
+    /// <summary>
     /// Parses the TargetSDK as an int from the Android Unity Player Settings.
     /// </summary>
     /// <remarks>
@@ -126,7 +137,11 @@ public class UnityCompat {
     /// <param name="sdkVersion">SDK version to use, -1 for auto (newest installed SDK).</param>
     /// <returns>true if successful, false otherwise.</returns>
     public static bool SetAndroidTargetSDKVersion(int sdkVersion) {
-        var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetSdkVersion");
+        return SetAndroidSDKVersion(sdkVersion, UNITY_ANDROID_TARGET_SDK_VERSION_PROPERTY);
+    }
+
+    private static bool SetAndroidSDKVersion(int sdkVersion, string propertyName) {
+        var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty(propertyName);
         if (property == null) return false;
         var enumValueString = sdkVersion >= 0 ?
             UNITY_ANDROID_VERSION_ENUM_PREFIX + sdkVersion.ToString() :
