@@ -372,10 +372,14 @@ namespace GooglePlayServices {
         /// </summary>
         internal const string EMBEDDED_RESOURCES_NAMESPACE = "PlayServicesResolver.scripts.";
 
+        // Silence the unused variable warning, as this holds a reference to the
+        // PlayServicesSupport singleton.
+        #pragma warning disable 414
         /// <summary>
         /// The instance to the play services support object.
         /// </summary>
         private static PlayServicesSupport svcSupport;
+        #pragma warning restore 414
 
         /// <summary>
         /// Resolver that uses Gradle to download libraries and embed them within a Unity project.
