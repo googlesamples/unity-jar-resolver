@@ -30,10 +30,8 @@ public class UnityCompat {
     private const string Namespace = "GooglePlayServices.";
     private const string ANDROID_MIN_SDK_FALLBACK_KEY = Namespace + "MinSDKVersionFallback";
     private const string ANDROID_PLATFORM_FALLBACK_KEY = Namespace + "PlatformVersionFallback";
-    private const string ANDROID_BUILD_TOOLS_FALLBACK_KEY = Namespace + "BuildToolsVersionFallback";
     private const int DEFAULT_ANDROID_MIN_SDK = 14;
     private const int DEFAULT_PLATFORM_VERSION = 25;
-    private const string DEFAULT_BUILD_TOOLS_VERSION = "25.0.2";
 
     private const string UNITY_ANDROID_VERSION_ENUM_PREFIX = "AndroidApiLevel";
     private const string UNITY_ANDROID_MIN_SDK_VERSION_PROPERTY = "minSdkVersion";
@@ -53,14 +51,6 @@ public class UnityCompat {
     private static int AndroidPlatformVersionFallback {
         get { return EditorPrefs.GetInt(ANDROID_PLATFORM_FALLBACK_KEY, DEFAULT_PLATFORM_VERSION); }
     }
-    private static string AndroidBuildToolsVersionFallback {
-        get {
-            return EditorPrefs.GetString(ANDROID_BUILD_TOOLS_FALLBACK_KEY,
-                                         DEFAULT_BUILD_TOOLS_VERSION);
-        }
-    }
-
-    private const float EPSILON = 1e-7f;
 
     // Parses a UnityEditor.AndroidSDKVersion enum for a value.
     private static int VersionFromAndroidSDKVersionsEnum(string enumName, string fallbackPrefKey,
@@ -181,26 +171,26 @@ public class UnityCompat {
 
     private static Type AndroidSDKToolsClass {
         get {
-            Type sdkTools = Type.GetType(
-                UNITY_ANDROID_SDKTOOLS_CLASS + ", " + UNITY_ANDROID_EXTENSION_ASSEMBLY);
-            if (sdkTools == null) {
-                Debug.LogError("Could not find the " +
-                    UNITY_ANDROID_SDKTOOLS_CLASS + " class via reflection. " + WRITE_A_BUG);
-                return null;
-            }
-            return sdkTools;
+            return Type.GetType(UNITY_ANDROID_SDKTOOLS_CLASS + ", " +
+                                UNITY_ANDROID_EXTENSION_ASSEMBLY);
         }
     }
 
     private static object AndroidSDKToolsInstance {
         get {
+            var androidSdkToolsClass = AndroidSDKToolsClass;
+            if (androidSdkToolsClass == null) {
+                Debug.LogError(String.Format("{0} class does not exist. {1}",
+                                             UNITY_ANDROID_SDKTOOLS_CLASS, WRITE_A_BUG));
+                return null;
+            }
             try {
-                return VersionHandler.InvokeStaticMethod(AndroidSDKToolsClass, "GetInstance", null);
+                return VersionHandler.InvokeStaticMethod(androidSdkToolsClass, "GetInstance", null);
             } catch (Exception) {
             }
             // Unity 2018+ requires the AndroidJavaTools instance to get the SDK tools instance.
             try {
-                return VersionHandler.InvokeStaticMethod(AndroidSDKToolsClass, "GetInstance",
+                return VersionHandler.InvokeStaticMethod(androidSdkToolsClass, "GetInstance",
                                                          new object[] { AndroidJavaToolsInstance });
             } catch (Exception e) {
                 Debug.LogError(String.Format("Failed while calling {0}.GetInstance() ({1}). {2}",
@@ -243,11 +233,23 @@ public class UnityCompat {
         }
     }
 
+    // Display a warning and get the fallback Android SDK version.
+    private static int WarnOnAndroidSdkFallbackVersion() {
+        int version = AndroidPlatformVersionFallback;
+        Debug.LogWarning(String.Format(
+            "Failed to determine the most recently installed Android SDK version. {0} " +
+            "Resorting to reading a fallback value from the editor preferences {1}: {2}",
+            WRITE_A_BUG, ANDROID_PLATFORM_FALLBACK_KEY, version));
+        return version;
+    }
+
     // Gets the latest SDK version that's currently installed.
     // This is required for generating gradle builds.
     public static int FindNewestInstalledAndroidSDKVersion() {
         var androidSdkToolsClass = AndroidSDKToolsClass;
         if (androidSdkToolsClass != null) {
+            var androidSdkToolsInstance = AndroidSDKToolsInstance;
+            if (androidSdkToolsInstance == null) return WarnOnAndroidSdkFallbackVersion();
             // Unity 2019+ only has a method to list the installed targets, so we need to parse
             // the returned list to determine the newest Android SDK version.
             var listTargetPlatforms = androidSdkToolsClass.GetMethod(
@@ -259,14 +261,14 @@ public class UnityCompat {
                 try {
                     // Unity 2019+
                     platformStrings = (IEnumerable<string>)listTargetPlatforms.Invoke(
-                        AndroidSDKToolsInstance, null);
+                        androidSdkToolsInstance, null);
                 } catch (Exception) {
                 }
                 if (platformStrings != null) {
                     try {
                         // Unity 2018+
                         platformStrings = (IEnumerable<string>)listTargetPlatforms.Invoke(
-                            AndroidSDKToolsInstance, new object[] { AndroidJavaToolsInstance });
+                            androidSdkToolsInstance, new object[] { AndroidJavaToolsInstance });
                     } catch (Exception) {
                     }
                 }
@@ -292,7 +294,7 @@ public class UnityCompat {
                 androidSdkToolsClass.GetMethod("GetTopAndroidPlatformAvailable");
             if (getTopAndroidPlatformAvailable != null) {
                 return (int)getTopAndroidPlatformAvailable.Invoke(
-                    AndroidSDKToolsInstance, BindingFlags.NonPublic, null,
+                    androidSdkToolsInstance, BindingFlags.NonPublic, null,
                     new object[] { null }, null);
             }
         }
@@ -309,36 +311,7 @@ public class UnityCompat {
                 PostProcessAndroidPlayerInstance, BindingFlags.NonPublic, null,
                 new object[] {}, null);
         }
-
-        Debug.LogError(String.Format(
-            "Failed to determine the most recently installed Android SDK version. {0} " +
-            "Resorting to reading a fallback value from the editor preferences {1}: {2}",
-            WRITE_A_BUG, ANDROID_PLATFORM_FALLBACK_KEY, AndroidPlatformVersionFallback));
-
-        return AndroidPlatformVersionFallback;
-    }
-
-    // Finds the latest build tools version that's currently installed.
-    // This is required for generating gradle builds.
-    [Obsolete]
-    public static string GetAndroidBuildToolsVersion() {
-        // TODO: We're using reflection to access Unity's SDK helpers to get at this info
-        // but since this is likely fragile, and may not even be consistent across versions
-        // of Unity, we'll need to replace it with our own.
-        MethodInfo buildToolsVersionMethod = null;
-        Type sdkClass = AndroidSDKToolsClass;
-        if (sdkClass != null)
-            buildToolsVersionMethod = sdkClass.GetMethod("BuildToolsVersion");
-        if (buildToolsVersionMethod != null) {
-            return (string)buildToolsVersionMethod.Invoke(AndroidSDKToolsInstance,
-                BindingFlags.NonPublic, null, new object[] { null }, null);
-        }
-
-        Debug.LogError("Could not find the " + UNITY_ANDROID_SDKTOOLS_CLASS +
-            ".BuildToolsVersion method via reflection. " + WRITE_A_BUG +
-            " Resorting to reading a fallback value from the editor preferences " +
-            ANDROID_BUILD_TOOLS_FALLBACK_KEY + ": " + AndroidBuildToolsVersionFallback);
-        return AndroidBuildToolsVersionFallback;
+        return WarnOnAndroidSdkFallbackVersion();
     }
 
     /// <summary>
