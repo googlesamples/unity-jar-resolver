@@ -19,6 +19,7 @@ namespace GooglePlayServices
     using System.Collections.Generic;
     using System.Diagnostics;
     using System.IO;
+    using System.Text;
     using System.Text.RegularExpressions;
     using System.Threading;
     using System;
@@ -220,7 +221,7 @@ namespace GooglePlayServices
                                     byte[] copy = new byte[bytesRead];
                                     Array.Copy(buffer, copy, copy.Length);
                                     DataReceived(new StreamData(
-                                        handle, System.Text.Encoding.UTF8.GetString(copy), copy,
+                                        handle, Encoding.UTF8.GetString(copy), copy,
                                         complete));
                                 }
                             }
@@ -512,6 +513,11 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Whether the console configuration warning has been displayed.
+        /// </summary>
+        private static bool displayedConsoleConfigurationWarning = false;
+
+        /// <summary>
         /// Execute a command line tool.
         /// </summary>
         /// <param name="toolPath">Tool to execute.  On Windows, if the path to this tool contains
@@ -537,19 +543,31 @@ namespace GooglePlayServices
                 Dictionary<string, string> envVars = null,
                 IOHandler ioHandler = null, bool useShellExecution = false,
                 bool stdoutRedirectionInShellMode = true) {
-            System.Text.Encoding inputEncoding = Console.InputEncoding;
-            System.Text.Encoding outputEncoding = Console.OutputEncoding;
+            bool consoleConfigurationWarning = false;
+            Encoding inputEncoding = Console.InputEncoding;
+            Encoding outputEncoding = Console.OutputEncoding;
             // Android SDK manager requires the input encoding to be set to
             // UFT8 to pipe data to the tool.
             // Cocoapods requires the output encoding to be set to UTF8 to
             // retrieve output.
             try {
-                Console.InputEncoding = System.Text.Encoding.UTF8;
-                Console.OutputEncoding = System.Text.Encoding.UTF8;
+                var utf8Type = Encoding.UTF8.GetType();
+                // Only compare the type of the encoding class since the configuration shouldn't
+                // matter.
+                if (inputEncoding.GetType() != utf8Type) {
+                    Console.InputEncoding = Encoding.UTF8;
+                }
+                if (outputEncoding.GetType() != utf8Type) {
+                    Console.OutputEncoding = Encoding.UTF8;
+                }
             } catch (Exception e) {
-                UnityEngine.Debug.LogWarning(String.Format(
-                    "Unable to set console input / output  encoding to UTF8 (e.g en_US.UTF8-8). " +
-                    "Some commands may fail. {0}", e));
+                if (!displayedConsoleConfigurationWarning) {
+                    UnityEngine.Debug.LogWarning(String.Format(
+                        "Unable to set console input / output encoding from {0} & {1} to {2} " +
+                        "(e.g en_US.UTF8-8). Some commands may fail. {3}",
+                        inputEncoding, outputEncoding, Encoding.UTF8, e));
+                    consoleConfigurationWarning = true;
+                }
             }
 
             // Mono 3.x on Windows can't execute tools with single quotes (apostrophes) in the path.
@@ -655,13 +673,21 @@ namespace GooglePlayServices
             result.message = FormatResultMessage(toolPath, arguments, result.stdout,
                                                  result.stderr, result.exitCode);
             try {
-                Console.InputEncoding = inputEncoding;
-                Console.OutputEncoding = outputEncoding;
+                if (Console.InputEncoding != inputEncoding) {
+                    Console.InputEncoding = inputEncoding;
+                }
+                if (Console.OutputEncoding != outputEncoding) {
+                    Console.OutputEncoding = outputEncoding;
+                }
             } catch (Exception e) {
-                UnityEngine.Debug.LogWarning(String.Format(
-                    "Unable to restore console input / output  encoding to {0} & {1}. {2}",
-                    inputEncoding, outputEncoding, e));
+                if (!displayedConsoleConfigurationWarning) {
+                  UnityEngine.Debug.LogWarning(String.Format(
+                      "Unable to restore console input / output  encoding to {0} & {1}. {2}",
+                      inputEncoding, outputEncoding, e));
+                  consoleConfigurationWarning = true;
+                }
             }
+            if (consoleConfigurationWarning) displayedConsoleConfigurationWarning = true;
             return result;
         }
 
