@@ -42,21 +42,28 @@ namespace GooglePlayServices {
         protected string dependencyType = "dependencies";
 
         /// <summary>
+        /// Determines whether a filename matches an XML dependencies file.
+        /// </summary>
+        /// <param name="filename"></param>
+        /// <returns>true if it is a match, false otherwise.</returns>
+        internal bool IsDependenciesFile(string filename) {
+            foreach (var regex in fileRegularExpressions) {
+                if (regex.Match(filename).Success) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Find all XML declared dependency files.
         /// </summary>
         /// <returns>List of XML dependency filenames in the project.</returns>
         private List<string> FindFiles() {
             return new List<string>(
                 VersionHandlerImpl.SearchAssetDatabase(
-                    "Dependencies t:TextAsset",
-                    (string filename) => {
-                        foreach (var regex in fileRegularExpressions) {
-                            if (regex.Match(filename).Success) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    }, new [] { "Assets", "Packages"}));
+                   "Dependencies t:TextAsset", IsDependenciesFile,
+                   new [] { "Assets", "Packages"}));
         }
 
         /// <summary>

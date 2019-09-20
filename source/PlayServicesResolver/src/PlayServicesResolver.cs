@@ -285,7 +285,7 @@ namespace GooglePlayServices {
         /// Polls a value and signals a callback with the change after the specified delay
         /// time.
         /// </summary>
-        private class PropertyPoller<T> {
+        internal class PropertyPoller<T> {
             /// <summary>
             /// Delegate that is called when a value changes.
             /// </summary>

@@ -538,6 +538,12 @@ public class IOSResolver : AssetPostprocessor {
     // Project level settings for this module.
     private static ProjectSettings settings = new ProjectSettings(PREFERENCE_NAMESPACE);
 
+    /// <summary>
+    /// Polls for changes to TargetSdk.
+    /// </summary>
+    private static PlayServicesResolver.PropertyPoller<string> targetSdkPoller =
+        new PlayServicesResolver.PropertyPoller<string>("iOS Target SDK");
+
     // Search for a file up to a maximum search depth stopping the
     // depth first search each time the specified file is found.
     private static List<string> FindFile(
@@ -676,7 +682,12 @@ public class IOSResolver : AssetPostprocessor {
             !ExecutionEnvironment.InBatchMode) {
             RunOnMainThread.Run(() => { AutoInstallCocoapods(); }, runNow: false);
         }
-
+        // Install / remove target SDK property poller.
+        SetEnablePollTargetSdk(PodfileGenerationEnabled);
+        // Load XML dependencies on the next editor update.
+        if (PodfileGenerationEnabled) {
+            RunOnMainThread.Run(RefreshXmlDependencies, runNow: false);
+        }
 
         // Prompt the user to use workspaces if they aren't at least using project level
         // integration.
@@ -826,7 +837,21 @@ public class IOSResolver : AssetPostprocessor {
     public static bool PodfileGenerationEnabled {
         get { return settings.GetBool(PREFERENCE_PODFILE_GENERATION_ENABLED,
                                          defaultValue: true); }
-        set { settings.SetBool(PREFERENCE_PODFILE_GENERATION_ENABLED, value); }
+        set {
+            settings.SetBool(PREFERENCE_PODFILE_GENERATION_ENABLED, value);
+            SetEnablePollTargetSdk(value);
+        }
+    }
+
+    /// <summary>
+    /// Enable / disable target SDK polling.
+    /// </summary>
+    private static void SetEnablePollTargetSdk(bool enable) {
+        if (enable && EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
+            RunOnMainThread.OnUpdate += PollTargetSdk;
+        } else {
+            RunOnMainThread.OnUpdate -= PollTargetSdk;
+        }
     }
 
     /// <summary>
@@ -1104,41 +1129,38 @@ public class IOSResolver : AssetPostprocessor {
             return;
         }
         pods[podName] = pod;
-
-        UpdateTargetSdk(pod);
+        ScheduleCheckTargetSdk();
     }
 
     /// <summary>
-    /// Update the iOS target SDK if it's lower than the minimum SDK
-    /// version specified by the pod.
+    /// Determine whether the target SDK has changed.
     /// </summary>
-    /// <param name="pod">Pod to query for the minimum supported version.
-    /// </param>
-    /// <param name="notifyUser">Whether to write to the log to notify the
-    /// user of a build setting change.</param>
-    /// <returns>true if the SDK version was changed, false
-    /// otherwise.</returns>
-    private static bool UpdateTargetSdk(Pod pod,
-                                        bool notifyUser = true) {
-        int currentVersion = TargetSdkVersion;
-        int minVersion = pod.MinTargetSdkToVersion();
-        if (currentVersion >= minVersion) {
-            return false;
-        }
-        if (notifyUser) {
-            string oldSdk = TargetSdk;
-            TargetSdkVersion = minVersion;
-            Log("iOS Target SDK changed from " + oldSdk + " to " +
-                TargetSdk + " required by the " + pod.name + " pod");
-        }
-        return true;
+    private static void PollTargetSdk() {
+        targetSdkPoller.Poll(() => TargetSdk,
+                             (previousValue, currentValue) => { ScheduleCheckTargetSdk(); });
+    }
+
+    // ID of the job which checks that the target SDK is correct for the currently selected set of
+    // Cocoapods.
+    private static int checkTargetSdkJobId = 0;
+
+    /// <summary>
+    /// Schedule a check to ensure target SDK is configured correctly given the set of selected
+    /// Cocoapods.
+    /// </summary>
+    private static void ScheduleCheckTargetSdk() {
+        RunOnMainThread.Cancel(checkTargetSdkJobId);
+        checkTargetSdkJobId = RunOnMainThread.Schedule(() => {
+                UpdateTargetSdk(false);
+            }, 500.0 /* delay in milliseconds before running the check */);
     }
 
     /// <summary>
     /// Update the target SDK if it's required.
     /// </summary>
+    /// <param name="runningBuild">Whether the build is being processed.</param>
     /// <returns>true if the SDK was updated, false otherwise.</returns>
-    public static bool UpdateTargetSdk() {
+    public static bool UpdateTargetSdk(bool runningBuild) {
         var minVersionAndPodNames = TargetSdkNeedsUpdate();
         if (minVersionAndPodNames.Value != null) {
             var minVersionString =
@@ -1157,12 +1179,14 @@ public class IOSResolver : AssetPostprocessor {
                 "Yes", cancel: "No");
             if (update) {
                 TargetSdkVersion = minVersionAndPodNames.Key;
-                string errorString = (
-                    "Target SDK has been updated from " + TargetSdk +
-                    " to " + minVersionString + ".  You must restart the " +
-                    "build for this change to take effect.");
-                EditorUtility.DisplayDialog(
-                    "Target SDK updated.", errorString, "OK");
+                if (runningBuild) {
+                    string errorString = (
+                        "Target SDK has been updated from " + TargetSdk +
+                        " to " + minVersionString + ".  You must restart the " +
+                        "build for this change to take effect.");
+                    EditorUtility.DisplayDialog(
+                        "Target SDK updated.", errorString, "OK");
+                }
                 return true;
             }
         }
@@ -1173,26 +1197,24 @@ public class IOSResolver : AssetPostprocessor {
     /// Determine whether the target SDK needs to be updated based upon pod
     /// dependencies.
     /// </summary>
-    /// <returns>Key value pair of minimum SDK version (key) and
+    /// <returns>Key value pair of maximum of the minimum SDK versions (key) and
     /// a list of pod names that require it (value) if the currently
     /// selected target SDK version does not satisfy pod requirements, the list
     /// (value) is null otherwise.</returns>
     private static KeyValuePair<int, List<string>> TargetSdkNeedsUpdate() {
-        var kvpair = new KeyValuePair<int, List<string>>(0, null);
-        var podListsByVersion = Pod.BucketByMinSdkVersion(pods.Values);
-        if (podListsByVersion.Count == 0) {
-            return kvpair;
+        var emptyVersionAndPodNames = new KeyValuePair<int, List<string>>(0, null);
+        var minVersionAndPodNames = emptyVersionAndPodNames;
+        int maxOfMinRequiredVersions = 0;
+        foreach (var versionAndPodList in Pod.BucketByMinSdkVersion(pods.Values)) {
+            if (versionAndPodList.Key > maxOfMinRequiredVersions) {
+                maxOfMinRequiredVersions = versionAndPodList.Key;
+                minVersionAndPodNames = versionAndPodList;
+            }
         }
-        KeyValuePair<int, List<string>> minVersionAndPodName = kvpair;
-        foreach (var versionAndPodList in podListsByVersion) {
-            minVersionAndPodName = versionAndPodList;
-            break;
-        }
-        int currentVersion = TargetSdkVersion;
-        if (currentVersion >= minVersionAndPodName.Key) {
-            return kvpair;
-        }
-        return minVersionAndPodName;
+        // If the target SDK version exceeds the minimum required version return an empty tuple
+        // otherwise return the minimum required SDK version and the set of pods that need it.
+        return TargetSdkVersion >= maxOfMinRequiredVersions ? emptyVersionAndPodNames :
+            minVersionAndPodNames;
     }
 
     // Get the path of an xcode project relative to the specified directory.
@@ -1525,6 +1547,29 @@ public class IOSResolver : AssetPostprocessor {
 
         // If this wasn't started interactively, block until execution is complete.
         if (!interactive) complete.WaitOne();
+    }
+
+    /// <summary>
+    /// Called by Unity when all assets have been updated. This refreshes the Pods loaded from
+    /// XML files.
+    /// </summary>
+    /// <param name="importedAssets">Imported assets. (unused)</param>
+    /// <param name="deletedAssets">Deleted assets. (unused)</param>
+    /// <param name="movedAssets">Moved assets. (unused)</param>
+    /// <param name="movedFromAssetPaths">Moved from asset paths. (unused)</param>
+    private static void OnPostprocessAllAssets(string[] importedAssets,
+                                               string[] deletedAssets,
+                                               string[] movedAssets,
+                                               string[] movedFromAssetPaths) {
+        if (!CocoapodsIntegrationEnabled) return;
+        bool dependencyFileChanged = false;
+        var changedAssets = new List<string>(importedAssets);
+        changedAssets.AddRange(deletedAssets);
+        foreach (var asset in changedAssets) {
+            dependencyFileChanged = xmlDependencies.IsDependenciesFile(asset);
+            if (dependencyFileChanged) break;
+        }
+        if (dependencyFileChanged) RefreshXmlDependencies();
     }
 
     /// <summary>
@@ -2150,7 +2195,7 @@ public class IOSResolver : AssetPostprocessor {
     public static void OnPostProcessInstallPods(BuildTarget buildTarget,
                                                 string pathToBuiltProject) {
         if (!InjectDependencies() || !PodfileGenerationEnabled) return;
-        if (UpdateTargetSdk()) return;
+        if (UpdateTargetSdk(true)) return;
         if (!CocoapodsIntegrationEnabled || !cocoapodsToolsInstallPresent) {
             Log(String.Format(
                 "Cocoapod installation is disabled.\n" +
