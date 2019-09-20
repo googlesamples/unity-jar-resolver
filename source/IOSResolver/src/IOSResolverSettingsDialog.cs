@@ -30,7 +30,6 @@ public class IOSResolverSettingsDialog : EditorWindow
     /// Loads / saves settings for this dialog.
     /// </summary>
     private class Settings {
-        internal bool cocoapodsInstallEnabled;
         internal bool podfileGenerationEnabled;
         internal bool podToolExecutionViaShellEnabled;
         internal bool autoPodToolInstallInEditorEnabled;
@@ -42,7 +41,6 @@ public class IOSResolverSettingsDialog : EditorWindow
         /// Load settings into the dialog.
         /// </summary>
         internal Settings() {
-            cocoapodsInstallEnabled = IOSResolver.CocoapodsInstallEnabled;
             podfileGenerationEnabled = IOSResolver.PodfileGenerationEnabled;
             podToolExecutionViaShellEnabled = IOSResolver.PodToolExecutionViaShellEnabled;
             autoPodToolInstallInEditorEnabled = IOSResolver.AutoPodToolInstallInEditorEnabled;
@@ -57,7 +55,6 @@ public class IOSResolverSettingsDialog : EditorWindow
         /// </summary>
         internal void Save() {
             IOSResolver.PodfileGenerationEnabled = podfileGenerationEnabled;
-            IOSResolver.CocoapodsInstallEnabled = cocoapodsInstallEnabled;
             IOSResolver.PodToolExecutionViaShellEnabled = podToolExecutionViaShellEnabled;
             IOSResolver.AutoPodToolInstallInEditorEnabled = autoPodToolInstallInEditorEnabled;
             IOSResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
