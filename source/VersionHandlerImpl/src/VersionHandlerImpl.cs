@@ -1758,10 +1758,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     [MenuItem("Assets/Play Services Resolver/Version Handler/Update")]
     public static void UpdateNow() {
-        UpdateVersionedAssets(forceUpdate: true);
-        if (!ExecutionEnvironment.InBatchMode) {
-            EditorUtility.DisplayDialog(PLUGIN_NAME, "Update complete.", "OK");
-        }
+        UpdateVersionedAssets(true, () => {
+                if (!ExecutionEnvironment.InBatchMode) {
+                    EditorUtility.DisplayDialog(PLUGIN_NAME, "Update complete.", "OK");
+                }
+            });
     }
 
     /// <summary>
@@ -1838,9 +1839,36 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// delete obsolete versions and files referenced by old manifests that
     /// are not present in the most recent manifests.
     /// </summary>
-    public static void UpdateVersionedAssets(bool forceUpdate = false) {
+    public static void UpdateVersionedAssets() {
+        UpdateVersionedAssets(false);
+    }
+
+    /// <summary>
+    /// Find all files in the asset database with multiple version numbers
+    /// encoded in their filename, select the most recent revisions and
+    /// delete obsolete versions and files referenced by old manifests that
+    /// are not present in the most recent manifests.
+    /// </summary>
+    /// <param name="forceUpdate">Whether to force an update.</param>
+    public static void UpdateVersionedAssets(bool forceUpdate) {
+        UpdateVersionedAssets(forceUpdate, () => {});
+    }
+
+
+    /// <summary>
+    /// Find all files in the asset database with multiple version numbers
+    /// encoded in their filename, select the most recent revisions and
+    /// delete obsolete versions and files referenced by old manifests that
+    /// are not present in the most recent manifests.
+    /// </summary>
+    /// <param name="forceUpdate">Whether to force an update.</param>
+    /// <param name="complete">Called when this is method is complete.</param>
+    public static void UpdateVersionedAssets(bool forceUpdate, Action complete) {
         // If this module is disabled do nothing.
-        if (!forceUpdate && !Enabled) return;
+        if (!forceUpdate && !Enabled) {
+            complete();
+            return;
+        }
 
         UpdateAssetsWithBuildTargets(EditorUserBuildSettings.activeBuildTarget);
 
@@ -1860,59 +1888,68 @@ public class VersionHandlerImpl : AssetPostprocessor {
         var obsoleteFiles = new ObsoleteFiles(
             ManifestReferences.FindAndReadManifests(metadataSet), metadataSet);
 
-        // Obsolete files that are no longer referenced can be safely
-        // deleted, prompt the user for confirmation if they have the option
-        // enabled.
-        bool deleteFiles = true;
+        // Obsolete files that are no longer referenced can be safely deleted, prompt the user for
+        // confirmation if they have the option enabled.
+        var cleanupFiles = new List<KeyValuePair<string, string>>();
         if (obsoleteFiles.unreferenced.Count > 0) {
-            if (CleanUpPromptEnabled && deleteFiles &&
+            if (!ExecutionEnvironment.InBatchMode && CleanUpPromptEnabled &&
                 obsoleteFiles.unreferencedExcludingManifests.Count > 0) {
-                deleteFiles = ExecutionEnvironment.InBatchMode ||
-                    EditorUtility.DisplayDialog(
-                        PLUGIN_NAME,
-                        "Would you like to delete the following obsolete files " +
-                        "in your project?\n\n" +
-                        String.Join(
-                            "\n", new List<string>(
-                                      obsoleteFiles.unreferencedExcludingManifests).ToArray()),
-                        "Yes", cancel: "No");
-            }
-            foreach (var filename in obsoleteFiles.unreferenced) {
-                if (deleteFiles) {
-                    MoveAssetToTrash(filename);
-                } else {
-                    Log("Leaving obsolete file: " + filename, verbose: true);
+                foreach (var filename in obsoleteFiles.unreferenced) {
+                    cleanupFiles.Add(new KeyValuePair<string, string>(filename, filename));
                 }
+            } else {
+                foreach (var filename in obsoleteFiles.unreferenced) MoveAssetToTrash(filename);
             }
         }
 
-        // If any obsolete referenced files are present, prompt the user for
-        // confirmation of deletion.
+        // If any obsolete referenced files are present, prompt the user for confirmation of
+        // deletion.
         if (obsoleteFiles.referenced.Count > 0) {
-            List<string> referencesString = new List<string>();
-            foreach (var item in obsoleteFiles.referencedExcludingManifests) {
-                List<string> lines = new List<string>();
-                foreach (var reference in item.Value) {
-                    lines.Add(String.Format("{0}: {1}", reference, item.Key));
+            if (!ExecutionEnvironment.InBatchMode) {
+                foreach (var item in obsoleteFiles.referenced) {
+                    var filename = item.Key;
+                    var references = item.Value;
+                    cleanupFiles.Add(
+                        new KeyValuePair<string, string>(
+                            filename,
+                            String.Format("{0} ({1})", filename,
+                                          String.Join(", ", references.ToArray()))));
                 }
-                referencesString.Add(String.Join("\n", lines.ToArray()));
+            } else {
+                foreach (var item in obsoleteFiles.referenced) MoveAssetToTrash(item.Key);
             }
-            deleteFiles = obsoleteFiles.referencedExcludingManifests.Values.Count == 0 ||
-                ExecutionEnvironment.InBatchMode ||
-                EditorUtility.DisplayDialog(
-                   PLUGIN_NAME,
-                   "The following obsolete files are referenced by packages in " +
-                   "your project, would you like to delete them?\n\n" +
-                   String.Join("\n", referencesString.ToArray()),
-                   "Yes", cancel: "No");
-            foreach (var item in obsoleteFiles.referenced) {
-                if (deleteFiles) {
-                    MoveAssetToTrash(item.Key);
-                } else {
-                    Log("Leaving obsolete file: " + item.Key + " | " + "Referenced by (" +
-                        String.Join(", ", item.Value.ToArray())  + ")", verbose: true);
+        }
+
+        if (cleanupFiles.Count > 0) {
+            var window = MultiSelectWindow.CreateMultiSelectWindow(PLUGIN_NAME);
+            Action<string> logObsoleteFile = (filename) => {
+                Log("Leaving obsolete file: " + filename, verbose: true);
+            };
+            Action deleteFiles = () => {
+                foreach (var filename in window.SelectedItems) MoveAssetToTrash(filename);
+                foreach (var filenameAndDisplay in window.AvailableItems) {
+                    if (!window.SelectedItems.Contains(filenameAndDisplay.Key)) {
+                        logObsoleteFile(filenameAndDisplay.Value);
+                    }
                 }
-            }
+                complete();
+            };
+            Action leaveFiles = () => {
+                foreach (var filenameAndDisplay in window.AvailableItems) {
+                    logObsoleteFile(filenameAndDisplay.Value);
+                }
+                complete();
+            };
+            window.AvailableItems = new List<KeyValuePair<string, string>>(cleanupFiles);
+            window.Sort(1);
+            window.SelectAll();
+            window.Caption =
+                "Would you like to delete the following obsolete files in your project?";
+            window.OnApply = deleteFiles;
+            window.OnCancel = leaveFiles;
+            window.Show();
+        } else {
+            complete();
         }
 
         if (!Refreshing) {
