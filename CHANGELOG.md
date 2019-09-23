@@ -1,3 +1,13 @@
+# Version 1.2.125 - Sep 23, 2019
+## Bug Fixes
+* All components: Silenced a warning about not being able to set the console
+  encoding to UTF8.
+* Android Resolver: Worked around broken AndroidSDKTools class in some
+  versions of Unity.
+* iOS Resolver: Fixed iOS target SDK version check
+* Version Handler: Changed clean up obsolete files window so that it doesn't
+  exceed the screen size.
+
 # Version 1.2.124 - Jul 28, 2019
 ## Bug Fixes
 * All components: Fixed regression with source control integration when using
