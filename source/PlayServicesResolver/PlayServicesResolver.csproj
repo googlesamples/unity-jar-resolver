@@ -87,6 +87,9 @@
     <EmbeddedResource Include="scripts\download_artifacts.gradle">
       <Link>scripts\download_artifacts.gradle</Link>
     </EmbeddedResource>
+    <EmbeddedResource Include="scripts\settings.gradle">
+      <Link>scripts\settings.gradle</Link>
+    </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\VersionHandler\VersionHandler.csproj">

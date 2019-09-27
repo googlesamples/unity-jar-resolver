@@ -252,11 +252,19 @@ namespace GooglePlayServices
 
             // Extract the gradle wrapper and build script.
             if (!(gradleWrapper.Extract(PlayServicesResolver.logger) &&
-                  EmbeddedResource.ExtractResources(typeof(GradleResolver).Assembly,
-                                                    new KeyValuePair<string, string>[] {
-                                                        new KeyValuePair<string, string>(
-                                                            null, buildScript),
-                                                    }, PlayServicesResolver.logger))) {
+                  EmbeddedResource.ExtractResources(
+                      typeof(GradleResolver).Assembly,
+                      new KeyValuePair<string, string>[] {
+                          new KeyValuePair<string, string>(null, buildScript),
+                          // Copies the settings.gradle file into this folder to mark it as a Gradle
+                          // project. Without the settings.gradle file, Gradle will search up all
+                          // parent directories for a settings.gradle and prevent execution of the
+                          // download_artifacts.gradle script if a settings.gradle is found.
+                          new KeyValuePair<string, string>(
+                              PlayServicesResolver.EMBEDDED_RESOURCES_NAMESPACE + "settings.gradle",
+                              Path.GetFullPath(Path.Combine(gradleWrapper.BuildDirectory,
+                                                            "settings.gradle"))),
+                      }, PlayServicesResolver.logger))) {
                 PlayServicesResolver.Log(String.Format(
                         "Failed to extract {0} and {1} from assembly {2}",
                         gradleWrapper.Executable, buildScript,

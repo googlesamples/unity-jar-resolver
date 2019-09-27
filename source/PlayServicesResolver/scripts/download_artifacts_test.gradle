@@ -76,7 +76,8 @@ project.ext {
   outputDir = new File(System.getProperty("user.dir"),
                        "download_artifacts_test_output")
 
-  // Gradle file under test.
+  // Gradle project under test.
+  srcSettingsFile = new File(scriptDirectory, "settings.gradle")
   srcBuildFile = new File(scriptDirectory, "download_artifacts.gradle")
   buildFile = new File(outputDir, srcBuildFile.name)
 
@@ -123,7 +124,7 @@ task copyTestScript(
     type: Copy,
     dependsOn: createDirectoryTask(project.ext.outputDir)) {
   description "Copy the test script into the test project"
-  from srcBuildFile
+  from srcBuildFile, srcSettingsFile
   into outputDir
 }
 

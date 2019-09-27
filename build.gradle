@@ -1027,7 +1027,7 @@ task cleanPackageManagerTests() {
 
 task testDownloadArtifacts(type: GradleBuild) {
   description "Run tests for the download_artifacts.gradle script."
-  buildFile "source/PlayServicesResolver/scripts/download_artifacts_test.gradle"
+  dir "source/PlayServicesResolver/scripts"
 }
 
 task testPackageUploader(type: Exec) {
