@@ -897,6 +897,25 @@ public class TestResolveAsync {
     }
 
     /// <summary>
+    /// Accesses the PatchMainTemplateGradle setting.
+    /// </summary>
+    private static bool PatchMainTemplateGradle {
+        get {
+            return (bool)Google.VersionHandler.FindClass(
+                null, "GooglePlayServices.SettingsDialog").GetProperty(
+                    "PatchMainTemplateGradle",
+                    BindingFlags.Static | BindingFlags.NonPublic).GetValue(null, null);
+        }
+
+        set {
+            Google.VersionHandler.FindClass(
+                null, "GooglePlayServices.SettingsDialog").GetProperty(
+                    "PatchMainTemplateGradle",
+                    BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, value, null);
+        }
+    }
+
+    /// <summary>
     /// Resolve for Gradle using a template .gradle file.
     /// </summary>
     /// <param name="gradleTemplate">Gradle template to use.</param>
@@ -920,11 +939,13 @@ public class TestResolveAsync {
         if (deleteGradleTemplate) cleanUpFiles.Add(GRADLE_TEMPLATE_ENABLED);
         if (otherExpectedFiles != null) cleanUpFiles.AddRange(otherExpectedFiles);
         Action cleanUpTestCase = () => {
+            PatchMainTemplateGradle = false;
             foreach (var filename in cleanUpFiles) {
                 if (File.Exists(filename)) File.Delete(filename);
             }
         };
         try {
+            PatchMainTemplateGradle = true;
             File.Copy(gradleTemplate, GRADLE_TEMPLATE_ENABLED);
             Resolve("Gradle", false, expectedAssetsDir, null, filesToIgnore, testCase,
                     (TestCaseResult testCaseResult) => {
