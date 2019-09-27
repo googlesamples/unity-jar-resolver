@@ -1,3 +1,11 @@
+# Version 1.2.126 - Sep 27, 2019
+## Changes
+* Android Resolver: File paths are now serialized with POSIX directory
+  separators.
+## Bug Fixes
+* Android Resolver: Fixed resolution when the parent directory of a Unity
+  project contains a Gradle project (i.e `settings.gradle` file).
+
 # Version 1.2.125 - Sep 23, 2019
 ## Bug Fixes
 * All components: Silenced a warning about not being able to set the console
