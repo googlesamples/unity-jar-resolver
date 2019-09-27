@@ -47,7 +47,10 @@
     <Compile Include="src\Google.JarResolver\AssemblyInfo.cs" />
     <Compile Include="src\Google.JarResolver\Dependency.cs" />
     <Compile Include="src\Google.JarResolver\PlayServicesSupport.cs" />
+    <Compile Include="..\VersionHandlerImpl\src\ExecutionEnvironment.cs" />
     <Compile Include="..\VersionHandlerImpl\src\FileUtils.cs" />
+    <Compile Include="..\VersionHandlerImpl\src\Logger.cs" />
+    <Compile Include="..\VersionHandler\src\VersionHandler.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
