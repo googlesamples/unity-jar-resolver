@@ -118,7 +118,7 @@ namespace GooglePlayServices {
                         writer.WriteStartElement("files");
                         foreach (var assetPath in SortSet(Files)) {
                             writer.WriteStartElement("file");
-                            writer.WriteValue(assetPath);
+                            writer.WriteValue(FileUtils.PosixPathSeparators(assetPath));
                             writer.WriteEndElement();
                         }
                         writer.WriteEndElement();

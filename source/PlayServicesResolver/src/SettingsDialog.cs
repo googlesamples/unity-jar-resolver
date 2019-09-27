@@ -337,7 +337,8 @@ namespace GooglePlayServices {
                         path.Substring(startOfPath, path.Length - startOfPath);;
                 }
                 if (!previousPackageDir.Equals(settings.packageDir)) {
-                    settings.packageDir = ValidatePackageDir(settings.packageDir);
+                    settings.packageDir =
+                        FileUtils.PosixPathSeparators(ValidatePackageDir(settings.packageDir));
                 }
                 GUILayout.EndHorizontal();
                 settings.packageDir = EditorGUILayout.TextField(settings.packageDir);
