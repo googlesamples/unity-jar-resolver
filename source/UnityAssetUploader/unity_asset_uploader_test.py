@@ -50,13 +50,14 @@ class TestUploaderMethods(unittest.TestCase):
                 "/login?{}".format(self.parsed_params),
                 headers={'Accept': 'application/json'}),
             call('GET',
-                 "/api/asset-store-tools/metadata/0.json?{}" +
-                 "&xunitysession=this_session_id".format(
+                 ("/api/asset-store-tools/metadata/0.json?{}" +
+                  "&xunitysession=this_session_id").format(
                      self.parsed_params),
                  headers={'Accept': 'application/json'}),
         ]
 
         self.expected_metadata = {
+            'status': 'ok',
             'xunitysession': 'this_session_id',
             'publisher': {
                 'id': 'publisher_id',
@@ -107,7 +108,7 @@ class TestUploaderMethods(unittest.TestCase):
 
         mock_json.load.assert_called_with(
             mock_connection.return_value.getresponse.return_value)
-        assert 'this_session_id' in mock_stdout.getvalue()
+        self.assertIn('this_session_id', mock_stdout.getvalue())
 
     @patch('unity_asset_uploader.json')
     @patch('unity_asset_uploader.client.HTTPSConnection')
@@ -124,11 +125,12 @@ class TestUploaderMethods(unittest.TestCase):
         metadata = session.get_metadata()
 
         request = mock_connection.return_value.request
-        assert request.call_args_list == self.expected_login_and_metadata_calls
+        self.assertEqual(self.expected_login_and_metadata_calls,
+                         request.call_args_list)
 
         mock_json.load.assert_called_with(
             mock_connection.return_value.getresponse.return_value)
-        assert metadata == self.expected_metadata
+        self.assertEqual(self.expected_metadata, metadata)
 
     @patch('unity_asset_uploader.json')
     @patch('unity_asset_uploader.client.HTTPSConnection')
@@ -145,16 +147,17 @@ class TestUploaderMethods(unittest.TestCase):
             None)
 
         request = mock_connection.return_value.request
-        assert request.call_args_list == self.expected_login_and_metadata_calls
+        self.assertEqual(self.expected_login_and_metadata_calls,
+                         request.call_args_list)
 
         mock_json.load.assert_called_with(
             mock_connection.return_value.getresponse.return_value)
 
         out = mock_stdout.getvalue()
-        assert 'publisher_id' in out
-        assert 'publisher_name' in out
-        assert '123' in out
-        assert '456' in out
+        self.assertIn('publisher_id', out)
+        self.assertIn('publisher_name', out)
+        self.assertIn('123', out)
+        self.assertIn('456', out)
 
     @patch('unity_asset_uploader.json')
     @patch('unity_asset_uploader.client.HTTPSConnection')
@@ -170,7 +173,8 @@ class TestUploaderMethods(unittest.TestCase):
             None)
 
         request = mock_connection.return_value.request
-        assert request.call_args_list == self.expected_login_and_metadata_calls
+        self.assertEqual(self.expected_login_and_metadata_calls,
+                         request.call_args_list)
 
         mock_json.load.assert_called_with(
             mock_connection.return_value.getresponse.return_value)
@@ -179,7 +183,7 @@ class TestUploaderMethods(unittest.TestCase):
         expected_456 = self.expected_metadata['packages']['456']
         package_two_values = expected_456.keys
         for key in unity_asset_uploader.LISTING_TRAITS:
-            assert "{}={}".format(key, expected_456[key]) in out
+            self.assertIn("{}={}".format(key, expected_456[key]), out)
 
     @patch('unity_asset_uploader.open')
     @patch('unity_asset_uploader.json')
@@ -221,7 +225,7 @@ class TestUploaderMethods(unittest.TestCase):
             headers={'Accept': 'application/json'}))
 
         request = mock_connection.return_value.request
-        assert request.call_args_list == expected_call_args
+        self.assertEqual(expected_call_args, request.call_args_list)
 
         mock_json.load.assert_called_with(
             mock_connection.return_value.getresponse.return_value)
@@ -249,10 +253,11 @@ class TestUploaderMethods(unittest.TestCase):
                 '456',
                 '/mock_project2/mock_path.unityasset')
 
-            assert 'no draft created for package 456' in cm.exception.output
+            self.assertIn('no draft created for package 456', cm.exception.output)
 
         request = mock_connection.return_value.request
-        assert request.call_args_list == self.expected_login_and_metadata_calls
+        self.assertEqual(self.expected_login_and_metadata_calls,
+                         request.call_args_list)
 
         mock_json.load.assert_called_with(
             mock_connection.return_value.getresponse.return_value)
@@ -279,10 +284,11 @@ class TestUploaderMethods(unittest.TestCase):
                 '789',
                 '/mock_project3/mock_path.unityasset')
             error_msg = 'could not find package with version ID 789'
-            assert error_msg in cm.exception.output
+            self.assertIn(error_msg, cm.exception.output)
 
         request = mock_connection.return_value.request
-        assert request.call_args_list == self.expected_login_and_metadata_calls
+        self.assertEqual(self.expected_login_and_metadata_calls,
+                         request.call_args_list)
 
         mock_json.load.assert_called_with(
             mock_connection.return_value.getresponse.return_value)

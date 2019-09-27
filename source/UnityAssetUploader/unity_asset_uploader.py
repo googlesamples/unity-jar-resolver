@@ -446,11 +446,12 @@ def upload_package(
         unity_version=unity_version,
         tools_version=tools_version)
     response_ob = session.upload_package(package_id, package_path)
-    print("status={}".format(response_ob['status']))
-    if response_ob['status'] != 'ok':
+    status = response_ob.get('status', '<unknown>')
+    print("status={}".format(status))
+    if status != 'ok':
         raise RequestError(
             'Non-success response from Asset Store request: {}'.format(
-                response_ob['status']))
+                status))
     print(response_ob)
 
 
