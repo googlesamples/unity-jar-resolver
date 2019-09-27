@@ -157,6 +157,17 @@ project.ext {
     cacheProperties.store(projectPropertiesFile.newWriter(), null)
   }
 
+  // Get the installed python version.
+  def pythonOutput = new ByteArrayOutputStream()
+  pythonVersion = ""
+  if (project.exec {
+        commandLine "python", "-V"
+        standardOutput = pythonOutput
+        errorOutput = pythonOutput
+      }.exitValue == 0) {
+    pythonVersion = pythonOutput.toString().trim().tokenize()[1]
+  }
+
   // UnityAssetUploader required environment variables.
   unityUsername = findProperty("UNITY_USERNAME")
   unityPassword = findProperty("UNITY_PASSWORD")
@@ -1019,13 +1030,18 @@ task testDownloadArtifacts(type: GradleBuild) {
   buildFile "source/PlayServicesResolver/scripts/download_artifacts_test.gradle"
 }
 
-task testPackageUploaderTests(type: Exec) {
+task testPackageUploader(type: Exec) {
+  if (project.ext.pythonVersion &&
+      project.ext.pythonVersion.tokenize(".")[0].toInteger() >= 3) {
     def outputDir = buildDir
     def script = "source/UnityAssetUploader/unity_asset_uploader_test.py"
     inputs.file script
     outputs.dir outputDir
     commandLine "python", script
     workingDir = projectDir
+  } else {
+    commandLine "echo", "Skipping testPackageUploaderTests, requires Python 3."
+  }
 }
 
 task updateEmbeddedGradleWrapper(type: Zip) {
