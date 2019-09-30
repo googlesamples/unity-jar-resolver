@@ -171,10 +171,10 @@ namespace GooglePlayServices {
         internal static string PackageDir {
             private set { projectSettings.SetString(PackageDirKey, value); }
             get {
-                return ValidatePackageDir(
+                return FileUtils.PosixPathSeparators(ValidatePackageDir(
                     ConfigurablePackageDir ?
                         (projectSettings.GetString(PackageDirKey, DefaultPackageDir)) :
-                        DefaultPackageDir);
+                    DefaultPackageDir));
             }
         }
 
@@ -208,7 +208,10 @@ namespace GooglePlayServices {
         }
 
         internal static string AndroidManifestPath {
-            get { return Path.Combine(PackageDir, "AndroidManifest.xml"); }
+            get {
+                return FileUtils.PosixPathSeparators(
+                    Path.Combine(PackageDir, "AndroidManifest.xml"));
+            }
         }
 
         internal static bool PatchAndroidManifest {
@@ -333,15 +336,16 @@ namespace GooglePlayServices {
                     string path = EditorUtility.OpenFolderPanel("Set Package Directory",
                                                                 PackageDir, "");
                     int startOfPath = path.IndexOf(AndroidPluginsDir);
-                    settings.packageDir = startOfPath < 0 ? "" :
-                        path.Substring(startOfPath, path.Length - startOfPath);;
+                    settings.packageDir = FileUtils.PosixPathSeparators(
+                        startOfPath < 0 ? "" : path.Substring(startOfPath,
+                                                              path.Length - startOfPath));
                 }
                 if (!previousPackageDir.Equals(settings.packageDir)) {
-                    settings.packageDir =
-                        FileUtils.PosixPathSeparators(ValidatePackageDir(settings.packageDir));
+                    settings.packageDir = ValidatePackageDir(settings.packageDir);
                 }
                 GUILayout.EndHorizontal();
-                settings.packageDir = EditorGUILayout.TextField(settings.packageDir);
+                settings.packageDir = FileUtils.PosixPathSeparators(
+                    EditorGUILayout.TextField(settings.packageDir));
             }
 
             GUILayout.BeginHorizontal();
