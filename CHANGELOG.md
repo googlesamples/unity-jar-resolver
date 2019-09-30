@@ -1,3 +1,8 @@
+# Version 1.2.127 - Sep 30, 2019
+## Changes
+* Android Resolver: All Android Resolver settings File paths are now
+  serialized with POSIX directory separators.
+
 # Version 1.2.126 - Sep 27, 2019
 ## Changes
 * Android Resolver: File paths are now serialized with POSIX directory
