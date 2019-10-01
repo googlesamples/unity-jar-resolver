@@ -1,3 +1,8 @@
+# Version 1.2.128 - Oct 1, 2019
+## Bug Fixes
+* iOS Resolver: Fixed Cocoapod project integration mode with Unity
+  2019.3+.
+
 # Version 1.2.127 - Sep 30, 2019
 ## Changes
 * Android Resolver: All Android Resolver settings File paths are now
