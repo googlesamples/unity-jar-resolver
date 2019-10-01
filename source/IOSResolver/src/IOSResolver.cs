@@ -2322,12 +2322,13 @@ public class IOSResolver : AssetPostprocessor {
         var pbxprojPath = GetProjectPath(pathToBuiltProject);
         var project = new UnityEditor.iOS.Xcode.PBXProject();
         project.ReadFromString(File.ReadAllText(pbxprojPath));
-        var target = project.TargetGuidByName(TARGET_NAME);
-        var guid = project.AddFile(
-            Path.Combine(podsDir, PODS_PROJECT_NAME + ".xcodeproj"),
-            "Pods.xcodeproj",
-            UnityEditor.iOS.Xcode.PBXSourceTree.Source);
-        project.AddFileToBuild(target, guid);
+        foreach (var target in GetXcodeTargetGuids(project)) {
+            var guid = project.AddFile(
+                Path.Combine(podsDir, PODS_PROJECT_NAME + ".xcodeproj"),
+                "Pods.xcodeproj",
+                UnityEditor.iOS.Xcode.PBXSourceTree.Source);
+            project.AddFileToBuild(target, guid);
+        }
         project.WriteToFile(pbxprojPath);
     }
 
