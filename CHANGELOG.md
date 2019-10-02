@@ -1,3 +1,8 @@
+# Version 1.2.129 - Oct 2, 2019
+## Bug Fixes
+* iOS Resolver: Changed Cocoapod integration in Unity 2019.3+ to
+  only add Pods to the UnityFramework target.
+
 # Version 1.2.128 - Oct 1, 2019
 ## Bug Fixes
 * iOS Resolver: Fixed Cocoapod project integration mode with Unity
