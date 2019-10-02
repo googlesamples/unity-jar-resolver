@@ -1617,7 +1617,7 @@ public class IOSResolver : AssetPostprocessor {
         get {
             // Return hard coded names in the UnityEditor.iOS.Xcode.PBXProject DLL.
             return MultipleXcodeTargetsSupported ?
-                new List<string>() { "Unity-iPhone", "UnityFramework" } :
+                new List<string>() { "UnityFramework" } :
                 new List<string>() { InitializeTargetName() };
         }
     }
@@ -1635,7 +1635,7 @@ public class IOSResolver : AssetPostprocessor {
             // NOTE: The test target is not exposed.
             try {
                 foreach (var guidMethod in
-                         new[] { "GetUnityMainTargetGuid", "GetUnityFrameworkTargetGuid" }) {
+                         new[] { "GetUnityFrameworkTargetGuid" }) {
                     targets.Add((string)VersionHandler.InvokeInstanceMethod(project, guidMethod,
                                                                             null));
                 }
