@@ -64,6 +64,7 @@
     <Compile Include="src\SettingsDialog.cs" />
     <Compile Include="src\VersionNumber.cs" />
     <Compile Include="src\VersionHandlerImpl.cs" />
+    <Compile Include="src\PackageUninstallWindow.cs" />
     <Compile Include="src\XmlUtilities.cs" />
     <Compile Include="src\MiniJSON.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
