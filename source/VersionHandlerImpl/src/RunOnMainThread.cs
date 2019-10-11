@@ -359,7 +359,7 @@ public class RunOnMainThread {
         // as part of the process until the queue is empty.
         // If we're not executing the job right now, the job queue is pumped from the UnityEditor
         // update event.
-        if ((firstJob || ExecuteNow) && runNow && OnMainThread) {
+        if (firstJob && (runNow || ExecuteNow) && OnMainThread) {
             ExecuteAll();
         }
     }
