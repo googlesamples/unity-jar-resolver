@@ -511,6 +511,18 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Get the set of build targets as strings.
+        /// </summary>
+        /// <returns>Set of build targets as strings.</returns>
+        public HashSet<string> GetBuildTargetStrings() {
+            var buildTargetStringsSet = new HashSet<string>();
+            foreach (var buildTarget in GetBuildTargets()) {
+                buildTargetStringsSet.Add(buildTarget.ToString());
+            }
+            return buildTargetStringsSet;
+        }
+
+        /// <summary>
         /// Get the list of .NET versions this file is compatible with.
         /// </summary>
         /// <returns>Set of .NET versions this is compatible with.  This returns an empty
@@ -1979,7 +1991,15 @@ public class VersionHandlerImpl : AssetPostprocessor {
             foreach (var versionData in versionPair.Values) {
                 bool enabled = false;
                 if (versionData == versionPair.MostRecentVersion) {
-                    if (versionData.GetBuildTargetsSpecified()) {
+                    Log(String.Format(
+                        "{0}: editor enabled {1}, build targets [{2}] (current target {3})",
+                        versionData.filename, versionData.GetEditorEnabled(),
+                        String.Join(
+                            ", ",
+                            (new List<string>(versionData.GetBuildTargetStrings())).ToArray()),
+                        currentBuildTarget),
+                        level: LogLevel.Verbose);
+                    if (versionData.GetBuildTargetsSpecified() && !versionData.GetEditorEnabled()) {
                         var buildTargets = versionData.GetBuildTargets();
                         enabled = buildTargets.Contains(currentBuildTarget);
                     } else {
