@@ -10,7 +10,7 @@ packages.
 * A Unity Asset Store [publisher account](https://publisher.assetstore.unity3d.com).
 
 ## Usage
-
+```
 positional arguments:
   {display_session_id,display_publisher_info,display_listings,upload_package}
     display_session_id  Print (possibly refreshed) auth session ID.
@@ -39,3 +39,4 @@ global arguments:
                         Version of Unity to report to the asset store.
   --tools_version TOOLS_VERSION
                         Version of Tools plugin to report to the asset store.
+```
