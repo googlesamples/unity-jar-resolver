@@ -1,3 +1,12 @@
+# Version 1.2.130 - Oct 23, 2019
+## New Features
+* iOS Resolver: Added support for modifying the Podfile before `pod install`
+  is executed.
+
+## Bug Fixes
+* Version Handler: Fixed invalid classname error when calling
+  `VersionHandler.UpdateVersionedAssets()`.
+
 # Version 1.2.129 - Oct 2, 2019
 ## Bug Fixes
 * iOS Resolver: Changed Cocoapod integration in Unity 2019.3+ to
