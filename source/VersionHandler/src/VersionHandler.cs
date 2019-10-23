@@ -381,9 +381,7 @@ public class VersionHandler {
     /// </summary>
     public static void UpdateVersionedAssets(bool forceUpdate = false) {
         InvokeImplMethod("UpdateVersionedAssets",
-                         namedArgs: new Dictionary<string, object> {
-                             { "forceUpdate", forceUpdate }
-                         },
+                         args: new object[] { forceUpdate },
                          schedule: true);
     }
 
