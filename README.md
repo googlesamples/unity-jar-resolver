@@ -348,6 +348,25 @@ The `CocoaPods` are either:
 The resolution strategy can be changed via the
 `Assets > Play Services Resolver > iOS Resolver > Settings` menu.
 
+### Appending text to generated Podfile
+In order to modify the generated Podfile you can create a script like this:
+```
+using System.IO;
+public class PostProcessIOS : MonoBehaviour {
+[PostProcessBuildAttribute(45)]//must be between 40 and 50 to ensure that it's not overriden by Podfile generation (40) and that it's added before "pod install" (50)
+private static void PostProcessBuild_iOS(BuildTarget target, string buildPath)
+{
+    if (target == BuildTarget.iOS)
+    {
+
+        using (StreamWriter sw = File.AppendText(buildPath + "/Podfile"))
+        {   
+            //in this example I'm adding an app extension
+            sw.WriteLine("\ntarget 'NSExtension' do\n  pod 'Firebase/Messaging', '6.6.0'\nend");
+        }
+    }
+}
+```
 # Version Handler Usage
 
 The Version Handler component of this plugin manages:

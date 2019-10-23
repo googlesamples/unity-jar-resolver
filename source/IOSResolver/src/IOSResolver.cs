@@ -388,12 +388,12 @@ public class IOSResolver : AssetPostprocessor {
         new SortedDictionary<string, Pod>();
 
     // Order of post processing operations.
-    private const int BUILD_ORDER_REFRESH_DEPENDENCIES = 1;
-    private const int BUILD_ORDER_CHECK_COCOAPODS_INSTALL = 2;
-    private const int BUILD_ORDER_PATCH_PROJECT = 3;
-    private const int BUILD_ORDER_GEN_PODFILE = 4;
-    private const int BUILD_ORDER_INSTALL_PODS = 5;
-    private const int BUILD_ORDER_UPDATE_DEPS = 6;
+    private const int BUILD_ORDER_REFRESH_DEPENDENCIES = 10;
+    private const int BUILD_ORDER_CHECK_COCOAPODS_INSTALL = 20;
+    private const int BUILD_ORDER_PATCH_PROJECT = 30;
+    private const int BUILD_ORDER_GEN_PODFILE = 40;
+    private const int BUILD_ORDER_INSTALL_PODS = 50;
+    private const int BUILD_ORDER_UPDATE_DEPS = 60;
 
     // This is appended to the Podfile filename to store a backup of the original Podfile.
     // ie. "Podfile_Unity".
