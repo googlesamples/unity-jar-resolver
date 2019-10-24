@@ -28,7 +28,7 @@ allprojects {
 }
 ([rootProject] + (rootProject.subprojects as List)).each { project ->
     project.repositories {
-        def unityProjectPath = "file:///" + file(rootProject.projectDir.path + "/../../").absolutePath
+        def unityProjectPath = "file:///**DIR_UNITYPROJECT**"
         maven {
             url "https://maven.google.com"
         }
