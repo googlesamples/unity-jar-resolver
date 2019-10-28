@@ -55,6 +55,7 @@
   <ItemGroup>
     <Compile Include="src\Logger.cs" />
     <Compile Include="src\ExecutionEnvironment.cs" />
+    <Compile Include="src\EditorMeasurement.cs" />
     <Compile Include="src\FileUtils.cs" />
     <Compile Include="src\MultiSelectWindow.cs" />
     <Compile Include="src\PortableWebRequest.cs" />
