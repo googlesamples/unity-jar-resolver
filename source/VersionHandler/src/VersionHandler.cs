@@ -442,6 +442,7 @@ public class VersionHandler {
                     foreach (var currentType in assembly.GetTypes()) {
                         if (currentType.FullName == className) {
                             type = currentType;
+                            break;
                         }
                     }
                     if (type != null) break;
