@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: a0e7a1be153b040ff916da8b65c4f433
+timeCreated: 1570835312
+licenseType: Pro
+labels:
+- gvh
+- gvh_rename_to_disable
+- gvh_targets-editor
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

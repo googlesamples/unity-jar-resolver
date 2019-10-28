@@ -44,6 +44,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Web" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
@@ -56,6 +57,7 @@
     <Compile Include="src\ExecutionEnvironment.cs" />
     <Compile Include="src\FileUtils.cs" />
     <Compile Include="src\MultiSelectWindow.cs" />
+    <Compile Include="src\PortableWebRequest.cs" />
     <Compile Include="src\ProjectSettings.cs" />
     <Compile Include="src\RunOnMainThread.cs" />
     <Compile Include="src\SettingsDialog.cs" />

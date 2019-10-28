@@ -8,6 +8,10 @@ buildscript {
   }
 }
 
+plugins {
+  id "com.jetbrains.python.envs" version "0.0.30"
+}
+
 /*
  * Project level variables
  */
@@ -157,17 +161,6 @@ project.ext {
     cacheProperties.store(projectPropertiesFile.newWriter(), null)
   }
 
-  // Get the installed python version.
-  def pythonOutput = new ByteArrayOutputStream()
-  pythonVersion = ""
-  if (project.exec {
-        commandLine "python", "-V"
-        standardOutput = pythonOutput
-        errorOutput = pythonOutput
-      }.exitValue == 0) {
-    pythonVersion = pythonOutput.toString().trim().tokenize()[1]
-  }
-
   // UnityAssetUploader required environment variables.
   unityUsername = findProperty("UNITY_USERNAME")
   unityPassword = findProperty("UNITY_PASSWORD")
@@ -224,6 +217,17 @@ project.ext {
   dllMdbExtension = ".mdb"
   // Changelog file.
   changelog = new File(scriptDirectory, "CHANGELOG.md")
+  pythonBootstrapDir = new File(buildDir, "python_bootstrap")
+  // Python binary after it has been bootstrapped.
+  pythonExe = new File(new File(new File(pythonBootstrapDir, "python"), "bin"),
+                       "python3")
+}
+
+// Configure com.jetbrains.python.envs to bootstrap a Python install.
+envs {
+  bootstrapDirectory = project.ext.pythonBootstrapDir
+  envsDirectory = new File(project.ext.buildDir, "python_envs")
+  python "python", "3.7.4"
 }
 
 /*
@@ -783,6 +787,31 @@ Task createNUnitTask(String name, String description, File testDll,
 }
 
 /*
+ * Create a task to run an executable.
+ *
+ * @param name Name of the task.
+ * @param description Description of the task.
+ * @param dependsOn Tasks this depends upon.
+ * @param executable Executable to run.
+ * @param arguments Arguments for the executable.
+ *
+ * @returns Task which runs the specified executable.
+ */
+Task createExecTask(String name, String description,
+                    Iterable<Task> dependsOn, File executableToRun,
+                    Iterable<String> arguments) {
+  Task execTask = tasks.create(name: name,
+                               description: description,
+                               type: Exec,
+                               dependsOn: dependsOn)
+  execTask.with {
+    executable executableToRun
+    args arguments
+  }
+  return execTask
+}
+
+/*
  * Create a task to execute Unity.
  *
  * @param taskName Name of the task to create.
@@ -795,6 +824,8 @@ Task createNUnitTask(String name, String description, File testDll,
  * @param projectContainerDir Directory that contains the project directory.
  * @param arguments Command line arguments to pass to Unity.
  * @param batchMode Whether to run Unity in batch mode.
+ * @param createTaskClosure Optional task used to start Unity, this must
+ *   conform to createExecTask()
  *
  * @returns Task which executes Unity.
  * The following extended properties are set on the task:
@@ -806,12 +837,13 @@ Task createNUnitTask(String name, String description, File testDll,
 Task createUnityTask(String taskName, String summary,
                      Iterable<Task> dependsOn, String projectName,
                      File projectContainerDir, Iterable<String> arguments,
-                     Boolean batchMode) {
+                     Boolean batchMode, createTaskClosure) {
   Boolean createProject = summary == "create"
   File logFile = new File(projectContainerDir,
                           sprintf("%s_%s.log", projectName, summary))
   File projectDir = new File(projectContainerDir, projectName)
   List<String> executeArguments = []
+
   if (batchMode) executeArguments += unityBatchModeArguments
   executeArguments += [
     "-logFile", logFile.absolutePath,
@@ -819,16 +851,24 @@ Task createUnityTask(String taskName, String summary,
   if (createProject) executeArguments += ["-quit"]
   executeArguments += arguments
 
-  Task unityTask = tasks.create(name: taskName,
-                                description: sprintf(
-                                  "Run Unity to %s (project: %s)",
-                                  summary, projectName),
-                                type: Exec,
-                                dependsOn: dependsOn).with {
+  if (!createTaskClosure) {
+    createTaskClosure = {
+      String name, String description, Iterable<Task> depends,
+      File executable, Iterable<String> args ->
+        return createExecTask(name, description, depends, executable, args)
+    }
+  }
+
+  Task unityTask = createTaskClosure(taskName,
+                                     sprintf(
+                                       "Run Unity to %s (project: %s)",
+                                       summary, projectName),
+                                     dependsOn,
+                                     project.ext.unityExe,
+                                     executeArguments)
+  unityTask.with {
     inputs.files fileTree(projectDir)
     outputs.files files(logFile)
-    executable project.ext.unityExe
-    args executeArguments
   }
   unityTask.ext.projectDir = projectDir
   unityTask.ext.containerDir = projectContainerDir
@@ -854,7 +894,7 @@ Task createUnityTask(String taskName, String summary,
 Task createUnityProjectTask(String taskName, Iterable<Task> dependsOn,
                             String projectName, File projectContainerDir) {
   return createUnityTask(taskName, "create", dependsOn, projectName,
-                         projectContainerDir, [], true).with {
+                         projectContainerDir, [], true, null).with {
     doFirst {
       // Clean / create the output directory.
       delete ext.containerDir
@@ -889,7 +929,7 @@ Task createSetupUnityProjectTask(String taskName, Iterable<Task> dependsOn,
   return createUnityTask(
       taskName, "import_plugin", [createProject], projectName, outputDir,
       ["-importPackage", project.ext.pluginExportFile.absolutePath,
-       "-quit"], batchMode)
+       "-quit"], batchMode, null)
 }
 
 /*
@@ -903,13 +943,15 @@ Task createSetupUnityProjectTask(String taskName, Iterable<Task> dependsOn,
  * @param additionalArguments Additional arguments to pass to Unity when
  *   executing the test.
  * @param batchMode Whether to execute Unity in batch mode.
+ * @param createTaskClosure Optional task used to start Unity, this must
+ *   conform to tasks.create(name, description, type, dependsOn).
  *
  * @returns Test task.
  */
 Task createUnityTestTask(String taskName, String description,
                          Iterable<Task> dependsOn, File testScriptsDir,
                          Iterable<String> additionalArguments,
-                         Boolean batchMode) {
+                         Boolean batchMode, createTaskClosure) {
   List<File> inputFiles = fileTree(testScriptsDir).collect {
     new File(it.absolutePath - testScriptsDir.absolutePath)
   }
@@ -931,7 +973,8 @@ Task createUnityTestTask(String taskName, String description,
   Task testTask = createUnityTask(taskName, "test", [copyTestScripts],
                                   setupTestProject.ext.projectDir.name,
                                   setupTestProject.ext.containerDir,
-                                  additionalArguments, batchMode)
+                                  additionalArguments, batchMode,
+                                  createTaskClosure)
   testTask.description = description
 
   // Create a clean task
@@ -953,26 +996,30 @@ Task createUnityTestTask(String taskName, String description,
  * @param dependsOn Dependencies of the new task.
  * @param testScriptsDir Directory containing scripts to copy into the test
  *   project and execute for testing.
- * @param batchMode Whether to execute Unity in batch mode.
+ * @param additionalArguments Additional arguments to pass to Unity.
+ * @param createTaskClosure Optional task used to start Unity, this must
+ *   conform to tasks.create(name, description, type, dependsOn).
  *
  * @returns Test task.
  */
 Task createUnityTestBatchAndNonBatch(String taskName, String description,
                                      Iterable<Task> dependsOn,
                                      File testScriptsDir,
-                                     Iterable<String> additionalArguments) {
+                                     Iterable<String> additionalArguments,
+                                     createTaskClosure) {
   return tasks.create(name: taskName,
                       description: description,
                       dependsOn: [
                         createUnityTestTask(
                           sprintf("%sBatchMode", taskName),
                           sprintf("%s (Batch Mode)", description),
-                          dependsOn, testScriptsDir, additionalArguments, true),
+                          dependsOn, testScriptsDir, additionalArguments, true,
+                          createTaskClosure),
                         createUnityTestTask(
                           sprintf("%sInteractiveMode", taskName),
                           sprintf("%s (Interactive Mode)", description),
                           dependsOn, testScriptsDir, additionalArguments,
-                          true)])
+                          true, createTaskClosure)])
 }
 
 Task compileResolverLibTests = createXbuildTask(
@@ -984,6 +1031,33 @@ Task compileResolverLibTests = createXbuildTask(
     new File(project.ext.testDir, "ResolverLibTests"),
     [new File("JarResolverTests.dll")], []).with {
   doFirst { checkNUnitDllPath() }
+}
+
+/*
+ * Create a task to execute Python.
+ *
+ * @param taskName Name of the task to create.
+ * @param description Description of the task.
+ * @param dependsOn Dependencies of the new task.
+ * @param script Python script to run.
+ * @param arguments Command line arguments to pass to the Python script.
+ * @param inputFiles Files that are required by the script.
+ * @param outputFiles Files generated by the script.
+ *
+ * @returns Task which executes Python.
+ */
+Task createPythonTask(String taskName, String description,
+                      Iterable<Task> dependsOn,
+                      File script, Iterable<String> arguments) {
+  Task pythonTask = tasks.create(
+      name: taskName,
+      description: sprintf("Run Python to %s", description),
+      type: Exec,
+      dependsOn: dependsOn + ["build_envs"]).with {
+    executable project.ext.pythonExe
+    args ([script.absolutePath] + arguments)
+  }
+  return pythonTask
 }
 
 Task testResolverLibTests = createNUnitTask(
@@ -1031,19 +1105,12 @@ task testDownloadArtifacts(type: GradleBuild) {
   dir "source/PlayServicesResolver/scripts"
 }
 
-task testPackageUploader(type: Exec) {
-  if (project.ext.pythonVersion &&
-      project.ext.pythonVersion.tokenize(".")[0].toInteger() >= 3) {
-    def outputDir = buildDir
-    def script = "source/UnityAssetUploader/unity_asset_uploader_test.py"
-    inputs.file script
-    outputs.dir outputDir
-    commandLine "python", script
-    workingDir = projectDir
-  } else {
-    commandLine "echo", "Skipping testPackageUploaderTests, requires Python 3."
-  }
-}
+createPythonTask(
+  "testPackageUploader",
+  "Test the unity_asset_uploader.py application.",
+  [],
+  new File("source/UnityAssetUploader/unity_asset_uploader_test.py"),
+  [])
 
 task updateEmbeddedGradleWrapper(type: Zip) {
   description "Update the gradle wrapper in gradle-template.zip"
@@ -1172,7 +1239,7 @@ Task buildPlugin = createUnityTask(
      "-exportPackage", project.ext.pluginAssetsDir.path,
      project.ext.pluginExportFile.absolutePath,
      "-gvh_disable",
-     "-quit"], true)
+     "-quit"], true, null)
 buildPlugin.with {
   description "Exports the plugin staging area directory as a Unity package."
   inputs.files files(copyPluginTemplateToStagingArea.outputs.files,
@@ -1337,14 +1404,35 @@ createUnityTestBatchAndNonBatch(
   ("Imports the plugin into a Unity project and verifies all " +
    "components can be activated by the Version Handler."),
   [buildPlugin],
-  new File("source/VersionHandlerImpl/test/activation"), [])
+  new File("source/VersionHandlerImpl/test/activation"), [], null)
+
+// Launch the test via a script that runs a local web server.
+createUnityTestBatchAndNonBatch(
+  "testVersionHandlerWebRequest",
+  ("Imports the plugin into a Unity project tests the PortableWebRequest " +
+   "class."),
+  [buildPlugin],
+  new File("source/VersionHandlerImpl/test/webrequest"), [],
+  { String name, String description, Iterable<Task> depends,
+    File executable, Iterable<String> args ->
+      Iterable<String> runnerArgs = [executable.absolutePath] + args
+      return createPythonTask(
+        name, description, depends,
+        new File(
+          new File(
+            new File(project.ext.pluginSourceDir,
+                     "VersionHandlerImpl"),
+            "test"),
+          "webrequest_launcher.py"),
+        runnerArgs)
+  })
 
 createUnityTestBatchAndNonBatch(
   "testVersionHandlerReflection",
   ("Imports the plugin into a Unity project and tests reflection " +
    "methods."),
   [buildPlugin],
-  new File("source/VersionHandler/test/reflection"), [])
+  new File("source/VersionHandler/test/reflection"), [], null)
 
 createUnityTestBatchAndNonBatch(
   "testAndroidResolverAsyncResolve",
@@ -1353,7 +1441,7 @@ createUnityTestBatchAndNonBatch(
    "XML files, verifying all dependencies resolve successfully."),
   [buildPlugin],
   new File("source/PlayServicesResolver/test/resolve_async"),
-  ["-buildTarget", "android"])  // TODO: Move this into the test!?
+  ["-buildTarget", "android"], null)  // TODO: Move this into the test!?
 
 task cleanTests(type: Delete) {
   description "Clean test directories."

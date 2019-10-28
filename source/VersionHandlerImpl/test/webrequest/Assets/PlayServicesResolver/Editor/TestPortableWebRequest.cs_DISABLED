@@ -1,0 +1,147 @@
+// <copyright file="TestResolverBootstrapped.cs" company="Google Inc.">
+// Copyright (C) 2019 Google Inc. All Rights Reserved.
+//
+//  Licensed under the Apache License, Version 2.0 (the "License");
+//  you may not use this file except in compliance with the License.
+//  You may obtain a copy of the License at
+//
+//  http://www.apache.org/licenses/LICENSE-2.0
+//
+//  Unless required by applicable law or agreed to in writing, software
+//  distributed under the License is distributed on an "AS IS" BASIS,
+//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//  See the License for the specific language governing permissions and
+//    limitations under the License.
+// </copyright>
+
+using System;
+using System.Collections.Generic;
+using System.Collections;
+using System.Net;
+using Google;
+
+[UnityEditor.InitializeOnLoad]
+public class TestPortableWebRequest {
+
+    // Whether the get operation succeeded.
+    private static bool getSucceeded = false;
+    // Whether the post operation succeeded.
+    private static bool postSucceeded = false;
+
+    /// <summary>
+    /// Register a method to call when the Version Handler has enabled all plugins in the project.
+    /// </summary>
+    static TestPortableWebRequest() {
+        // Disable stack traces for more condensed logs.
+        UnityEngine.Application.stackTraceLogType = UnityEngine.StackTraceLogType.None;
+        RunOnMainThread.Run(StartTests, runNow: false);
+    }
+
+    /// <summary>
+    /// Convert a dictionary of string key value pairs to a sorted newline separated string
+    /// </summary>
+    /// <param name="prefix">If specified, only keys will this prefix are included.</param>
+    /// <param name="lowercaseKeys">Convert all keys to lowercase, this is required as WWW class
+    /// converts all headers to uppercase.</param>
+    /// <param name="items">Items to convert to a newline separated string.</param>
+    /// <returns>Sorted newline separated string.</returns>
+    private static string DictionaryToString(string prefix, bool lowercaseKeys,
+                                             IDictionary<string, string> items) {
+        var stringList = new List<string>();
+        foreach (var kv in items) {
+            var key = lowercaseKeys ? kv.Key.ToLower() : kv.Key;
+            if (String.IsNullOrEmpty(prefix) || key.StartsWith(prefix)) {
+                stringList.Add(String.Format("{0}={1}", key, kv.Value));
+            }
+        }
+        stringList.Sort();
+        return String.Join("\n", stringList.ToArray());
+    }
+
+    /// <summary>
+    /// Determine whether two values are equal.
+    /// </summary>
+    /// <param name="lhs">Object to compare.</param>
+    /// <param name="rhs">Object to compare.</param>
+    /// <returns>true if they're both equal, false and prints each object as a string to the console
+    /// if they differ.</returns>
+    private static bool CheckEqual(object lhs, object rhs) {
+        if (!lhs.Equals(rhs)) {
+            UnityEngine.Debug.Log(String.Format("Check failed:\n  '{0}' !=\n  '{1}'", lhs, rhs));
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Execute tests.
+    /// </summary>
+    public static void StartTests() {
+        var webRequest = PortableWebRequest.DefaultInstance;
+        UnityEngine.Debug.Log("Running get test...");
+        var getStatus = webRequest.Get("http://localhost:8000/get?foo1=bar1&foo2=bar2",
+                                       new Dictionary<string, string> {
+                                           { "Echo-Foo", "Bar" },
+                                           { "Echo-Bish", "Bosh" }
+                                       });
+        RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                var complete = getStatus.Complete;
+                if (complete) {
+                    getSucceeded = CheckEqual(getStatus.Status, HttpStatusCode.OK);
+                    getSucceeded &= CheckEqual(DictionaryToString("echo-", true, getStatus.Headers),
+                                               "echo-bish=Bosh\n" +
+                                               "echo-foo=Bar");
+                    var result = System.Text.Encoding.Default.GetString(getStatus.Result);
+                    var expected = ("{\"data\": \"Hello from a test server\", " +
+                                    "\"headers\": {\"Echo-Bish\": \"Bosh\", " +
+                                    "\"Echo-Foo\": \"Bar\"}, " +
+                                    "\"path\": \"/get?foo1=bar1&foo2=bar2\", " +
+                                    "\"query\": {\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}}");
+                    getSucceeded &= CheckEqual(result, expected);
+                    UnityEngine.Debug.Log(String.Format("Get complete succeeded={0}\n{1}",
+                                                        getSucceeded, result));
+                }
+                return complete;
+            }, synchronous: true);
+
+        UnityEngine.Debug.Log("Running post test...");
+        var postStatus = webRequest.Post("http://localhost:8000/post",
+                                         new Dictionary<string, string> {
+                                             { "Echo-Foo", "Bar" },
+                                             { "Echo-Bish", "Bosh" }
+                                         },
+                                         new[] {
+                                             new KeyValuePair<string, string>("foo1", "bar1"),
+                                             new KeyValuePair<string, string>("foo2", "bar2")
+                                         });
+        RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                var complete = postStatus.Complete;
+                if (complete) {
+                    postSucceeded = CheckEqual(getStatus.Status, HttpStatusCode.OK);
+                    postSucceeded &= CheckEqual(DictionaryToString("echo-", true,
+                                                                   getStatus.Headers),
+                                               "echo-bish=Bosh\n" +
+                                               "echo-foo=Bar");
+                    var result = System.Text.Encoding.Default.GetString(postStatus.Result);
+                    var expected =
+                        "{\"data\": \"Hello from a test server\", " +
+                        "\"form\": {\"foo1\": [\"bar1\"], \"foo2\": " +
+                        "[\"bar2\"]}, " +
+                        "\"headers\": {\"Echo-Bish\": \"Bosh\", " +
+                        "\"Echo-Foo\": \"Bar\"}, \"path\": \"/post\", \"query\": {}}";
+                    postSucceeded &= CheckEqual(result, expected);
+                    UnityEngine.Debug.Log(String.Format("Post complete succeeded={0}\n{1}",
+                                                        postSucceeded, result));
+                }
+                return complete;
+            }, synchronous: true);
+
+        // Exit when the tests are complete.
+        if (!(getSucceeded && postSucceeded)) {
+            UnityEngine.Debug.Log("Test failed");
+            UnityEditor.EditorApplication.Exit(1);
+        }
+        UnityEngine.Debug.Log("Test passed");
+        UnityEditor.EditorApplication.Exit(0);
+    }
+}
