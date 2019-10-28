@@ -2,10 +2,10 @@
  * Gradle file to build the Jar Resolver Unity plugin.
  */
 buildscript {
-    repositories {
-        jcenter()
-        mavenLocal()
-    }
+  repositories {
+    jcenter()
+    mavenLocal()
+  }
 }
 
 /*
@@ -772,6 +772,7 @@ Task createNUnitTask(String name, String description, File testDll,
                       type: Exec,
                       dependsOn: dependsOn).with {
     workingDir project.ext.pluginSourceDir
+    inputs.files testDll
     outputs.files logFile
     executable project.ext.nunitConsoleExe
     args ([sprintf("-output:%s", logFile.absolutePath),
@@ -1308,6 +1309,28 @@ task gitTagRelease(type: Exec) {
 // - Workspace export (Unity 5.6 and above)
 // - Project export
 // - Add a pod which changes the target SDK
+
+Task compileVersionHandlerImplTests = createXbuildTask(
+    "compileVersionHandlerImplTests",
+    "Compile tests for VersionHandlerImpl.",
+    project.ext.pluginSolutionFile, "VersionHandlerImplTests",
+    fileTree(new File(
+               new File(
+                 new File(project.ext.pluginSourceDir,
+                          "VersionHandlerImpl"),
+                 "unit_tests"),
+               "src")),
+    new File(project.ext.testDir, "VersionHandlerImplTests"),
+    [new File("Google.VersionHandlerImplTests.dll")], []).with {
+  doFirst { checkNUnitDllPath() }
+}
+
+createNUnitTask(
+  "testVersionHandlerImpl",
+  "Runs tests for the VersionHandlerImpl module",
+  compileVersionHandlerImplTests.outputs.files[0],
+  [compileVersionHandlerImplTests])
+
 
 createUnityTestBatchAndNonBatch(
   "testVersionHandlerActivation",

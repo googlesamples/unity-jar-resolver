@@ -14,12 +14,14 @@
 //    limitations under the License.
 // </copyright>
 
+using System;
+
 namespace Google {
 
     /// <summary>
     /// Log severity.
     /// </summary>
-    internal enum LogLevel {
+    public enum LogLevel {
         Debug,
         Verbose,
         Info,
@@ -28,20 +30,35 @@ namespace Google {
     };
 
     /// <summary>
+    /// Where to log.
+    /// </summary>
+    [Flags]
+    public enum LogTarget {
+        Console = 1,
+        Unity = 2,
+        File = 4,
+    };
+
+    /// <summary>
     /// Writes filtered logs to the Unity log.
     /// </summary>
-    internal class Logger {
+    public class Logger {
 
         /// <summary>
         /// Filter the log level.
         /// </summary>
-        internal LogLevel Level { get; set; }
+        public LogLevel Level { get; set; }
+
+        /// <summary>
+        /// Filter the log targets.
+        /// </summary>
+        public LogTarget Target { get; set; }
 
         /// <summary>
         /// Enable / disable verbose logging.
         /// This toggles between Info vs. Verbose levels.
         /// </summary>
-        internal bool Verbose {
+        public bool Verbose {
             set { Level = value ? LogLevel.Verbose : LogLevel.Info; }
             get { return Level <= LogLevel.Verbose; }
         }
@@ -49,24 +66,27 @@ namespace Google {
         /// <summary>
         /// Name of the file to log to, if this is null this will not log to a file.
         /// </summary>
-        internal string LogFilename { get; set; }
+        public string LogFilename { get; set; }
 
         /// <summary>
         /// Delegate function used to log messages.
         /// </summary>
         /// <param name="message">Message to log.</param>
         /// <param name="level">Log level of the message.</param>
-        internal delegate void LogMessageDelegate(string message, LogLevel level);
+        public delegate void LogMessageDelegate(string message, LogLevel level);
 
         /// <summary>
         /// Event that is called for each logged message.
         /// </summary>
-        internal event LogMessageDelegate LogMessage;
+        public event LogMessageDelegate LogMessage;
 
         /// <summary>
         /// Construct a logger.
         /// </summary>
-        internal Logger() {}
+        public Logger() {
+            Level = LogLevel.Info;
+            Target = LogTarget.Unity | LogTarget.File;
+        }
 
         /// <summary>
         /// Write a message to the log file.
@@ -86,22 +106,29 @@ namespace Google {
         /// <param name="message">String to write to the log.</param>
         /// <param name="level">Severity of the message, if this is below the currently selected
         /// Level property the message will not be logged.</param>
-        internal virtual void Log(string message, LogLevel level = LogLevel.Info) {
+        public virtual void Log(string message, LogLevel level = LogLevel.Info) {
             if (level >= Level || ExecutionEnvironment.InBatchMode) {
                 switch (level) {
                     case LogLevel.Debug:
                     case LogLevel.Verbose:
                     case LogLevel.Info:
-                        UnityEngine.Debug.Log(message);
-                        LogToFile(message);
+                        if ((Target & LogTarget.Unity) != 0) UnityEngine.Debug.Log(message);
+                        if ((Target & LogTarget.File) != 0) LogToFile(message);
+                        if ((Target & LogTarget.Console) != 0) System.Console.WriteLine(message);
                         break;
                     case LogLevel.Warning:
-                        UnityEngine.Debug.LogWarning(message);
-                        LogToFile("WARNING: " + message);
+                        if ((Target & LogTarget.Unity) != 0) UnityEngine.Debug.LogWarning(message);
+                        if ((Target & LogTarget.File) != 0) LogToFile("WARNING: " + message);
+                        if ((Target & LogTarget.Console) != 0) {
+                            System.Console.WriteLine("WARNING: " + message);
+                        }
                         break;
                     case LogLevel.Error:
-                        UnityEngine.Debug.LogError(message);
-                        LogToFile("ERROR: " + message);
+                        if ((Target & LogTarget.Unity) != 0) UnityEngine.Debug.LogError(message);
+                        if ((Target & LogTarget.File) != 0) LogToFile("ERROR: " + message);
+                        if ((Target & LogTarget.Console) != 0) {
+                            System.Console.WriteLine("ERROR: " + message);
+                        }
                         break;
                 }
             }
