@@ -17,6 +17,7 @@
 namespace Google {
 
 using System;
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -60,6 +61,11 @@ public class SettingsDialog : EditorWindow
         internal bool renameToDisableFilesEnabled;
 
         /// <summary>
+        /// Analytics settings.
+        /// </summary>
+        internal EditorMeasurement.Settings analyticsSettings;
+
+        /// <summary>
         /// Load settings into the dialog.
         /// </summary>
         internal Settings() {
@@ -69,6 +75,7 @@ public class SettingsDialog : EditorWindow
             verboseLoggingEnabled = VersionHandlerImpl.VerboseLoggingEnabled;
             useProjectSettings = VersionHandlerImpl.UseProjectSettings;
             renameToDisableFilesEnabled = VersionHandlerImpl.RenameToDisableFilesEnabled;
+            analyticsSettings = new EditorMeasurement.Settings(VersionHandlerImpl.analytics);
         }
 
         /// <summary>
@@ -81,7 +88,7 @@ public class SettingsDialog : EditorWindow
             VersionHandlerImpl.VerboseLoggingEnabled = verboseLoggingEnabled;
             VersionHandlerImpl.UseProjectSettings = useProjectSettings;
             VersionHandlerImpl.RenameToDisableFilesEnabled = renameToDisableFilesEnabled;
-
+            analyticsSettings.Save();
             VersionHandlerImpl.BuildTargetChecker.HandleSettingsChanged();
         }
     }
@@ -99,10 +106,11 @@ public class SettingsDialog : EditorWindow
     /// Setup the window's initial position and size.
     /// </summary>
     public void Initialize() {
-        minSize = new Vector2(300, 265);
+        minSize = new Vector2(300, 288);
         position = new Rect(UnityEngine.Screen.width / 3,
                             UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
+        VersionHandlerImpl.analytics.Report("settings/show", "Settings");
     }
 
     /// <summary>
@@ -150,6 +158,8 @@ public class SettingsDialog : EditorWindow
                                 EditorGUILayout.Toggle(settings.renameToDisableFilesEnabled);
         GUILayout.EndHorizontal();
 
+        settings.analyticsSettings.RenderGui();
+
         GUILayout.BeginHorizontal();
         GUILayout.Label("Verbose logging", EditorStyles.boldLabel);
         settings.verboseLoggingEnabled = EditorGUILayout.Toggle(settings.verboseLoggingEnabled);
@@ -160,7 +170,6 @@ public class SettingsDialog : EditorWindow
         settings.useProjectSettings = EditorGUILayout.Toggle(settings.useProjectSettings);
         GUILayout.EndHorizontal();
 
-
         GUILayout.Space(10);
 
         if (GUILayout.Button("Reset to Defaults")) {
@@ -168,15 +177,37 @@ public class SettingsDialog : EditorWindow
             // saved preferences.
             var backupSettings = new Settings();
             VersionHandlerImpl.RestoreDefaultSettings();
+            VersionHandlerImpl.analytics.Report("settings/reset", "Settings Reset");
             LoadSettings();
             backupSettings.Save();
         }
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Cancel")) {
+            VersionHandlerImpl.analytics.Report("settings/cancel", "Settings Cancel");
             Close();
         }
         if (GUILayout.Button("OK")) {
+            VersionHandlerImpl.analytics.Report(
+                "settings/save",
+                new KeyValuePair<string, string>[] {
+                    new KeyValuePair<string, string>(
+                        "enabled",
+                        VersionHandlerImpl.Enabled.ToString()),
+                    new KeyValuePair<string, string>(
+                        "cleanUpPromptEnabled",
+                        VersionHandlerImpl.CleanUpPromptEnabled.ToString()),
+                    new KeyValuePair<string, string>(
+                        "renameToCanonicalFilenames",
+                        VersionHandlerImpl.RenameToCanonicalFilenames.ToString()),
+                    new KeyValuePair<string, string>(
+                        "verboseLoggingEnabled",
+                        VersionHandlerImpl.VerboseLoggingEnabled.ToString()),
+                    new KeyValuePair<string, string>(
+                        "renameToDisableFilesEnabled",
+                        VersionHandlerImpl.RenameToDisableFilesEnabled.ToString()),
+                },
+                "Settings Save");
             settings.Save();
             Close();
             // If the handler has been enabled, refresh the asset database

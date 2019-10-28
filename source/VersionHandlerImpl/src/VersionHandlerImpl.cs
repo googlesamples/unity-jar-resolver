@@ -1505,9 +1505,23 @@ public class VersionHandlerImpl : AssetPostprocessor {
     internal static ProjectSettings settings = new ProjectSettings("Google.VersionHandler.");
 
     /// <summary>
-    ///    Logger for this module.
+    /// Logger for this module.
     /// </summary>
     private static Logger logger = new Logger();
+
+    // Google Analytics tracking ID.
+    internal const string GA_TRACKING_ID = "UA-54627617-3";
+    // Privacy policy for analytics data usage.
+    internal const string PRIVACY_POLICY = "https://policies.google.com/privacy";
+
+    // Analytics reporter.
+    internal static EditorMeasurement analytics = new EditorMeasurement(
+            settings, logger, GA_TRACKING_ID, "com.google.unity.oss.play_services_resolver",
+            "Version Handler", "", PRIVACY_POLICY) {
+        BasePath = "/versionhandler/",
+        BaseQuery = String.Format("version={0}", VersionHandlerVersionNumber.Value.ToString()),
+        BaseReportName = "Version Handler: "
+    };
 
     /// <summary>
     /// Enables / disables assets imported at multiple revisions / versions.
@@ -1621,6 +1635,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     internal static void RestoreDefaultSettings() {
         settings.DeleteKeys(PREFERENCE_KEYS);
+        analytics.RestoreDefaultSettings();
     }
 
     /// <summary>
@@ -1748,7 +1763,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     [MenuItem("Assets/Play Services Resolver/Documentation")]
     public static void OpenProjectDocumentation() {
-        Application.OpenURL(VersionHandlerImpl.DocumentationUrl("#overview"));
+        analytics.OpenUrl(VersionHandlerImpl.DocumentationUrl("#overview"), "Overview");
     }
 
     /// <summary>
@@ -1756,7 +1771,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     [MenuItem("Assets/Play Services Resolver/Version Handler/Documentation")]
     public static void OpenDocumentation() {
-        Application.OpenURL(VersionHandlerImpl.DocumentationUrl("#version-handler-usage"));
+        analytics.OpenUrl(VersionHandlerImpl.DocumentationUrl("#version-handler-usage"), "Usage");
     }
 
     /// <summary>
@@ -1899,6 +1914,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             metadataSet = FileMetadataSet.FindWithPendingUpdates(metadataSet);
         }
         if (metadataSet.EnableMostRecentPlugins(forceUpdate)) {
+            analytics.Report("enablemostrecentplugins", "Enable Most Recent Plugins");
             AssetDatabase.Refresh();
             Refreshing = true;
         }
@@ -1944,11 +1960,20 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 Log("Leaving obsolete file: " + filename, verbose: true);
             };
             Action deleteFiles = () => {
+                bool deletedAll = true;
                 foreach (var filename in window.SelectedItems) MoveAssetToTrash(filename);
                 foreach (var filenameAndDisplay in window.AvailableItems) {
                     if (!window.SelectedItems.Contains(filenameAndDisplay.Key)) {
+                        deletedAll = false;
                         logObsoleteFile(filenameAndDisplay.Value);
                     }
+                }
+                if (deletedAll) {
+                    analytics.Report("deleteobsoletefiles/confirm/all",
+                                     "Delete All Obsolete Files");
+                } else {
+                    analytics.Report("deleteobsoletefiles/confirm/subset",
+                                     "Delete Subset of Obsolete Files");
                 }
                 complete();
             };
@@ -1956,6 +1981,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 foreach (var filenameAndDisplay in window.AvailableItems) {
                     logObsoleteFile(filenameAndDisplay.Value);
                 }
+                analytics.Report("deleteobsoletefiles/abort",
+                                 "Leave Obsolete Files");
                 complete();
             };
             window.AvailableItems = new List<KeyValuePair<string, string>>(cleanupFiles);
