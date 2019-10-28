@@ -647,6 +647,8 @@ public class IOSResolver : AssetPostprocessor {
     /// Initialize the module.
     /// </summary>
     static IOSResolver() {
+        // Load log preferences.
+        VerboseLoggingEnabled = VerboseLoggingEnabled;
         // NOTE: We can't reference the UnityEditor.iOS.Xcode module in this
         // method as the Mono runtime in Unity 4 and below requires all
         // dependencies of a method are loaded before the method is executed
@@ -886,7 +888,11 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static bool VerboseLoggingEnabled {
         get { return settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, defaultValue: false); }
-        set { settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
+        set {
+            settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value);
+            logger.Level = (value || ExecutionEnvironment.InBatchMode) ?
+                LogLevel.Verbose : LogLevel.Info;
+        }
     }
 
     /// <summary>
@@ -987,8 +993,6 @@ public class IOSResolver : AssetPostprocessor {
     /// <param name="level">Severity of the message.</param>
     internal static void Log(string message, bool verbose = false,
                              LogLevel level = LogLevel.Info) {
-        logger.Level = (VerboseLoggingEnabled || ExecutionEnvironment.InBatchMode) ?
-            LogLevel.Verbose : LogLevel.Info;
         logger.Log(message, level: verbose ? LogLevel.Verbose : level);
     }
 
@@ -1448,7 +1452,9 @@ public class IOSResolver : AssetPostprocessor {
         var podToolPath = FindPodTool();
         if (!String.IsNullOrEmpty(podToolPath)) {
             var installationFoundMessage = "CocoaPods installation detected " + podToolPath;
-            if (displayAlreadyInstalled) logMessage(installationFoundMessage);
+            if (displayAlreadyInstalled) {
+                logMessage(installationFoundMessage, level: LogLevel.Verbose);
+            }
             cocoapodsToolsInstallPresent = true;
             return;
         }
