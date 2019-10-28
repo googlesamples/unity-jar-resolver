@@ -723,7 +723,7 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     [MenuItem("Assets/Play Services Resolver/iOS Resolver/Documentation")]
     public static void OpenDocumentation() {
-        Application.OpenURL(VersionHandlerImpl.DocumentationUrl("#ios-resolver-usage"));
+        analytics.OpenUrl(VersionHandlerImpl.DocumentationUrl("#ios-resolver-usage"), "Usage");
     }
 
     // Display the iOS resolver settings menu.
@@ -777,6 +777,7 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     internal static void RestoreDefaultSettings() {
         settings.DeleteKeys(PREFERENCE_KEYS);
+        analytics.RestoreDefaultSettings();
     }
 
     /// <summary>
@@ -984,6 +985,16 @@ public class IOSResolver : AssetPostprocessor {
 
     private static Google.Logger logger = new Google.Logger();
 
+    // Analytics reporter.
+    internal static EditorMeasurement analytics = new EditorMeasurement(
+          settings, logger, VersionHandlerImpl.GA_TRACKING_ID,
+          "com.google.unity.oss.play_services_resolver", "iOS Resolver", "",
+          VersionHandlerImpl.PRIVACY_POLICY) {
+        BasePath = "/iosresolver/",
+        BaseQuery = String.Format("version={0}", IOSResolverVersionNumber.Value.ToString()),
+        BaseReportName = "iOS Resolver: "
+    };
+
     /// <summary>
     /// Log a message.
     /// </summary>
@@ -1181,6 +1192,8 @@ public class IOSResolver : AssetPostprocessor {
                 ").\n" +
                 "Would you like to update the target SDK version?",
                 "Yes", cancel: "No");
+            analytics.Report("updatetargetsdk/" + (update ? "apply" : "cancel"),
+                             "Update Target SDK");
             if (update) {
                 TargetSdkVersion = minVersionAndPodNames.Key;
                 if (runningBuild) {
@@ -1467,7 +1480,9 @@ public class IOSResolver : AssetPostprocessor {
             "For more information see:\n" +
             "  https://guides.cocoapods.org/using/getting-started.html\n\n";
 
-        // Log the set of install pods.
+        analytics.Report("installpodtool/querygems", "Install Pod Tool Query Ruby Gems");
+
+        // Log the set of install gems.
         RunCommand(GEM_EXECUTABLE, "list");
 
         // Gem is being executed in an RVM directory it's already configured to perform a
@@ -1491,6 +1506,7 @@ public class IOSResolver : AssetPostprocessor {
             installArgs += " --verbose";
         }
 
+        analytics.Report("installpodtool/installgems", "Install Pod Tool Ruby Gem");
         var commandList = new List<CommandItem>();
         if (!QueryGemInstalled("activesupport", logMessage: logMessage)) {
             // Workaround activesupport (dependency of the CocoaPods gem) requiring
@@ -1515,6 +1531,9 @@ public class IOSResolver : AssetPostprocessor {
                 var lastCommand = commands[commandIndex];
                 commandIndex += 1;
                 if (result.exitCode != 0) {
+                    analytics.Report("installpodtool/failed",
+                                     String.Format("Install Pod Tool Ruby Gem Failed {0}",
+                                                   result.exitCode));
                     logMessage(String.Format(
                         "Failed to install CocoaPods for the current user.\n\n" +
                         "{0}\n" +
@@ -1535,15 +1554,20 @@ public class IOSResolver : AssetPostprocessor {
                             "'{0} {1}' succeeded but the {2} tool cannot be found.\n\n" +
                             "{3}\n", lastCommand.Command, lastCommand.Arguments,
                             POD_EXECUTABLE, commonInstallErrorMessage), level: LogLevel.Error);
+                        analytics.Report("installpodtool/failedmissing",
+                                         "Install Pod Tool Ruby Gem Succeeded, Missing Tool");
                         complete.Set();
                         return -1;
                     }
                     if (dialog != null) {
+                        analytics.Report("installpodtool/downloadrepo",
+                                         "Install Pod Tool Download Cocoapods Repo");
                         dialog.bodyText += ("\n\nDownloading CocoaPods Master Repository\n" +
                                             "(this can take a while)\n");
                     }
                     commands[commandIndex].Command = podToolPath;
                 } else if (commandIndex == commands.Length) {
+                    analytics.Report("installpodtool/success", "Install Pod Tool Succeeded");
                     complete.Set();
                     logMessage("CocoaPods tools successfully installed.");
                     cocoapodsToolsInstallPresent = true;
@@ -1839,6 +1863,7 @@ public class IOSResolver : AssetPostprocessor {
     // processing step.
     public static void GenPodfile(BuildTarget buildTarget,
                                   string pathToBuiltProject) {
+        analytics.Report("generatepodfile", "Generate Podfile");
         string podfilePath = GetPodfilePath(pathToBuiltProject);
 
         string unityPodfile = FindExistingUnityPodfile(podfilePath);
@@ -1858,6 +1883,7 @@ public class IOSResolver : AssetPostprocessor {
                           (CocoapodsWorkspaceIntegrationEnabled ? "Xcode workspace" :
                           (CocoapodsProjectIntegrationEnabled ? "Xcode project" : "no target"))),
             verbose: true);
+
         using (StreamWriter file = new StreamWriter(podfilePath)) {
             file.WriteLine(GeneratePodfileSourcesSection() +
                            String.Format("platform :ios, '{0}'\n", TargetSdk));
@@ -1869,6 +1895,38 @@ public class IOSResolver : AssetPostprocessor {
                 file.WriteLine("end");
             }
         }
+
+        int versionCount = 0;
+        int localPathCount = 0;
+        int targetSdkCount = 0;
+        int maxProperties = 0;
+        int maxSources = Pod.Sources.Count;
+        int fromXmlFileCount = 0;
+        foreach (var pod in pods.Values) {
+            maxProperties = Math.Max(maxProperties, pod.propertiesByName.Count);
+            maxSources = Math.Max(maxSources, pod.sources.Count);
+            if (!String.IsNullOrEmpty(pod.version)) versionCount++;
+            if (!String.IsNullOrEmpty(pod.minTargetSdk)) targetSdkCount++;
+            if (!String.IsNullOrEmpty(pod.LocalPath)) localPathCount++;
+            if (pod.fromXmlFile) fromXmlFileCount++;
+        }
+        analytics.Report("generatepodfile/podinfo",
+                         new KeyValuePair<string, string>[] {
+                             new KeyValuePair<string, string>("numPods", pods.Count.ToString()),
+                             new KeyValuePair<string, string>("numPodsWithVersions",
+                                                              versionCount.ToString()),
+                             new KeyValuePair<string, string>("numLocalPods",
+                                                              localPathCount.ToString()),
+                             new KeyValuePair<string, string>("numMinTargetSdk",
+                                                              targetSdkCount.ToString()),
+                             new KeyValuePair<string, string>("maxNumProperties",
+                                                              maxProperties.ToString()),
+                             new KeyValuePair<string, string>("maxNumSources",
+                                                              maxSources.ToString()),
+                             new KeyValuePair<string, string>("numFromXmlFiles",
+                                                              fromXmlFileCount.ToString())
+                         },
+                         "Generate Podfile Pods Section");
     }
 
     /// <summary>
@@ -2219,6 +2277,7 @@ public class IOSResolver : AssetPostprocessor {
         if (UnityCanLoadWorkspace &&
             CocoapodsIntegrationMethodPref == CocoapodsIntegrationMethod.Workspace &&
             SkipPodInstallWhenUsingWorkspaceIntegration) {
+            analytics.Report("installpods/disabled", "Pod Install Disabled");
             Log("Skipping pod install.", level: LogLevel.Warning);
             return;
         }
@@ -2227,9 +2286,14 @@ public class IOSResolver : AssetPostprocessor {
         CommandLine.Result result;
         result = RunPodCommand("--version", pathToBuiltProject);
         if (result.exitCode == 0) podsVersion = result.stdout.Trim();
+        var cocoapodsVersionParameters = new KeyValuePair<string, string>[] {
+            new KeyValuePair<string, string>("cocoapodsVersion", podsVersion)
+        };
 
         if (result.exitCode != 0 ||
             (!String.IsNullOrEmpty(podsVersion) && podsVersion[0] == '0')) {
+            analytics.Report("installpods/outofdate", cocoapodsVersionParameters,
+                             "Pod Install, Tool Out Of Date");
             Log("Error running CocoaPods. Please ensure you have at least " +
                 "version 1.0.0.  " + COCOAPOD_INSTALL_INSTRUCTIONS + "\n\n" +
                 "'" + POD_EXECUTABLE + " --version' returned status: " +
@@ -2239,16 +2303,21 @@ public class IOSResolver : AssetPostprocessor {
             return;
         }
 
+        analytics.Report("installpods/install", cocoapodsVersionParameters, "Pod Install");
         result = RunPodCommand("install", pathToBuiltProject);
 
         // If pod installation failed it may be due to an out of date pod repo.
         // We'll attempt to resolve the error by updating the pod repo -
         // which is a slow operation - and retrying pod installation.
         if (result.exitCode != 0) {
+            analytics.Report("installpods/repoupdate", cocoapodsVersionParameters,
+                             "Pod Install Repo Update");
             CommandLine.Result repoUpdateResult =
                 RunPodCommand("repo update", pathToBuiltProject);
             bool repoUpdateSucceeded = repoUpdateResult.exitCode == 0;
 
+            analytics.Report("installpods/install2", cocoapodsVersionParameters,
+                             "Pod Install Attempt 2");
             // Second attempt result.
             // This is isolated in case it fails, so we can just report the
             // original failure.
@@ -2257,6 +2326,8 @@ public class IOSResolver : AssetPostprocessor {
 
             // If the repo update still didn't fix the problem...
             if (result2.exitCode != 0) {
+                analytics.Report("installpods/failed", cocoapodsVersionParameters,
+                                 "Pod Install Failed");
                 Log("iOS framework addition failed due to a " +
                     "CocoaPods installation failure. This will will likely " +
                     "result in an non-functional Xcode project.\n\n" +
@@ -2305,6 +2376,7 @@ public class IOSResolver : AssetPostprocessor {
         // failed.
         var podsDir = Path.Combine(pathToBuiltProject, PODS_DIR);
         if (!Directory.Exists(podsDir)) return;
+        analytics.Report("injectpodsintoxcproj", "Inject Pods Into xcproj");
 
         // If Unity can load workspaces, and one has been generated, yet we're still
         // trying to patch the project file, then we have to actually get rid of the workspace

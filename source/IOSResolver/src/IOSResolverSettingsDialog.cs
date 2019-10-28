@@ -17,6 +17,7 @@
 namespace Google {
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -36,6 +37,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         internal bool verboseLoggingEnabled;
         internal int cocoapodsIntegrationMenuIndex;
         internal bool useProjectSettings;
+        internal EditorMeasurement.Settings analyticsSettings;
 
         /// <summary>
         /// Load settings into the dialog.
@@ -48,6 +50,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             cocoapodsIntegrationMenuIndex = FindIndexFromCocoapodsIntegrationMethod(
                 IOSResolver.CocoapodsIntegrationMethodPref);
             useProjectSettings = IOSResolver.UseProjectSettings;
+            analyticsSettings = new EditorMeasurement.Settings(IOSResolver.analytics);
         }
 
         /// <summary>
@@ -61,6 +64,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             IOSResolver.CocoapodsIntegrationMethodPref =
                 integrationMapping[cocoapodsIntegrationMenuIndex];
             IOSResolver.UseProjectSettings = useProjectSettings;
+            analyticsSettings.Save();
         }
     }
 
@@ -91,7 +95,7 @@ public class IOSResolverSettingsDialog : EditorWindow
     }
 
     public void Initialize() {
-        minSize = new Vector2(400, 360);
+        minSize = new Vector2(400, 400);
         position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
     }
@@ -170,6 +174,8 @@ public class IOSResolverSettingsDialog : EditorWindow
                             "Assets > Play Services Resolver > iOS Resolver > Install Cocoapods");
         }
 
+        settings.analyticsSettings.RenderGui();
+
         GUILayout.BeginHorizontal();
         GUILayout.Label("Verbose Logging", EditorStyles.boldLabel);
         settings.verboseLoggingEnabled = EditorGUILayout.Toggle(settings.verboseLoggingEnabled);
@@ -187,15 +193,39 @@ public class IOSResolverSettingsDialog : EditorWindow
             // saved preferences.
             var backupSettings = new Settings();
             IOSResolver.RestoreDefaultSettings();
+            IOSResolver.analytics.Report("settings/reset", "Settings Reset");
             LoadSettings();
             backupSettings.Save();
         }
 
         GUILayout.BeginHorizontal();
         bool closeWindow = GUILayout.Button("Cancel");
+        if (closeWindow) IOSResolver.analytics.Report("settings/cancel", "Settings Cancel");
         bool ok = GUILayout.Button("OK");
         closeWindow |= ok;
-        if (ok) settings.Save();
+        if (ok) {
+            IOSResolver.analytics.Report(
+                "settings/save",
+                new KeyValuePair<string, string>[] {
+                    new KeyValuePair<string, string>(
+                        "podfileGenerationEnabled",
+                        IOSResolver.PodfileGenerationEnabled.ToString()),
+                    new KeyValuePair<string, string>(
+                        "podToolExecutionViaShellEnabled",
+                        IOSResolver.PodToolExecutionViaShellEnabled.ToString()),
+                    new KeyValuePair<string, string>(
+                        "autoPodToolInstallInEditorEnabled",
+                        IOSResolver.AutoPodToolInstallInEditorEnabled.ToString()),
+                    new KeyValuePair<string, string>(
+                        "verboseLoggingEnabled",
+                        IOSResolver.VerboseLoggingEnabled.ToString()),
+                    new KeyValuePair<string, string>(
+                        "cocoapodsIntegrationMethod",
+                        IOSResolver.CocoapodsIntegrationMethodPref.ToString()),
+                },
+                "Settings Save");
+            settings.Save();
+        }
         if (closeWindow) Close();
         GUILayout.EndHorizontal();
         GUILayout.EndVertical();
