@@ -1505,13 +1505,22 @@ public class VersionHandlerImpl : AssetPostprocessor {
     internal static ProjectSettings settings = new ProjectSettings("Google.VersionHandler.");
 
     /// <summary>
+    ///    Logger for this module.
+    /// </summary>
+    private static Logger logger = new Logger();
+
+    /// <summary>
     /// Enables / disables assets imported at multiple revisions / versions.
     /// In addition, this module will read text files matching _manifest_
     /// and remove files from older manifest files.
     /// </summary>
     static VersionHandlerImpl() {
         Log("Loaded VersionHandlerImpl", verbose: true);
-        RunOnMainThread.Run(() => { UpdateVersionedAssetsOnUpdate(); }, runNow: false);
+        RunOnMainThread.Run(() => {
+                // Load log preferences.
+                VerboseLoggingEnabled = VerboseLoggingEnabled;
+                UpdateVersionedAssetsOnUpdate();
+            }, runNow: false);
     }
 
     static void UpdateVersionedAssetsOnUpdate() {
@@ -1658,7 +1667,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
         get { return System.Environment.CommandLine.Contains("-batchmode") ||
                 settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
                                  defaultValue: false); }
-        set { settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value); }
+        set {
+            settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value);
+            logger.Level = value ? LogLevel.Verbose : LogLevel.Info;
+        }
     }
 
     /// <summary>
@@ -1702,11 +1714,6 @@ public class VersionHandlerImpl : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Logger for this module.
-    /// </summary>
-    private static Logger logger = new Logger();
-
-    /// <summary>
     /// Whether to also log to a file in the project.
     /// </summary>
     internal static bool LogToFile {
@@ -1723,7 +1730,6 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// <param name="level">Severity of the message.</param>
     internal static void Log(string message, bool verbose = false,
                              LogLevel level = LogLevel.Info) {
-        logger.Level = VerboseLoggingEnabled ? LogLevel.Verbose : LogLevel.Info;
         logger.Log(message, level: verbose ? LogLevel.Verbose : level);
     }
 
