@@ -1,3 +1,17 @@
+# Version 1.2.131 - Oct 29, 2019
+## Bug Fixes
+* Version Handler: Improved execution of events on the main thread in batch
+  mode.
+* Version Handler: Improved log level configuration at startup.
+* Version Handler: Improved performance of class lookup in deferred method
+  calls.
+* Version Handler: Fixed rename to enable / disable for editor assets.
+* iOS Resolver: Improved log level configuration at startup.
+* Android Resolver: Improved local maven repo path reference in
+  mainTemplate.gradle using DIR_UNITYPROJECT.  DIR_UNITYPROJECT by Unity
+  to point to the local filesystem path of the Unity project when Unity
+  generates the Gradle project.
+
 # Version 1.2.130 - Oct 23, 2019
 ## New Features
 * iOS Resolver: Added support for modifying the Podfile before `pod install`
