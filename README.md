@@ -287,6 +287,67 @@ build system and Gradle / Android Studio project export.
 It's possible to change the resolution strategy via the
 `Assets > Play Services Resolver > Android Resolver > Settings` menu.
 
+### Download Artifacts with Gradle
+
+Using the default resolution strategy, the Android resolver executes the
+following operations:
+
+   - Remove the result of previous Android resolutions.
+     e.g Delete all files and directories labeled with "gpsr" under
+     `Plugins/Android` from the project.
+   - Collect the set of Android dependencies (libraries) specified by a
+     project's `*Dependencies.xml` files.
+   - Run `download_artifacts.gradle` with Gradle to resolve conflicts and,
+     if successful, download the set of resolved Android libraries (AARs, JARs).
+   - Process each AAR / JAR so that it can be used with the currently selected
+     Unity build system (e.g Internal vs. Gradle, Export vs. No Export).
+     This involves patching each reference to `applicationId` in the
+     AndroidManifest.xml with the project's bundle ID.  This means resolution
+     must be run if the bundle ID is changed again.
+   - Move the processed AARs to `Plugins/Android` so they will be included when
+     Unity invokes the Android build.
+
+### Integrate into mainTemplate.gradle
+
+Unity 5.6 introduced support for customizing the `build.gradle` used to build
+Unity projects with Gradle. When the *Patch mainTemplate.gradle* setting is
+enabled, rather than downloading artifacts before the build, Android resolution
+results in the execution of the following operations:
+
+   - Remove the result of previous Android resolutions.
+     e.g Delete all files and directories labeled with "gpsr" under
+     `Plugins/Android` from the project and remove sections delimited with
+     `// Android Resolver * Start` and `// Android Resolver * End` lines.
+   - Collect the set of Android dependencies (libraries) specified by a
+     project's `*Dependencies.xml` files.
+   - Rename any `.srcaar` files in the build to `.aar` and exclude them from
+     being included directly by Unity in the Android build as
+     `mainTemplate.gradle` will be patched to include them instead from their
+     local maven repositories.
+   - Inject the required Gradle repositories into `mainTemplate.gradle` at the
+     line matching the pattern
+     `.*apply plugin: 'com\.android\.(application|library)'.*"` or the section
+     starting at the line `// Android Resolver Repos Start`.
+     If you want to control the injection point in the file, the section
+     delimited by the lines `// Android Resolver Repos Start` and
+     `// Android Resolver Repos End` should be placed in the global scope
+     before the `dependencies` section.
+   - Inject the required Android dependencies (libraries) into
+     `mainTemplate.gradle` at the line matching the pattern `***DEPS***` or
+     the section starting at the line `// Android Resolver Dependencies Start`.
+     If you want to control the injection point in the file, the section
+     delimited by the lines `// Android Resolver Dependencies Start` and
+     `// Android Resolver Dependencies End` should be placed in the
+     `dependencies` section.
+   - Inject the packaging options logic, which excludes architecture specific
+     libraries based upon the selected build target, into `mainTemplate.gradle`
+     at the line matching the pattern `android +{` or the section starting at
+     the line `// Android Resolver Exclusions Start`.
+     If you want to control the injection point in the file, the section
+     delimited by the lines `// Android Resolver Exclusions Start` and
+     `// Android Resolver Exclusions End` should be placed in the global
+     scope before the `android` section.
+
 ## Dependency Tracking
 
 The Android Resolver creates the
