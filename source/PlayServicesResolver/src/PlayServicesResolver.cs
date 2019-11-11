@@ -1917,8 +1917,8 @@ namespace GooglePlayServices {
                 // generate the root Gradle project in "Temp/gradleOut" when *not* exporting a
                 // gradle project.
                 lines.Add(String.Format(
-						  "        def unityProjectPath = \"{0}**DIR_UNITYPROJECT**\"",
-						  GradleWrapper.FILE_SCHEME));
+                          "        def unityProjectPath = $/{0}**DIR_UNITYPROJECT**/$" +
+                          ".replace(\"\\\\\", \"/\")", GradleWrapper.FILE_SCHEME));
                 lines.Add("        maven {");
                 lines.Add("            url \"https://maven.google.com\"");
                 lines.Add("        }");
