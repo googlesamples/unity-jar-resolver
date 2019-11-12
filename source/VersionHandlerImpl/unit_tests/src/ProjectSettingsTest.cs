@@ -18,6 +18,7 @@ namespace Google.VersionHandlerImpl.Tests {
     using NUnit.Framework;
     using System;
     using System.Collections.Generic;
+    using System.IO;
 
     using Google;
 
@@ -110,7 +111,12 @@ namespace Google.VersionHandlerImpl.Tests {
             ProjectSettings.systemSettings = new InMemorySettings();
             ProjectSettings.logger.Target = LogTarget.Console;
             ProjectSettings.checkoutFile = (filename, logger) => { return true; };
-            ProjectSettings.DeleteAllProjectKeys();
+            // Delete any persisted settings.
+            if (File.Exists(ProjectSettings.PROJECT_SETTINGS_FILE)) {
+                (new System.IO.FileInfo(ProjectSettings.PROJECT_SETTINGS_FILE)).IsReadOnly = false;
+                File.Delete(ProjectSettings.PROJECT_SETTINGS_FILE);
+            }
+
         }
 
         /// <summary>
@@ -203,6 +209,31 @@ namespace Google.VersionHandlerImpl.Tests {
             Assert.That(settings.GetFloat("a_float"), Is.EqualTo(3.14f));
             Assert.That(settings.HasKey("a_string"), Is.EqualTo(true));
             Assert.That(settings.GetString("a_string"), Is.EqualTo("nada"));
+        }
+
+        /// <summary>
+        /// Test attempting to store persisted settings to a read-only file.
+        /// </summary>
+        [Test]
+        public void SaveToReadonlySettings() {
+            // Create a readonly settings file.
+            File.WriteAllText(ProjectSettings.PROJECT_SETTINGS_FILE,
+                              "<projectSettings>\n" +
+                              "  <projectSetting name=\"myplugin.bar\" value=\"True\" />\n" +
+                              "</projectSettings>\n");
+            (new System.IO.FileInfo(ProjectSettings.PROJECT_SETTINGS_FILE)).IsReadOnly = true;
+            var settings = new ProjectSettings("myplugin");
+            Assert.That(settings.HasKey("myplugin.foo", SettingsLocation.Project),
+                        Is.EqualTo(false));
+            Assert.That(settings.HasKey("myplugin.bar", SettingsLocation.Project),
+                        Is.EqualTo(true));
+            Assert.That(settings.GetBool("myplugin.bar", false, SettingsLocation.Project),
+                        Is.EqualTo(true));
+            settings.SetBool("myplugin.foo", true, SettingsLocation.Project);
+            Assert.That(settings.HasKey("myplugin.foo", SettingsLocation.Project),
+                        Is.EqualTo(true));
+            Assert.That(settings.GetBool("myplugin.foo", false, SettingsLocation.Project),
+                        Is.EqualTo(true));
         }
 
         /// <summary>

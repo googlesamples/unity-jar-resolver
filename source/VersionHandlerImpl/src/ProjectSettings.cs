@@ -355,7 +355,7 @@ namespace Google {
         /// <summary>
         /// File to store project level settings.
         /// </summary>
-        private static readonly string PROJECT_SETTINGS_FILE = Path.Combine(
+        internal static readonly string PROJECT_SETTINGS_FILE = Path.Combine(
             "ProjectSettings", "GvhProjectSettings.xml");
 
         /// <summary>
@@ -809,20 +809,30 @@ namespace Google {
                                       PROJECT_SETTINGS_FILE), LogLevel.Error);
                     return;
                 }
-                using (var writer = new XmlTextWriter(new StreamWriter(PROJECT_SETTINGS_FILE)) {
-                        Formatting = Formatting.Indented,
-                    }) {
-                    writer.WriteStartElement("projectSettings");
-                    foreach (var key in projectSettings.Keys) {
-                        var value = projectSettings.GetString(key);
-                        writer.WriteStartElement("projectSetting");
-                        if (!String.IsNullOrEmpty(key) && !String.IsNullOrEmpty(value)) {
-                            writer.WriteAttributeString("name", key);
-                            writer.WriteAttributeString("value", value);
+                try {
+                    using (var writer = new XmlTextWriter(new StreamWriter(PROJECT_SETTINGS_FILE)) {
+                            Formatting = Formatting.Indented,
+                        }) {
+                        writer.WriteStartElement("projectSettings");
+                        foreach (var key in projectSettings.Keys) {
+                            var value = projectSettings.GetString(key);
+                            writer.WriteStartElement("projectSetting");
+                            if (!String.IsNullOrEmpty(key) && !String.IsNullOrEmpty(value)) {
+                                writer.WriteAttributeString("name", key);
+                                writer.WriteAttributeString("value", value);
+                            }
+                            writer.WriteEndElement();
                         }
                         writer.WriteEndElement();
                     }
-                    writer.WriteEndElement();
+                } catch (Exception exception) {
+                    if (exception is IOException || exception is UnauthorizedAccessException) {
+                        logger.Log(String.Format("Unable to write to '{0}' ({1}, " +
+                                                 "Project settings were not saved!",
+                                                 PROJECT_SETTINGS_FILE, exception), LogLevel.Error);
+                        return;
+                    }
+                    throw exception;
                 }
             }
         }
