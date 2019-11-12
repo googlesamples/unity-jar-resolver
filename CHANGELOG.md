@@ -1,3 +1,10 @@
+# Version 1.2.132 - Nov 11, 2019
+## Bug Fixes
+* Android Resolver: Worked around expansion of DIR_UNITYPROJECT on Windows
+  breaking Gradle builds when used as part of a file URI.
+* Android Resolver: mainTemplate.gradle is only written if it needs to be
+  modified.
+
 # Version 1.2.131 - Oct 29, 2019
 ## Bug Fixes
 * Version Handler: Improved execution of events on the main thread in batch
