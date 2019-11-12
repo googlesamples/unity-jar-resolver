@@ -345,6 +345,13 @@ namespace GooglePlayServices {
                 }
                 outputLines.AddRange(currentOutputLines);
             }
+            var inputText = String.Join("\n", (new List<string>(lines)).ToArray()) + "\n";
+            var outputText = String.Join("\n", outputLines.ToArray()) + "\n";
+            if (inputText == outputText) {
+                PlayServicesResolver.Log(String.Format("No changes to {0}", fileDescription),
+                                         level: LogLevel.Verbose);
+                return true;
+            }
             if (!FileUtils.CheckoutFile(GradleTemplatePath, PlayServicesResolver.logger)) {
                 PlayServicesResolver.Log(
                     String.Format("Failed to checkout '{0}', unable to patch the file.",
@@ -358,8 +365,7 @@ namespace GooglePlayServices {
                 String.Format("Writing updated {0}", fileDescription),
                 level: LogLevel.Verbose);
             try {
-                File.WriteAllText(GradleTemplatePath,
-                                  String.Join("\n", outputLines.ToArray()) + "\n");
+                File.WriteAllText(GradleTemplatePath, outputText);
                 PlayServicesResolver.analytics.Report(
                        "/resolve/gradletemplate/success", resolutionMeasurementParameters,
                        "Gradle Template Resolve Success");
