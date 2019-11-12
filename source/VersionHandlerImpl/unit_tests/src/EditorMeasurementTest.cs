@@ -149,7 +149,7 @@ namespace Google.VersionHandlerImpl.Tests {
         /// Concatenate query strings.
         /// </summary>
         [Test]
-        void ConcatenateQueryStrings() {
+        public void ConcatenateQueryStrings() {
             Assert.That(EditorMeasurement.ConcatenateQueryStrings(null, null), Is.EqualTo(null));
             Assert.That(EditorMeasurement.ConcatenateQueryStrings("foo", null), Is.EqualTo("foo"));
             Assert.That(EditorMeasurement.ConcatenateQueryStrings(null, "foo"), Is.EqualTo("foo"));
