@@ -1,3 +1,8 @@
+# Version 1.2.133 - Nov 18, 2019
+## Bug Fixes
+* All Components: Failure to save project settings will now report an error
+  to the log rather than throwing an exception.
+
 # Version 1.2.132 - Nov 11, 2019
 ## Bug Fixes
 * Android Resolver: Worked around expansion of DIR_UNITYPROJECT on Windows
