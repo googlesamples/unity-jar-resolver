@@ -453,6 +453,7 @@ namespace Google {
         public void SetInt(string name, int value, SettingsLocation location) {
             if ((location & SettingsLocation.Project) != 0) {
                 lock (classLock) {
+                    LoadIfEmpty();
                     projectSettings.SetInt(name, value);
                     Save();
                 }
@@ -478,6 +479,7 @@ namespace Google {
         public void SetBool(string name, bool value, SettingsLocation location) {
             if ((location & SettingsLocation.Project) != 0) {
                 lock (classLock) {
+                    LoadIfEmpty();
                     projectSettings.SetBool(name, value);
                     Save();
                 }
@@ -503,6 +505,7 @@ namespace Google {
         public void SetFloat(string name, float value, SettingsLocation location) {
             if ((location & SettingsLocation.Project) != 0) {
                 lock (classLock) {
+                    LoadIfEmpty();
                     projectSettings.SetFloat(name, value);
                     Save();
                 }
@@ -528,6 +531,7 @@ namespace Google {
         public void SetString(string name, string value, SettingsLocation location) {
             if ((location & SettingsLocation.Project) != 0) {
                 lock (classLock) {
+                    LoadIfEmpty();
                     projectSettings.SetString(name, value);
                     Save();
                 }
@@ -709,6 +713,7 @@ namespace Google {
         public void DeleteKey(string name) {
             systemSettings.DeleteKey(name);
             lock (classLock) {
+                LoadIfEmpty();
                 projectSettings.DeleteKey(name);
                 Save();
             }
@@ -720,6 +725,7 @@ namespace Google {
         /// <param name="names">Names of the values to delete.</param>
         public void DeleteKeys(IEnumerable<string> names) {
             lock (classLock) {
+                LoadIfEmpty();
                 foreach (var name in names) {
                     systemSettings.DeleteKey(name);
                     projectSettings.DeleteKey(name);
@@ -735,6 +741,7 @@ namespace Google {
         /// <param name="save">Whether to save the settings.</param>
         internal static void DeleteAllProjectKeys(bool save = true) {
             lock (classLock) {
+                LoadIfEmpty();
                 foreach (var key in new List<string>(projectSettings.Keys)) {
                     projectSettings.DeleteKey(key);
                 }

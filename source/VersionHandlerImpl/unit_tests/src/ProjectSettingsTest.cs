@@ -209,6 +209,20 @@ namespace Google.VersionHandlerImpl.Tests {
             Assert.That(settings.GetFloat("a_float"), Is.EqualTo(3.14f));
             Assert.That(settings.HasKey("a_string"), Is.EqualTo(true));
             Assert.That(settings.GetString("a_string"), Is.EqualTo("nada"));
+
+            // Force reload of settings.
+            ProjectSettings.projectSettings = new InMemorySettings();
+            ProjectSettings.systemSettings = new InMemorySettings();
+            // Make sure that setting a value also loads other settings into the cache.
+            settings.SetFloat("a_float", 0.707f);
+            Assert.That(settings.HasKey("an_int"), Is.EqualTo(true));
+            Assert.That(settings.GetInt("an_int"), Is.EqualTo(42));
+            Assert.That(settings.HasKey("a_bool"), Is.EqualTo(true));
+            Assert.That(settings.GetBool("a_bool"), Is.EqualTo(true));
+            Assert.That(settings.HasKey("a_float"), Is.EqualTo(true));
+            Assert.That(settings.GetFloat("a_float"), Is.EqualTo(0.707f));
+            Assert.That(settings.HasKey("a_string"), Is.EqualTo(true));
+            Assert.That(settings.GetString("a_string"), Is.EqualTo("nada"));
         }
 
         /// <summary>

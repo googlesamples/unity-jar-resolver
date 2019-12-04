@@ -1679,12 +1679,12 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// Enable / disable verbose logging.
     /// </summary>
     public static bool VerboseLoggingEnabled {
-        get { return System.Environment.CommandLine.Contains("-batchmode") ||
-                settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
-                                 defaultValue: false); }
+        get { return settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED,
+                                      defaultValue: false); }
         set {
             settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value);
-            logger.Level = value ? LogLevel.Verbose : LogLevel.Info;
+            logger.Level = System.Environment.CommandLine.Contains("-batchmode") || value ?
+                LogLevel.Verbose : LogLevel.Info;
         }
     }
 
@@ -2128,7 +2128,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 bool logToFilePrevious = LogToFile;
                 // Enable logging to a file as all logs on shutdown do not end up in Unity's log
                 // file.
-                LogToFile = VerboseLoggingEnabled;
+                LogToFile = logger.Level == LogLevel.Verbose;
                 Log(String.Format(".NET framework version changed from {0} to {1}\n",
                                   currentDotNetVersion, newDotNetVersion));
                 currentDotNetVersion = FileMetadata.ScriptingRuntimeDotNetVersion;
