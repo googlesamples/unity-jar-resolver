@@ -1,3 +1,8 @@
+# Version 1.2.134 - Dec 4, 2019
+## Bug Fixes
+* All Components: Fixed an issue which caused project settings to be cleared
+  when running in batch mode.
+
 # Version 1.2.133 - Nov 18, 2019
 ## Bug Fixes
 * All Components: Failure to save project settings will now report an error
