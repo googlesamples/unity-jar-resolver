@@ -1,3 +1,7 @@
+# Version 1.2.135 - Dec 5, 2019
+## Bug Fixes
+* All Components: Fixed stack overflow when loading project settings.
+
 # Version 1.2.134 - Dec 4, 2019
 ## Bug Fixes
 * All Components: Fixed an issue which caused project settings to be cleared

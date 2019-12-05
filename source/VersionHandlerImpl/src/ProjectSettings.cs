@@ -741,7 +741,7 @@ namespace Google {
         /// <param name="save">Whether to save the settings.</param>
         internal static void DeleteAllProjectKeys(bool save = true) {
             lock (classLock) {
-                LoadIfEmpty();
+                if (save) LoadIfEmpty();
                 foreach (var key in new List<string>(projectSettings.Keys)) {
                     projectSettings.DeleteKey(key);
                 }
