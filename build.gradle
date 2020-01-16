@@ -151,9 +151,12 @@ project.ext {
   }
   saveProperty("NUNIT_CONSOLE_EXE", nunitConsoleExe, cacheProperties)
 
+  // Get the directory that contains this script.
+  scriptDirectory = buildscript.sourceFile.getParentFile()
+
   // It can take a while to search for build tools, so cache paths in the project
   // properties.
-  File projectPropertiesFile = new File("gradle.properties")
+  File projectPropertiesFile = new File(scriptDirectory,"gradle.properties")
   if (!projectPropertiesFile.exists()) {
     logger.info(sprintf("Saving %s to %s",
                         cacheProperties.stringPropertyNames(),
@@ -169,9 +172,6 @@ project.ext {
 
   // Whether debug symbols should be included.
   debugEnabled = findProperty("NDEBUG") == null
-
-  // Get the directory that contains this script.
-  scriptDirectory = buildscript.sourceFile.getParentFile()
 
   // Directory for intermediate and final build outputs.
   buildDir = new File(scriptDirectory, "build")
@@ -194,7 +194,7 @@ project.ext {
   pluginEditorDllDir = new File(pluginAssetsDir, "Editor")
   // Directory which contains the solution for all C# projects with a project in
   // each subdirectory.
-  pluginSourceDir = new File("source")
+  pluginSourceDir = new File(scriptDirectory, "source")
   // Solution which references all projects used by the plugin.
   pluginSolutionFile = new File(pluginSourceDir, "JarResolver.sln")
   // Version of the plugin (update this with CHANGELOG.md on each release).
@@ -1109,7 +1109,7 @@ createPythonTask(
   "testPackageUploader",
   "Test the unity_asset_uploader.py application.",
   [],
-  new File("source/UnityAssetUploader/unity_asset_uploader_test.py"),
+  new File(project.ext.scriptDirectory, "source/UnityAssetUploader/unity_asset_uploader_test.py"),
   [])
 
 task updateEmbeddedGradleWrapper(type: Zip) {
@@ -1404,7 +1404,7 @@ createUnityTestBatchAndNonBatch(
   ("Imports the plugin into a Unity project and verifies all " +
    "components can be activated by the Version Handler."),
   [buildPlugin],
-  new File("source/VersionHandlerImpl/test/activation"), [], null)
+  new File(project.ext.scriptDirectory,"source/VersionHandlerImpl/test/activation"), [], null)
 
 // Launch the test via a script that runs a local web server.
 createUnityTestBatchAndNonBatch(
@@ -1412,7 +1412,7 @@ createUnityTestBatchAndNonBatch(
   ("Imports the plugin into a Unity project tests the PortableWebRequest " +
    "class."),
   [buildPlugin],
-  new File("source/VersionHandlerImpl/test/webrequest"), [],
+  new File(project.ext.scriptDirectory, "source/VersionHandlerImpl/test/webrequest"), [],
   { String name, String description, Iterable<Task> depends,
     File executable, Iterable<String> args ->
       Iterable<String> runnerArgs = [executable.absolutePath] + args
@@ -1432,7 +1432,7 @@ createUnityTestBatchAndNonBatch(
   ("Imports the plugin into a Unity project and tests reflection " +
    "methods."),
   [buildPlugin],
-  new File("source/VersionHandler/test/reflection"), [], null)
+  new File(project.ext.scriptDirectory, "source/VersionHandler/test/reflection"), [], null)
 
 createUnityTestBatchAndNonBatch(
   "testAndroidResolverAsyncResolve",
@@ -1440,7 +1440,7 @@ createUnityTestBatchAndNonBatch(
    "a combination of dependencies added via the programmatic API and via " +
    "XML files, verifying all dependencies resolve successfully."),
   [buildPlugin],
-  new File("source/PlayServicesResolver/test/resolve_async"),
+  new File(project.ext.scriptDirectory, "source/PlayServicesResolver/test/resolve_async"),
   ["-buildTarget", "android"], null)  // TODO: Move this into the test!?
 
 task cleanTests(type: Delete) {
