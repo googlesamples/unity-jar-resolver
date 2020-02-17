@@ -64,7 +64,13 @@ namespace GooglePlayServices {
                             "Editor", "").Replace("OSX", "MacOS");
                         var openJdkDir = Path.Combine(Path.Combine(Path.Combine(
                             androidPlayerDir, "Tools"), "OpenJDK"), platformDir);
-                        if (Directory.Exists(openJdkDir)) javaHome = openJdkDir;
+                        if (Directory.Exists(openJdkDir)) {
+                            javaHome = openJdkDir;
+                        }
+                        else {
+                            openJdkDir = Path.Combine(androidPlayerDir, "OpenJDK");
+                            if (Directory.Exists(openJdkDir)) javaHome = openJdkDir;
+                        }
                     }
                 }
                 // If the JDK stil isn't found, check the environment.
