@@ -1,3 +1,7 @@
+# Version 1.2.136 - Feb 19, 2019
+## Bug Fixes
+* Android Resolver: Fixed OpenJDK path discovery in Unity 2019.3.1.
+
 # Version 1.2.135 - Dec 5, 2019
 ## Bug Fixes
 * All Components: Fixed stack overflow when loading project settings.
