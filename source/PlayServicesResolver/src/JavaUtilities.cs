@@ -58,20 +58,19 @@ namespace GooglePlayServices {
                 // Unity 2019.x added installation of the JDK in the AndroidPlayer directory
                 // so fallback to searching for it there.
                 if (String.IsNullOrEmpty(javaHome) || EditorPrefs.GetBool("JdkUseEmbedded")) {
+#if UNITY_2019_3_OR_NEWER
+                    var openJdkDir = UnityEditor.Android.AndroidExternalToolsSettings.jdkRootPath;
+                    if (Directory.Exists(openJdkDir)) javaHome = openJdkDir;
+#else
                     var androidPlayerDir = PlayServicesResolver.AndroidPlaybackEngineDirectory;
                     if (!String.IsNullOrEmpty(androidPlayerDir)) {
                         var platformDir = UnityEngine.Application.platform.ToString().Replace(
                             "Editor", "").Replace("OSX", "MacOS");
                         var openJdkDir = Path.Combine(Path.Combine(Path.Combine(
                             androidPlayerDir, "Tools"), "OpenJDK"), platformDir);
-                        if (Directory.Exists(openJdkDir)) {
-                            javaHome = openJdkDir;
-                        }
-                        else {
-                            openJdkDir = Path.Combine(androidPlayerDir, "OpenJDK");
-                            if (Directory.Exists(openJdkDir)) javaHome = openJdkDir;
-                        }
+                        if (Directory.Exists(openJdkDir)) javaHome = openJdkDir;
                     }
+#endif
                 }
                 // If the JDK stil isn't found, check the environment.
                 if (String.IsNullOrEmpty(javaHome)) {
