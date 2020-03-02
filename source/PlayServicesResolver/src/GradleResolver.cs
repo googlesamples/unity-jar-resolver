@@ -134,6 +134,9 @@ namespace GooglePlayServices
         /// Convert a repo path to a valid URI.
         /// If the specified repo is a local directory and it doesn't exist, search the project
         /// for a match.
+        /// Valid paths are:
+        /// * Path relative to Assets or Packages folder, ex. "Firebase/m2repository"
+        /// * Path relative to project folder, ex."Assets/Firebase/m2repository"
         /// </summary>
         /// <param name="repoPath">Repo path to convert.</param>
         /// <param name="sourceLocation>XML or source file this path is referenced from. If this is
@@ -153,25 +156,80 @@ namespace GooglePlayServices
                 if (repoPath.StartsWith(scheme)) return GradleWrapper.EscapeUri(repoPath);
             }
 
-            // If the directory isn't found, it is possible the user has moved the repository
-            // in the project, so try searching for it.
-            string searchDir = "Assets" + Path.DirectorySeparatorChar;
-            if (!Directory.Exists(repoPath) &&
-                FileUtils.NormalizePathSeparators(repoPath.ToLower()).StartsWith(
-                    searchDir.ToLower())) {
-                var foundPath = FileUtils.FindPathUnderDirectory(
-                    searchDir, repoPath.Substring(searchDir.Length));
-                string warningMessage;
-                if (!String.IsNullOrEmpty(foundPath)) {
-                    repoPath = searchDir + foundPath;
-                    warningMessage = String.Format(
-                        "{0}: Repo path '{1}' does not exist, will try using '{2}' instead.",
-                        sourceLocation, repoPath, foundPath);
-                } else {
-                    warningMessage = String.Format(
-                        "{0}: Repo path '{1}' does not exist.", sourceLocation, repoPath);
+            if (!Directory.Exists(repoPath)) {
+                string trimmedRepoPath = repoPath;
+                string foundPath = "";
+                bool shouldLog = false;
+
+                if (FileUtils.IsUnderDirectory(repoPath, FileUtils.ASSETS_FOLDER)) {
+                    trimmedRepoPath = repoPath.Substring(FileUtils.ASSETS_FOLDER.Length + 1);
+                } else if (FileUtils.IsUnderDirectory(repoPath, FileUtils.PACKAGES_FOLDER)) {
+                    // Trim the Packages/package-id/ part
+                    string packageFolder =
+                        FileUtils.GetPackageDirectory(repoPath, actualPath: false);
+                    if (!String.IsNullOrEmpty(packageFolder)) {
+                        trimmedRepoPath = repoPath.Substring(packageFolder.Length + 1);
+                    }
                 }
-                PlayServicesResolver.Log(warningMessage, level: LogLevel.Warning);
+
+                // Search under Packages/package-id first if Dependencies.xml is from a UPM package.
+                if (FileUtils.IsUnderDirectory(sourceLocation, FileUtils.PACKAGES_FOLDER)) {
+                    // Get the physical package directory.
+                    // Ex. Library/PackageCache/com.google.unity-jar-resolver@1.2.120/
+                    string packageFolder =
+                        FileUtils.GetPackageDirectory(sourceLocation, actualPath: true);
+                    if (!String.IsNullOrEmpty(packageFolder)) {
+                        string repoPathUnderPackages =
+                            packageFolder + Path.DirectorySeparatorChar + trimmedRepoPath;
+                        if (Directory.Exists(repoPathUnderPackages)) {
+                            foundPath = repoPathUnderPackages;
+                        } else {
+                            // It is unlikely but possible the user has moved the repository in the
+                            // project under Packages directory, so try searching for it.
+                            foundPath = FileUtils.FindPathUnderDirectory(
+                                packageFolder, trimmedRepoPath);
+                            if (!String.IsNullOrEmpty(foundPath)) {
+                                foundPath = packageFolder + Path.DirectorySeparatorChar + foundPath;
+                                shouldLog = true;
+                            }
+                        }
+                    }
+                }
+
+                // Search under Assets/
+                if (String.IsNullOrEmpty(foundPath)) {
+                    // Try to find under "Assets" folder.  It is possible that "Assets/" was not
+                    // added to the repoPath.
+                    string repoPathUnderAssets =
+                        FileUtils.ASSETS_FOLDER + Path.DirectorySeparatorChar + trimmedRepoPath;
+                    if (Directory.Exists(repoPathUnderAssets)) {
+                        foundPath = repoPathUnderAssets;
+                    } else {
+                        // If the directory isn't found, it is possible the user has moved the
+                        // repository in the project under Assets directory, so try searching for
+                        // it.
+                        foundPath = FileUtils.FindPathUnderDirectory(
+                            FileUtils.ASSETS_FOLDER, trimmedRepoPath);
+                        if (!String.IsNullOrEmpty(foundPath)) {
+                            foundPath = FileUtils.ASSETS_FOLDER +
+                                        Path.DirectorySeparatorChar + foundPath;
+                            shouldLog = true;
+                        }
+                    }
+                }
+
+                if (!String.IsNullOrEmpty(foundPath)) {
+                    if (shouldLog) {
+                        PlayServicesResolver.Log(String.Format(
+                            "{0}: Repo path '{1}' does not exist, will try using '{2}' instead.",
+                            sourceLocation, repoPath, foundPath), level: LogLevel.Warning);
+                    }
+                    repoPath = foundPath;
+                } else {
+                    PlayServicesResolver.Log(String.Format(
+                        "{0}: Repo path '{1}' does not exist.", sourceLocation, repoPath),
+                        level: LogLevel.Warning);
+                }
             }
             return GradleWrapper.EscapeUri(GradleWrapper.PathToFileUri(repoPath));
         }
