@@ -118,7 +118,7 @@ public class EditorMeasurement {
 
     // Global flag that controls whether this class is enabled and should report
     // data.
-    internal static bool GloballyEnabled = false;
+    internal static bool GloballyEnabled = true;
 
     /// <summary>
     /// Enable / disable analytics
