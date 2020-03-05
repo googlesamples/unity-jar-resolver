@@ -744,7 +744,9 @@ namespace GooglePlayServices {
                 "Android Resolver", "", VersionHandlerImpl.PRIVACY_POLICY) {
             BasePath = "/androidresolver/",
             BaseQuery = String.Format("version={0}", AndroidResolverVersionNumber.Value.ToString()),
-            BaseReportName = "Android Resolver: "
+            BaseReportName = "Android Resolver: ",
+            InstallSourceFilename =
+                System.Reflection.Assembly.GetAssembly(typeof(PlayServicesResolver)).Location
         };
 
         /// <summary>

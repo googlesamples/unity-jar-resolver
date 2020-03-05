@@ -1084,7 +1084,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                 metadata.versionString,
                                 currentFilename,
                                 metadata.targets != null ?
-                                    String.Join(", ", new List<string>(metadata.targets).ToArray()) 
+                                    String.Join(", ", new List<string>(metadata.targets).ToArray())
                                                                                             : ""));
                     }
                     fileInfoLines.Add("");
@@ -1520,7 +1520,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
             "Version Handler", "", PRIVACY_POLICY) {
         BasePath = "/versionhandler/",
         BaseQuery = String.Format("version={0}", VersionHandlerVersionNumber.Value.ToString()),
-        BaseReportName = "Version Handler: "
+        BaseReportName = "Version Handler: ",
+        InstallSourceFilename = Assembly.GetAssembly(typeof(VersionHandlerImpl)).Location
     };
 
     /// <summary>

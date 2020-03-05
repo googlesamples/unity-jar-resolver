@@ -992,7 +992,8 @@ public class IOSResolver : AssetPostprocessor {
           VersionHandlerImpl.PRIVACY_POLICY) {
         BasePath = "/iosresolver/",
         BaseQuery = String.Format("version={0}", IOSResolverVersionNumber.Value.ToString()),
-        BaseReportName = "iOS Resolver: "
+        BaseReportName = "iOS Resolver: ",
+        InstallSourceFilename = Assembly.GetAssembly(typeof(IOSResolver)).Location
     };
 
     /// <summary>

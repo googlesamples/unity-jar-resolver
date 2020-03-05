@@ -19,6 +19,7 @@ namespace Google.VersionHandlerImpl.Tests {
     using System;
     using System.Collections.Generic;
     using System.Net;
+    using System.IO;
 
     using Google;
 
@@ -434,6 +435,7 @@ namespace Google.VersionHandlerImpl.Tests {
             var analytics = CreateEditorMeasurement();
             analytics.ReportUnityVersion = true;
             analytics.ReportUnityPlatform = true;
+            analytics.InstallSource = "unitypackage";
             analytics.BasePath = "/myplugin";
             analytics.BaseQuery = "version=1.2.3";
             analytics.BaseReportName = "My Plugin: ";
@@ -444,8 +446,56 @@ namespace Google.VersionHandlerImpl.Tests {
                         Is.EqualTo(CreateMeasurementEvents(
                             analytics,
                             "/myplugin/a/new/event",
-                            "?unityVersion=5.6.1f1&unityPlatform=WindowsEditor&version=1.2.3", "",
+                            "?unityVersion=5.6.1f1&unityPlatform=WindowsEditor&" +
+                            "installSource=unitypackage&version=1.2.3", "",
                             "My Plugin: something interesting")));
+        }
+
+        /// <summary>
+        /// Test reporting the install source based upon the specified filename.
+        /// </summary>
+        /// <param name="filename">Path of the installed file.</param>
+        /// <param name="expectedInstallSource">Install source that should be reported.</param>
+        public void TestInstallSourceFilename(string filename, string expectedInstallSource) {
+            var analytics = CreateEditorMeasurement();
+            analytics.ReportUnityVersion = true;
+            analytics.ReportUnityPlatform = true;
+            analytics.InstallSource = null;
+            analytics.InstallSourceFilename = filename;
+            var selectedOptions = new List<int> { 0 /* yes */ };
+            analytics.displayDialog = CreateDisplayDialogDelegate(selectedOptions);
+            analytics.Report("/a/new/event", "something interesting");
+            Assert.That(webRequest.PostedUrlAndForms,
+                        Is.EqualTo(CreateMeasurementEvents(
+                            analytics,
+                            "/a/new/event",
+                            "?unityVersion=5.6.1f1&unityPlatform=WindowsEditor&" +
+                            "installSource=" + expectedInstallSource, "",
+                            "something interesting")));
+        }
+
+        /// <summary>
+        /// Report an event after obtaining consent using an install filename in the Assets folder.
+        /// </summary>
+        [Test]
+        public void ReportWithConsentWithInstallSourceFilenameAssets() {
+            TestInstallSourceFilename(
+                Path.Combine(Path.Combine(Directory.GetCurrentDirectory(),
+                                          Path.Combine("Assets", "MyPlugin")),
+                             "MyComponent.dll"),
+                "unitypackage");
+        }
+
+        /// <summary>
+        /// Report an event after obtaining consent using an install filename in the Packages
+        /// folder.
+        /// </summary>
+        [Test]
+        public void ReportWithConsentWithInstallSourceFilenamePackages() {
+            TestInstallSourceFilename(
+                Path.Combine(Path.Combine(Directory.GetCurrentDirectory(),
+                                          Path.Combine("Packages", "MyPlugin")),
+                             "MyComponent.dll"), "upm");
         }
 
         /// <summary>

@@ -18,6 +18,7 @@ namespace Google {
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 using UnityEngine;
 using UnityEditor;
@@ -231,6 +232,24 @@ public class EditorMeasurement {
     public bool ReportUnityPlatform { get; set; }
 
     /// <summary>
+    /// The plugin installation source.
+    /// </summary>
+    /// Typical sources are:
+    /// <ul>
+    ///   <li><b>unitypackage</b> - installed manually in the project</li>
+    ///   <li><b>assetstore</b> - installed via the Unity Asset Store</li>
+    ///   <li><b>upm</b> - installed via the Unity Package Manager</li>
+    /// </ul>
+    public string InstallSource { get; set; }
+
+    /// <summary>
+    /// Set the installation source from the location of an assembly in the plugin relative to the
+    /// project directory. If InstallSource is not null it takes precedence over this property.
+    /// </summary>
+    /// <note>This path must use the system directory separator.<note>
+    public string InstallSourceFilename { get; set; }
+
+    /// <summary>
     /// Generate common query parameters.
     /// </summary>
     /// <return>Query string with common parameters.</returns>
@@ -241,6 +260,23 @@ public class EditorMeasurement {
             if (ReportUnityPlatform) {
                 query = ConcatenateQueryStrings(
                     query, "unityPlatform=" + GetAndCacheUnityRuntimePlatform());
+            }
+            string installSource = null;
+            if (!String.IsNullOrEmpty(InstallSource)) {
+                installSource = InstallSource;
+            } else if (!String.IsNullOrEmpty(InstallSourceFilename)) {
+                var currentDir = Directory.GetCurrentDirectory() + Path.DirectorySeparatorChar;
+                var installSourceFilename = InstallSourceFilename;
+                if (installSourceFilename.StartsWith(currentDir)) {
+                    installSourceFilename = installSourceFilename.Substring(currentDir.Length);
+                }
+                var rootDir = installSourceFilename.Substring(
+                    0, installSourceFilename.IndexOf(Path.DirectorySeparatorChar));
+                installSource = rootDir == "Assets" ? "unitypackage" : rootDir == "Packages" ?
+                    "upm" : "";
+            }
+            if (!String.IsNullOrEmpty(installSource)) {
+                query = ConcatenateQueryStrings(query, "installSource=" + installSource);
             }
             return query;
         }
