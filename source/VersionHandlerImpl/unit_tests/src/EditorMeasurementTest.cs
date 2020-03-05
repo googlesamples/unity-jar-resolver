@@ -487,14 +487,14 @@ namespace Google.VersionHandlerImpl.Tests {
         }
 
         /// <summary>
-        /// Report an event after obtaining consent using an install filename in the Packages
+        /// Report an event after obtaining consent using an install filename in the Library
         /// folder.
         /// </summary>
         [Test]
-        public void ReportWithConsentWithInstallSourceFilenamePackages() {
+        public void ReportWithConsentWithInstallSourceFilenameLibrary() {
             TestInstallSourceFilename(
                 Path.Combine(Path.Combine(Directory.GetCurrentDirectory(),
-                                          Path.Combine("Packages", "MyPlugin")),
+                                          Path.Combine("Library", "MyPlugin")),
                              "MyComponent.dll"), "upm");
         }
 

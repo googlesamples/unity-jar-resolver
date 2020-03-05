@@ -272,7 +272,7 @@ public class EditorMeasurement {
                 }
                 var rootDir = installSourceFilename.Substring(
                     0, installSourceFilename.IndexOf(Path.DirectorySeparatorChar));
-                installSource = rootDir == "Assets" ? "unitypackage" : rootDir == "Packages" ?
+                installSource = rootDir == "Assets" ? "unitypackage" : rootDir == "Library" ?
                     "upm" : "";
             }
             if (!String.IsNullOrEmpty(installSource)) {
