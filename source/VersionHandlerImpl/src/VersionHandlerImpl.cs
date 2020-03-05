@@ -65,17 +65,17 @@ public class VersionHandlerImpl : AssetPostprocessor {
         // Prefix which identifies the targets metadata in the filename or
         // asset label.
 
-        private static string[] TOKEN_TARGETS = new [] { "targets-", "t" };
+        public static string[] TOKEN_TARGETS = new [] { "targets-", "t" };
         // Prefix which identifies the version metadata in the filename or
         // asset label.
-        private static string[] TOKEN_VERSION = new [] { "version-", "v" };
+        public static string[] TOKEN_VERSION = new [] { "version-", "v" };
         // Prefix which identifies the .NET version metadata in the filename
         // or asset label.
-        private static string[] TOKEN_DOTNET_TARGETS = new [] { "dotnet-" };
+        public static string[] TOKEN_DOTNET_TARGETS = new [] { "dotnet-" };
         // Prefix which indicates this file is a package manifest.
-        private static string[] TOKEN_MANIFEST = new [] { "manifest" };
+        public static string[] TOKEN_MANIFEST = new [] { "manifest" };
         // Prefix which identifies the canonical name of this Linux library.
-        private static string[] TOKEN_LINUX_LIBRARY_BASENAME = new [] { "linuxlibname-" };
+        public static string[] TOKEN_LINUX_LIBRARY_BASENAME = new [] { "linuxlibname-" };
 
         // Delimiter for version numbers.
         private static char[] VERSION_DELIMITER = new char[] { '.' };
@@ -443,7 +443,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="fieldPrefixes">The first item of this list is used as the prefix.
         /// </param>
         /// <param name="values">Set of values to store with the field.</param>
-        private string[] CreateLabels(string[] fieldPrefixes, IEnumerable<string> values) {
+        private static string[] CreateLabels(string[] fieldPrefixes, IEnumerable<string> values) {
             string prefix = fieldPrefixes[0];
             List<string> labels = new List<string>();
             foreach (var value in values) {
@@ -459,7 +459,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="prefix"> The field prefix to be applied to the label.
         /// </param>
         /// <param name="value">The value to store in the field</param>
-        private string CreateLabel(string prefix, string value) {
+        public static string CreateLabel(string prefix, string value) {
             return LABEL_PREFIX + prefix + value;
         }
 
@@ -1301,6 +1301,18 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             return manifestReferencesList;
         }
+
+        /// <summary>
+        /// Find and read all package manifests.
+        /// </summary>
+        /// <returns>List of ManifestReferences which contain current and
+        /// obsolete files referenced in each manifest file.</returns>
+        public static List<ManifestReferences> FindAndReadManifests() {
+            return FindAndReadManifests(FileMetadataSet.ParseFromFilenames(
+                SearchAssetDatabase(
+                    assetsFilter: "l:" +
+                        FileMetadata.CreateLabel(FileMetadata.TOKEN_MANIFEST[0], ""))));
+        }
     }
 
     /// <summary>
@@ -1797,6 +1809,27 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     EditorUtility.DisplayDialog(PLUGIN_NAME, "Update complete.", "OK");
                 }
             });
+    }
+
+    /// <summary>
+    /// Menu item which logs the set of installed packages and their contents to the console.
+    /// </summary>
+    [MenuItem("Assets/Play Services Resolver/Version Handler/Display Managed Packages")]
+    public static void DisplayInstalledPackages() {
+        var manifests = ManifestReferences.FindAndReadManifests();
+        foreach (var pkg in manifests) {
+            if (!String.IsNullOrEmpty(pkg.filenameCanonical) && pkg.metadataByVersion != null) {
+                var versions = new List<string>();
+                foreach (var fileMetadata in pkg.metadataByVersion.Values) {
+                    versions.Add(fileMetadata.versionString);
+                }
+                var packageFiles = new List<string>(pkg.currentFiles);
+                packageFiles.Sort();
+                Log(String.Format("{0}: [{1}]\n{2}", pkg.filenameCanonical,
+                                  String.Join(", ", versions.ToArray()),
+                                  String.Join("\n", packageFiles.ToArray())));
+            }
+        }
     }
 
     /// <summary>
