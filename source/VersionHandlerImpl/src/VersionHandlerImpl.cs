@@ -1000,6 +1000,22 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public FileMetadataSet() { }
 
         /// <summary>
+        /// Filter all files that were installed by the Unity Package Manager.
+        /// </summary>
+        /// <param name="metadata">Metadata to filter.</param>
+        /// <returns>New FileMetadata with Unity Package Manager files removed.</returns>
+        public static FileMetadataSet FilterOutUnityPackageManagerFiles(FileMetadataSet metadata) {
+            var filteredMetadata = new FileMetadataSet();
+            var metadataByCanonicalFilename = filteredMetadata.metadataByCanonicalFilename;
+            foreach (var metadataFilename in metadata.metadataByCanonicalFilename) {
+                var filename = metadataFilename.Key;
+                if (FileUtils.IsUnderDirectory(filename, FileUtils.PACKAGES_FOLDER)) continue;
+                metadataByCanonicalFilename[filename] = metadataFilename.Value;
+            }
+            return filteredMetadata;
+        }
+
+        /// <summary>
         /// Add file metadata to the set.
         /// </summary>
         public void Add(FileMetadata metadata) {
@@ -1939,7 +1955,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
 
         UpdateAssetsWithBuildTargets(EditorUserBuildSettings.activeBuildTarget);
 
-        var metadataSet = FileMetadataSet.ParseFromFilenames(FindAllAssets());
+        var metadataSet = FileMetadataSet.FilterOutUnityPackageManagerFiles(
+            FileMetadataSet.ParseFromFilenames(FindAllAssets()));
         // Rename linux libraries, if any are being tracked.
         var linuxLibraries = new LinuxLibraryRenamer(metadataSet);
         linuxLibraries.RenameLibraries();
