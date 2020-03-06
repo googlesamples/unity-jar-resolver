@@ -15,10 +15,6 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VersionHandlerImplTests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IOSResolver", "IOSResolver\IOSResolver.csproj", "{5B581BAE-D432-41AB-AEED-FD269AEA081D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageManager", "PackageManager\PackageManager.csproj", "{8B0A2564-01ED-426B-AF33-33EED4A81828}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageManagerTests", "PackageManagerTests\PackageManagerTests.csproj", "{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,13 +49,5 @@ Global
 		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5B581BAE-D432-41AB-AEED-FD269AEA081D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{8B0A2564-01ED-426B-AF33-33EED4A81828}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{8B0A2564-01ED-426B-AF33-33EED4A81828}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{8B0A2564-01ED-426B-AF33-33EED4A81828}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{8B0A2564-01ED-426B-AF33-33EED4A81828}.Release|Any CPU.Build.0 = Release|Any CPU
-		{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{7E1CDCE1-1B39-48F6-9DEA-A714FD6654D2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

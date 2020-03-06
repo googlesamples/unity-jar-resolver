@@ -24,8 +24,7 @@ project.ext {
   String unitySearchDirExcludesString = findProperty("UNITY_EXCLUDES")
   String[] unitySearchDirExcludes =
     unitySearchDirExcludesString ?
-      unitySearchDirExcludesString.tokenize(";") :
-      ["**/PackageManager/Editor"]
+      unitySearchDirExcludesString.tokenize(";") : []
 
   // Save the current OS.
   operatingSystem = OperatingSystem.getOperatingSystem()
@@ -1072,34 +1071,6 @@ task cleanResolverLibTests() {
                         testResolverLibTests.outputs.files) }
 }
 
-Task compilePackageManagerTests = createXbuildTask(
-    "compilePackageManagerTests",
-    "Compile tests for the package manager.",
-    project.ext.pluginSolutionFile, "PackageManagerTests",
-    fileTree(new File(new File(project.ext.pluginSourceDir,
-                               "PackageManagerTests"), "src")),
-    new File(project.ext.testDir, "PackageManagerTests"),
-    [new File("PackageManagerTests.dll")], []).with {
-  doFirst { checkNUnitDllPath() }
-}
-
-Task testPackageManagerTests = createNUnitTask(
-    "testPackageManagerTests",
-    "Runs tests for the Package Manager",
-    compilePackageManagerTests.outputs.files[0],
-    [compilePackageManagerTests]).with {
-  environment (["TEST_DATA_DIR":
-                (new File(new File(project.ext.pluginSourceDir,
-                                   "PackageManagerTests"),
-                          "testData")).absolutePath])
-}
-
-task cleanPackageManagerTests() {
-  description "Clean Package Manager tests"
-  doLast { delete files(compilePackageManagerTests.ext.buildDir,
-                        testPackageManagerTests.outputs.files) }
-}
-
 task testDownloadArtifacts(type: GradleBuild) {
   description "Run tests for the download_artifacts.gradle script."
   dir "source/AndroidResolver/scripts"
@@ -1134,9 +1105,6 @@ Task buildAndroidResolver = createBuildPluginDllTask(
 Task buildIosResolver = createBuildPluginDllTask(
   "IosResolver", "IOSResolver", "Google.IOSResolver.dll", true,
   [buildAndroidResolver])
-Task buildPackageManager = createBuildPluginDllTask(
-  "PackageManager", "PackageManager", "Google.PackageManager.dll", true,
-  [buildVersionHandlerImpl])
 
 task preparePluginStagingAreaDir(type: Task) {
   description "Delete all files that should not be present in staging area."
