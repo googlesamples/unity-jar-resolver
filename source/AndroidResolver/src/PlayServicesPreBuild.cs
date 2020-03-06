@@ -23,11 +23,11 @@ namespace GooglePlayServices {
                                  "Ensure you have run the resolver manually." +
                                  "\n\nWith auto-resolution of Android dependencies disabled you " +
                                  "must manually resolve dependencies using the " +
-                                 "\"Assets > Play Services Resolver > Android Resolver > " +
+                                 "\"Assets > External Dependency Manager > Android Resolver > " +
                                  "Resolve\" menu item.\n\nFailure to resolve Android " +
                                  "dependencies will result in an non-functional " +
                                  "application.\nTo enable auto-resolution, navigate to " +
-                                 "\"Assets > Play Services Resolver > Android Resolver > " +
+                                 "\"Assets > External Dependency Manager > Android Resolver > " +
                                  "Settings\" and check \"Enable Auto-resolution\"");
             }
 

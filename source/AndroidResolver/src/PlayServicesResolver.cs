@@ -1145,11 +1145,11 @@ namespace GooglePlayServices {
                                  "Ensure you have manually run the resolver before building." +
                                  "\n\nWith auto-resolution of Android dependencies disabled you " +
                                  "must manually resolve dependencies using the " +
-                                 "\"Assets > Play Services Resolver > Android Resolver > " +
+                                 "\"Assets > External Dependency Manager > Android Resolver > " +
                                  "Resolve\" menu item.\n\nFailure to resolve Android " +
                                  "dependencies will result in an non-functional " +
                                  "application.\n\nTo enable auto-resolution, navigate to " +
-                                 "\"Assets > Play Services Resolver > Android Resolver > " +
+                                 "\"Assets > External Dependency Manager > Android Resolver > " +
                                  "Settings\" and check \"Enable Auto-resolution\"");
                 resolutionComplete();
             }
@@ -1671,15 +1671,15 @@ namespace GooglePlayServices {
                 bool shouldResolve = false;
                 AlertModal alert = new AlertModal {
                     Title = "Enable Android Auto-resolution?",
-                    Message = "The Play Services Resolver has detected a change " +
+                    Message = "Android Resolver has detected a change " +
                               " and would to resolve conflicts and download Android dependencies." +
                               "\n\n\"Disable Auto-Resolution\" will require manually " +
-                              "running resolution using \"Assets > Play Services Resolver " +
+                              "running resolution using \"Assets > External Dependency Manager " +
                               "> Android Resolver > Resolve\" menu item. Failure to " +
                               "resolve Android dependencies will result " +
                               "in an non-functional application." +
                               "\n\nEnable auto-resolution again via " +
-                              "\"Assets > Play Services Resolver " +
+                              "\"Assets > External Dependency Manager " +
                               "> Android Resolver > Settings.",
                     Ok = new AlertModal.LabeledAction {
                         Label = "Enable",
@@ -1800,7 +1800,7 @@ namespace GooglePlayServices {
         /// Display a dialog explaining that the resolver is disabled in the current configuration.
         /// </summary>
         private static void NotAvailableDialog() {
-            EditorUtility.DisplayDialog("Play Services Resolver.",
+            EditorUtility.DisplayDialog("Android Resolver.",
                                         "Resolver not enabled. " +
                                         "Android platform must be selected.",
                                         "OK");
@@ -1810,7 +1810,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Link to the documentation.
         /// </summary>
-        [MenuItem("Assets/Play Services Resolver/Android Resolver/Documentation")]
+        [MenuItem("Assets/External Dependency Manager/Android Resolver/Documentation")]
         public static void OpenDocumentation() {
             Application.OpenURL(VersionHandlerImpl.DocumentationUrl("#android-resolver-usage"));
         }
@@ -1818,7 +1818,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Add a menu item for resolving the jars manually.
         /// </summary>
-        [MenuItem("Assets/Play Services Resolver/Android Resolver/Settings")]
+        [MenuItem("Assets/External Dependency Manager/Android Resolver/Settings")]
         public static void SettingsDialog()
         {
             SettingsDialog window = (SettingsDialog)EditorWindow.GetWindow(
@@ -1848,7 +1848,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Add a menu item for resolving the jars manually.
         /// </summary>
-        [MenuItem("Assets/Play Services Resolver/Android Resolver/Resolve")]
+        [MenuItem("Assets/External Dependency Manager/Android Resolver/Resolve")]
         public static void MenuResolve() {
             ExecuteMenuResolve(false);
         }
@@ -1856,7 +1856,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Add a menu item to force resolve the jars manually.
         /// </summary>
-        [MenuItem("Assets/Play Services Resolver/Android Resolver/Force Resolve")]
+        [MenuItem("Assets/External Dependency Manager/Android Resolver/Force Resolve")]
         public static void MenuForceResolve() {
             ExecuteMenuResolve(true);
         }
@@ -1864,7 +1864,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Add a menu item to clear all resolved libraries.
         /// </summary>
-        [MenuItem("Assets/Play Services Resolver/Android Resolver/Delete Resolved Libraries")]
+        [MenuItem("Assets/External Dependency Manager/Android Resolver/Delete Resolved Libraries")]
         public static void MenuDeleteResolvedLibraries() {
             DeleteResolvedLibrariesSync();
         }
@@ -2049,7 +2049,7 @@ namespace GooglePlayServices {
         /// script.  This does not resolve dependency conflicts, it simply displays what is included
         /// by plugins in the project.
         /// </summary>
-        [MenuItem("Assets/Play Services Resolver/Android Resolver/Display Libraries")]
+        [MenuItem("Assets/External Dependency Manager/Android Resolver/Display Libraries")]
         public static void MenuDisplayLibraries() {
             xmlDependencies.ReadAll(logger);
             var dependencies = PlayServicesSupport.GetAllDependencies().Values;

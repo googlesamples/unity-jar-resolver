@@ -1,5 +1,5 @@
 ---
-name: Play Services Resolver issue
+name: External Dependency Manager issue
 about: Please use this template to report issues with the Play Services Resolver.
 title: ''
 labels: new
@@ -9,8 +9,8 @@ assignees: ''
 
 ### Please fill in the following fields:
 Unity editor version: 
-Play Services Resolver version: 
-Features in Play Services Resolver in use (Android Resolver, iOS Resolver, VersionHandler, etc.):
+External Dependency Manager version: 
+Features in External Dependency Manager in use (Android Resolver, iOS Resolver, VersionHandler, etc.):
 Plugins SDK in use (Firebase, Admob, Facebook, etc.):
 Platform you are using the Unity editor on (Mac, Windows, or Linux): 
 Platform you are targeting (iOS, Android, and/or desktop): 

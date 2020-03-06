@@ -189,20 +189,20 @@ project.ext {
   // location.
   pluginExportFile = new File(buildDir, "plugin.unitypackage")
   // Directory within the plugin staging area that just contains the plugin.
-  pluginAssetsDir = new File("Assets", "PlayServicesResolver")
+  pluginAssetsDir = new File("Assets", "ExternalDependencyManager")
   // Directory within the plugin directory that contains the managed DLLs.
   pluginEditorDllDir = new File(pluginAssetsDir, "Editor")
   // Directory which contains the solution for all C# projects with a project in
   // each subdirectory.
   pluginSourceDir = new File(scriptDirectory, "source")
   // Solution which references all projects used by the plugin.
-  pluginSolutionFile = new File(pluginSourceDir, "JarResolver.sln")
+  pluginSolutionFile = new File(pluginSourceDir, "ExternalDependencyManager.sln")
   // Version of the plugin (update this with CHANGELOG.md on each release).
   pluginVersion = "1.2.136.0"
   // Semantic version of the plugin.
   pluginVersionSemVer = pluginVersion.tokenize(".")[0..2].join(".")
   // Base filename of the released plugin.
-  currentPluginBasename = "play-services-resolver"
+  currentPluginBasename = "external-dependency-manager"
   // Versioned release plugin file.
   pluginReleaseFile = new File(scriptDirectory,
                                sprintf("%s-%s.unitypackage",
@@ -1102,7 +1102,7 @@ task cleanPackageManagerTests() {
 
 task testDownloadArtifacts(type: GradleBuild) {
   description "Run tests for the download_artifacts.gradle script."
-  dir "source/PlayServicesResolver/scripts"
+  dir "source/AndroidResolver/scripts"
 }
 
 createPythonTask(
@@ -1120,7 +1120,7 @@ task updateEmbeddedGradleWrapper(type: Zip) {
   include "gradle/**"
   archiveName "gradle-template.zip"
   destinationDir (new File(project.ext.scriptDirectory,
-                           "source/PlayServicesResolver/scripts"))
+                           "source/AndroidResolver/scripts"))
 }
 
 Task buildVersionHandler = createBuildPluginDllTask(
@@ -1129,7 +1129,7 @@ Task buildVersionHandlerImpl = createBuildPluginDllTask(
   "VersionHandlerImpl", "VersionHandlerImpl", "Google.VersionHandlerImpl.dll",
   true, [buildVersionHandler])
 Task buildAndroidResolver = createBuildPluginDllTask(
-  "AndroidResolver", "PlayServicesResolver", "Google.JarResolver.dll", true,
+  "AndroidResolver", "AndroidResolver", "Google.JarResolver.dll", true,
   [updateEmbeddedGradleWrapper, buildVersionHandlerImpl])
 Task buildIosResolver = createBuildPluginDllTask(
   "IosResolver", "IOSResolver", "Google.IOSResolver.dll", true,
@@ -1159,8 +1159,8 @@ task preparePluginStagingAreaDir(type: Task) {
 Task copyPluginTemplateToStagingArea = createCopyFilesTask(
   "copyPluginTemplateToStagingArea",
   "Copy the template project into the Unity plugin packaging dir.",
-  [new File("Assets", "PlayServicesResolver.meta"),
-   new File(new File("Assets", "PlayServicesResolver"), "Editor.meta")],
+  [new File("Assets", "ExternalDependencyManager.meta"),
+   new File(new File("Assets", "ExternalDependencyManager"), "Editor.meta")],
   project.ext.pluginTemplateDir, project.ext.pluginStagingAreaDir,
   [preparePluginStagingAreaDir],
   { sourceFile, targetFile -> copyAssetMetadataFile(sourceFile, targetFile) })
@@ -1195,7 +1195,11 @@ task copyPluginComponentsToStagingArea(
 task generatePluginManifest(dependsOn: [preparePluginStagingAreaDir,
                                         copyPluginTemplateToStagingArea,
                                         copyPluginComponentsToStagingArea]) {
-  String unversionedManifestName = currentPluginBasename + ".txt"
+  // This should use currentPluginBasename when we have support for plugin
+  // aliases which will allow the detection of a play-services-resolver
+  // plugin to be upgraded to external-dependency-manager.
+  String unversionedManifestName =
+    "play-services-resolver" /* currentPluginBasename */ + ".txt"
   File outputDir = new File(project.ext.pluginStagingAreaDir,
                             project.ext.pluginEditorDllDir.path)
   File manifestMetadataTemplateFile =
@@ -1349,7 +1353,7 @@ task gitTagRelease(type: Exec) {
                       createCommitMessage(),
                       sprintf("https://github.com/googlesamples/" +
                               "unity-jar-resolver/raw/v%s/" +
-                              "play-services-resolver-%s.unitypackage",
+                              "external-dependency-manager-%s.unitypackage",
                               project.ext.pluginVersionSemVer,
                               project.ext.pluginVersion))
 }
@@ -1440,7 +1444,7 @@ createUnityTestBatchAndNonBatch(
    "a combination of dependencies added via the programmatic API and via " +
    "XML files, verifying all dependencies resolve successfully."),
   [buildPlugin],
-  new File(project.ext.scriptDirectory, "source/PlayServicesResolver/test/resolve_async"),
+  new File(project.ext.scriptDirectory, "source/AndroidResolver/test/resolve_async"),
   ["-buildTarget", "android"], null)  // TODO: Move this into the test!?
 
 task cleanTests(type: Delete) {

@@ -5,7 +5,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JarResolverLib", "JarResolv
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JarResolverTests", "JarResolverTests\JarResolverTests.csproj", "{593254D7-6358-40A6-B0C8-F0616BBF499D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PlayServicesResolver", "PlayServicesResolver\PlayServicesResolver.csproj", "{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AndroidResolver", "AndroidResolver\AndroidResolver.csproj", "{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VersionHandler", "VersionHandler\VersionHandler.csproj", "{5378B37A-887E-49ED-A8AE-42FA843AA9DC}"
 EndProject

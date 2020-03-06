@@ -1790,7 +1790,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// <summary>
     /// Link to the project documentation.
     /// </summary>
-    [MenuItem("Assets/Play Services Resolver/Documentation")]
+    [MenuItem("Assets/External Dependency Manager/Documentation")]
     public static void OpenProjectDocumentation() {
         analytics.OpenUrl(VersionHandlerImpl.DocumentationUrl("#overview"), "Overview");
     }
@@ -1798,7 +1798,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// <summary>
     /// Link to the documentation.
     /// </summary>
-    [MenuItem("Assets/Play Services Resolver/Version Handler/Documentation")]
+    [MenuItem("Assets/External Dependency Manager/Version Handler/Documentation")]
     public static void OpenDocumentation() {
         analytics.OpenUrl(VersionHandlerImpl.DocumentationUrl("#version-handler-usage"), "Usage");
     }
@@ -1807,7 +1807,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// Add the settings dialog for this module to the menu and show the
     /// window when the menu item is selected.
     /// </summary>
-    [MenuItem("Assets/Play Services Resolver/Version Handler/Settings")]
+    [MenuItem("Assets/External Dependency Manager/Version Handler/Settings")]
     public static void ShowSettings() {
         SettingsDialog window = (SettingsDialog)EditorWindow.GetWindow(
             typeof(SettingsDialog), true, PLUGIN_NAME + " Settings");
@@ -1818,7 +1818,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// <summary>
     /// Menu item which forces version handler execution.
     /// </summary>
-    [MenuItem("Assets/Play Services Resolver/Version Handler/Update")]
+    [MenuItem("Assets/External Dependency Manager/Version Handler/Update")]
     public static void UpdateNow() {
         UpdateVersionedAssets(true, () => {
                 if (!ExecutionEnvironment.InBatchMode) {
@@ -1830,7 +1830,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// <summary>
     /// Menu item which logs the set of installed packages and their contents to the console.
     /// </summary>
-    [MenuItem("Assets/Play Services Resolver/Version Handler/Display Managed Packages")]
+    [MenuItem("Assets/External Dependency Manager/Version Handler/Display Managed Packages")]
     public static void DisplayInstalledPackages() {
         var manifests = ManifestReferences.FindAndReadManifests();
         foreach (var pkg in manifests) {

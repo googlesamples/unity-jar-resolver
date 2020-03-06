@@ -170,8 +170,9 @@ public class IOSResolverSettingsDialog : EditorWindow
             GUILayout.Label("Automatically installs the Cocoapod tool if the editor isn't " +
                             "running in batch mode");
         } else {
-            GUILayout.Label("Cocoapod tool installation can be performed via the menu option: " +
-                            "Assets > Play Services Resolver > iOS Resolver > Install Cocoapods");
+            GUILayout.Label(
+                "Cocoapod tool installation can be performed via the menu option: " +
+                "Assets > External Dependency Manager > iOS Resolver > Install Cocoapods");
         }
 
         settings.analyticsSettings.RenderGui();

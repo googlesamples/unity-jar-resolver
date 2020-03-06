@@ -721,13 +721,13 @@ public class IOSResolver : AssetPostprocessor {
     /// <summary>
     /// Link to the documentation.
     /// </summary>
-    [MenuItem("Assets/Play Services Resolver/iOS Resolver/Documentation")]
+    [MenuItem("Assets/External Dependency Manager/iOS Resolver/Documentation")]
     public static void OpenDocumentation() {
         analytics.OpenUrl(VersionHandlerImpl.DocumentationUrl("#ios-resolver-usage"), "Usage");
     }
 
     // Display the iOS resolver settings menu.
-    [MenuItem("Assets/Play Services Resolver/iOS Resolver/Settings")]
+    [MenuItem("Assets/External Dependency Manager/iOS Resolver/Settings")]
     public static void SettingsDialog() {
         IOSResolverSettingsDialog window = (IOSResolverSettingsDialog)
             EditorWindow.GetWindow(typeof(IOSResolverSettingsDialog), true,
@@ -1374,7 +1374,7 @@ public class IOSResolver : AssetPostprocessor {
     /// <summary>
     /// Menu item that installs CocoaPods if it's not already installed.
     /// </summary>
-    [MenuItem("Assets/Play Services Resolver/iOS Resolver/Install Cocoapods")]
+    [MenuItem("Assets/External Dependency Manager/iOS Resolver/Install Cocoapods")]
     public static void InstallCocoapodsMenu() {
         InstallCocoapodsInteractive();
     }
@@ -2392,7 +2392,7 @@ public class IOSResolver : AssetPostprocessor {
                 "from CocoaPods integration, however the IOSResolver Settings are configured " +
                 "to use project level integration. It's recommended that you use workspace " +
                 "integration instead.\n" +
-                "You can manage this setting from: Assets > Play Services Resolver > " +
+                "You can manage this setting from: Assets > External Dependency Manager > " +
                 "iOS Resolver > Settings, using the CocoaPods Integration drop down menu.",
                 level: LogLevel.Warning);
             Directory.Delete(workspacePath, true);

@@ -51,7 +51,7 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Xml" />
     <Reference Include="Google.JarResolver">
-      <HintPath>..\PlayServicesResolver\bin\Release\Google.JarResolver.dll</HintPath>
+      <HintPath>..\AndroidResolver\bin\Release\Google.JarResolver.dll</HintPath>
     </Reference>
     <Reference Include="Google.VersionHandler.dll">
       <HintPath>..\VersionHandler\bin\Release\Google.VersionHandler.dll</HintPath>

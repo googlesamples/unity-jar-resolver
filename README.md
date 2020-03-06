@@ -1,9 +1,11 @@
-Play Services Resolver for Unity
+External Dependency Manager for Unity
 ========
 
 # Overview
 
-This library is intended to be used by any Unity plugin that requires:
+The External Dependency Manager for Unity (EDM4U)
+(formerly Play Services Resolver / Jar Resolver) is intended to be used by any
+Unity plugin that requires:
 
    * Android specific libraries (e.g
      [AARs](https://developer.android.com/studio/projects/android-library.html)).
@@ -28,10 +30,7 @@ This causes the following problems:
      attempt to resolve problems by deleting random files in your plugin,
      report bugs when that doesn't work and finally give up.
 
-The Play Services Resolver plugin (the name comes from its origin of just
-handling
-[Google Play Services](https://developers.google.com/android/guides/overview)
-dependencies on Android) provides solutions for each of these problems.
+EDM provides solutions for each of these problems.
 
 ## Android Dependency Management
 
@@ -74,20 +73,20 @@ process.
 
 For example, without the Version Handler plugin, if:
 
-   * Unity plugin `SomePlugin` includes the `Play Services Resolver` plugin at
+   * Unity plugin `SomePlugin` includes `EDM4U` plugin at
      version 1.1.
-   * Unity plugin `SomeOtherPlugin` includes the `Play Services Resolver`
+   * Unity plugin `SomeOtherPlugin` includes `EDM4U`
      plugin  at version 1.2.
 
-The version of `Play Services Resolver` included in the developer's project
-depends upon the order the developer imports `SomePlugin` or `SomeOtherPlugin`.
+The version of `EDM4U` included in the developer's project depends upon the
+order the developer imports `SomePlugin` or `SomeOtherPlugin`.
 
 This results in:
 
-   * `Play Services Resolver` at version 1.2, if `SomePlugin` is imported then
-     `SomeOtherPlugin` is imported.
-   * `Play Services Resolver` at version 1.1, if `SomeOtherPlugin` is imported
-     then `SomePlugin` is imported.
+   * `EDM4U` at version 1.2, if `SomePlugin` is imported then `SomeOtherPlugin`
+     is imported.
+   * `EDM4U` at version 1.1, if `SomeOtherPlugin` is imported then
+     `SomePlugin` is imported.
 
 The Version Handler solves the problem of managing transitive dependencies by:
 
@@ -96,12 +95,12 @@ The Version Handler solves the problem of managing transitive dependencies by:
    * Providing activation logic that selects the latest version of a plugin
      within a project.
 
-When using the Version Handler to manage `Play Services Resolver` included in
-`SomePlugin` and `SomeOtherPlugin`, from the prior example, version 1.2 will
-always be the version activated in a developer's Unity project.
+When using the Version Handler to manage `EDM4U` included in `SomePlugin` and
+`SomeOtherPlugin`, from the prior example, version 1.2 will always be the
+version activated in a developer's Unity project.
 
 Plugin creators are encouraged to adopt this library to ease integration for
-their customers.  For more information about integrating Play Services Resolver
+their customers.  For more information about integrating EDM4U
 into your own plugin, see the [Plugin Redistribution](#plugin-redistribution)
 section of this document.
 
@@ -115,15 +114,15 @@ depends upon the `PluginImporter` UnityEditor API.
 
 # Getting Started
 
-Before you import the Play Services Resolver into your plugin project, you first
-need to consider whether you intend to *redistribute* Play Services Resolver
+Before you import EDM4U into your plugin project, you first
+need to consider whether you intend to *redistribute* `EDM4U`
 along with your own plugin.
 
-Redistributing the `Play Services Resolver` inside your own plugin will ease
+Redistributing `EDM4U` inside your own plugin will ease
 the integration process for your users, by resolving dependency conflicts
 between your plugin and other plugins in a user's project.
 
-If you wish to redistribute the `Play Services Resolver` inside your plugin,
+If you wish to redistribute `EDM4U` inside your plugin,
 you **must** follow these steps when importing the
 `play-services-resolver-*.unitypackage`, and when exporting your own plugin
 package:
@@ -158,13 +157,12 @@ Unity -gvh_disable \
 
 The *Version Handler* component relies upon deferring the load of editor DLLs
 so that it can run first and determine the latest version of a plugin component
-to activate.  The build of the `Play Services Resolver` plugin has Unity asset
-metadata that is configured so that the editor components are not
-initially enabled when it's imported into a Unity project.  To maintain this
-configuration when importing the `Play Services Resolver` .unitypackage
-into a Unity plugin project, you *must* specify the command line option
-`-gvh_disable` which will prevent the Version Handler component from running and
-changing the Unity asset metadata.
+to activate.  The build of `EDM4U` plugin has Unity asset metadata that is
+configured so that the editor components are not initially enabled when it's
+imported into a Unity project.  To maintain this configuration when importing
+the `external-dependency-manager.unitypackage` into a Unity plugin project, you
+*must* specify the command line option `-gvh_disable` which will prevent the
+Version Handler component from running and changing the Unity asset metadata.
 
 # Android Resolver Usage
 
@@ -174,7 +172,7 @@ target in the Unity editor.
 
    1. Add the `play-services-resolver-*.unitypackage` to your plugin
       project (assuming you are developing a plugin). If you are redistributing
-      the Play Services Resolver with your plugin, you **must** follow the
+      EDM4U with your plugin, you **must** follow the
       import steps in the [Getting Started](#getting-started) section!
 
    2. Copy and rename the `SampleDependencies.xml` file into your
@@ -234,18 +232,18 @@ resolution process runs when the specified dependencies are not present in your
 project.
 
 The *auto-resolution* process can be disabled via the
-`Assets > Play Services Resolver > Android Resolver > Settings` menu.
+`Assets > External Dependency Manager > Android Resolver > Settings` menu.
 
 Manual resolution can be performed using the following menu options:
 
-   * `Assets > Play Services Resolver > Android Resolver > Resolve`
-   * `Assets > Play Services Resolver > Android Resolver > Force Resolve`
+   * `Assets > External Dependency Manager > Android Resolver > Resolve`
+   * `Assets > External Dependency Manager > Android Resolver > Force Resolve`
 
 ## Deleting libraries
 
 Resolved packages are tracked via asset labels by the Android Resolver.
 They can easily be deleted using the
-`Assets > Play Services Resolver > Android Resolver > Delete Resolved Libraries`
+`Assets > External Dependency Manager > Android Resolver > Delete Resolved Libraries`
 menu item.
 
 ## Android Manifest Variable Processing
@@ -258,9 +256,9 @@ by exploding the AAR into a folder and replacing `${applicationId}` with the
 `bundleID`.
 
 Disabling AAR explosion and therefore Android manifest processing can be done
-via the `Assets > Play Services Resolver > Android Resolver > Settings` menu.
-You may want to disable explosion of AARs if you're exporting a project to be
-built with Gradle / Android Studio.
+via the `Assets > External Dependency Manager > Android Resolver > Settings`
+menu. You may want to disable explosion of AARs if you're exporting a project
+to be built with Gradle / Android Studio.
 
 ## ABI Stripping
 
@@ -274,9 +272,9 @@ libraries) Android may attempt to load the wrong library for the current
 runtime ABI completely breaking your plugin when targeting some architectures.
 
 AAR explosion and therefore ABI stripping can be disabled via the
-`Assets > Play Services Resolver > Android Resolver > Settings` menu.  You may
-want to disable explosion of AARs if you're exporting a project to be built
-with Gradle / Android Studio.
+`Assets > External Dependency Manager > Android Resolver > Settings` menu.
+You may want to disable explosion of AARs if you're exporting a project to be
+built with Gradle / Android Studio.
 
 ## Resolution Strategies
 
@@ -285,7 +283,7 @@ to integrating them into a Unity project.  This works with Unity's internal
 build system and Gradle / Android Studio project export.
 
 It's possible to change the resolution strategy via the
-`Assets > Play Services Resolver > Android Resolver > Settings` menu.
+`Assets > External Dependency Manager > Android Resolver > Settings` menu.
 
 ### Download Artifacts with Gradle
 
@@ -359,8 +357,8 @@ process to only run the expensive resolution process when necessary.
 
 It's possible to display the set of dependencies the Android Resolver
 would download and process in your project via the
-`Assets > Play Services Resolver > Android Resolver > Display Libraries` menu
-item.
+`Assets > External Dependency Manager > Android Resolver > Display Libraries`
+menu item.
 
 # iOS Resolver Usage
 
@@ -373,7 +371,7 @@ Dependencies for iOS are added by referring to CocoaPods.
 
    1. Add the `play-services-resolver-*.unitypackage` to your plugin
       project (assuming you are developing a plugin). If you are redistributing
-      the Play Services Resolver with your plugin, you **must** follow the
+      EDM4U with your plugin, you **must** follow the
       import steps in the [Getting Started](#getting-started) section!
 
    2. Copy and rename the SampleDependencies.xml file into your
@@ -407,7 +405,7 @@ The `CocoaPods` are either:
      CocoaPods.  We call this `Xcode workspace` integration.
 
 The resolution strategy can be changed via the
-`Assets > Play Services Resolver > iOS Resolver > Settings` menu.
+`Assets > External Dependency Manager > iOS Resolver > Settings` menu.
 
 ### Appending text to generated Podfile
 In order to modify the generated Podfile you can create a script like this:
@@ -453,7 +451,7 @@ Unity plugins can be managed by the Version Handler using the following steps:
       that lists all the files in your plugin relative to the project root.
       Then add the `gvh_manifest` label to the asset to indicate this file is
       a plugin manifest.
-   1. Redistribute the `Play Services Resolver` Unity plugin with your plugin.
+   1. Redistribute EDM4U Unity plugin with your plugin.
       See the [Plugin Redistribution](#plugin-redistribution) for the details.
 
 If you follow these steps:
