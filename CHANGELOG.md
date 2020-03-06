@@ -1,3 +1,26 @@
+# Version 1.2.137 - Mar 6, 2020
+## Changed
+* Renamed package to External Package Manager for Unity (EDM4U).
+  We changed this to reflect what this plugin is doing today which is far more
+  than the original scope which just consisted of importing jar files from the
+  Android SDK maven repository.
+  Scripts that used to pull `play-services-resolver*.unitypackage` will now have
+  to request `external-dependency-manager*.unitypackage` instead.
+  We'll still be shipping a `play-services-resolver*_manifest.txt` file to
+  handle upgrading from older versions of the plugin.
+
+## New Features
+* All Components: Added reporting of usage so that we can remotely detect
+  errors and target improvements.
+* Android Resolver: Added support for *Dependencies.xml files in Unity Package
+  Manager packages.
+* iOS Resolver: Added support for *Dependencies.xml files in Unity Package
+  Manager packages.
+
+## Bug Fixes
+* Version Handler: Disabled attempts to disable asset metadata modification
+  when assets are in a Unity Package Manager managed package.
+
 # Version 1.2.136 - Feb 19, 2019
 ## Bug Fixes
 * Android Resolver: Fixed OpenJDK path discovery in Unity 2019.3.1.

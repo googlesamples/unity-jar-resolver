@@ -1,0 +1,8 @@
+Assets/ExternalDependencyManager/Editor/Google.IOSResolver_v1.2.137.0.dll
+Assets/ExternalDependencyManager/Editor/Google.IOSResolver_v1.2.137.0.dll.mdb
+Assets/ExternalDependencyManager/Editor/Google.JarResolver_v1.2.137.0.dll
+Assets/ExternalDependencyManager/Editor/Google.JarResolver_v1.2.137.0.dll.mdb
+Assets/ExternalDependencyManager/Editor/Google.VersionHandler.dll
+Assets/ExternalDependencyManager/Editor/Google.VersionHandler.dll.mdb
+Assets/ExternalDependencyManager/Editor/Google.VersionHandlerImpl_v1.2.137.0.dll
+Assets/ExternalDependencyManager/Editor/Google.VersionHandlerImpl_v1.2.137.0.dll.mdb
