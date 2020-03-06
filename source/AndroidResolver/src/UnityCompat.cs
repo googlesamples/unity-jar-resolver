@@ -39,6 +39,8 @@ public class UnityCompat {
     private const string UNITY_ANDROID_EXTENSION_ASSEMBLY = "UnityEditor.Android.Extensions";
     private const string UNITY_ANDROID_JAVA_TOOLS_CLASS = "UnityEditor.Android.AndroidJavaTools";
     private const string UNITY_ANDROID_SDKTOOLS_CLASS = "UnityEditor.Android.AndroidSDKTools";
+    private const string UNITY_ANDROID_EXTERNAL_TOOLS_SETTINGS_CLASS =
+        "UnityEditor.Android.AndroidExternalToolsSettings";
     private const string UNITY_ANDROID_POST_PROCESS_ANDROID_PLAYER_CLASS =
         "UnityEditor.Android.PostProcessAndroidPlayer";
     private const string WRITE_A_BUG =
@@ -151,6 +153,64 @@ public class UnityCompat {
     [ObsoleteAttribute("InBatchMode is obsolete, use ExecutionEnvironment.InBatchMode instead")]
     public static bool InBatchMode { get { return ExecutionEnvironment.InBatchMode; } }
 
+    private static Type AndroidExternalToolsClass {
+        get {
+            return Type.GetType(UNITY_ANDROID_EXTERNAL_TOOLS_SETTINGS_CLASS + ", " +
+                                UNITY_ANDROID_EXTENSION_ASSEMBLY);
+        }
+    }
+
+    /// <summary>
+    /// Get a property of the UnityEditor.Android.AndroidExternalToolsSettings class which was
+    /// introduced in Unity 2019.
+    /// </summary>
+    /// <param name="propertyName">Name of the property to query.</param>
+    /// <returns>Value of the string property or null if the property isn't found or isn't a
+    /// string.</returns>
+    private static string GetAndroidExternalToolsSettingsProperty(string propertyName) {
+        string value = null;
+        var androidExternalTools = AndroidExternalToolsClass;
+        if (androidExternalTools != null) {
+            var property = androidExternalTools.GetProperty(propertyName);
+            if (property != null) {
+                value = property.GetValue(null, null) as string;
+            }
+        }
+        return value;
+    }
+
+    /// <summary>
+    /// Get the JDK path from UnityEditor.Android.AndroidExternalToolsSettings if it's
+    /// available.
+    /// </summary>
+    public static string AndroidExternalToolsSettingsJdkRootPath {
+        get { return GetAndroidExternalToolsSettingsProperty("jdkRootPath"); }
+    }
+
+    /// <summary>
+    /// Get the Android NDK path from UnityEditor.Android.AndroidExternalToolsSettings if it's
+    /// available.
+    /// </summary>
+    public static string AndroidExternalToolsSettingsNdkRootPath {
+        get { return GetAndroidExternalToolsSettingsProperty("ndkRootPath"); }
+    }
+
+    /// <summary>
+    /// Get the Android SDK path from UnityEditor.Android.AndroidExternalToolsSettings if it's
+    /// available.
+    /// </summary>
+    public static string AndroidExternalToolsSettingsSdkRootPath {
+        get { return GetAndroidExternalToolsSettingsProperty("sdkRootPath"); }
+    }
+
+    /// <summary>
+    /// Get the Gradle path from UnityEditor.Android.AndroidExternalToolsSettings if it's
+    /// available.
+    /// </summary>
+    public static string AndroidExternalToolsSettingsGradlePath {
+        get { return GetAndroidExternalToolsSettingsProperty("gradlePath"); }
+    }
+
     private static Type AndroidJavaToolsClass {
         get {
             return Type.GetType(
@@ -248,54 +308,70 @@ public class UnityCompat {
     public static int FindNewestInstalledAndroidSDKVersion() {
         var androidSdkToolsClass = AndroidSDKToolsClass;
         if (androidSdkToolsClass != null) {
-            var androidSdkToolsInstance = AndroidSDKToolsInstance;
-            if (androidSdkToolsInstance == null) return WarnOnAndroidSdkFallbackVersion();
-            // Unity 2019+ only has a method to list the installed targets, so we need to parse
-            // the returned list to determine the newest Android SDK version.
-            var listTargetPlatforms = androidSdkToolsClass.GetMethod(
-                "ListTargetPlatforms", BindingFlags.Instance | BindingFlags.NonPublic);
-            if (listTargetPlatforms != null) {
-                var sdkVersionList = new List<int>();
-                const string PLATFORM_STRING_PREFIX = "android-";
-                IEnumerable<string> platformStrings = null;
-                try {
-                    // Unity 2019+
-                    platformStrings = (IEnumerable<string>)listTargetPlatforms.Invoke(
-                        androidSdkToolsInstance, null);
-                } catch (Exception) {
-                }
-                if (platformStrings != null) {
+            // To fetch the Android SDK version Unity runs tools in the Android SDK but doesn't
+            // set the JAVA_HOME environment variable before launching them via these internal
+            // methods. Therefore, we override JAVA_HOME in the process with the directory specified
+            // in Unity's settings while querying the Android SDK and then restore the JAVA_HOME
+            // variable to it's default state when we're finished.
+            var previousJavaHome = Environment.GetEnvironmentVariable(JavaUtilities.JAVA_HOME);
+            var javaHome = JavaUtilities.JavaHome;
+            if (!String.IsNullOrEmpty(javaHome)) {
+                Environment.SetEnvironmentVariable(JavaUtilities.JAVA_HOME, javaHome,
+                                                   EnvironmentVariableTarget.Process);
+            }
+            try {
+                var androidSdkToolsInstance = AndroidSDKToolsInstance;
+                if (androidSdkToolsInstance == null) return WarnOnAndroidSdkFallbackVersion();
+                // Unity 2019+ only has a method to list the installed targets, so we need to parse
+                // the returned list to determine the newest Android SDK version.
+                var listTargetPlatforms = androidSdkToolsClass.GetMethod(
+                    "ListTargetPlatforms", BindingFlags.Instance | BindingFlags.NonPublic);
+                if (listTargetPlatforms != null) {
+                    var sdkVersionList = new List<int>();
+                    const string PLATFORM_STRING_PREFIX = "android-";
+                    IEnumerable<string> platformStrings = null;
                     try {
-                        // Unity 2018+
+                        // Unity 2019+
                         platformStrings = (IEnumerable<string>)listTargetPlatforms.Invoke(
-                            androidSdkToolsInstance, new object[] { AndroidJavaToolsInstance });
+                            androidSdkToolsInstance, null);
                     } catch (Exception) {
                     }
-                }
-                if (platformStrings != null) {
-                    foreach (var platformString in platformStrings) {
-                        if (platformString.StartsWith(PLATFORM_STRING_PREFIX)) {
-                            int sdkVersion;
-                            if (Int32.TryParse(
-                                    platformString.Substring(PLATFORM_STRING_PREFIX.Length),
-                                    out sdkVersion)) {
-                                sdkVersionList.Add(sdkVersion);
-                            }
+                    if (platformStrings != null) {
+                        try {
+                            // Unity 2018+
+                            platformStrings = (IEnumerable<string>)listTargetPlatforms.Invoke(
+                                androidSdkToolsInstance, new object[] { AndroidJavaToolsInstance });
+                        } catch (Exception) {
                         }
                     }
-                    sdkVersionList.Sort();
-                    var numberOfSdks = sdkVersionList.Count;
-                    if (numberOfSdks > 0) {
-                        return sdkVersionList[numberOfSdks - 1];
+                    if (platformStrings != null) {
+                        foreach (var platformString in platformStrings) {
+                            if (platformString.StartsWith(PLATFORM_STRING_PREFIX)) {
+                                int sdkVersion;
+                                if (Int32.TryParse(
+                                        platformString.Substring(PLATFORM_STRING_PREFIX.Length),
+                                        out sdkVersion)) {
+                                    sdkVersionList.Add(sdkVersion);
+                                }
+                            }
+                        }
+                        sdkVersionList.Sort();
+                        var numberOfSdks = sdkVersionList.Count;
+                        if (numberOfSdks > 0) {
+                            return sdkVersionList[numberOfSdks - 1];
+                        }
                     }
                 }
-            }
-            var getTopAndroidPlatformAvailable =
-                androidSdkToolsClass.GetMethod("GetTopAndroidPlatformAvailable");
-            if (getTopAndroidPlatformAvailable != null) {
-                return (int)getTopAndroidPlatformAvailable.Invoke(
-                    androidSdkToolsInstance, BindingFlags.NonPublic, null,
-                    new object[] { null }, null);
+                var getTopAndroidPlatformAvailable =
+                    androidSdkToolsClass.GetMethod("GetTopAndroidPlatformAvailable");
+                if (getTopAndroidPlatformAvailable != null) {
+                    return (int)getTopAndroidPlatformAvailable.Invoke(
+                        androidSdkToolsInstance, BindingFlags.NonPublic, null,
+                        new object[] { null }, null);
+                }
+            } finally {
+                Environment.SetEnvironmentVariable(JavaUtilities.JAVA_HOME, previousJavaHome,
+                                                   EnvironmentVariableTarget.Process);
             }
         }
 

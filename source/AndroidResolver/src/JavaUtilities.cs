@@ -41,7 +41,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Environment variable used to specify the Java distribution directory.
         /// </summary>
-        private const string JAVA_HOME = "JAVA_HOME";
+        internal const string JAVA_HOME = "JAVA_HOME";
 
         /// <summary>
         /// Minimum JDK version required to build with recently released Android libraries.
@@ -52,9 +52,14 @@ namespace GooglePlayServices {
         /// Find the JDK path (JAVA_HOME) either configured in the Unity editor or via the JAVA_HOME
         /// environment variable.
         /// </summary>
-        private static string JavaHome {
+        internal static string JavaHome {
             get {
-                var javaHome = UnityEditor.EditorPrefs.GetString("JdkPath");
+                var javaHome = null;
+                // Unity 2019.3 added AndroidExternalToolsSettings which contains the JDK path so
+                // try to use that first.
+                var javaRootPath = UnityCompat.AndroidExternalToolsSettingsJdkRootPath;
+                if (!String.IsNullOrEmpty(javaRootPath)) javaHome = javaRootPath;
+
                 // Unity 2019.x added installation of the JDK in the AndroidPlayer directory
                 // so fallback to searching for it there.
                 if (String.IsNullOrEmpty(javaHome) || EditorPrefs.GetBool("JdkUseEmbedded")) {
@@ -66,13 +71,18 @@ namespace GooglePlayServices {
                             androidPlayerDir, "Tools"), "OpenJDK"), platformDir);
                         if (Directory.Exists(openJdkDir)) {
                             javaHome = openJdkDir;
-                        }
-                        else {
+                        } else {
                             openJdkDir = Path.Combine(androidPlayerDir, "OpenJDK");
                             if (Directory.Exists(openJdkDir)) javaHome = openJdkDir;
                         }
                     }
                 }
+
+                // Pre Unity 2019, use the JDK path in the preferences.
+                if (String.IsNullOrEmpty(javaHome)) {
+                    javaHome = UnityEditor.EditorPrefs.GetString("JdkPath");
+                }
+
                 // If the JDK stil isn't found, check the environment.
                 if (String.IsNullOrEmpty(javaHome)) {
                     javaHome = Environment.GetEnvironmentVariable(JAVA_HOME);
@@ -169,7 +179,7 @@ namespace GooglePlayServices {
             PlayServicesResolver.Log(
                 String.Format(
                     "Failed to get Java version when running {0}\n" +
-                    "It is not be possible to verify your Java installation is new enough to " +
+                    "It is not possible to verify your Java installation is new enough to " +
                     "compile with the latest Android SDK\n\n" +
                     "{1}", javaPath, commandLineSummary),
                 level: LogLevel.Warning);

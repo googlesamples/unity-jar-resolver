@@ -513,12 +513,22 @@ namespace GooglePlayServices {
             set { gradleVersion = value; }
             get {
                 if (!String.IsNullOrEmpty(gradleVersion)) return gradleVersion;
-                var engineDir = AndroidPlaybackEngineDirectory;
-                if (String.IsNullOrEmpty(engineDir)) return null;
+                string gradleLibDir = null;
 
-                var gradleLibDir =
-                    Path.Combine(Path.Combine(Path.Combine(engineDir, "Tools"), "gradle"), "lib");
-                if (Directory.Exists(gradleLibDir)) {
+                // Unity 2019.3 added AndroidExternalToolsSettings which contains the Gradle path
+                // so try to use that first.
+                var gradleDir = UnityCompat.AndroidExternalToolsSettingsGradlePath;
+                if (Directory.Exists(gradleDir)) gradleLibDir = Path.Combine(gradleDir, "lib");
+
+                // Fallback to searching for gradle redistributed with Unity in the Android plugin.
+                if (String.IsNullOrEmpty(gradleDir)) {
+                    var engineDir = AndroidPlaybackEngineDirectory;
+                    if (String.IsNullOrEmpty(engineDir)) return null;
+                    gradleLibDir = Path.Combine(Path.Combine(Path.Combine(engineDir, "Tools"),
+                                                             "gradle"), "lib");
+                }
+
+                if (!String.IsNullOrEmpty(gradleLibDir) && Directory.Exists(gradleLibDir)) {
                     foreach (var path in Directory.GetFiles(gradleLibDir, "gradle-core-*.jar",
                                                             SearchOption.TopDirectoryOnly)) {
                         var match = gradleJarVersionExtract.Match(Path.GetFileName(path));
@@ -780,7 +790,12 @@ namespace GooglePlayServices {
         /// </summary>
         public static string AndroidSdkRoot {
             get {
-                var sdkPath = EditorPrefs.GetString("AndroidSdkRoot");
+                string sdkPath = null;
+                // Unity 2019.3 added AndroidExternalToolsSettings which contains the Android SDK
+                // path so try to use that first.
+                var androidSdkRootPath = UnityCompat.AndroidExternalToolsSettingsSdkRootPath;
+                if (!String.IsNullOrEmpty(androidSdkRootPath)) sdkPath = androidSdkRootPath;
+
                 // Unity 2019.x added installation of the Android SDK in the AndroidPlayer directory
                 // so fallback to searching for it there.
                 if (String.IsNullOrEmpty(sdkPath) || EditorPrefs.GetBool("SdkUseEmbedded")) {
@@ -789,6 +804,11 @@ namespace GooglePlayServices {
                         var androidPlayerSdkDir = Path.Combine(androidPlayerDir, "SDK");
                         if (Directory.Exists(androidPlayerSdkDir)) sdkPath = androidPlayerSdkDir;
                     }
+                }
+
+                // Pre Unity 2019 Android SDK path.
+                if (String.IsNullOrEmpty(sdkPath)) {
+                    sdkPath = EditorPrefs.GetString("AndroidSdkRoot");
                 }
                 return sdkPath;
             }
