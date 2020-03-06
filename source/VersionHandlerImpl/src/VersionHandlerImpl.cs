@@ -1544,7 +1544,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
 
     // Analytics reporter.
     internal static EditorMeasurement analytics = new EditorMeasurement(
-            settings, logger, GA_TRACKING_ID, "com.google.unity.oss.play_services_resolver",
+            settings, logger, GA_TRACKING_ID, "com.google.external-dependency-manager",
             "Version Handler", "", PRIVACY_POLICY) {
         BasePath = "/versionhandler/",
         BaseQuery = String.Format("version={0}", VersionHandlerVersionNumber.Value.ToString()),
