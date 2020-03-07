@@ -54,7 +54,7 @@ namespace GooglePlayServices {
         /// </summary>
         internal static string JavaHome {
             get {
-                var javaHome = null;
+                string javaHome = null;
                 // Unity 2019.3 added AndroidExternalToolsSettings which contains the JDK path so
                 // try to use that first.
                 var javaRootPath = UnityCompat.AndroidExternalToolsSettingsJdkRootPath;
