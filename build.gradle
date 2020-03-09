@@ -1105,6 +1105,10 @@ Task buildAndroidResolver = createBuildPluginDllTask(
 Task buildIosResolver = createBuildPluginDllTask(
   "IosResolver", "IOSResolver", "Google.IOSResolver.dll", true,
   [buildAndroidResolver])
+Task buildUnityPackageManagerResolver = createBuildPluginDllTask(
+  "UnityPackageManagerResolver", "UnityPackageManagerResolver",
+  "Google.UnityPackageManagerResolver.dll", true,
+  [buildVersionHandlerImpl])
 
 task preparePluginStagingAreaDir(type: Task) {
   description "Delete all files that should not be present in staging area."
@@ -1137,7 +1141,8 @@ Iterable<Task> copyComponentsToStagingAreaTasks = [
     copyAndroidResolverStaging,
     copyVersionHandlerStaging,
     copyVersionHandlerImplStaging,
-    copyIosResolverStaging].collect {
+    copyIosResolverStaging,
+    copyUnityPackageManagerResolverStaging].collect {
   task ->
     createCopyFilesTask(
       sprintf("copy%sToStagingArea", task.ext.componentName),
@@ -1370,6 +1375,27 @@ createNUnitTask(
   compileVersionHandlerImplTests.outputs.files[0],
   [compileVersionHandlerImplTests])
 
+Task compileUnityPackageManagerResolverTests = createXbuildTask(
+    "compileUnityPackageManagerResolverTests",
+    "Compile tests for UnityPackageManagerResolver.",
+    project.ext.pluginSolutionFile, "UnityPackageManagerResolverTests",
+    fileTree(new File(
+               new File(
+                 new File(project.ext.pluginSourceDir,
+                          "UnityPackageManagerResolver"),
+                 "unit_tests"),
+               "src")),
+    new File(project.ext.testDir, "UnityPackageManagerResolverTests"),
+    [new File("Google.UnityPackageManagerResolverTests.dll")],
+    [buildUnityPackageManagerResolver]).with {
+  doFirst { checkNUnitDllPath() }
+}
+
+createNUnitTask(
+  "testUnityPackageManagerResolver",
+  "Runs tests for the UnityPackageManagerResolver module",
+  compileUnityPackageManagerResolverTests.outputs.files[0],
+  [compileUnityPackageManagerResolverTests])
 
 createUnityTestBatchAndNonBatch(
   "testVersionHandlerActivation",

@@ -1,5 +1,5 @@
-﻿// <copyright file="AssemblyInfo.cs" company="Google Inc.">
-// Copyright (C) 2014 Google Inc. All Rights Reserved.
+﻿// <copyright file="AssemblyInfo.cs" company="Google LLC">
+// Copyright (C) 2020 Google LLC All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -11,7 +11,7 @@
 //  distributed under the License is distributed on an "AS IS" BASIS,
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
-//    limitations under the License.
+//  limitations under the License.
 // </copyright>
 
 using System.Reflection;
@@ -19,12 +19,12 @@ using System.Runtime.CompilerServices;
 
 // Information about this assembly is defined by the following attributes.
 // Change them to the values specific to your project.
-[assembly: AssemblyTitle("Google.VersionHandlerImpl")]
+[assembly: AssemblyTitle("Google.UnityPackageManagerResolver")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Google Inc.")]
+[assembly: AssemblyCompany("Google LLC")]
 [assembly: AssemblyProduct("")]
-[assembly: AssemblyCopyright("Copyright 2016")]
+[assembly: AssemblyCopyright("Copyright 2020")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -37,8 +37,8 @@ using System.Runtime.CompilerServices;
 // if desired. See the Mono documentation for more information about signing.
 
 // [assembly: AssemblyDelaySign(false)]
-// // <copyright file="ResolutionException.cs" company="Google Inc.">
-// Copyright (C) 2016 Google Inc. All Rights Reserved.
+// // <copyright file="ResolutionException.cs" company="Google LLC">
+// Copyright (C) 2016 Google LLC All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -53,8 +53,6 @@ using System.Runtime.CompilerServices;
 //    limitations under the License.
 // </copyright>[assembly: AssemblyKeyFile("")]
 
-// Uses VersionHandlerImpl.RestoreDefaultSettings(preferenceKeys)
-[assembly: InternalsVisibleTo("Google.IOSResolver")]
-[assembly: InternalsVisibleTo("Google.JarResolver")]
-[assembly: InternalsVisibleTo("Google.UnityPackageManagerResolver")]
-[assembly: InternalsVisibleTo("Google.VersionHandlerImplTests")]
+// Uses UnityPackageManagerResolver.RestoreDefaultSettings(preferenceKeys)
+[assembly: InternalsVisibleTo("Google.UnityPackageManagerResolverTests")]
+
