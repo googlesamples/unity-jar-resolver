@@ -735,7 +735,7 @@ Task createBuildPluginDllTask(String componentName,
   copyTask.ext.componentName = componentName
 
   // Generate a clean target for this project.
-  Task cleanTask = tasks.create(name: sprintf("clean%s", projectName),
+  Task cleanTask = tasks.create(name: sprintf("clean%s", componentName),
                description: sprintf("Clean %s plugin DLL", projectName),
                type: Delete).with {
     delete (files(compileTask.outputs.files,
