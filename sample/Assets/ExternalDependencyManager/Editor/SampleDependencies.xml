@@ -62,6 +62,8 @@
            Cocoapod version specification for the named pod.
            If this is not specified the latest version is used.
            NOTE: This can't be used when "path" is set.
+         * "target" (optional)
+           The Xcode target to which to add the pod to.
          * "bitcodeEnabled" (optional)
            Whether this Cocoapod requires bitcode to be enabled in Unity's
            generated Xcode project.  This is "true" by default.
