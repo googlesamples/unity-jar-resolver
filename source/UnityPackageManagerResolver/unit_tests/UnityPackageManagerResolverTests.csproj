@@ -42,6 +42,8 @@
    </ItemGroup>
    <ItemGroup>
      <Compile Include="src\PackageManifestModifierTest.cs" />
+     <Compile Include="src\UnityPackageManagerRegistryTest.cs" />
+     <Compile Include="src\XmlUnityPackageManagerRegistriesTest.cs" />
    </ItemGroup>
    <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
    <ItemGroup>

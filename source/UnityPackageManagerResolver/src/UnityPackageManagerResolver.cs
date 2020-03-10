@@ -14,31 +14,63 @@
 //    limitations under the License.
 // </copyright>
 
+using UnityEngine;
 using UnityEditor;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Text;
 
 namespace Google {
 
 [InitializeOnLoad]
-public class UnityPackageManagerResolver {
+public class UnityPackageManagerResolver : AssetPostprocessor {
+
+    /// <summary>
+    /// Name of the plugin.
+    /// </summary>
+    internal const string PLUGIN_NAME = "Unity Package Manager Resolver";
+
+    /// <summary>
+    /// The operation to perform when modifying the manifest.
+    /// </summary>
+    internal enum ManifestModificationMode {
+        Add, /// Add package registries that are not in the manifest.
+        Remove, /// Remove package registries from the manifest that are in the loaded config.
+        Modify, /// Display and add / remove all package registries from the manifest.
+    }
+
+    private const string ADD_REGISTRIES_QUESTION =
+        "Add the selected Unity Package Manager registries to your project?";
+    private const string REMOVE_REGISTRIES_QUESTION =
+        "Remove the selected Unity Package Manager registries from your project?";
+    private const string ADD_REGISTRIES_DESCRIPTION =
+        "Adding a registry will allow you to install, upgrade and remove packages from the " +
+        "registry's server in the Unity Package Manager. By adding the selected registries, you " +
+        "agree that your use of these registries is subject to their Terms of Service and you " +
+        "acknowledge that data will be collected in accordance with each registry's Privacy " +
+        "Policy.";
+    private const string REMOVE_REGISTRIES_DESCRIPTION =
+        "Removing a registry will prevent you from installing and upgrading packages from the " +
+        "registry's server in the Unity Package Manager. It will not remove packages from the " +
+        "registry's server that are already installed";
+    private const string ADD_OR_REMOVE_REGISTRIES_QUESTION =
+        "Add the selected Unity Package Manager (UPM) registries to and remove the " +
+        "unselected UPM registries from your project?";
+    private const string MODIFY_MENU_ITEM_DESCRIPTION =
+        "You can always add or remove registries at a later time using menu item:\n" +
+        "'Assets > External Dependency Manager > Unity Package Manager Resolver > " +
+        "Modify Registries'.";
+
     /// <summary>
     /// Enables / disables external package registries for Unity Package
     /// Manager.
     /// </summary>
     static UnityPackageManagerResolver() {
-        logger.Log("Loaded UnityPackageManagerResolver", LogLevel.Verbose);
+        logger.Log("Loaded UnityPackageManagerResolver", level: LogLevel.Verbose);
 
         RunOnMainThread.Run(() => {
                 // Load log preferences.
                 VerboseLoggingEnabled = VerboseLoggingEnabled;
-
-                // Turn off the feature immediately scoped registry is not support.
-                // This is for the case when the user downgrade Unity version.
-                if (!ScopedRegistrySupported) Enable = false;
-
                 CheckRegistries();
             }, runNow: false);
     }
@@ -60,97 +92,323 @@ public class UnityPackageManagerResolver {
     /// Check registry status based on current settings.
     /// </summary>
     internal static void CheckRegistries() {
-        if (!ScopedRegistrySupported) return;
-
-        if (!ExecutionEnvironment.InBatchMode) {
-            PromptToEnable();
+        if (Enable) {
+            UpdateManifest(ManifestModificationMode.Add,
+                           promptBeforeAction: PromptToAddRegistries,
+                           showDisableButton: true);
         }
-
-        UpdateManifest(Enable);
     }
 
-    internal static string PromptTitleText = "Add Game Package Registry by Google?";
-    internal static string PromptMessageText =
-        "This will enable you to discover packages from Google through Unity Package Manager.";
-    internal static string PromptOkText = "OK";
-    internal static string PromptCancelText = "Cancel";
 
     /// <summary>
-    /// Check registry status based on current settings.
+    /// Called by Unity when all assets have been updated and checks to see whether any registries
+    /// have changed.
     /// </summary>
-    internal static void PromptToEnable() {
-        if (!ScopedRegistrySupported) return;
-
-        if (PromptForAddRegistry && !Enable) {
-            bool result = EditorUtility.DisplayDialog(
-                PromptTitleText,
-                PromptMessageText,
-                PromptOkText,
-                PromptCancelText);
-            Enable = result;
-            UnityPackageManagerResolver.analytics.Report(
-                "consent/dialog", String.Format("Prompt response: {0}", result ? "Yes" : "No"));
+    /// <param name="importedAssets">Imported assets.</param>
+    /// <param name="deletedAssets">Deleted assets.</param>
+    /// <param name="movedAssets">Moved assets.</param>
+    /// <param name="movedFromAssetPaths">Moved from asset paths. (unused)</param>
+    private static void OnPostprocessAllAssets(string[] importedAssets,
+                                               string[] deletedAssets,
+                                               string[] movedAssets,
+                                               string[] movedFromAssetPaths) {
+        if (!Enable) return;
+        bool registriesChanged = false;
+        var checkAssets = new List<string>(importedAssets);
+        checkAssets.AddRange(movedAssets);
+        foreach (var asset in checkAssets) {
+            if (XmlUnityPackageManagerRegistries.IsRegistriesFile(asset)) {
+                registriesChanged = true;
+                break;
+            }
+            AssetImporter importer = AssetImporter.GetAtPath(asset);
+            if (importer != null) {
+                foreach (var assetLabel in AssetDatabase.GetLabels(importer)) {
+                    if (assetLabel == XmlUnityPackageManagerRegistries.REGISTRIES_LABEL) {
+                        registriesChanged = true;
+                        break;
+                    }
+                }
+            }
         }
-        PromptForAddRegistry = false;
+        if (registriesChanged) CheckRegistries();
     }
 
+    /// <summary>
+    /// Add registries in the XML configuration to the project manifest.
+    /// </summary>
     [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Add Registries")]
     public static void AddRegistries() {
-        UpdateManifest(true);
+        UpdateManifest(ManifestModificationMode.Add, promptBeforeAction: true,
+                       showDisableButton: false);
     }
 
+    /// <summary>
+    /// Remove registries in the XML configuration from the project manifest.
+    /// </summary>
     [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Remove Registries")]
     public static void RemoveRegistries() {
-        UpdateManifest(false);
+        UpdateManifest(ManifestModificationMode.Remove, promptBeforeAction: true,
+                       showDisableButton: false);
+    }
+
+    /// <summary>
+    /// Add or remove registries in the project manifest based upon the set available in the XML
+    /// configuration.
+    /// </summary>
+    [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Modify Registries")]
+    public static void ModifyRegistries() {
+        UpdateManifest(ManifestModificationMode.Modify, promptBeforeAction: true,
+                       showDisableButton: false);
+    }
+
+    /// <summary>
+    /// Read registries from XML configuration files.
+    /// </summary>
+    /// <returns>Dictionary of registries indexed by URL.</returns>
+    private static Dictionary<string, UnityPackageManagerRegistry> ReadRegistriesFromXml() {
+        // Read registries from XML files.
+        var xmlReader = new XmlUnityPackageManagerRegistries();
+        xmlReader.ReadAll(logger);
+        return xmlReader.Registries;
+    }
+
+    /// <summary>
+    /// Apply registry changes to the projects manifest.
+    /// </summary>
+    /// <param name="manifestModifier">Object that modifies the project's manifest.</param>
+    /// <param name="availableRegistries">Registries that are available in the
+    /// configuration.</param>
+    /// <param name="manifestRegistries">Registries that are present in the manifest.</param>
+    /// <param name="selectedRegistryUrls">URLs of selected registries, these should be items in
+    /// availableRegistries.</param>
+    /// <param name="addRegistries">Whether to add selected registries to the manifest.</param>
+    /// <param name="removeRegistries">Whether to remove unselected registries from the
+    /// manifest.</param>
+    /// <param name="invertSelection">If false, adds the selected registries and removes the
+    /// unselected registries.  If true, removes the selected registries and adds the unselected
+    /// registries.</param>
+    /// <returns>true if successful, false otherwise.</returns>
+    private static bool SyncRegistriesToManifest(
+            PackageManifestModifier manifestModifier,
+            Dictionary<string, UnityPackageManagerRegistry> availableRegistries,
+            Dictionary<string, List<UnityPackageManagerRegistry>> manifestRegistries,
+            HashSet<string> selectedRegistryUrls,
+            bool addRegistries = true,
+            bool removeRegistries = true,
+            bool invertSelection = false) {
+        // Build a list of registries to add to and remove from the manifest.
+        var registriesToAdd = new List<UnityPackageManagerRegistry>();
+        var registriesToRemove = new List<UnityPackageManagerRegistry>();
+
+        foreach (var availableRegistry in availableRegistries.Values) {
+            var url = availableRegistry.Url;
+            bool isSelected = selectedRegistryUrls.Contains(url);
+            if (invertSelection) isSelected = !isSelected;
+
+            bool currentlyInManifest = manifestRegistries.ContainsKey(url);
+
+            if (isSelected) {
+                if (addRegistries && !currentlyInManifest) {
+                    registriesToAdd.Add(availableRegistry);
+                }
+            } else {
+                if (removeRegistries && currentlyInManifest) {
+                    registriesToRemove.Add(availableRegistry);
+                }
+            }
+        }
+
+        bool manifestModified = false;
+        if (registriesToAdd.Count > 0) {
+            manifestModifier.AddRegistries(registriesToAdd);
+            manifestModified = true;
+        }
+        if (registriesToRemove.Count > 0) {
+            manifestModifier.RemoveRegistries(registriesToRemove);
+            manifestModified = true;
+        }
+
+        bool successful = true;
+        if (manifestModified) {
+            successful = manifestModifier.WriteManifest();
+            if (successful) {
+                if (registriesToAdd.Count > 0) {
+                    logger.Log(String.Format(
+                        "Added registries to {0}:\n{1}",
+                        PackageManifestModifier.MANIFEST_FILE_PATH,
+                        UnityPackageManagerRegistry.ToString(registriesToAdd)));
+                }
+                if (registriesToRemove.Count > 0) {
+                    logger.Log(String.Format(
+                        "Removed registries from {0}:\n{1}",
+                        PackageManifestModifier.MANIFEST_FILE_PATH,
+                        UnityPackageManagerRegistry.ToString(registriesToRemove)));
+                }
+                analytics.Report(
+                    "registry_manifest/write/success",
+                    new KeyValuePair<string, string>[] {
+                        new KeyValuePair<string, string>("added", registriesToAdd.Count.ToString()),
+                        new KeyValuePair<string, string>("removed",
+                                                         registriesToRemove.Count.ToString())
+                    },
+                    "Project Manifest Modified");
+            } else {
+                analytics.Report("registry_manifest/write/failed", "Project Manifest Write Failed");
+            }
+        }
+        return successful;
     }
 
     /// <summary>
     /// Update manifest file based on the settings.
     /// </summary>
-    public static void UpdateManifest(bool enable) {
-        if (!ScopedRegistrySupported) return;
-
-        PackageManifestModifier modifier = new PackageManifestModifier() { Logger = logger };
-        if (!modifier.ReadManifest()) {
-            UnityPackageManagerResolver.analytics.Report(
-               "/registry_manifest/read/failed",
-               "Update Manifest failed: Read/Parse manifest failed");
-            Enable = false;
+    /// <param name="mode">Manifest modification mode being applied.</param>
+    /// <param name="promptBeforeAction">Whether to display a window that prompts the user for
+    /// confirmation before applying changes.</param>
+    /// <param name="showDisableButton">Whether to show a button to disable auto-registry
+    /// addition.</param>
+    /// <param name="scopePrefixFilter">List of scope prefixes used to filter the set of registries
+    /// being operated on.</param>
+    private static void UpdateManifest(ManifestModificationMode mode,
+                                       bool promptBeforeAction = true,
+                                       bool showDisableButton = false,
+                                       IEnumerable<string> scopePrefixFilter = null) {
+        if (!ScopedRegistriesSupported) {
+            logger.Log(String.Format("Scoped registries not supported in this version of Unity."),
+                       level: LogLevel.Verbose);
             return;
         }
 
-        bool manifestModified = false;
-
-        List<Dictionary<string, object>> foundRegistries =
-            modifier.SearchRegistries(PackageManifestModifier.GOOGLE_REGISTRY_URL);
-
-        bool registryExists = foundRegistries.Count > 0;
-
-        if (enable && !registryExists) {
-            logger.Log(String.Format("Adding {0} (url: {1}) to manifest.json",
-                PackageManifestModifier.GOOGLE_REGISTRY_NAME,
-                PackageManifestModifier.GOOGLE_REGISTRY_URL), LogLevel.Info);
-            modifier.AddRegistry(
-                PackageManifestModifier.GOOGLE_REGISTRY_NAME,
-                PackageManifestModifier.GOOGLE_REGISTRY_URL,
-                PackageManifestModifier.GOOGLE_REGISTRY_SCOPES);
-
-            manifestModified = true;
-        } else if (!enable && registryExists) {
-            logger.Log(String.Format("Removing {0} (url: {1}) from manifest.json",
-                PackageManifestModifier.GOOGLE_REGISTRY_NAME,
-                PackageManifestModifier.GOOGLE_REGISTRY_URL), LogLevel.Info);
-            modifier.RemoveRegistries(foundRegistries);
-            manifestModified = true;
+        PackageManifestModifier modifier = new PackageManifestModifier() { Logger = logger };
+        Dictionary<string, List<UnityPackageManagerRegistry>> manifestRegistries =
+            modifier.ReadManifest() ? modifier.UnityPackageManagerRegistries : null;
+        if (manifestRegistries == null) {
+            UnityPackageManagerResolver.analytics.Report(
+               "registry_manifest/read/failed",
+               "Update Manifest failed: Read/Parse manifest failed");
+            return;
         }
 
-        if (manifestModified) {
-            if (modifier.WriteManifest()) {
-                logger.Log("Successfully updated manifest.json", LogLevel.Info);
+        var xmlRegistries = ReadRegistriesFromXml();
+        // Filter registries using the scope prefixes.
+        if (scopePrefixFilter != null) {
+            foreach (var registry in new List<UnityPackageManagerRegistry>(xmlRegistries.Values)) {
+                bool removeRegistry = true;
+                foreach (var scope in registry.Scopes) {
+                    foreach (var scopePrefix in scopePrefixFilter) {
+                        if (scope.StartsWith(scopePrefix)) {
+                            removeRegistry = false;
+                        }
+                    }
+                }
+                if (removeRegistry) xmlRegistries.Remove(registry.Url);
+            }
+        }
+
+        // Filter the set of considered registries based upon the modification mode.
+        HashSet<string> selectedRegistryUrls = null;
+        switch (mode) {
+            case ManifestModificationMode.Add:
+                // Remove all items from the XML loaded registries that are present in the manifest.
+                foreach (var url in manifestRegistries.Keys) xmlRegistries.Remove(url);
+                selectedRegistryUrls = new HashSet<string>(xmlRegistries.Keys);
+                break;
+            case ManifestModificationMode.Remove:
+                // Remove all items from the XML loaded registries that are not present in the
+                // manifest.
+                foreach (var url in new List<string>(xmlRegistries.Keys)) {
+                    if (!manifestRegistries.ContainsKey(url)) {
+                        xmlRegistries.Remove(url);
+                    }
+                }
+                selectedRegistryUrls = new HashSet<string>(xmlRegistries.Keys);
+                break;
+            case ManifestModificationMode.Modify:
+                selectedRegistryUrls = new HashSet<string>();
+                // Keep all XML loaded registries and select the items in the manifest.
+                foreach (var url in xmlRegistries.Keys) {
+                    if (manifestRegistries.ContainsKey(url)) {
+                        selectedRegistryUrls.Add(url);
+                    }
+                }
+                break;
+        }
+
+        // Applies the manifest modification based upon the modification mode.
+        Action<HashSet<string>> syncRegistriesToManifest = (urlSelectionToApply) => {
+            SyncRegistriesToManifest(modifier, xmlRegistries, manifestRegistries,
+                                     urlSelectionToApply,
+                                     addRegistries: (mode == ManifestModificationMode.Add ||
+                                                     mode == ManifestModificationMode.Modify),
+                                     removeRegistries: (mode == ManifestModificationMode.Remove ||
+                                                        mode == ManifestModificationMode.Modify),
+                                     invertSelection: mode == ManifestModificationMode.Remove);
+        };
+
+        if (xmlRegistries.Count > 0) {
+            if (promptBeforeAction) {
+                // Build a list of items to display.
+                var registryItems = new List<KeyValuePair<string, string>>();
+                foreach (var kv in xmlRegistries) {
+                    registryItems.Add(new KeyValuePair<string, string>(kv.Key, kv.Value.Name));
+                }
+
+                // Optional when prompting is enabled or forced.
+                var window = MultiSelectWindow.CreateMultiSelectWindow(PLUGIN_NAME);
+                window.AvailableItems = registryItems;
+                window.Sort(1);
+                window.SelectedItems = selectedRegistryUrls;
+                switch (mode) {
+                    case ManifestModificationMode.Add:
+                        window.Caption = String.Format("{0}\n\n{1}\n\n{2}",
+                                                       ADD_REGISTRIES_QUESTION,
+                                                       ADD_REGISTRIES_DESCRIPTION,
+                                                       MODIFY_MENU_ITEM_DESCRIPTION);
+                        window.ApplyLabel = "Add Selected Registries";
+                        break;
+                    case ManifestModificationMode.Remove:
+                        window.Caption = String.Format("{0}\n\n{1}{2}",
+                                                       REMOVE_REGISTRIES_QUESTION,
+                                                       REMOVE_REGISTRIES_DESCRIPTION,
+                                                       MODIFY_MENU_ITEM_DESCRIPTION);
+                        window.ApplyLabel = "Remove Selected Registries";
+                        break;
+                    case ManifestModificationMode.Modify:
+                        window.Caption = String.Format("{0}\n\n{1} {2}",
+                                                       ADD_OR_REMOVE_REGISTRIES_QUESTION,
+                                                       ADD_REGISTRIES_DESCRIPTION,
+                                                       REMOVE_REGISTRIES_DESCRIPTION);
+                        window.ApplyLabel = "Modify Registries";
+                        break;
+                }
+                window.RenderItem = (item) => {
+                    var registry = xmlRegistries[item.Key];
+                    var termsOfService = registry.TermsOfService;
+                    if (!String.IsNullOrEmpty(termsOfService)) {
+                        if (GUILayout.Button("View Terms of Service")) {
+                            Application.OpenURL(termsOfService);
+                        }
+                    }
+                    var privacyPolicy = registry.PrivacyPolicy;
+                    if (!String.IsNullOrEmpty(privacyPolicy)) {
+                        if (GUILayout.Button("View Privacy Policy")) {
+                            Application.OpenURL(privacyPolicy);
+                        }
+                    }
+                };
+                if (showDisableButton) {
+                    window.RenderBeforeCancelApply = () => {
+                        if (GUILayout.Button("Disable Registry Addition")) {
+                            Enable = false;
+                            window.Close();
+                        }
+                    };
+                }
+                window.OnApply = () => { syncRegistriesToManifest(window.SelectedItems); };
+                window.Show();
             } else {
-                UnityPackageManagerResolver.analytics.Report(
-                       "/registry_manifest/write/failed",
-                       "Update Manifest failed: Write manifest failed");
+                syncRegistriesToManifest(selectedRegistryUrls);
             }
         }
     }
@@ -167,14 +425,14 @@ public class UnityPackageManagerResolver {
     // module.
     private const string PreferenceEnable =
         "Google.UnityPackageManagerResolver.Enable";
-    private const string PreferencePromptToEnable =
-        "Google.UnityPackageManagerResolver.PromptForAddRegistry";
+    private const string PreferencePromptToAddRegistries =
+        "Google.UnityPackageManagerResolver.PromptToAddRegistries";
     private const string PreferenceVerboseLoggingEnabled =
         "Google.UnityPackageManagerResolver.VerboseLoggingEnabled";
     // List of preference keys, used to restore default settings.
     private static string[] PreferenceKeys = new[] {
         PreferenceEnable,
-        PreferencePromptToEnable,
+        PreferencePromptToAddRegistries,
         PreferenceVerboseLoggingEnabled
     };
 
@@ -197,7 +455,7 @@ public class UnityPackageManagerResolver {
     // Analytics reporter.
     internal static EditorMeasurement analytics =
         new EditorMeasurement(settings, logger, VersionHandlerImpl.GA_TRACKING_ID,
-            "com.google.external-dependency-manager", "Unity PackageManager Resolver", "",
+            "com.google.external-dependency-manager", PLUGIN_NAME, "",
             VersionHandlerImpl.PRIVACY_POLICY) {
         BasePath = "/upmresolver/",
         BaseQuery =
@@ -218,38 +476,34 @@ public class UnityPackageManagerResolver {
     /// Enable / disable management of external registries.
     /// </summary>
     public static bool Enable {
-        get {
-            return settings.GetBool(PreferenceEnable, defaultValue: false);
-        }
+        get { return settings.GetBool(PreferenceEnable, defaultValue: false); }
         set { settings.SetBool(PreferenceEnable, value); }
     }
 
     /// <summary>
-    /// Enable / disable prompting the user to enable/disable registries.
+    /// Enable / disable prompting the user to add registries.
     /// </summary>
-    public static bool PromptForAddRegistry {
-        get { return settings.GetBool(PreferencePromptToEnable,
-                                      defaultValue: true); }
-        set { settings.SetBool(PreferencePromptToEnable, value); }
+    public static bool PromptToAddRegistries {
+        get { return settings.GetBool(PreferencePromptToAddRegistries, defaultValue: true); }
+        set { settings.SetBool(PreferencePromptToAddRegistries, value); }
     }
 
     /// <summary>
     /// Enable / disable verbose logging.
     /// </summary>
     public static bool VerboseLoggingEnabled {
-        get { return settings.GetBool(PreferenceVerboseLoggingEnabled,
-                                      defaultValue: false); }
+        get { return settings.GetBool(PreferenceVerboseLoggingEnabled, defaultValue: false); }
         set {
             settings.SetBool(PreferenceVerboseLoggingEnabled, value);
-            logger.Level = System.Environment.CommandLine.Contains("-batchmode") || value ?
+            logger.Level = ExecutionEnvironment.InBatchMode || value ?
                 LogLevel.Verbose : LogLevel.Info;
         }
     }
 
     /// <summary>
-    /// Whether scoped registry is supported in current Unity editor.
+    /// Whether scoped registries are supported in current Unity editor.
     /// </summary>
-    public static bool ScopedRegistrySupported {
+    public static bool ScopedRegistriesSupported {
         get {
             return VersionHandler.GetUnityVersionMajorMinor() >= MinimumUnityVersionFloat;
         }

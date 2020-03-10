@@ -1,0 +1,46 @@
+<!-- Unity Package Manager Registries to be added by the
+     Unity Package Manager Resolver component of this plugin can be added to
+     a Unity plugin or project by providing a file that conforms this sample
+     that is one of:
+     - A file matching the filename pattern Editor/*Registries.xml
+     - Any text asset labeled with "gupmr_registries" -->
+
+<registries>
+  <!-- Unity Package Manager (UPM) registries are under the "registries" element.
+
+       The "name" attribute is *required* and provides the name of the registry
+       that is displayed in the UPM UI.
+
+       The "url" attribute is *required* and provides the URL of the NPM
+       registry server. This URL must be unique across the project, registries
+       when multiple registries point at the same URL only the first is used.
+
+       The "termsOfService" attribute is optional and allows a maintainer to
+       display the terms of service of a registry to the developer when the
+       developer is deciding whether to add the registry to UPM.
+
+       The "privacyPolicy" attribute is optional and allows a maintainer to
+       display the privacy policy of a registry to the developer when the
+       developer is deciding whether to add the registry to UPM.
+
+       For more information, see https://docs.unity3d.com/Manual/upm-scoped.html
+       -->
+  <registry name="My Company"
+            url="https://unityregistry.mycompany.com"
+            termsOfService="https://mycompany.com/unityregistry/terms"
+            privacyPolicy="https://mycompany.com/unityregistry/privacy">
+    <!-- Scopes that specify the set of packages managed by this registry.
+
+         At least one scope *must* be specified for each registry.
+
+         For more information, see:
+         * https://docs.unity3d.com/Manual/upm-scoped.html
+         * https://docs.npmjs.com/using-npm/scope.html
+      -->
+    <scopes>
+      <!-- This can contain one more more scopes for packages managed by this
+           package registry. -->
+      <scope>com.mycompany</scope>
+    </scopes>
+  </registry>
+</registries>

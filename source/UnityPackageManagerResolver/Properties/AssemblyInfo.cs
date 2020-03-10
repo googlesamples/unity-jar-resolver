@@ -53,6 +53,5 @@ using System.Runtime.CompilerServices;
 //    limitations under the License.
 // </copyright>[assembly: AssemblyKeyFile("")]
 
-// Uses UnityPackageManagerResolver.RestoreDefaultSettings(preferenceKeys)
 [assembly: InternalsVisibleTo("Google.UnityPackageManagerResolverTests")]
 

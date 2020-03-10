@@ -36,9 +36,9 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         internal bool enable;
 
         /// <summary>
-        /// Whether to prompt the user before to enable external registry
+        /// Whether to prompt the user before to adding external registries.
         /// </summary>
-        internal bool promptForAddRegistry;
+        internal bool promptToAddRegistries;
 
         /// <summary>
         /// Whether to enable / disable verbose logging.
@@ -60,7 +60,7 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         /// </summary>
         internal Settings() {
             enable = UnityPackageManagerResolver.Enable;
-            promptForAddRegistry = UnityPackageManagerResolver.PromptForAddRegistry;
+            promptToAddRegistries = UnityPackageManagerResolver.PromptToAddRegistries;
             verboseLoggingEnabled = UnityPackageManagerResolver.VerboseLoggingEnabled;
             useProjectSettings = UnityPackageManagerResolver.UseProjectSettings;
             analyticsSettings =
@@ -72,7 +72,7 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         /// </summary>
         internal void Save() {
             UnityPackageManagerResolver.Enable = enable;
-            UnityPackageManagerResolver.PromptForAddRegistry = promptForAddRegistry;
+            UnityPackageManagerResolver.PromptToAddRegistries = promptToAddRegistries;
             UnityPackageManagerResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
             UnityPackageManagerResolver.UseProjectSettings = useProjectSettings;
             analyticsSettings.Save();
@@ -114,35 +114,37 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
 
         GUILayout.BeginVertical();
 
-        GUILayout.Label(String.Format("Unity Package Manager Resolver (version {0}.{1}.{2})",
+        GUILayout.Label(String.Format("{0} (version {1}.{2}.{3})",
+                                      UnityPackageManagerResolver.PLUGIN_NAME,
                                       UnityPackageManagerResolverVersionNumber.Value.Major,
                                       UnityPackageManagerResolverVersionNumber.Value.Minor,
                                       UnityPackageManagerResolverVersionNumber.Value.Build));
 
-        if (!UnityPackageManagerResolver.ScopedRegistrySupported) {
+        if (!UnityPackageManagerResolver.ScopedRegistriesSupported) {
             GUILayout.Label(
                 String.Format("Only supported from Unity {0} and above.",
                     UnityPackageManagerResolver.MinimumUnityVersionString));
         }
 
-        // Disable all GUI if scoped registry is not supported.
-        GUI.enabled = UnityPackageManagerResolver.ScopedRegistrySupported;
+        // Disable all GUI if scoped registries are not supported.
+        GUI.enabled = UnityPackageManagerResolver.ScopedRegistriesSupported;
 
         GUILayout.BeginHorizontal();
-        GUILayout.Label("Add Game Package Registry by Google", EditorStyles.boldLabel);
+        GUILayout.Label("Add package registries", EditorStyles.boldLabel);
         settings.enable = EditorGUILayout.Toggle(settings.enable);
         GUILayout.EndHorizontal();
-        GUILayout.Label("When this option is enabled, Game Package Registry will be added to " +
-                        "this Unity project. This allows Unity packages from Google to be " +
-                        "discovered and managed by Unity Package Manager. When disabled, the " +
-                        "registry will be removed from the project.");
+        GUILayout.Label("When this option is enabled, Unity Package Manager registries " +
+                        "discovered by this plugin will be added to the project's manifest. " +
+                        "This allows Unity packages from additional sources to be " +
+                        "discovered and managed by the Unity Package Manager.");
 
         GUILayout.BeginHorizontal();
-        GUILayout.Label("Prompt to add registry", EditorStyles.boldLabel);
-        settings.promptForAddRegistry = EditorGUILayout.Toggle(settings.promptForAddRegistry);
+        GUILayout.Label("Prompt to add package registries", EditorStyles.boldLabel);
+        settings.promptToAddRegistries = EditorGUILayout.Toggle(settings.promptToAddRegistries);
         GUILayout.EndHorizontal();
-        GUILayout.Label("When this option is enabled, the resolver will prompt to add the Google " +
-                        "package registry server to the project manifest.");
+        GUILayout.Label("When this option is enabled, this plugin will prompt for confirmation " +
+                        "before adding Unity Package Manager registries to the project's " +
+                        "manifest.");
 
         settings.analyticsSettings.RenderGui();
 
@@ -166,8 +168,6 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
             UnityPackageManagerResolver.analytics.Report("settings/reset", "Settings Reset");
             LoadSettings();
             backupSettings.Save();
-
-            UnityPackageManagerResolver.UpdateManifest(settings.enable);
         }
 
         GUILayout.BeginHorizontal();
@@ -183,8 +183,8 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
                         "enabled",
                         UnityPackageManagerResolver.Enable.ToString()),
                     new KeyValuePair<string, string>(
-                        "promptForAddRegistry",
-                        UnityPackageManagerResolver.PromptForAddRegistry.ToString()),
+                        "promptToAddRegistries",
+                        UnityPackageManagerResolver.PromptToAddRegistries.ToString()),
                     new KeyValuePair<string, string>(
                         "verboseLoggingEnabled",
                         UnityPackageManagerResolver.VerboseLoggingEnabled.ToString()),
@@ -193,7 +193,7 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
             settings.Save();
             Close();
 
-            UnityPackageManagerResolver.UpdateManifest(settings.enable);
+            UnityPackageManagerResolver.CheckRegistries();
         }
         GUILayout.EndHorizontal();
         GUILayout.EndVertical();

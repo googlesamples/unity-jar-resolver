@@ -1132,7 +1132,11 @@ Task copyPluginTemplateToStagingArea = createCopyFilesTask(
   "copyPluginTemplateToStagingArea",
   "Copy the template project into the Unity plugin packaging dir.",
   [new File("Assets", "ExternalDependencyManager.meta"),
-   new File(new File("Assets", "ExternalDependencyManager"), "Editor.meta")],
+   new File(new File("Assets", "ExternalDependencyManager"), "Editor.meta"),
+   new File(new File(new File("Assets", "ExternalDependencyManager"), "Editor"),
+            "GoogleRegistries.xml"),
+   new File(new File(new File("Assets", "ExternalDependencyManager"), "Editor"),
+            "GoogleRegistries.xml.meta")],
   project.ext.pluginTemplateDir, project.ext.pluginStagingAreaDir,
   [preparePluginStagingAreaDir],
   { sourceFile, targetFile -> copyAssetMetadataFile(sourceFile, targetFile) })

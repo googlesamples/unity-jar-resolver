@@ -18,37 +18,26 @@ using EDMInternal.MiniJSON;
 using System;
 using System.IO;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Google {
 
 internal class PackageManifestModifier {
-    /// <summary>
-    /// Scoped Registry Name for Game Package Registry
-    /// </summary>
-    internal const string GOOGLE_REGISTRY_NAME = "Game Package Registry by Google";
 
     /// <summary>
-    /// Scoped Registry URL for Game Package Registry
+    /// Thrown if an error occurs while parsing the manifest.
     /// </summary>
-    internal const string GOOGLE_REGISTRY_URL = "https://unityregistry-pa.googleapis.com";
+    internal class ParseException : Exception {
 
-    /// <summary>
-    /// Scoped Registry scopes for Game Package Registry
-    /// </summary>
-    internal static readonly List<object> GOOGLE_REGISTRY_SCOPES = new List<object>(){
-        "com.google"
-    };
+        /// <summary>
+        /// Construct an exception with a message.
+        /// </summary>
+        public ParseException(string message) : base(message) {}
+    }
 
     /// <summary>
     /// Relative location of the manifest file from project root.
     /// </summary>
     internal const string MANIFEST_FILE_PATH = "Packages/manifest.json";
-
-    /// <summary>
-    /// Logger for this object.
-    /// </summary>
-    public Google.Logger Logger;
 
     /// <summary>
     /// JSON keys to be used in manifest.json
@@ -69,30 +58,40 @@ internal class PackageManifestModifier {
     private const string MANIFEST_REGISTRY_SCOPES_KEY = "scopes";
 
     /// <summary>
+    /// Logger for this object.
+    /// </summary>
+    public Google.Logger Logger;
+
+    /// <summary>
     /// Parsed manifest data from the manifest JSON file.
     /// </summary>
-    internal Dictionary<string, object> manifestDict;
+    internal Dictionary<string, object> manifestDict = null;
 
     /// <summary>
     /// Construct an object to modify manifest file.
     /// </summary>
-    public PackageManifestModifier() {Logger = new Google.Logger();}
+    public PackageManifestModifier() { Logger = new Google.Logger(); }
 
     /// <summary>
     /// Read manifest from the file and parse JSON string into a dictionary.
     /// </summary>
     /// <return>True if read and parsed successfully.</return>
     internal bool ReadManifest() {
+        string manifestText;
         try {
-            string manifestText = File.ReadAllText(MANIFEST_FILE_PATH);
-
-            manifestDict = Json.Deserialize(manifestText) as Dictionary<string,object>;
+            manifestText = File.ReadAllText(MANIFEST_FILE_PATH);
         } catch (Exception e) {
-            Logger.Log(String.Format("Failed to read the {0}. \nException:{1}",
+            Logger.Log(String.Format("Failed to read {0}. \nException:{1}",
                 MANIFEST_FILE_PATH, e.ToString()), LogLevel.Error);
             return false;
         }
-
+        try {
+            manifestDict = Json.Deserialize(manifestText) as Dictionary<string,object>;
+        } catch (Exception e) {
+            Logger.Log(String.Format("Failed to parse {0}. \nException:{1}",
+                MANIFEST_FILE_PATH, e.ToString()), LogLevel.Error);
+            return false;
+        }
         if (manifestDict == null) {
             Logger.Log(String.Format("Failed to read the {0} because it is empty or malformed.",
                 MANIFEST_FILE_PATH), LogLevel.Error);
@@ -102,85 +101,177 @@ internal class PackageManifestModifier {
     }
 
     /// <summary>
-    /// Search all scoped registries using the given url.
+    /// Try to get the scopedRegistries entry from the manifest.
     /// </summary>
-    /// <para name="searchUrl">Url for searching</para>
-    /// <returns>A list of found scoped registries</returns>
-    internal List<Dictionary<string, object>> SearchRegistries(string searchUrl) {
-        List<Dictionary<string, object>> foundRegistries = new List<Dictionary<string, object>>();
-        object scopedRegistriesObj;
-        if (manifestDict.TryGetValue(MANIFEST_SCOPED_REGISTRIES_KEY, out scopedRegistriesObj)){
-            var scopedRegistries = scopedRegistriesObj as List<object>;
-            if (scopedRegistries != null) {
-                foreach (var obj in scopedRegistries) {
-                    var registry = obj as Dictionary<string, object>;
-                    object urlObj;
-                    if (registry.TryGetValue(MANIFEST_REGISTRY_URL_KEY, out urlObj)) {
-                        var url = urlObj as string;
-                        if (url != null && String.Compare(url, searchUrl) == 0) {
-                            foundRegistries.Add(registry);
+    /// <returns>List of scoped registries if found, null otherwise.</returns>
+    /// <exception>Throws ParseException if the manifest isn't loaded or there is an error parsing
+    /// the manifest.</exception>
+    private List<object> ScopedRegistries {
+        get {
+            object scopedRegistriesObj = null;
+            if (manifestDict == null) {
+                throw new ParseException(String.Format("'{0}' not loaded.", MANIFEST_FILE_PATH));
+            } else if (manifestDict.TryGetValue(MANIFEST_SCOPED_REGISTRIES_KEY,
+                                                out scopedRegistriesObj)) {
+                var scopedRegistries = scopedRegistriesObj as List<object>;
+                if (scopedRegistries == null) {
+                    throw new ParseException(
+                        String.Format("Found malformed '{0}' section in '{1}'.",
+                                      MANIFEST_SCOPED_REGISTRIES_KEY, MANIFEST_FILE_PATH));
+                }
+                return scopedRegistries;
+            }
+            return null;
+        }
+    }
+
+
+    /// <summary>
+    /// Extract scoped registries from the parsed manifest.
+    /// </summary>
+    internal Dictionary<string, List<UnityPackageManagerRegistry>> UnityPackageManagerRegistries {
+        get {
+            var upmRegistries = new Dictionary<string, List<UnityPackageManagerRegistry>>();
+            List<object> scopedRegistries = null;
+            try {
+                scopedRegistries = ScopedRegistries;
+            } catch (ParseException exception) {
+                Logger.Log(exception.ToString(), level: LogLevel.Warning);
+            }
+            if (scopedRegistries == null) {
+                Logger.Log(String.Format("No registries found in '{0}'", MANIFEST_FILE_PATH),
+                           level: LogLevel.Verbose);
+                return upmRegistries;
+            }
+            Logger.Log(String.Format("Reading '{0}' from '{1}'",
+                                     MANIFEST_SCOPED_REGISTRIES_KEY, MANIFEST_FILE_PATH),
+                       level: LogLevel.Verbose);
+            foreach (var obj in scopedRegistries) {
+                var registry = obj as Dictionary<string, object>;
+                if (registry == null) continue;
+                string name = null;
+                string url = null;
+                var scopes = new List<string>();
+                object nameObj = null;
+                object urlObj = null;
+                object scopesObj;
+                if (registry.TryGetValue(MANIFEST_REGISTRY_NAME_KEY, out nameObj)) {
+                    name = nameObj as string;
+                }
+                if (registry.TryGetValue(MANIFEST_REGISTRY_URL_KEY, out urlObj)) {
+                    url = urlObj as string;
+                }
+                if (registry.TryGetValue(MANIFEST_REGISTRY_SCOPES_KEY,
+                                         out scopesObj)) {
+                    List<object> scopesObjList = scopesObj as List<object>;
+                    if (scopesObjList != null && scopesObjList.Count > 0) {
+                        foreach (var scopeObj in scopesObjList) {
+                            string scope = scopeObj as string;
+                            if (!String.IsNullOrEmpty(scope)) scopes.Add(scope);
                         }
                     }
                 }
+                var upmRegistry = new UnityPackageManagerRegistry() {
+                    Name = name,
+                    Url = url,
+                    Scopes = scopes,
+                    CustomData = registry,
+                    CreatedBy = MANIFEST_FILE_PATH
+                };
+                if (!String.IsNullOrEmpty(name) &&
+                    !String.IsNullOrEmpty(url) &&
+                    scopes.Count > 0) {
+                    List<UnityPackageManagerRegistry> upmRegistryList;
+                    if (!upmRegistries.TryGetValue(url, out upmRegistryList)) {
+                        upmRegistryList = new List<UnityPackageManagerRegistry>();
+                        upmRegistries[url] = upmRegistryList;
+                    }
+                    upmRegistryList.Add(upmRegistry);
+                    Logger.Log(String.Format("Read '{0}' from '{1}'",
+                                             upmRegistry.ToString(), MANIFEST_FILE_PATH),
+                               level: LogLevel.Verbose);
+                } else {
+                    Logger.Log(
+                        String.Format("Ignoring malformed registry {0} in {1}",
+                                      upmRegistry.ToString(), MANIFEST_FILE_PATH),
+                        level: LogLevel.Warning);
+                }
+
             }
+            return upmRegistries;
         }
-        return foundRegistries;
     }
 
     /// <summary>
     /// Add a scoped registries.
     /// </summary>
-    /// <para name="name">Name of the scoped registry</para>
-    /// <para name="url">Url of the scoped registry</para>
-    /// <para name="scopes">A list of scopes of the scoped registry</para>
-    internal void AddRegistry(string name, string url, List<object> scopes) {
-        Dictionary<string, object> registry = new Dictionary<string, object>() {
-            { MANIFEST_REGISTRY_NAME_KEY, name },
-            { MANIFEST_REGISTRY_URL_KEY, url },
-            { MANIFEST_REGISTRY_SCOPES_KEY, scopes }
-        };
-
-        object scopedRegistriesObj;
-
-        if (!manifestDict.TryGetValue(MANIFEST_SCOPED_REGISTRIES_KEY, out scopedRegistriesObj)) {
-            scopedRegistriesObj = new List<object>();
+    /// <para name="registries">Registries to add to the manifest.</para>
+    /// <returns>true if the registries are added to the manifest, false otherwise.</returns>
+    internal bool AddRegistries(IEnumerable<UnityPackageManagerRegistry> registries) {
+        List<object> scopedRegistries;
+        try {
+            scopedRegistries = ScopedRegistries;
+        } catch (ParseException exception) {
+            Logger.Log(String.Format("{0}  Unable to add registries:\n",
+                                     exception.ToString(),
+                                     UnityPackageManagerRegistry.ToString(registries)),
+                       level: LogLevel.Error);
+            return false;
         }
-        var scopedRegistries = scopedRegistriesObj as List<object>;
-        if (scopedRegistries != null) {
-            scopedRegistries.Add(registry);
-        } else {
-            Logger.Log(String.Format(
-                "Cannot add registry {0} (url: {1}) because \"scopedRegistries\" in manifest.json" +
-                " is not a list.", name, url), LogLevel.Error);
+        if (scopedRegistries == null) {
+            scopedRegistries = new List<object>();
+            manifestDict[MANIFEST_SCOPED_REGISTRIES_KEY] = scopedRegistries;
         }
-        manifestDict[MANIFEST_SCOPED_REGISTRIES_KEY] = scopedRegistries;
+        RemoveRegistries(registries);
+        foreach (var registry in registries) {
+            scopedRegistries.Add(new Dictionary<string, object>() {
+                                     { MANIFEST_REGISTRY_NAME_KEY, registry.Name },
+                                     { MANIFEST_REGISTRY_URL_KEY, registry.Url },
+                                     { MANIFEST_REGISTRY_SCOPES_KEY, registry.Scopes }
+                                 });
+        }
+        return true;
     }
 
     /// <summary>
     /// Remove all scoped registries in the given list.
     /// </summary>
     /// <para name="registries">A list of scoped registry to be removed</para>
-    internal void RemoveRegistries(List<Dictionary<string, object>> registries) {
-        object scopedRegistriesObj;
-        if (!manifestDict.TryGetValue(MANIFEST_SCOPED_REGISTRIES_KEY, out scopedRegistriesObj)) {
-            var scopedRegistries = scopedRegistriesObj as List<object>;
-            if (scopedRegistries != null) {
-                foreach (var registry in registries) {
-                    scopedRegistries.Remove(registry);
-                }
-                if (scopedRegistries.Count == 0) {
-                    manifestDict.Remove(MANIFEST_SCOPED_REGISTRIES_KEY);
-                }
-            } else {
-                Logger.Log(
-                    String.Format("Cannot remove registries because \"{0}\" in {1} is not a list.",
-                        MANIFEST_SCOPED_REGISTRIES_KEY, MANIFEST_FILE_PATH),LogLevel.Error);
-            }
-        } else {
-            Logger.Log(
-                String.Format("Cannot remove registries because \"{0}\" is not in {1}.",
-                    MANIFEST_SCOPED_REGISTRIES_KEY, MANIFEST_FILE_PATH),LogLevel.Error);
+    /// <returns>true if the registries could be removed, false otherwise.</returns>
+    internal bool RemoveRegistries(IEnumerable<UnityPackageManagerRegistry> registries) {
+        List<object> scopedRegistries = null;
+        try {
+            scopedRegistries = ScopedRegistries;
+        } catch (ParseException exception) {
+            Logger.Log(String.Format("{0}  Unable to remove registries:\n", exception.ToString(),
+                                     UnityPackageManagerRegistry.ToString(registries)),
+                       level: LogLevel.Error);
+            return false;
         }
+        int removed = 0;
+        int numberOfRegistries = 0;
+        var scopedRegistriesByUrl = UnityPackageManagerRegistries;
+        foreach (var registry in registries) {
+            numberOfRegistries ++;
+            List<UnityPackageManagerRegistry> existingRegistries;
+            if (scopedRegistriesByUrl.TryGetValue(registry.Url, out existingRegistries)) {
+                int remaining = existingRegistries.Count;
+                foreach (var existingRegistry in existingRegistries) {
+                    if (scopedRegistries.Remove(existingRegistry.CustomData)) {
+                        remaining --;
+                    } else {
+                        Logger.Log(String.Format("Failed to remove registry '{0}' from '{1}'",
+                                                 existingRegistry, MANIFEST_FILE_PATH),
+                                   level: LogLevel.Error);
+                    }
+                }
+                if (remaining == 0) removed ++;
+            }
+        }
+        Logger.Log(String.Format("Removed {0}/{1} registries from '{2}'",
+                                 removed, numberOfRegistries, MANIFEST_FILE_PATH),
+                   level: removed == numberOfRegistries ? LogLevel.Verbose : LogLevel.Warning);
+        return removed == numberOfRegistries;
     }
 
     /// <summary>
@@ -188,6 +279,11 @@ internal class PackageManifestModifier {
     /// </summary>
     /// <return>True if serialized and wrote successfully.</return>
     internal bool WriteManifest() {
+        if (manifestDict == null) {
+            Logger.Log(String.Format("No manifest to write to '{0}'", MANIFEST_FILE_PATH),
+                       level: LogLevel.Error);
+            return false;
+        }
         try {
             string manifestText =
                 Json.Serialize(manifestDict, humanReadable: true, indentSpaces: 2);
@@ -198,8 +294,8 @@ internal class PackageManifestModifier {
         } catch (Exception e) {
             Logger.Log(
                 String.Format("Failed to write to {0}. \nException:{1}",
-                    MANIFEST_FILE_PATH, e.ToString()),
-                LogLevel.Error);
+                              MANIFEST_FILE_PATH, e.ToString()),
+                level: LogLevel.Error);
             return false;
         }
         return true;
