@@ -73,6 +73,23 @@ namespace Google {
         public Action OnCancel;
 
         /// <summary>
+        /// Delegate that allows the rendering of each item to be customized.
+        /// </summary>
+        /// <param name="item">Item being rendered.</param>
+        public delegate void RenderItemDelegate(KeyValuePair<string, string> item);
+
+        /// <summary>
+        /// Delegate which can be used to customize item rendering.
+        /// </summary>
+        public RenderItemDelegate RenderItem;
+
+        /// <summary>
+        /// Action to render additional items in the button area of the window before the
+        /// cancel and apply buttons.
+        /// </summary>
+        public Action RenderBeforeCancelApply;
+
+        /// <summary>
         /// Styles for unselected items in the list.
         /// </summary>
         private GUIStyle[] unselectedItemStyles;
@@ -81,6 +98,11 @@ namespace Google {
         /// Styles for selected items in the list.
         /// </summary>
         private GUIStyle[] selectedItemStyles;
+
+        /// <summary>
+        /// Style for wrapped labels.
+        /// </summary>
+        private GUIStyle wrappedLabel;
 
         /// <summary>
         /// Initialize the window.
@@ -102,6 +124,7 @@ namespace Google {
             minSize = new Vector2(300, 200);
             unselectedItemStyles = null;
             selectedItemStyles = null;
+            wrappedLabel = null;
         }
 
         /// <summary>
@@ -172,6 +195,10 @@ namespace Google {
                     selectedItemStyles[i] = style;
                 }
             }
+            if (wrappedLabel == null) {
+                wrappedLabel = new GUIStyle(EditorStyles.label);
+                wrappedLabel.wordWrap = true;
+            }
             if (AvailableItems != null && sortedItems.Count != AvailableItems.Count) {
                 InitializeSortedItems();
             }
@@ -184,9 +211,11 @@ namespace Google {
             InitializeStyles();
             if (!String.IsNullOrEmpty(Caption)) {
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.SelectableLabel(Caption);
+                GUILayout.Label(Caption, wrappedLabel);
                 EditorGUILayout.EndHorizontal();
+                EditorGUILayout.BeginVertical(EditorStyles.textField);
                 EditorGUILayout.Space();
+                EditorGUILayout.EndVertical();
             }
             EditorGUILayout.BeginVertical();
             scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
@@ -206,6 +235,7 @@ namespace Google {
                         SelectedItems.Remove(item);
                     }
                 }
+                if (RenderItem != null) RenderItem(indexAndItem.Value);
                 EditorGUILayout.EndHorizontal();
                 displayIndex++;
             }
@@ -216,6 +246,7 @@ namespace Google {
             if (GUILayout.Button("None")) SelectNone();
             EditorGUILayout.Space();
             EditorGUILayout.Space();
+            if (RenderBeforeCancelApply != null) RenderBeforeCancelApply();
             bool cancel = GUILayout.Button(CancelLabel);
             bool apply = GUILayout.Button(ApplyLabel);
             EditorGUILayout.EndHorizontal();
