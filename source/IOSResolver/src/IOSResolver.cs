@@ -375,7 +375,9 @@ public class IOSResolver : AssetPostprocessor {
                         }
                         return true;
                     }
-                    return false;
+                    // Ignore unknown tags so that different configurations can be stored in the
+                    // same file.
+                    return true;
                 })) {
                 return false;
             }

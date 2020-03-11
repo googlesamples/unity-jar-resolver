@@ -99,6 +99,7 @@ namespace Google {
         internal static bool ParseXmlTextFileElements(
                 string filename, Logger logger, ParseElement parseElement) {
             if (!File.Exists(filename)) return false;
+            bool successful = true;
             try {
                 using (var xmlReader = new XmlTextReader(new StreamReader(filename))) {
                     var elementNameStack = new List<string>();
@@ -109,9 +110,12 @@ namespace Google {
                         var elementName = xmlReader.Name;
                         var parentElementName = getParentElement();
                         if (xmlReader.NodeType == XmlNodeType.Element) {
-                            if (parseElement(xmlReader, elementName, true,
-                                             parentElementName, elementNameStack)) {
+                            bool parsedElement = parseElement(xmlReader, elementName, true,
+                                                              parentElementName, elementNameStack);
+                            if (parsedElement) {
                                 elementNameStack.Insert(0, elementName);
+                            } else {
+                                successful = false;
                             }
 
                             // If the parse delegate read data, move to the next XML node.
@@ -133,8 +137,10 @@ namespace Google {
                                 // so clear the stack.
                                 elementNameStack.Clear();
                             }
-                            parseElement(xmlReader, elementName, false,
-                                         getParentElement(), elementNameStack);
+                            if (!parseElement(xmlReader, elementName, false,
+                                              getParentElement(), elementNameStack)) {
+                                successful = false;
+                            }
                         }
                         reader.Read();
                     }
@@ -144,7 +150,7 @@ namespace Google {
                                          filename, exception.ToString()), level: LogLevel.Error);
                 return false;
             }
-            return true;
+            return successful;
         }
     }
 }
