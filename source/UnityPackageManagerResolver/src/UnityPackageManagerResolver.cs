@@ -62,6 +62,11 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
         "Modify Registries'.";
 
     /// <summary>
+    /// Registry scopes provided by the Game Package Registry by Google.
+    /// </summary>
+    private static readonly string[] googleScopes = new [] { "com.google" };
+
+    /// <summary>
     /// Enables / disables external package registries for Unity Package
     /// Manager.
     /// </summary>
@@ -86,6 +91,14 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
              typeof(UnityPackageManagerResolverSettingsDialog), true, PluginName + " Settings");
          window.Initialize();
          window.Show();
+    }
+
+    /// <summary>
+    /// Alias for the settings dialog.
+    /// </summary>
+    [MenuItem("Window/Google/Game Package Registry/Settings")]
+    public static void ShowSettingsAlias() {
+        ShowSettings();
     }
 
     /// <summary>
@@ -160,6 +173,26 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     public static void ModifyRegistries() {
         UpdateManifest(ManifestModificationMode.Modify, promptBeforeAction: true,
                        showDisableButton: false);
+    }
+
+    /// <summary>
+    /// Alias that simplifies adding the Game Package Registry by Google to the project.
+    /// manifest.
+    /// </summary>
+    [MenuItem("Window/Google/Game Package Registry/Add To Project")]
+    public static void AddGamePackageManagerRegistries() {
+        UpdateManifest(ManifestModificationMode.Add, promptBeforeAction: true,
+                       showDisableButton: false, scopePrefixFilter: googleScopes);
+    }
+
+    /// <summary>
+    /// Alias that simplifies removing the Game Package Registry by Google to the project.
+    /// manifest.
+    /// </summary>
+    [MenuItem("Window/Google/Game Package Registry/Remove From Project")]
+    public static void RemoveGamePackageManagerRegistries() {
+        UpdateManifest(ManifestModificationMode.Remove, promptBeforeAction: false,
+                       showDisableButton: false, scopePrefixFilter: googleScopes);
     }
 
     /// <summary>
