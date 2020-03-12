@@ -124,10 +124,10 @@ between your plugin and other plugins in a user's project.
 
 If you wish to redistribute `EDM4U` inside your plugin,
 you **must** follow these steps when importing the
-`play-services-resolver-*.unitypackage`, and when exporting your own plugin
+`external-dependency-manager-*.unitypackage`, and when exporting your own plugin
 package:
 
-   1. Import the `play-services-resolver-*.unitypackage` into your plugin
+   1. Import the `external-dependency-manager-*.unitypackage` into your plugin
       project by
       [running Unity from the command line](https://docs.unity3d.com/Manual/CommandLineArguments.html), ensuring that
       you add the `-gvh_disable` option.
@@ -140,14 +140,14 @@ You **must** specify the `-gvh_disable` option in order for the Version
 Handler to work correctly!
 
 For example, the following command will import the
-`play-services-resolver-1.2.46.0.unitypackage` into the project
+`external-dependency-manager-1.2.46.0.unitypackage` into the project
 `MyPluginProject` and export the entire Assets folder to
 `MyPlugin.unitypackage`:
 
 ```
 Unity -gvh_disable \
       -batchmode \
-      -importPackage play-services-resolver-1.2.46.0.unitypackage \
+      -importPackage external-dependency-manager-1.2.46.0.unitypackage \
       -projectPath MyPluginProject \
       -exportPackage Assets MyPlugin.unitypackage \
       -quit
@@ -170,7 +170,7 @@ The Android Resolver copies specified dependencies from local or remote Maven
 repositories into the Unity project when a user selects Android as the build
 target in the Unity editor.
 
-   1. Add the `play-services-resolver-*.unitypackage` to your plugin
+   1. Add the `external-dependency-manager-*.unitypackage` to your plugin
       project (assuming you are developing a plugin). If you are redistributing
       EDM4U with your plugin, you **must** follow the
       import steps in the [Getting Started](#getting-started) section!
@@ -369,7 +369,7 @@ to the Xcode project exported by Unity.
 
 Dependencies for iOS are added by referring to CocoaPods.
 
-   1. Add the `play-services-resolver-*.unitypackage` to your plugin
+   1. Add the `external-dependency-manager-*.unitypackage` to your plugin
       project (assuming you are developing a plugin). If you are redistributing
       EDM4U with your plugin, you **must** follow the
       import steps in the [Getting Started](#getting-started) section!
@@ -489,7 +489,7 @@ need to do the following:
    * Update `CHANGELOG.md` with the new version number and changes included in
      the release.
    * Build the release using `./gradle release` which performs the following:
-      * Updates `play-services-resolver-*.unitypackage`
+      * Updates `external-dependency-manager-*.unitypackage`
       * Copies the unpacked plugin to the `exploded` directory.
       * Updates template metadata files in the `plugin` directory.
         The GUIDs of all asset metadata is modified due to the version number
