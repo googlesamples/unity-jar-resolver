@@ -46,7 +46,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     private const string ADD_REGISTRIES_DESCRIPTION =
         "Adding a registry will allow you to install, upgrade and remove packages from the " +
         "registry's server in the Unity Package Manager. By adding the selected registries, you " +
-        "agree that your use of these registries is subject to their Terms of Service and you " +
+        "agree that your use of these registries are subject to their Terms of Service and you " +
         "acknowledge that data will be collected in accordance with each registry's Privacy " +
         "Policy.";
     private const string REMOVE_REGISTRIES_DESCRIPTION =
