@@ -1217,6 +1217,12 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public HashSet<string> currentFiles = new HashSet<string>();
 
         /// <summary>
+        /// Metadata of files in the package indexed by current filename.
+        /// </summary>
+        public Dictionary<string, FileMetadata> metadataByFilename =
+            new Dictionary<string, FileMetadata>();
+
+        /// <summary>
         /// Set of obsolete files in this package.
         /// </summary>
         public HashSet<string> obsoleteFiles = new HashSet<string>();
@@ -1255,6 +1261,35 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public ManifestReferences() { }
 
         /// <summary>
+        /// Parse a legacy manfiest file.
+        /// </summary>
+        /// <param name="metadata">Package manifest to parse.</param>
+        /// <param name="metadataSet">Set of all metadata files in the
+        /// project.  This is used to handle file renaming in the parsed
+        /// manifest.  If the manifest contains files that have been
+        /// renamed it's updated with the new filenames.</param>
+        /// <returns>Metadata of files in the package indexed by current filename.<returns>
+        public Dictionary<string, FileMetadata> ParseLegacyManifest(FileMetadata metadata,
+                                                                    FileMetadataSet metadataSet) {
+            var filesInManifest = new Dictionary<string, FileMetadata>();
+            StreamReader manifestFile =
+                new StreamReader(metadata.filename);
+            string line;
+            while ((line = manifestFile.ReadLine()) != null) {
+                var manifestFileMetadata = new FileMetadata(line.Trim());
+                // Check for a renamed file.
+                long version = manifestFileMetadata.CalculateVersion();
+                var existingFileMetadata =
+                    metadataSet.FindMetadata(manifestFileMetadata.filenameCanonical, version) ??
+                    metadataSet.FindMetadata(manifestFileMetadata.filename, version);
+                if (existingFileMetadata != null) manifestFileMetadata = existingFileMetadata;
+                filesInManifest[manifestFileMetadata.filename] = manifestFileMetadata;
+            }
+            manifestFile.Close();
+            return filesInManifest;
+        }
+
+        /// <summary>
         /// Parse current and obsolete file references from a package's
         /// manifest files.
         /// </summary>
@@ -1277,52 +1312,32 @@ public class VersionHandlerImpl : AssetPostprocessor {
             foreach (FileMetadata metadata in metadataByVersion.Values) {
                 versionIndex++;
                 if (!metadata.isManifest) return false;
+                Log(String.Format("Parsing manifest '{0}' of package '{1}'", metadata.filename,
+                                  metadataByVersion.filenameCanonical), verbose: true);
                 this.metadataByVersion = metadataByVersion;
-                bool manifestNeedsUpdate = false;
-                HashSet<string> filesInManifest =
-                    versionIndex < numberOfVersions ?
-                        obsoleteFiles : currentFiles;
-                StreamReader manifestFile =
-                    new StreamReader(metadata.filename);
-                string line;
-                while ((line = manifestFile.ReadLine()) != null) {
-                    var manifestFileMetadata = new FileMetadata(line.Trim());
-                    string filename = manifestFileMetadata.filename;
-                    // Check for a renamed file.
-                    var existingFileMetadata =
-                        metadataSet.FindMetadata(
-                            manifestFileMetadata.filenameCanonical,
-                            manifestFileMetadata.CalculateVersion());
-                    if (existingFileMetadata != null &&
-                        !manifestFileMetadata.filename.Equals(
-                            existingFileMetadata.filename)) {
-                        filename = existingFileMetadata.filename;
-                        manifestNeedsUpdate = true;
-                    }
-                    filesInManifest.Add(filename);
-                }
-                manifestFile.Close();
-
+                var filesInManifest = ParseLegacyManifest(metadata, metadataSet);
+                var filenames = new HashSet<string>(filesInManifest.Keys);
                 // If this is the most recent manifest version, remove all
                 // current files from the set to delete.
                 if (versionIndex == numberOfVersions) {
+                    currentFiles.UnionWith(filenames);
+                    obsoleteFiles.ExceptWith(filenames);
                     currentMetadata = metadata;
-                    foreach (var currentFile in filesInManifest) {
-                        obsoleteFiles.Remove(currentFile);
-                    }
-                }
-
-                // Rewrite the manifest to track renamed files.
-                if (manifestNeedsUpdate) {
-                    File.Delete(metadata.filename);
-                    var writer = new StreamWriter(metadata.filename);
-                    foreach (var filename in filesInManifest) {
-                        writer.WriteLine(filename);
-                    }
-                    writer.Close();
+                    metadataByFilename = filesInManifest;
+                } else {
+                    obsoleteFiles.UnionWith(filenames);
                 }
             }
-            this.filenameCanonical = metadataByVersion.filenameCanonical;
+            filenameCanonical = metadataByVersion.filenameCanonical;
+            var currentFilesSorted = new List<string>(currentFiles);
+            var obsoleteFilesSorted = new List<string>(obsoleteFiles);
+            currentFilesSorted.Sort();
+            obsoleteFilesSorted.Sort();
+            Log(String.Format("'{0}' Manifest:\n\nCurrent files:\n{1}\n\nObsolete files:\n{2}",
+                              filenameCanonical,
+                              String.Join("\n", currentFilesSorted.ToArray()),
+                              String.Join("\n", obsoleteFilesSorted.ToArray())),
+                verbose: true);
             return true;
         }
 
