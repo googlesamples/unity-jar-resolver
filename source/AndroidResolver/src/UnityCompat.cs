@@ -57,6 +57,10 @@ public class UnityCompat {
     // Parses a UnityEditor.AndroidSDKVersion enum for a value.
     private static int VersionFromAndroidSDKVersionsEnum(string enumName, string fallbackPrefKey,
                                                          int fallbackValue) {
+        // If the enum property has no name it's not possible to parse the version so fallback to
+        // auto-selection.
+        if (String.IsNullOrEmpty(enumName)) return -1;
+
         if (enumName.StartsWith(UNITY_ANDROID_VERSION_ENUM_PREFIX)) {
             enumName = enumName.Substring(UNITY_ANDROID_VERSION_ENUM_PREFIX.Length);
         }
