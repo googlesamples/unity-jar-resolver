@@ -2123,7 +2123,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
         }
 
-        if (cleanupFiles.Count > 0) {
+        if (cleanupFiles.Count > 0 && !Refreshing) {
             var window = MultiSelectWindow.CreateMultiSelectWindow(PLUGIN_NAME);
             Action<string> logObsoleteFile = (filename) => {
                 Log("Leaving obsolete file: " + filename, verbose: true);
