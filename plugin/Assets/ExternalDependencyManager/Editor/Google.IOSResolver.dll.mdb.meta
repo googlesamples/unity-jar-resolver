@@ -2,6 +2,7 @@ fileFormatVersion: 2
 guid: ffc992326412414095536652e14f1a3a
 labels:
 - gvh_version-1.2.137.0
+- gvhp_exportpath-Assets/PlayServicesResolver/Editor/Google.IOSResolver.dll.mdb
 - gvh
 timeCreated: 1538009133
 licenseType: Pro

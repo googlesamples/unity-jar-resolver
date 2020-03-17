@@ -2,6 +2,7 @@ fileFormatVersion: 2
 guid: 3aa17cd5f43042a1a7381759dc1258a7
 labels:
 - gvh_version-1.2.137.0
+- gvhp_exportpath-Assets/PlayServicesResolver/Editor/Google.VersionHandler.dll.mdb
 - gvh
 timeCreated: 1538009133
 licenseType: Pro

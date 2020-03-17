@@ -2,6 +2,7 @@ fileFormatVersion: 2
 guid: 81e43a9734ee4e3d8d85776f1b564bd3
 labels:
 - gvh_version-0.0.0.0
+- gvhp_exportpath-Assets/ExternalDependencyManager/Editor/GoogleRegistries.xml.meta
 - gvh
 - gumpr_registries
 timeCreated: 1583806049

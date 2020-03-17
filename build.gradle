@@ -189,6 +189,8 @@ project.ext {
   pluginExportFile = new File(buildDir, "plugin.unitypackage")
   // Directory within the plugin staging area that just contains the plugin.
   pluginAssetsDir = new File("Assets", "ExternalDependencyManager")
+  // Directories within the staging area to export.
+  pluginExportDirs = [pluginAssetsDir, new File("Assets", "PlayServicesResolver")]
   // Directory within the plugin directory that contains the managed DLLs.
   pluginEditorDllDir = new File(pluginAssetsDir, "Editor")
   // Directory which contains the solution for all C# projects with a project in
@@ -197,7 +199,7 @@ project.ext {
   // Solution which references all projects used by the plugin.
   pluginSolutionFile = new File(pluginSourceDir, "ExternalDependencyManager.sln")
   // Version of the plugin (update this with CHANGELOG.md on each release).
-  pluginVersion = "1.2.137.0"
+  pluginVersion = "1.2.138.0"
   // Semantic version of the plugin.
   pluginVersionSemVer = pluginVersion.tokenize(".")[0..2].join(".")
   // Base filename of the released plugin.
@@ -525,6 +527,7 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
   // Parse the existing version from the asset metadata.
   def folderAssetRegEx = /^folderAsset:\s+yes\s*$/
   def versionRegEx = /^(-\s+gvh_version-)([a-zA-Z0-9.]+)\s*$/
+  def exportPathRegEx = /^(-\s+gvhp_exportpath-)(.*)$/
   Boolean isFolder = false
   String currentVersion = ""
   lines.each { String line ->
@@ -536,8 +539,11 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
       isFolder = true
     }
   }
+  Boolean isNotVersioned = (isFolder ||
+                            targetFile.name.startsWith(
+                                "play-services-resolver"))
   // Ignore folder assets, they don't need to be versioned.
-  if (isFolder) return copyFile(sourceFile, targetFile)
+  if (isNotVersioned) return copyFile(sourceFile, targetFile)
   Boolean versionChanged = currentVersion != project.ext.pluginVersion
 
   List<String> outputLines = []
@@ -545,6 +551,7 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
     if (versionChanged) {
       def guidMatch = (line =~ /^(guid:)\s+(.*)/)
       def versionLabelMatch = (line =~ versionRegEx)
+      def exportPathMatch = (line =~ exportPathRegEx)
       if (guidMatch.matches() && sourceFile.name != targetFile.name) {
         // Update the metadata's GUID.
         // If a file is renamed we want to make sure Unity imports it as a new
@@ -553,11 +560,16 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
           "%s %s",
           guidMatch.group(1),
           java.util.UUID.randomUUID().toString().replace("-", ""))
-      }
-      else if (versionLabelMatch.matches()) {
+      } else if (versionLabelMatch.matches()) {
         // Update the version metadata for the asset.
         line = sprintf("%s%s", versionLabelMatch.group(1),
                        project.ext.pluginVersion)
+      } else if (exportPathMatch.matches()) {
+        // Update the export path of the asset.
+        line = sprintf("%s%s", exportPathMatch.group(1),
+                       targetFile.path.replaceFirst(/.*\/Assets\//, "Assets/"))
+        line = line.substring(0, line.length() -
+                              project.ext.unityMetadataExtension.length())
       }
     }
     outputLines.add(line)
@@ -1136,7 +1148,13 @@ Task copyPluginTemplateToStagingArea = createCopyFilesTask(
    new File(new File(new File("Assets", "ExternalDependencyManager"), "Editor"),
             "GoogleRegistries.xml"),
    new File(new File(new File("Assets", "ExternalDependencyManager"), "Editor"),
-            "GoogleRegistries.xml.meta")],
+            "GoogleRegistries.xml.meta"),
+   new File("Assets", "PlayServicesResolver.meta"),
+   new File(new File("Assets", "PlayServicesResolver"), "Editor.meta"),
+   new File(new File(new File("Assets", "PlayServicesResolver"), "Editor"),
+            "play-services-resolver_v1.2.137.0.txt"),
+   new File(new File(new File("Assets", "PlayServicesResolver"), "Editor"),
+            "play-services-resolver_v1.2.137.0.txt.meta")],
   project.ext.pluginTemplateDir, project.ext.pluginStagingAreaDir,
   [preparePluginStagingAreaDir],
   { sourceFile, targetFile -> copyAssetMetadataFile(sourceFile, targetFile) })
@@ -1172,11 +1190,7 @@ task copyPluginComponentsToStagingArea(
 task generatePluginManifest(dependsOn: [preparePluginStagingAreaDir,
                                         copyPluginTemplateToStagingArea,
                                         copyPluginComponentsToStagingArea]) {
-  // This should use currentPluginBasename when we have support for plugin
-  // aliases which will allow the detection of a play-services-resolver
-  // plugin to be upgraded to external-dependency-manager.
-  String unversionedManifestName =
-    "play-services-resolver" /* currentPluginBasename */ + ".txt"
+  String unversionedManifestName = currentPluginBasename + ".txt"
   File outputDir = new File(project.ext.pluginStagingAreaDir,
                             project.ext.pluginEditorDllDir.path)
   File manifestMetadataTemplateFile =
@@ -1217,8 +1231,8 @@ Task buildPlugin = createUnityTask(
     project.ext.buildDir,
     ["-g.building",
      "-buildTarget", "android",
-     "-exportPackage", project.ext.pluginAssetsDir.path,
-     project.ext.pluginExportFile.absolutePath,
+     "-exportPackage"] + (project.ext.pluginExportDirs.collect { it.path }) +
+    [project.ext.pluginExportFile.absolutePath,
      "-gvh_disable",
      "-quit"], true, null)
 buildPlugin.with {
@@ -1263,7 +1277,9 @@ task releasePlugin(dependsOn: buildPlugin) {
     copy {
       from project.ext.pluginStagingAreaDir
       into project.ext.pluginExplodedDir
-      include (project.ext.pluginAssetsDir.path + "/**/*")
+      include project.ext.pluginExportDirs.collect {
+        it.path + "/**/*"
+      }
     }
     pluginTemplateFilesMap.each {
       sourceFile, targetFile -> copyFile(sourceFile, targetFile)
