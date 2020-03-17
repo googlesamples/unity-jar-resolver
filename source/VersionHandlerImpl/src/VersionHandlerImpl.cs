@@ -583,7 +583,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
             if (isManifest) {
                 labels.Add(CreateLabel(TOKEN_MANIFEST[0], null));
             }
-            if (!(new HashSet<string>(labels)).SetEquals(new HashSet<string>(currentLabels))) {
+            var uniqueLabels = new HashSet<string>(labels);
+            labels = new List<string>(uniqueLabels);
+            if (!uniqueLabels.SetEquals(new HashSet<string>(currentLabels))) {
+                currentLabels.Sort();
+                labels.Sort();
                 Log(String.Format("Changing labels of {0}\n" +
                                   "from: {1}\n" +
                                   "to: {2}\n",
@@ -591,8 +595,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                   String.Join(", ", currentLabels.ToArray()),
                                   String.Join(", ", labels.ToArray())),
                     verbose: true);
+                AssetDatabase.SetLabels(importer, labels.ToArray());
             }
-            AssetDatabase.SetLabels(importer, labels.ToArray());
         }
 
         /// <summary>
