@@ -1032,9 +1032,12 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     public class FileMetadataSet {
         /// <summary>
-        /// Dictionary of FileMetadataVersions indexed by filename with
+        /// Dictionary of FileMetadataByVersion indexed by filename with
         /// metadata stripped.
         /// </summary>
+        /// <remarks>
+        /// This shouldn't not be modified directly, use Add() and Clear() instead.
+        /// </remarks>
         private Dictionary<string, FileMetadataByVersion>
             metadataByCanonicalFilename =
                 new Dictionary<string, FileMetadataByVersion>();
@@ -1055,32 +1058,96 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <summary>
         /// Filter all files that were installed by the Unity Package Manager.
         /// </summary>
-        /// <param name="metadata">Metadata to filter.</param>
+        /// <param name="metadataSet">Metadata set to filter.</param>
         /// <returns>New FileMetadata with Unity Package Manager files removed.</returns>
-        public static FileMetadataSet FilterOutUnityPackageManagerFiles(FileMetadataSet metadata) {
+        public static FileMetadataSet FilterOutUnityPackageManagerFiles(
+                FileMetadataSet metadataSet) {
             var filteredMetadata = new FileMetadataSet();
-            var metadataByCanonicalFilename = filteredMetadata.metadataByCanonicalFilename;
-            foreach (var metadataFilename in metadata.metadataByCanonicalFilename) {
-                var filename = metadataFilename.Key;
-                if (FileUtils.IsUnderDirectory(filename, FileUtils.PACKAGES_FOLDER)) continue;
-                metadataByCanonicalFilename[filename] = metadataFilename.Value;
+            foreach (var metadataByVersion in metadataSet.Values) {
+                foreach (var metadata in metadataByVersion.Values) {
+                    if (!FileUtils.IsUnderDirectory(metadata.filename,
+                                                    FileUtils.PACKAGES_FOLDER)) {
+                        filteredMetadata.Add(metadata);
+                    }
+                }
             }
             return filteredMetadata;
         }
 
         /// <summary>
+        /// Empty the set.
+        /// </summary>
+        public void Clear() {
+            metadataByCanonicalFilename = new Dictionary<string, FileMetadataByVersion>();
+        }
+
+        /// <summary>
         /// Add file metadata to the set.
         /// </summary>
+        /// <param name="metadata">File metadata to add to the set.</param>
         public void Add(FileMetadata metadata) {
+            Add(metadata.filenameCanonical, metadata);
+        }
+
+        /// <summary>
+        /// Add file metadata to the set.
+        /// </summary>
+        /// <param name="filenameCanonical">File to associate the metadata with.</param>
+        /// <param name="metadata">File metadata to add to the set.</param>
+        public void Add(string filenameCanonical, FileMetadata metadata) {
+            FindMetadataByVersion(filenameCanonical, true).Add(metadata);
+        }
+
+        /// <summary>
+        /// Add a set of files to the specified set.
+        /// </summary>
+        /// <param name="filenameCanonical">File to associate the metadata with.</param>
+        /// <param name="metadataByVersion">Set of files to add to the set.</param>
+        public void Add(string filenameCanonical, FileMetadataByVersion metadataByVersion) {
+            var existingMetadataByVersion = FindMetadataByVersion(filenameCanonical, true);
+            foreach (var metadata in metadataByVersion.Values) {
+                existingMetadataByVersion.Add(metadata);
+            }
+        }
+
+        /// <summary>
+        /// Search for metadata for an existing file given a canonical filename
+        /// and version.
+        /// </summary>
+        /// <param name="filenameCanonical">Name of the file set to search
+        /// for.</param>
+        /// <param name="version">Version number of the file in the set or 0 to find the
+        /// most recent file.</param>
+        /// <returns>Reference to the metadata if successful, null otherwise.</returns>
+        public FileMetadata FindMetadata(string filenameCanonical,
+                                         long version) {
+            var metadataByVersion = FindMetadataByVersion(filenameCanonical, false);
+            FileMetadata metadata;
+            if (metadataByVersion != null) {
+                metadata = version > 0 ? metadataByVersion[version] :
+                    metadataByVersion.MostRecentVersion;
+                if (metadata != null) return metadata;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Get metadata by version for a given canonical filename.
+        /// </summary>
+        /// <param name="filenameCanonical">Name of the file set to search for.</param>
+        /// <param name="addEntry">Whether to add an entry if the metadata isn't found.</param>
+        /// <returns>Reference to the metadata by version if successful or addEntry is true,
+        /// null otherwise.</returns>
+        private FileMetadataByVersion FindMetadataByVersion(string filenameCanonical,
+                                                            bool addEntry) {
             FileMetadataByVersion metadataByVersion;
-            string filenameCanonical = metadata.filenameCanonical;
             if (!metadataByCanonicalFilename.TryGetValue(
                     filenameCanonical, out metadataByVersion)) {
-                metadataByVersion =
-                    new FileMetadataByVersion(filenameCanonical);
+                if (!addEntry) return null;
+                metadataByVersion = new FileMetadataByVersion(filenameCanonical);
+                metadataByCanonicalFilename[filenameCanonical] = metadataByVersion;
             }
-            metadataByVersion.Add(metadata);
-            metadataByCanonicalFilename[filenameCanonical] = metadataByVersion;
+            return metadataByVersion;
         }
 
         /// <summary>
@@ -1126,8 +1193,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     "  - In Unity 4.x:\n" +
                     "    - Select 'Assets > Reimport' from the menu.\n";
                 var warningLines = new List<string>();
-                foreach (var metadataByVersion in
-                         metadataByCanonicalFilename.Values) {
+                foreach (var metadataByVersion in Values) {
                     bool hasRelevantVersions = false;
                     var fileInfoLines = new List<string>();
                     fileInfoLines.Add(String.Format("Target Filename: {0}",
@@ -1171,8 +1237,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 return false;
             }
 
-            foreach (var metadataByVersion in
-                     metadataByCanonicalFilename.Values) {
+            foreach (var metadataByVersion in Values) {
                 modified |= metadataByVersion.EnableMostRecentPlugins();
             }
             return modified;
@@ -1216,32 +1281,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     }
                 }
                 if (needsUpdate) {
-                    Log(filenameAndMetadata.Key + " metadata will be checked",
-                        verbose: true);
-                    outMetadataSet.metadataByCanonicalFilename[
-                        filenameAndMetadata.Key] = filenameAndMetadata.Value;
+                    outMetadataSet.Add(filenameAndMetadata.Key, filenameAndMetadata.Value);
                 }
             }
             return outMetadataSet;
-        }
-
-        /// <summary>
-        /// Search for metadata for an existing file given a canonical filename
-        /// and version.
-        /// </summary>
-        /// <param name="filenameCanonical">Name of the file set to search
-        /// for.</param>
-        /// <param name="version">Version number of the file in the set.</param>
-        /// <returns>Reference to the metadata if successful, null otherwise.
-        /// </returns>
-        public FileMetadata FindMetadata(string filenameCanonical,
-                                         long version) {
-            FileMetadataByVersion metadataByVersion;
-            if (!metadataByCanonicalFilename.TryGetValue(
-                    filenameCanonical, out metadataByVersion)) {
-                return null;
-            }
-            return metadataByVersion[version];
         }
     }
 
