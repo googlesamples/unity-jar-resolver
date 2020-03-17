@@ -1043,11 +1043,28 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 new Dictionary<string, FileMetadataByVersion>();
 
         /// <summary>
+        /// Dictionary of FileMetadata indexed by filename in the project and the export path if
+        /// it exists. This is the inverse mapping of metadataByCanonicalFilename.
+        /// </summary>
+        /// <remarks>
+        /// This shouldn't not be modified directly, use Add() and Clear() instead.
+        /// </remarks>
+        private Dictionary<string, FileMetadata> metadataByFilename =
+            new Dictionary<string, FileMetadata>();
+
+        /// <summary>
         /// Get the FileMetadataByVersion for each filename bucket in this set.
         /// </summary>
         public Dictionary<string, FileMetadataByVersion>.ValueCollection
                 Values {
             get { return metadataByCanonicalFilename.Values; }
+        }
+
+        /// <summary>
+        /// Retrieves a map of in-project filename to file metadata.
+        /// </summary>
+        public Dictionary<string, FileMetadata> MetadataByFilename {
+            get { return metadataByFilename; }
         }
 
         /// <summary>
@@ -1079,6 +1096,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// </summary>
         public void Clear() {
             metadataByCanonicalFilename = new Dictionary<string, FileMetadataByVersion>();
+            metadataByFilename = new Dictionary<string, FileMetadata>();
         }
 
         /// <summary>
@@ -1096,6 +1114,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="metadata">File metadata to add to the set.</param>
         public void Add(string filenameCanonical, FileMetadata metadata) {
             FindMetadataByVersion(filenameCanonical, true).Add(metadata);
+            UpdateMetadataByFilename(metadata);
         }
 
         /// <summary>
@@ -1107,6 +1126,18 @@ public class VersionHandlerImpl : AssetPostprocessor {
             var existingMetadataByVersion = FindMetadataByVersion(filenameCanonical, true);
             foreach (var metadata in metadataByVersion.Values) {
                 existingMetadataByVersion.Add(metadata);
+                UpdateMetadataByFilename(metadata);
+            }
+        }
+
+        /// <summary>
+        /// Update the mapping of filename to metadata.
+        /// </summary>
+        /// <param name="metadata">File metadata to add to the set.</param>
+        private void UpdateMetadataByFilename(FileMetadata metadata) {
+            metadataByFilename[metadata.filename] = metadata;
+            if (!String.IsNullOrEmpty(metadata.exportPath)) {
+                metadataByFilename[metadata.exportPath] = metadata;
             }
         }
 
@@ -1121,8 +1152,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <returns>Reference to the metadata if successful, null otherwise.</returns>
         public FileMetadata FindMetadata(string filenameCanonical,
                                          long version) {
-            var metadataByVersion = FindMetadataByVersion(filenameCanonical, false);
             FileMetadata metadata;
+            if (metadataByFilename.TryGetValue(filenameCanonical, out metadata)) {
+                return metadata;
+            }
+            var metadataByVersion = FindMetadataByVersion(filenameCanonical, false);
             if (metadataByVersion != null) {
                 metadata = version > 0 ? metadataByVersion[version] :
                     metadataByVersion.MostRecentVersion;
