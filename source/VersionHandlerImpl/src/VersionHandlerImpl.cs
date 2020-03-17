@@ -919,6 +919,17 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <returns>true if any plugin metadata was modified and requires an
         /// AssetDatabase.Refresh(), false otherwise.</return>
         public bool EnableMostRecentPlugins() {
+            return EnableMostRecentPlugins(new HashSet<string>());
+        }
+
+        /// <summary>
+        /// If this instance references a set of plugins, enable the most
+        /// recent versions.
+        /// </summary>
+        /// <param name="disableFiles">Set of files in the project that should be disabled.</param>
+        /// <returns>true if any plugin metadata was modified and requires an
+        /// AssetDatabase.Refresh(), false otherwise.</return>
+        public bool EnableMostRecentPlugins(HashSet<string> disableFiles) {
             bool modified = false;
             int versionIndex = 0;
             int numberOfVersions = metadataByVersion.Count;
@@ -970,13 +981,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 bool modifiedThisVersion = false;
                 // Only enable the most recent plugin - SortedDictionary
                 // orders keys in ascending order.
-                bool obsoleteVersion = (numberOfVersions > 1 &&
-                                        versionIndex < numberOfVersions);
+                bool obsoleteVersion =
+                    (numberOfVersions > 1 && versionIndex < numberOfVersions) ||
+                    disableFiles.Contains(metadata.filename);
                 // If this is an obsolete version.
                 if (obsoleteVersion) {
                     // Disable for all platforms and the editor.
                     editorEnabled = false;
                     selectedTargets = new HashSet<BuildTarget>();
+                    Log(String.Format("{0} is obsolete and will be disabled.", metadata.filename),
+                        verbose: true);
                 } else {
                     if (hasDotNetTargets) {
                         // Determine whether this is supported by the selected .NET version.
@@ -1055,6 +1069,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 // Therefore, force a reimport of each file touched by the
                 // plugin importer.
                 if (modifiedThisVersion) {
+                    Log(String.Format("Metadata changed: force import of {0}", metadata.filename),
+                        verbose: true);
                     AssetDatabase.ImportAsset(metadata.filename,
                                               ImportAssetOptions.ForceUpdate);
                 }
@@ -1396,6 +1412,21 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <returns>true if any plugin metadata was modified and requires an
         /// AssetDatabase.Refresh(), false otherwise.</return>
         public bool EnableMostRecentPlugins(bool forceUpdate) {
+            return EnableMostRecentPlugins(forceUpdate, new HashSet<string>());
+        }
+
+        /// <summary>
+        /// For each plugin (DLL) referenced by this set, disable targeting
+        /// for all versions and re-enable platform targeting for the most
+        /// recent version.
+        /// </summary>
+        /// <param name="forceUpdate">Whether the update was forced by the
+        /// user.</param>
+        /// <param name="disableFiles">Set of files that should be disabled.</param>
+        /// <returns>true if any plugin metadata was modified and requires an
+        /// AssetDatabase.Refresh(), false otherwise.</return>
+        public bool EnableMostRecentPlugins(bool forceUpdate,
+                                            HashSet<string> disableFiles) {
             bool modified = false;
 
             // If PluginImporter isn't available it's not possible
@@ -1474,7 +1505,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
 
             foreach (var metadataByVersion in Values) {
-                modified |= metadataByVersion.EnableMostRecentPlugins();
+                modified |= metadataByVersion.EnableMostRecentPlugins(disableFiles);
             }
             return modified;
         }
@@ -1789,6 +1820,18 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// Same as the "referenced" member excluding manifest files.
         /// </summary>
         public Dictionary<string, List<string>> referencedExcludingManifests;
+
+        /// <summary>
+        /// Get all referenced and unreferenced obsolete files.
+        /// </summary>
+        public HashSet<string> All {
+            get {
+                var all = new HashSet<string>();
+                all.UnionWith(unreferenced);
+                all.UnionWith(referenced.Keys);
+                return all;
+            }
+        }
 
         /// <summary>
         /// Build an ObsoleteFiles instance searching a set of
@@ -2401,14 +2444,14 @@ public class VersionHandlerImpl : AssetPostprocessor {
         if (!forceUpdate) {
             metadataSet = FileMetadataSet.FindWithPendingUpdates(metadataSet);
         }
-        if (metadataSet.EnableMostRecentPlugins(forceUpdate)) {
+
+        var obsoleteFiles = new ObsoleteFiles(
+            ManifestReferences.FindAndReadManifests(metadataSet), metadataSet);
+        if (metadataSet.EnableMostRecentPlugins(forceUpdate, obsoleteFiles.All)) {
             analytics.Report("enablemostrecentplugins", "Enable Most Recent Plugins");
             AssetDatabase.Refresh();
             Refreshing = true;
         }
-
-        var obsoleteFiles = new ObsoleteFiles(
-            ManifestReferences.FindAndReadManifests(metadataSet), metadataSet);
 
         // Obsolete files that are no longer referenced can be safely deleted, prompt the user for
         // confirmation if they have the option enabled.
