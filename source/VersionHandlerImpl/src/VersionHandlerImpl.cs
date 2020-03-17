@@ -81,6 +81,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public static string[] TOKEN_DOTNET_TARGETS = new [] { "dotnet-" };
         // Prefix which indicates this file is a package manifest.
         public static string[] TOKEN_MANIFEST = new [] { "manifest" };
+        // Prefix which allows a manifest to specify a human readable package name.
+        // If the name begins with a digit [0-9] the numeric letters at the start of the string
+        // are used to order the priority of the package alias.
+        // For example, given the names:
+        // - "0current name"
+        // - "1old name"
+        // - "another alias"
+        // will create the list of names ["current name", "old name", "another alias"] where
+        // "current name" is the current display name of the package.
+        public static string[] TOKEN_MANIFEST_NAME = new[] { "manifestname-"};
         // Prefix which identifies the canonical name of this Linux library.
         public static string[] TOKEN_LINUX_LIBRARY_BASENAME = new [] { "linuxlibname-" };
         // Prefix which identifies the original path of a file when the package was exported.
@@ -171,6 +181,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
             new Regex("^(editor|" + String.Join(
                         "|", (new List<string>(BUILD_TARGET_NAME_TO_ENUM_NAME.Keys)).ToArray()) +
                       ")$", RegexOptions.IgnoreCase);
+        // Regular expression which matches an index in a manifest name field.
+        private static Regex MANIFEST_NAME_REGEX = new Regex("^([0-9]+)(.*)");
 
         /// <summary>
         /// Get a set of build target names mapped to supported BuildTarget
@@ -288,6 +300,18 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public bool isManifest = false;
 
         /// <summary>
+        /// Offset subtracted from entries inserted in customManifestNames.
+        /// </summary>
+        private const int CUSTOM_MANIFEST_NAMES_FIRST_INDEX_OFFSET = Int32.MaxValue / 2;
+
+        /// <summary>
+        /// Backing store for aliases of the manifest name, the current package name is always
+        /// first in the set. This contains only values parsed from manifestname labels,
+        /// the ManifestName property is used to retrieve the preferred manifest name.
+        /// </summary>
+        public SortedList<int, string> customManifestNames = new SortedList<int, string>();
+
+        /// <summary>
         /// Set if this references an asset which is handled by PluginManager.
         /// </summary>
         public bool isHandledByPluginImporter = false;
@@ -306,6 +330,27 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// Path of the file when it was originally exported as a package.
         /// </summary>
         public string exportPath = "";
+
+        /// <summary>
+        /// If this is a manifest, get the display name.
+        /// </summary>
+        /// <returns>If this file is a  manifest, returns the display name of the manifest,
+        /// null otherwise.</returns>
+        public string ManifestName {
+            get {
+                string name = null;
+                bool hasManifestNames = customManifestNames != null &&
+                    customManifestNames.Count > 0;
+                if (isManifest || hasManifestNames) {
+                    if (hasManifestNames) {
+                        name = customManifestNames.Values[0];
+                    } else {
+                        name = (new FilenameComponents(filenameCanonical)).basenameNoExtension;
+                    }
+                }
+                return name;
+            }
+        }
 
         /// <summary>
         /// Parse metadata from filename and store in this class.
@@ -413,7 +458,24 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <returns>true if the token is parsed, false otherwise.</returns>
         private bool ParseToken(string token, string prefix = null) {
             prefix = prefix ?? "";
-            var values = MatchPrefixesGetValues(token, TOKEN_MANIFEST, prefix);
+            var values = MatchPrefixesGetValues(token, TOKEN_MANIFEST_NAME, prefix);
+            if (values != null) {
+                var name = String.Join(FIELD_SEPARATOR[0].ToString(), values);
+                var nameMatch = MANIFEST_NAME_REGEX.Match(name);
+                int order = CUSTOM_MANIFEST_NAMES_FIRST_INDEX_OFFSET - customManifestNames.Count;
+                if (nameMatch.Success) {
+                    int parsedOrder;
+                    if (Int32.TryParse(nameMatch.Groups[1].Value, out parsedOrder)) {
+                        order = parsedOrder - CUSTOM_MANIFEST_NAMES_FIRST_INDEX_OFFSET;
+                    }
+                    name = nameMatch.Groups[2].Value;
+                }
+                customManifestNames.Remove(order);
+                customManifestNames.Add(order, name);
+                isManifest = true;
+                return true;
+            }
+            values = MatchPrefixesGetValues(token, TOKEN_MANIFEST, prefix);
             if (values != null) {
                 isManifest = true;
                 return true;
@@ -621,6 +683,18 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             if (isManifest) {
                 labels.Add(CreateLabel(TOKEN_MANIFEST[0], null));
+            }
+            if (customManifestNames != null && customManifestNames.Count > 0) {
+                foreach (var indexAndName in customManifestNames) {
+                    int order = indexAndName.Key + CUSTOM_MANIFEST_NAMES_FIRST_INDEX_OFFSET;
+                    var name = indexAndName.Value;
+                    if (order < CUSTOM_MANIFEST_NAMES_FIRST_INDEX_OFFSET) {
+                        labels.Add(CreateLabel(TOKEN_MANIFEST_NAME[0], order.ToString() + name,
+                                               preserve: true));
+                    } else {
+                        labels.Add(CreateLabel(TOKEN_MANIFEST_NAME[0], name, preserve: true));
+                    }
+                }
             }
             var uniqueLabels = new HashSet<string>(labels);
             labels = new List<string>(uniqueLabels);
