@@ -413,7 +413,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             values = MatchPrefixesGetValues(token, TOKEN_VERSION, prefix);
             if (values != null && StringListMatchesRegex(values, VERSION_REGEX)) {
-                if (String.IsNullOrEmpty(versionString) && values.Length > 0) {
+                if (values.Length > 0) {
                     versionString = values[0];
                     return true;
                 }
