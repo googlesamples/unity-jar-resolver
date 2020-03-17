@@ -18,6 +18,7 @@ namespace Google {
     using System;
     using System.IO;
     using System.Collections.Generic;
+    using UnityEditor;
 
     /// <summary>
     /// Utility methods to assist with file management in Unity.
@@ -390,6 +391,77 @@ namespace Google {
             }
 
             return packageDir;
+        }
+
+        /// <summary>
+        /// Remove the given set of files and their folders.
+        /// </summary>
+        /// <param name = "filenames">Files to be removed/</param>
+        /// <param name = "logger">Logger to log results.</param>
+        /// <return>True if all files are removed.  False if failed to remove any file or
+        /// if any file is missing.</return>
+        public static bool RemoveAssets(IEnumerable<string> filenames, Logger logger = null) {
+            List<string> assetRemoved = new List<string>();
+            List<string> assetRemoveFailed = new List<string>();
+            List<string> assetMissing = new List<string>();
+
+            HashSet<string> folderToRemove = new HashSet<string>();
+            foreach (var filename in filenames) {
+                if (File.Exists(filename)) {
+                    if (AssetDatabase.DeleteAsset(filename)) {
+                        assetRemoved.Add(filename);
+                    } else {
+                        assetRemoveFailed.Add(filename);
+                    }
+
+                    // Add folder and parent folders to be removed later.
+                    var folder = Path.GetDirectoryName(filename);
+                    while (!String.IsNullOrEmpty(folder) &&
+                           !Path.IsPathRooted(folder) &&
+                           String.Compare(folder, ASSETS_FOLDER) != 0 &&
+                           String.Compare(folder, PACKAGES_FOLDER) != 0) {
+                        folderToRemove.Add(folder);
+                        folder = Path.GetDirectoryName(folder);
+                    }
+                } else {
+                    assetMissing.Add(filename);
+                }
+            }
+
+            // Attempt to remove folders from bottom to top.
+            // This is an unreliable way to remove folder as long as Directory class is used.
+            // Directory.GetFiles() and Directory.GetDirectories() may return non-empty list
+            // even everything under the folder is removed.  This may due to Unity overriding
+            // Files and Directory class.  While Asset.DeleteAsset() can delete the folder,
+            // regardless it is empty or not, the current approach still have some chance to
+            // leave some empty folders.
+            // TODO: Change the implementation to remove folder directly as long as every files
+            //       and folders are planned to be removed.
+            List<string> sortedFolders = new List<string>(folderToRemove);
+            // Sort folders in descending order so that sub-folder is removed first.
+            sortedFolders.Sort((lhs, rhs) => {
+                return String.Compare(rhs, lhs);
+            });
+            List<string> folderRemoveFailed = new List<string>();
+            foreach (var folder in sortedFolders) {
+                if (Directory.GetFiles(folder).Length == 0 &&
+                    Directory.GetDirectories(folder).Length == 0) {
+                    if (!AssetDatabase.DeleteAsset(folder)) {
+                        folderRemoveFailed.Add(folder);
+                    }
+                }
+            }
+
+            if(logger != null) {
+                logger.Log(
+                    String.Format("Removed:\n{0}\nFailed to Remove:\n{1}\nMissing:\n{2}\n" +
+                        "Failed to Remove Folders:\n{3}\n",
+                        String.Join("\n", assetRemoved.ToArray()),
+                        String.Join("\n", assetRemoveFailed.ToArray()),
+                        String.Join("\n", assetMissing.ToArray()),
+                        String.Join("\n", folderRemoveFailed.ToArray())), level : LogLevel.Verbose);
+            }
+            return assetRemoveFailed.Count == 0 && assetMissing.Count == 0;
         }
    }
 }

@@ -1222,6 +1222,34 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public HashSet<string> obsoleteFiles = new HashSet<string>();
 
         /// <summary>
+        /// Get all files managed by this package, including manifest and obsolete files.
+        /// </summary>
+        public IEnumerable<string> All {
+            get {
+                List<string> files = new List<string>();
+                if (currentMetadata != null) {
+                    files.Add(currentMetadata.filename);
+                }
+                if (metadataByVersion != null) {
+                    foreach (var fileMetadata in metadataByVersion.Values) {
+                        files.Add(fileMetadata.filename);
+                    }
+                }
+                if (currentFiles != null) {
+                    foreach (var file in currentFiles) {
+                        files.Add(file);
+                    }
+                }
+                if (obsoleteFiles != null) {
+                    foreach (var file in obsoleteFiles) {
+                        files.Add(file);
+                    }
+                }
+                return files;
+            }
+        }
+
+        /// <summary>
         /// Create an instance.
         /// </summary>
         public ManifestReferences() { }
@@ -1324,10 +1352,88 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <returns>List of ManifestReferences which contain current and
         /// obsolete files referenced in each manifest file.</returns>
         public static List<ManifestReferences> FindAndReadManifests() {
+            return FindAndReadManifests(filter:null, directories:null);
+        }
+
+        /// <summary>
+        /// Find and read all package manifests.
+        /// </summary>
+        /// <param name="filter">Optional delegate to filter the returned
+        /// list.</param>
+        /// <param name="directories">Directories to search for the assets in the project.
+        /// Directories that don't exist are ignored.</param>
+        /// <returns>List of ManifestReferences which contain current and
+        /// obsolete files referenced in each manifest file.</returns>
+        public static List<ManifestReferences> FindAndReadManifests(
+                VersionHandler.FilenameFilter filter,
+                IEnumerable<string> directories) {
             return FindAndReadManifests(FileMetadataSet.ParseFromFilenames(
                 SearchAssetDatabase(
                     assetsFilter: "l:" +
-                        FileMetadata.CreateLabel(FileMetadata.TOKEN_MANIFEST[0], ""))));
+                        FileMetadata.CreateLabel(FileMetadata.TOKEN_MANIFEST[0], ""),
+                    filter:filter,
+                    directories:directories)));
+        }
+
+        /// <summary>
+        /// Find and read all package manifest from Assets folder.
+        /// </summary>
+        /// <returns>List of ManifestReferences from Assets folder</returns>
+        public static List<ManifestReferences> FindAndReadManifestsInAssetsFolder() {
+            return ManifestReferences.FindAndReadManifests(
+                    filter: null,
+                    directories: new string[] { FileUtils.ASSETS_FOLDER });
+        }
+
+        /// <summary>
+        /// Delete a subset of packages managed by Version Handler.
+        /// </summary>
+        /// <param name="packages">
+        /// A HashSet of canonical name of the packages to be uninstalled</param>
+        /// <param name="force">
+        /// Force to remove all file even it is referenced by other packages.</param>
+        public static void DeletePackages(HashSet<string> packages, bool force = false) {
+            // Create a map from canonical name to ManifestReferences.
+            var manifests = FindAndReadManifestsInAssetsFolder();
+            var manifestMap = new Dictionary<string, VersionHandlerImpl.ManifestReferences>();
+            foreach (var manifest in manifests) {
+                manifestMap[manifest.filenameCanonical] = manifest;
+            }
+
+            HashSet<string> filesToRemove = new HashSet<string>();
+            foreach (var pkgName in packages) {
+                ManifestReferences pkg = null;
+                if (manifestMap.TryGetValue(pkgName, out pkg)) {
+                    filesToRemove.UnionWith(pkg.All);
+                }
+                manifestMap.Remove(pkgName);
+            }
+
+            HashSet<string> filesToExclude = new HashSet<string>();
+            if (!force) {
+                // Keep files which are referenced by other packages.
+                foreach (var manifestEntry in manifestMap) {
+                    filesToExclude.UnionWith(manifestEntry.Value.All);
+                }
+            }
+
+            HashSet<string> filesToKeep = new HashSet<string>(filesToRemove);
+            filesToKeep.IntersectWith(filesToExclude);
+            filesToRemove.ExceptWith(filesToExclude);
+
+            VersionHandlerImpl.Log(String.Format("Uninstalling the following packages:\n{0}\n{1}",
+                    String.Join("\n", (new List<string>(packages)).ToArray()),
+                    filesToKeep.Count == 0 ? "" : String.Format(
+                            "Ignore the following files referenced by other packages:\n{0}\n",
+                            String.Join("\n", (new List<string>(filesToKeep)).ToArray()))));
+
+            if (FileUtils.RemoveAssets(filesToRemove, VersionHandlerImpl.Logger)) {
+                VersionHandlerImpl.analytics.Report("uninstallpackage/delete/success",
+                        "Successfully Delete All Files in Packages");
+            } else {
+                VersionHandlerImpl.analytics.Report("uninstallpackage/delete/fail",
+                        "Fail to Delete Some Files in Packages");
+            }
         }
     }
 
@@ -1536,6 +1642,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// Logger for this module.
     /// </summary>
     private static Logger logger = new Logger();
+
+    public static Logger Logger {
+        get { return logger; }
+    }
 
     // Google Analytics tracking ID.
     internal const string GA_TRACKING_ID = "UA-54627617-3";
@@ -1832,7 +1942,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     [MenuItem("Assets/External Dependency Manager/Version Handler/Display Managed Packages")]
     public static void DisplayInstalledPackages() {
-        var manifests = ManifestReferences.FindAndReadManifests();
+        var manifests = ManifestReferences.FindAndReadManifestsInAssetsFolder();
         foreach (var pkg in manifests) {
             if (!String.IsNullOrEmpty(pkg.filenameCanonical) && pkg.metadataByVersion != null) {
                 var versions = new List<string>();
