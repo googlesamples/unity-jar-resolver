@@ -1259,6 +1259,134 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Find the highest priority name of a manifest.
+        /// </summary>
+        /// <param name="name">Name to lookup from the graph.</param>
+        /// <param name="aliasesByName">Adjacency list (graph) of aliases to search.</param>
+        /// <param name="maxDepth">Maximum depth to traverse the graph.</param>
+        /// <param name="depth">Graph traversal depth.</param>
+        /// <returns>Name and depth in the graph or the supplied name and a depth of -1
+        /// if not found.</returns>
+        private static KeyValuePair<string, int> FindHighestPriorityManifestName(
+            string name, Dictionary<string, HashSet<string>> aliasesByName, int maxDepth,
+            int depth = 0) {
+            if (depth > maxDepth) {
+                Log(String.Format(
+                        "Detected manifest name alias loop for name {0}, to fix this change the " +
+                        "list (see below) to not contain a loop:\n{1}" +
+                        name, String.Join("\n", (new List<string>(aliasesByName.Keys)).ToArray())),
+                    level: LogLevel.Warning);
+                return new KeyValuePair<string, int>(name, -1);
+            }
+            KeyValuePair<string, int> deepestNameAndDepth =
+                new KeyValuePair<string, int>(name, depth);
+            HashSet<string> aliases;
+            if (!aliasesByName.TryGetValue(name, out aliases)) {
+                return deepestNameAndDepth;
+            }
+            if (aliases.Count == 1 && (new List<string>(aliases))[0] == name) {
+                return deepestNameAndDepth;
+            }
+            foreach (var alias in aliases) {
+                var nameAndDepth = FindHighestPriorityManifestName(
+                    alias, aliasesByName, maxDepth, depth: depth + 1);
+                    if (nameAndDepth.Value > deepestNameAndDepth.Value) {
+                        deepestNameAndDepth = nameAndDepth;
+                    }
+            }
+            return deepestNameAndDepth;
+        }
+
+        /// <summary>
+        /// Create an adjacency list of manifest names.
+        /// </summary>
+        /// <returns>Adjacency list of manifest names. For example, given the set of manifest
+        /// names for a file "foo.txt" [manifestName-0A, manifestName-1B, manifestName-1C]
+        /// this returns the set of aliaes for the name of manifest "A", i.e {"A": ["B, "C"]}.
+        /// </returns>
+        private Dictionary<string, HashSet<string>> GetManifestAliasesByName() {
+            // Create an adjacency list of manifest alias to name which can be used to search the
+            // highest priority name of a manifest "foo", which is the entry {"foo": ["foo"]}.
+            var aliasesByName = new Dictionary<string, HashSet<string>>();
+            foreach (var metadataByVersion in Values) {
+                var metadata = metadataByVersion.MostRecentVersion;
+                if (metadata.isManifest) {
+                    foreach (var name in metadata.customManifestNames.Values) {
+                        HashSet<string> aliases = null;
+                        if (!aliasesByName.TryGetValue(name, out aliases)) {
+                            aliases = new HashSet<string>();
+                            aliasesByName[name] = aliases;
+                        }
+                        aliases.Add(metadata.customManifestNames.Values[0]);
+                    }
+                }
+            }
+            // Display adjacency list for debugging.
+            var logLines = new List<string>();
+            foreach (var nameAndAliases in aliasesByName) {
+                logLines.Add(String.Format(
+                    "name: {0} --> aliases: [{1}]", nameAndAliases.Key,
+                    String.Join(", ", (new List<string>(nameAndAliases.Value)).ToArray())));
+            }
+            if (logLines.Count > 0) {
+                Log(String.Format("Manifest aliases:\n{0}",
+                                  String.Join("\n", logLines.ToArray())), verbose: true);
+            }
+            return aliasesByName;
+        }
+
+        /// <summary>
+        /// Use manifest aliases to cosolidate manifest metadata.
+        /// </summary>
+        public void ConsolidateManifests() {
+            var aliasesByName = GetManifestAliasesByName();
+            // Flatten graph of manifest aliases so that each entry maps to the highest priority
+            // name.
+            var manifestAliases = new Dictionary<string, string>();
+            int numberOfAliases = aliasesByName.Count;
+
+            var logLines = new List<string>();
+            foreach (var name in aliasesByName.Keys) {
+                var foundName = FindHighestPriorityManifestName(name, aliasesByName,
+                                                                numberOfAliases).Key;
+                manifestAliases[name] = foundName;
+                logLines.Add(String.Format("name: {0} --> alias: {1}", name, foundName));
+            }
+            if (logLines.Count > 0) {
+                Log(String.Format("Flattened manifest aliases:\n{0}",
+                                  String.Join("\n", logLines.ToArray())), verbose: true);
+            }
+
+            // Create a new metadata map consolidating manifests by their highest priority name.
+            var oldMetadataByCanonicalFilename = metadataByCanonicalFilename;
+            Clear();
+            foreach (var canonicalFilenameAndMetadataByVersion in oldMetadataByCanonicalFilename) {
+                var metadata = canonicalFilenameAndMetadataByVersion.Value.MostRecentVersion;
+                if (metadata.isManifest) {
+                    FileMetadataByVersion manifests = canonicalFilenameAndMetadataByVersion.Value;
+                    // Merge multiple versions of the manifest.
+                    string manifestName;
+                    if (!manifestAliases.TryGetValue(metadata.ManifestName, out manifestName)) {
+                        manifestName = metadata.ManifestName;
+                    }
+                    Add(manifestName, manifests);
+
+                    logLines = new List<string>();
+                    foreach (var manifest in manifests.Values) {
+                        logLines.Add(String.Format("file: {0}, version: {1}",
+                                                   manifest.filename, manifest.versionString));
+                    }
+                    Log(String.Format("Add manifests to package '{0}':\n{1}",
+                                      manifestName, String.Join("\n", logLines.ToArray())),
+                        verbose: true);
+                } else {
+                    Add(canonicalFilenameAndMetadataByVersion.Key,
+                        canonicalFilenameAndMetadataByVersion.Value);
+                }
+            }
+        }
+
+        /// <summary>
         /// For each plugin (DLL) referenced by this set, disable targeting
         /// for all versions and re-enable platform targeting for the most
         /// recent version.
@@ -1553,6 +1681,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// obsolete files referenced in each manifest file.</returns>
         public static List<ManifestReferences> FindAndReadManifests(
                 FileMetadataSet metadataSet) {
+            metadataSet.ConsolidateManifests();
             var manifestReferencesList = new List<ManifestReferences>();
             foreach (var metadataByVersion in metadataSet.Values) {
                 ManifestReferences manifestReferences =

@@ -454,6 +454,15 @@ Unity plugins can be managed by the Version Handler using the following steps:
       that lists all the files in your plugin relative to the project root.
       Then add the `gvh_manifest` label to the asset to indicate this file is
       a plugin manifest.
+   1. Optional: Add a `gvhp_manifestname-NAME` label to your manifest file
+      to provide a human readable name for your package.  If this isn't provided
+      the name of the manifest file will be used as the package name.
+      NAME can match the pattern `[0-9]+[a-zA-Z -]' where a leading integer
+      will set the priority of the name where `0` is the highest priority
+      and preferably used as the display name. The lowest value (i.e highest
+      priority name) will be used as the display name and all other specified
+      names will be aliases of the display name. Aliases can refer to previous
+      names of the package allowing renaming across published versions.
    1. Redistribute EDM4U Unity plugin with your plugin.
       See the [Plugin Redistribution](#plugin-redistribution) for the details.
 
