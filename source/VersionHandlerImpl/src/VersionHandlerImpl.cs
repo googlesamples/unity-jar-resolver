@@ -215,8 +215,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
             if (targetBlackList == null) {
                 targetBlackList = new HashSet<BuildTarget>();
                 if (VersionHandlerImpl.GetUnityVersionMajorMinor() >= 5.5) {
+#pragma warning disable 618
                     targetBlackList.Add(BuildTarget.PS3);
                     targetBlackList.Add(BuildTarget.XBOX360);
+#pragma warning restore 618
                 }
             }
             return targetBlackList;
