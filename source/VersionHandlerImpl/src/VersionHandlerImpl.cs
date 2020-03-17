@@ -34,6 +34,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
         // Splits a filename into components.
         private class FilenameComponents
         {
+            // Known multi-component extensions to strip.
+            private static readonly string[] MULTI_COMPONENT_EXTENSIONS = new [] { ".dll.mdb" };
+
             // Name of the file.
             public string filename;
             // Directory component.
@@ -50,7 +53,12 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 this.filename = filename;
                 directory = Path.GetDirectoryName(filename);
                 basename = Path.GetFileName(filename);
-                extension = Path.GetExtension(basename);
+                // Strip known multi-component extensions from the filename.
+                extension = null;
+                foreach (var knownExtension in MULTI_COMPONENT_EXTENSIONS) {
+                    if (basename.ToLower().EndsWith(knownExtension)) extension = knownExtension;
+                }
+                if (String.IsNullOrEmpty(extension)) extension = Path.GetExtension(basename);
                 basenameNoExtension =
                     basename.Substring(0, basename.Length - extension.Length);
             }
