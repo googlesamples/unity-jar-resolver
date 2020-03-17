@@ -64,7 +64,6 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
         }
 
-
         // Separator for metadata tokens in the supplied filename.
         private static char[] FILENAME_TOKEN_SEPARATOR = new char[] { '_' };
         // Separator for fields in each metadata token in the supplied
@@ -84,6 +83,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public static string[] TOKEN_MANIFEST = new [] { "manifest" };
         // Prefix which identifies the canonical name of this Linux library.
         public static string[] TOKEN_LINUX_LIBRARY_BASENAME = new [] { "linuxlibname-" };
+        // Prefix which identifies the original path of a file when the package was exported.
+        public static string[] TOKEN_EXPORT_PATH = new [] { "exportpath-" };
 
         // Delimiter for version numbers.
         private static char[] VERSION_DELIMITER = new char[] { '.' };
@@ -94,6 +95,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
         private static long VERSION_COMPONENT_MULTIPLIER = 1000;
         // Prefix for labels which encode metadata of an asset.
         private static string LABEL_PREFIX = "gvh_";
+        // Prefix for labels which encode metadata of the asset for 1.2.138 and above.
+        // These labels are never removed by the version handler.
+        private static string LABEL_PREFIX_PRESERVE = "gvhp_";
         // Initialized depending on the version of unity we are running against
         private static HashSet<BuildTarget> targetBlackList = null;
         // Initialized by parsing BuildTarget enumeration values from
@@ -299,14 +303,33 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public string linuxLibraryBasename = null;
 
         /// <summary>
+        /// Path of the file when it was originally exported as a package.
+        /// </summary>
+        public string exportPath = "";
+
+        /// <summary>
         /// Parse metadata from filename and store in this class.
         /// </summary>
         /// <param name="filename">Name of the file to parse.</param>
         public FileMetadata(string filename) {
             this.filename = FileUtils.NormalizePathSeparators(filename);
-            filenameCanonical = this.filename;
+            filenameCanonical = ParseMetadataFromFilename(this.filename);
+            ParseMetadataFromAssetLabels();
 
-            var filenameComponents = new FilenameComponents(filename);
+            // If the export path was specified, override the canonical filename.
+            if (!String.IsNullOrEmpty(exportPath)) {
+                filenameCanonical = ParseMetadataFromFilename(exportPath);
+            }
+            UpdateAssetLabels();
+        }
+
+        /// <summary>
+        /// Parse metadata from the specified filename and store in this class.
+        /// </summary>
+        /// <param name="filenameToParse">Parse metadata from the specified filename.</param>
+        /// <retuns>Filename with metadata removed.</returns>
+        private string ParseMetadataFromFilename(string filenameToParse) {
+            var filenameComponents = new FilenameComponents(filenameToParse);
             // Parse metadata from the filename.
             string[] tokens =
                 filenameComponents.basenameNoExtension.Split(
@@ -320,6 +343,22 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 }
                 filenameComponents.basenameNoExtension = basenameNoExtension;
             }
+            // On Windows the AssetDatabase converts native path separators
+            // used by the .NET framework '\' to *nix style '/' such that
+            // System.IO.Path generated paths will not match those looked up
+            // in the asset database.  So we convert the output of Path.Combine
+            // here to use *nix style paths so that it's possible to perform
+            // simple string comparisons to check for path equality.
+            return FileUtils.NormalizePathSeparators(Path.Combine(
+                filenameComponents.directory,
+                filenameComponents.basenameNoExtension +
+                filenameComponents.extension));
+        }
+
+        /// <summary>
+        /// Parse metadata from asset labels.
+        /// </summary>
+        public void ParseMetadataFromAssetLabels() {
             // Parse metadata from asset labels if it hasn't been specified in
             // the filename.
             AssetImporter importer = GetAssetImporter();
@@ -327,21 +366,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 foreach (string label in AssetDatabase.GetLabels(importer)) {
                     ParseLabel(label);
                 }
-
                 isHandledByPluginImporter = typeof(PluginImporter).IsInstanceOfType(importer);
             }
-
-            // On Windows the AssetDatabase converts native path separators
-            // used by the .NET framework '\' to *nix style '/' such that
-            // System.IO.Path generated paths will not match those looked up
-            // in the asset database.  So we convert the output of Path.Combine
-            // here to use *nix style paths so that it's possible to perform
-            // simple string comparisons to check for path equality.
-            filenameCanonical = FileUtils.NormalizePathSeparators(Path.Combine(
-                filenameComponents.directory,
-                filenameComponents.basenameNoExtension +
-                filenameComponents.extension));
-            UpdateAssetLabels();
         }
 
         /// <summary>
@@ -423,6 +449,12 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 linuxLibraryBasename = String.Join(FIELD_SEPARATOR[0].ToString(), values);
                 return true;
             }
+            values = MatchPrefixesGetValues(token, TOKEN_EXPORT_PATH, prefix);
+            if (values != null) {
+                exportPath = FileUtils.NormalizePathSeparators(
+                                 String.Join(FIELD_SEPARATOR[0].ToString(), values));
+                return true;
+            }
             return false;
         }
 
@@ -432,7 +464,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="label">Asset label to parse.</param>
         /// <returns>true if the token is parsed, false otherwise.</returns>
         private bool ParseLabel(string label) {
-            return ParseToken(label, prefix: LABEL_PREFIX);
+            return ParseToken(label, prefix: LABEL_PREFIX_PRESERVE) ||
+                ParseToken(label, prefix: LABEL_PREFIX);
         }
 
         /// <summary>
@@ -453,11 +486,13 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="fieldPrefixes">The first item of this list is used as the prefix.
         /// </param>
         /// <param name="values">Set of values to store with the field.</param>
-        private static string[] CreateLabels(string[] fieldPrefixes, IEnumerable<string> values) {
+        /// <param name="preserve">Always preserve these labels.</param>
+        private static string[] CreateLabels(string[] fieldPrefixes, IEnumerable<string> values,
+                                             bool preserve = false) {
             string prefix = fieldPrefixes[0];
             List<string> labels = new List<string>();
             foreach (var value in values) {
-                labels.Add(CreateLabel(prefix, value));
+                labels.Add(CreateLabel(prefix, value, preserve: preserve));
             }
 
             return labels.ToArray();
@@ -469,8 +504,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="prefix"> The field prefix to be applied to the label.
         /// </param>
         /// <param name="value">The value to store in the field</param>
-        public static string CreateLabel(string prefix, string value) {
-            return LABEL_PREFIX + prefix + value;
+        /// <param name="preserve">Whether the label should be preserved.</param>
+        public static string CreateLabel(string prefix, string value, bool preserve = false) {
+            return (preserve ? LABEL_PREFIX_PRESERVE : LABEL_PREFIX) + prefix + value;
         }
 
         /// <summary>
@@ -579,6 +615,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             if (!String.IsNullOrEmpty(linuxLibraryBasename)) {
                 labels.Add(CreateLabel(TOKEN_LINUX_LIBRARY_BASENAME[0], linuxLibraryBasename));
+            }
+            if (!String.IsNullOrEmpty(exportPath)) {
+                labels.Add(CreateLabel(TOKEN_EXPORT_PATH[0], exportPath, preserve: true));
             }
             if (isManifest) {
                 labels.Add(CreateLabel(TOKEN_MANIFEST[0], null));

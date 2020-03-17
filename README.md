@@ -438,6 +438,9 @@ Unity plugins can be managed by the Version Handler using the following steps:
       to manage.
    1. Add the `gvh_version-VERSION` label to each asset where `VERSION` is the
       version of the plugin you're releasing (e.g 1.2.3).
+   1. Add the `gvhp_exportpath-PATH` label to each asset where `PATH` is the
+      export path of the file when the `.unitypackage` is created.  This is
+      used to track files if they're moved around in a project by developers.
    1. Optional: Add `gvh_targets-editor` label to each editor DLL in your
       plugin and disable `editor` as a target platform for the DLL.
       The Version Handler will enable the most recent version of this DLL when
