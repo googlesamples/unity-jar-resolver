@@ -2334,6 +2334,34 @@ public class VersionHandlerImpl : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Menu item which moves all managed files to their initial install locations.
+    /// </summary>
+    [MenuItem("Assets/External Dependency Manager/Version Handler/Move Files To Install Locations")]
+    public static void MoveFilesToInstallLocations() {
+        var manifests = ManifestReferences.FindAndReadManifestsInAssetsFolder();
+        foreach (var pkg in manifests) {
+            if (!String.IsNullOrEmpty(pkg.filenameCanonical) && pkg.metadataByVersion != null) {
+                var logLines = new List<string>();
+                foreach (var metadata in pkg.metadataByFilename.Values) {
+                    if (!String.IsNullOrEmpty(metadata.exportPath)) {
+                        var originalFilename = metadata.filename;
+                        if (originalFilename != metadata.exportPath &&
+                            metadata.RenameAsset(metadata.exportPath)) {
+                            logLines.Add(String.Format("{0} --> {1}", originalFilename,
+                                                       metadata.exportPath));
+                        }
+                    }
+                }
+                if (logLines.Count > 0) {
+                    Log(String.Format("'{0}' files moved to their install locations:\n{1}",
+                                      pkg.filenameCanonical,
+                                      String.Join("\n", logLines.ToArray())));
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Delegate used to filter a file and directory names.
     /// </summary>
     /// <returns>true if the filename should be returned by an enumerator,
