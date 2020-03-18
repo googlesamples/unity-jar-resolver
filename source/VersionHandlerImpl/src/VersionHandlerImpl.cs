@@ -2658,7 +2658,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// <summary>
     /// Scanned for versioned assets and apply modifications if required.
     /// </summary>
-    private static void OnPostProcessAllAssets (
+    private static void OnPostprocessAllAssets(
             string[] importedAssets, string[] deletedAssets,
             string[] movedAssets, string[] movedFromPath) {
         UpdateVersionedAssets();
