@@ -1,3 +1,25 @@
+# Version 1.2.138 - Mar 17, 2020
+## New Features
+* Unity Package Manager Resolver: Added the Unity Package Manager Resolver
+  component that allows developers to easily boostrap Unity Package Manager
+  (UPM) registry addition using unitypackage plugins.
+* Version Handler: Added a window that allows plugins to managed by the
+  Version Handler to be uninstalled.
+* Version Handler: Added support for displaying installed plugins.
+* Version Handler: Added support for moving files in plugins to their install
+  locations (if the plugin has been configured to support this).
+* iOS Resolver: Added the ability to configure the Xcode target a Cocoapod is
+  added to.
+
+## Bug Fixes
+* Fixed upgrade from version 1.2.137 and below after the plugin rename to
+  EDM4U broke the upgrade process.
+* Android Resolver: Worked around PlayerSettings.Android.targetSdkVersion
+  returning empty names for some values in 2019.x.
+* Version Handler: Fixed the display of the obsolete files clean up window.
+* Version Handler: Fixed managed file check when assets are modified in the
+  project after plugin import.
+
 # Version 1.2.137 - Mar 6, 2020
 ## Changed
 * Renamed package to External Package Manager for Unity (EDM4U).

@@ -199,9 +199,7 @@ project.ext {
   // Solution which references all projects used by the plugin.
   pluginSolutionFile = new File(pluginSourceDir, "ExternalDependencyManager.sln")
   // Version of the plugin (update this with CHANGELOG.md on each release).
-  pluginVersion = "1.2.138.0"
-  // Semantic version of the plugin.
-  pluginVersionSemVer = pluginVersion.tokenize(".")[0..2].join(".")
+  pluginVersion = "1.2.138"
   // Base filename of the released plugin.
   currentPluginBasename = "external-dependency-manager"
   // Versioned release plugin file.
@@ -1315,7 +1313,7 @@ String readVersionSummaryFromChangelog() {
  */
 String createCommitMessage() {
   return sprintf("Version %s\n\n%s",
-                 project.ext.pluginVersionSemVer,
+                 project.ext.pluginVersion,
                  readVersionSummaryFromChangelog())
 }
 
@@ -1341,13 +1339,13 @@ task gitTagRelease(type: Exec) {
   description ("Run git to tag a release.  This should be performed " +
                "*after* a release commit has been be created.")
   commandLine "git", "tag", "-a",
-              sprintf("v%s", pluginVersionSemVer), "-m",
+              sprintf("v%s", pluginVersion), "-m",
               sprintf("%s\n\nDownload [here](%s)",
                       createCommitMessage(),
                       sprintf("https://github.com/googlesamples/" +
                               "unity-jar-resolver/raw/v%s/" +
                               "external-dependency-manager-%s.unitypackage",
-                              project.ext.pluginVersionSemVer,
+                              project.ext.pluginVersion,
                               project.ext.pluginVersion))
 }
 

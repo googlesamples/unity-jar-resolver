@@ -1,9 +1,7 @@
 fileFormatVersion: 2
-guid: 3aadc29aac2e4945985054a12d9ed18e
-labels:
-- gvh_version-1.2.137.0
-- gvh
-timeCreated: 1538009133
+guid: e105e00cdce8456482d26b1fcd1ca47d
+folderAsset: yes
+timeCreated: 1448926516
 licenseType: Pro
 DefaultImporter:
   userData: 

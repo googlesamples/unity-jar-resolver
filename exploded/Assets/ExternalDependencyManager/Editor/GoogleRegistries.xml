@@ -1,0 +1,11 @@
+<registries>
+  <!-- Registry that contains the External Dependency Manager plugin. -->
+  <registry name="Game Package Registry by Google"
+            url="https://unityregistry-pa.googleapis.com"
+            termsOfService="https://developers.google.com/terms"
+            privacyPolicy="https://policies.google.com/privacy">
+    <scopes>
+      <scope>com.google</scope>
+    </scopes>
+  </registry>
+</registries>
