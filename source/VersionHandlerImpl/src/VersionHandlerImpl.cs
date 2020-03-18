@@ -559,13 +559,14 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="fieldPrefixes">The first item of this list is used as the prefix.
         /// </param>
         /// <param name="values">Set of values to store with the field.</param>
+        /// <param name="currentLabels">Labels to search for the suitable prefix.</param>
         /// <param name="preserve">Always preserve these labels.</param>
         private static string[] CreateLabels(string[] fieldPrefixes, IEnumerable<string> values,
-                                             bool preserve = false) {
+                                             HashSet<string> currentLabels, bool preserve = false) {
             string prefix = fieldPrefixes[0];
             List<string> labels = new List<string>();
             foreach (var value in values) {
-                labels.Add(CreateLabel(prefix, value, preserve: preserve));
+                labels.Add(CreateLabel(prefix, value, currentLabels, preserve: preserve));
             }
 
             return labels.ToArray();
@@ -580,6 +581,23 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="preserve">Whether the label should be preserved.</param>
         public static string CreateLabel(string prefix, string value, bool preserve = false) {
             return (preserve ? LABEL_PREFIX_PRESERVE : LABEL_PREFIX) + prefix + value;
+        }
+
+        /// <summary>
+        /// Create an asset label keeping the preservation in the supplied set if it already exists.
+        /// </summary>
+        /// <param name="prefix"> The field prefix to be applied to the label.
+        /// </param>
+        /// <param name="value">The value to store in the field</param>
+        /// <param name="currentLabels">Labels to search for the suitable prefix.</param>
+        /// <param name="preserve">Whether the label should be preserved.</param>
+        public static string CreateLabel(string prefix, string value, HashSet<string> currentLabels,
+                                         bool preserve = false) {
+            var legacyLabel = CreateLabel(prefix, value, false);
+            var preservedLabel = CreateLabel(prefix, value, true);
+            if (currentLabels.Contains(legacyLabel)) return legacyLabel;
+            if (currentLabels.Contains(preservedLabel)) return preservedLabel;
+            return preserve ? preservedLabel : legacyLabel;
         }
 
         /// <summary>
@@ -661,8 +679,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 return;
             }
             AssetImporter importer = AssetImporter.GetAtPath(filename);
-            var labels = new List<string>();
-            var currentLabels = new List<string>();
+            var labels = new HashSet<string>();
+            var currentLabels = new HashSet<string>();
             // Strip labels we're currently managing.
             foreach (string label in AssetDatabase.GetLabels(importer)) {
                 currentLabels.Add(label);
@@ -676,26 +694,28 @@ public class VersionHandlerImpl : AssetPostprocessor {
             labels.Add(ASSET_LABEL);
             // Add labels for the metadata in this class.
             if (!String.IsNullOrEmpty(versionString)) {
-                labels.Add(CreateLabel(TOKEN_VERSION[0], versionString));
+                labels.Add(CreateLabel(TOKEN_VERSION[0], versionString, currentLabels));
             }
             if (targets != null && targets.Count > 0) {
-                labels.AddRange(CreateLabels(TOKEN_TARGETS, targets));
+                labels.UnionWith(CreateLabels(TOKEN_TARGETS, targets, currentLabels));
 
                 if (!isHandledByPluginImporter) {
                     labels.Add(ASSET_LABEL_RENAME_TO_DISABLE);
                 }
             }
             if (dotNetTargets != null && dotNetTargets.Count > 0) {
-                labels.AddRange(CreateLabels(TOKEN_DOTNET_TARGETS, dotNetTargets));
+                labels.UnionWith(CreateLabels(TOKEN_DOTNET_TARGETS, dotNetTargets, currentLabels));
             }
             if (!String.IsNullOrEmpty(linuxLibraryBasename)) {
-                labels.Add(CreateLabel(TOKEN_LINUX_LIBRARY_BASENAME[0], linuxLibraryBasename));
+                labels.Add(CreateLabel(TOKEN_LINUX_LIBRARY_BASENAME[0], linuxLibraryBasename,
+                                       currentLabels));
             }
             if (!String.IsNullOrEmpty(exportPath)) {
-                labels.Add(CreateLabel(TOKEN_EXPORT_PATH[0], exportPath, preserve: true));
+                labels.Add(CreateLabel(TOKEN_EXPORT_PATH[0], exportPath, currentLabels,
+                                       preserve: true));
             }
             if (isManifest) {
-                labels.Add(CreateLabel(TOKEN_MANIFEST[0], null));
+                labels.Add(CreateLabel(TOKEN_MANIFEST[0], null, currentLabels));
             }
             if (customManifestNames != null && customManifestNames.Count > 0) {
                 foreach (var indexAndName in customManifestNames) {
@@ -703,25 +723,27 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     var name = indexAndName.Value;
                     if (order < CUSTOM_MANIFEST_NAMES_FIRST_INDEX_OFFSET) {
                         labels.Add(CreateLabel(TOKEN_MANIFEST_NAME[0], order.ToString() + name,
-                                               preserve: true));
+                                               currentLabels, preserve: true));
                     } else {
-                        labels.Add(CreateLabel(TOKEN_MANIFEST_NAME[0], name, preserve: true));
+                        labels.Add(CreateLabel(TOKEN_MANIFEST_NAME[0], name, currentLabels,
+                                               preserve: true));
                     }
                 }
             }
-            var uniqueLabels = new HashSet<string>(labels);
-            labels = new List<string>(uniqueLabels);
-            if (!uniqueLabels.SetEquals(new HashSet<string>(currentLabels))) {
-                currentLabels.Sort();
-                labels.Sort();
+            if (!labels.SetEquals(currentLabels)) {
+                var sortedLabels = new List<string>(labels);
+                var sortedCurrentLabels = new List<string>(currentLabels);
+                sortedCurrentLabels.Sort();
+                sortedLabels.Sort();
+                var labelsArray = sortedLabels.ToArray();
                 Log(String.Format("Changing labels of {0}\n" +
                                   "from: {1}\n" +
-                                  "to: {2}\n",
+                                  "to:   {2}\n",
                                   filename,
-                                  String.Join(", ", currentLabels.ToArray()),
-                                  String.Join(", ", labels.ToArray())),
+                                  String.Join(", ", sortedCurrentLabels.ToArray()),
+                                  String.Join(", ", labelsArray)),
                     verbose: true);
-                AssetDatabase.SetLabels(importer, labels.ToArray());
+                AssetDatabase.SetLabels(importer, labelsArray);
             }
         }
 
