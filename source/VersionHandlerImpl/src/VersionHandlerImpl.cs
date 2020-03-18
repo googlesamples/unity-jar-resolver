@@ -746,8 +746,13 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             try {
               // This is *really* slow.
-              string error = AssetDatabase.RenameAsset(
-                  filename, filenameComponents.basenameNoExtension);
+              string error = AssetDatabase.MoveAsset(filename, newFilename);
+              if (!String.IsNullOrEmpty(error)) {
+                  string renameError = AssetDatabase.RenameAsset(
+                      filename, filenameComponents.basenameNoExtension);
+                  error = String.IsNullOrEmpty(renameError) ?
+                      renameError : String.Format("{0}, {1}", error, renameError);
+              }
               if (!String.IsNullOrEmpty(error)) {
                   Log("Failed to rename asset " + filename + " to " +
                       newFilename + " (" + error + ")",
