@@ -2496,7 +2496,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     cleanupFiles.Add(new KeyValuePair<string, string>(filename, filename));
                 }
             } else {
-                foreach (var filename in obsoleteFiles.unreferenced) MoveAssetToTrash(filename);
+                FileUtils.RemoveAssets(obsoleteFiles.unreferenced, VersionHandlerImpl.Logger);
             }
         }
 
@@ -2514,7 +2514,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                           String.Join(", ", references.ToArray()))));
                 }
             } else {
-                foreach (var item in obsoleteFiles.referenced) MoveAssetToTrash(item.Key);
+                FileUtils.RemoveAssets(obsoleteFiles.referenced.Keys, VersionHandlerImpl.Logger);
             }
         }
 
@@ -2525,7 +2525,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             };
             Action deleteFiles = () => {
                 bool deletedAll = true;
-                foreach (var filename in window.SelectedItems) MoveAssetToTrash(filename);
+                FileUtils.RemoveAssets(window.SelectedItems, VersionHandlerImpl.Logger);
                 foreach (var filenameAndDisplay in window.AvailableItems) {
                     if (!window.SelectedItems.Contains(filenameAndDisplay.Key)) {
                         deletedAll = false;
