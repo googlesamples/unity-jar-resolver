@@ -1147,6 +1147,12 @@ Task copyPluginTemplateToStagingArea = createCopyFilesTask(
             "GoogleRegistries.xml"),
    new File(new File(new File("Assets", "ExternalDependencyManager"), "Editor"),
             "GoogleRegistries.xml.meta"),
+   new File(new File(new File("Assets", "ExternalDependencyManager"), "Editor"),
+            "CHANGELOG.md.meta"),
+   new File(new File(new File("Assets", "ExternalDependencyManager"), "Editor"),
+            "LICENSE.meta"),
+   new File(new File(new File("Assets", "ExternalDependencyManager"), "Editor"),
+            "README.md.meta"),
    new File("Assets", "PlayServicesResolver.meta"),
    new File(new File("Assets", "PlayServicesResolver"), "Editor.meta"),
    new File(new File(new File("Assets", "PlayServicesResolver"), "Editor"),
@@ -1154,6 +1160,18 @@ Task copyPluginTemplateToStagingArea = createCopyFilesTask(
    new File(new File(new File("Assets", "PlayServicesResolver"), "Editor"),
             "play-services-resolver_v1.2.137.0.txt.meta")],
   project.ext.pluginTemplateDir, project.ext.pluginStagingAreaDir,
+  [preparePluginStagingAreaDir],
+  { sourceFile, targetFile -> copyAssetMetadataFile(sourceFile, targetFile) })
+
+Task copyDocumentationToStagingArea = createCopyFilesTask(
+  "copyDocumentationToStagingArea",
+  "Copy documentation into the Unity plugin packaging dir.",
+  [new File("CHANGELOG.md"),
+   new File("LICENSE"),
+   new File("README.md")],
+  project.ext.scriptDirectory,
+  new File(new File(new File(project.ext.pluginStagingAreaDir, "Assets"),
+                    "ExternalDependencyManager"), "Editor"),
   [preparePluginStagingAreaDir],
   { sourceFile, targetFile -> copyAssetMetadataFile(sourceFile, targetFile) })
 
@@ -1187,6 +1205,7 @@ task copyPluginComponentsToStagingArea(
 
 task generatePluginManifest(dependsOn: [preparePluginStagingAreaDir,
                                         copyPluginTemplateToStagingArea,
+                                        copyDocumentationToStagingArea,
                                         copyPluginComponentsToStagingArea]) {
   String unversionedManifestName = currentPluginBasename + ".txt"
   File outputDir = new File(project.ext.pluginStagingAreaDir,
