@@ -353,6 +353,17 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Whether it's possible to change the asset metadata.
+        /// </summary>
+        /// <returns>true if the asset metadata for this file is read-only,
+        /// false otherwise.</return>
+        public bool IsReadOnly {
+            get {
+                return FileUtils.IsUnderDirectory(filename, FileUtils.PACKAGES_FOLDER);
+            }
+        }
+
+        /// <summary>
         /// Parse metadata from filename and store in this class.
         /// </summary>
         /// <param name="filename">Name of the file to parse.</param>
@@ -646,7 +657,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// Save metadata from this class into the asset's labels.
         /// </summary>
         public void UpdateAssetLabels() {
-            if (String.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(filename))) return;
+            if (String.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(filename)) || IsReadOnly) {
+                return;
+            }
             AssetImporter importer = AssetImporter.GetAtPath(filename);
             var labels = new List<string>();
             var currentLabels = new List<string>();
@@ -1168,19 +1181,15 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public FileMetadataSet() { }
 
         /// <summary>
-        /// Filter all files that were installed by the Unity Package Manager.
+        /// Filter all files that can't be modified.
         /// </summary>
         /// <param name="metadataSet">Metadata set to filter.</param>
-        /// <returns>New FileMetadata with Unity Package Manager files removed.</returns>
-        public static FileMetadataSet FilterOutUnityPackageManagerFiles(
-                FileMetadataSet metadataSet) {
+        /// <returns>New FileMetadata with files that can't be modified removed.</returns>
+        public static FileMetadataSet FilterOutReadOnlyFiles(FileMetadataSet metadataSet) {
             var filteredMetadata = new FileMetadataSet();
             foreach (var metadataByVersion in metadataSet.Values) {
                 foreach (var metadata in metadataByVersion.Values) {
-                    if (!FileUtils.IsUnderDirectory(metadata.filename,
-                                                    FileUtils.PACKAGES_FOLDER)) {
-                        filteredMetadata.Add(metadata);
-                    }
+                    if (!metadata.IsReadOnly) filteredMetadata.Add(metadata);
                 }
             }
             return filteredMetadata;
@@ -1744,7 +1753,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// </summary>
         /// <returns>List of ManifestReferences from Assets folder</returns>
         public static List<ManifestReferences> FindAndReadManifestsInAssetsFolder() {
-            return FindAndReadManifests(FileMetadataSet.FilterOutUnityPackageManagerFiles(
+            return FindAndReadManifests(FileMetadataSet.FilterOutReadOnlyFiles(
                 FileMetadataSet.ParseFromFilenames(FindAllAssets())));
         }
 
@@ -2468,7 +2477,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
 
         UpdateAssetsWithBuildTargets(EditorUserBuildSettings.activeBuildTarget);
 
-        var metadataSet = FileMetadataSet.FilterOutUnityPackageManagerFiles(
+        var metadataSet = FileMetadataSet.FilterOutReadOnlyFiles(
             FileMetadataSet.ParseFromFilenames(FindAllAssets()));
         // Rename linux libraries, if any are being tracked.
         var linuxLibraries = new LinuxLibraryRenamer(metadataSet);
