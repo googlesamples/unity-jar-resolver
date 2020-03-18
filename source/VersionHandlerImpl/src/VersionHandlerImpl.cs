@@ -2477,18 +2477,17 @@ public class VersionHandlerImpl : AssetPostprocessor {
 
         UpdateAssetsWithBuildTargets(EditorUserBuildSettings.activeBuildTarget);
 
-        var metadataSet = FileMetadataSet.FilterOutReadOnlyFiles(
+        var allMetadataSet = FileMetadataSet.FilterOutReadOnlyFiles(
             FileMetadataSet.ParseFromFilenames(FindAllAssets()));
         // Rename linux libraries, if any are being tracked.
-        var linuxLibraries = new LinuxLibraryRenamer(metadataSet);
+        var linuxLibraries = new LinuxLibraryRenamer(allMetadataSet);
         linuxLibraries.RenameLibraries();
 
-        if (!forceUpdate) {
-            metadataSet = FileMetadataSet.FindWithPendingUpdates(metadataSet);
-        }
+        var metadataSet = allMetadataSet;
+        if (!forceUpdate) metadataSet = FileMetadataSet.FindWithPendingUpdates(allMetadataSet);
 
         var obsoleteFiles = new ObsoleteFiles(
-            ManifestReferences.FindAndReadManifests(metadataSet), metadataSet);
+            ManifestReferences.FindAndReadManifests(allMetadataSet), allMetadataSet);
         if (metadataSet.EnableMostRecentPlugins(forceUpdate, obsoleteFiles.All)) {
             analytics.Report("enablemostrecentplugins", "Enable Most Recent Plugins");
             AssetDatabase.Refresh();
