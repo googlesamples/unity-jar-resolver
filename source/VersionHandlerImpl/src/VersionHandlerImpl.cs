@@ -1367,27 +1367,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <returns>List of ManifestReferences which contain current and
         /// obsolete files referenced in each manifest file.</returns>
         public static List<ManifestReferences> FindAndReadManifests() {
-            return FindAndReadManifests(filter:null, directories:null);
-        }
-
-        /// <summary>
-        /// Find and read all package manifests.
-        /// </summary>
-        /// <param name="filter">Optional delegate to filter the returned
-        /// list.</param>
-        /// <param name="directories">Directories to search for the assets in the project.
-        /// Directories that don't exist are ignored.</param>
-        /// <returns>List of ManifestReferences which contain current and
-        /// obsolete files referenced in each manifest file.</returns>
-        public static List<ManifestReferences> FindAndReadManifests(
-                VersionHandler.FilenameFilter filter,
-                IEnumerable<string> directories) {
-            return FindAndReadManifests(FileMetadataSet.ParseFromFilenames(
-                SearchAssetDatabase(
-                    assetsFilter: "l:" +
-                        FileMetadata.CreateLabel(FileMetadata.TOKEN_MANIFEST[0], ""),
-                    filter:filter,
-                    directories:directories)));
+            return FindAndReadManifests(FileMetadataSet.ParseFromFilenames(FindAllAssets()));
         }
 
         /// <summary>
@@ -1395,9 +1375,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// </summary>
         /// <returns>List of ManifestReferences from Assets folder</returns>
         public static List<ManifestReferences> FindAndReadManifestsInAssetsFolder() {
-            return ManifestReferences.FindAndReadManifests(
-                    filter: null,
-                    directories: new string[] { FileUtils.ASSETS_FOLDER });
+            return FindAndReadManifests(FileMetadataSet.FilterOutUnityPackageManagerFiles(
+                FileMetadataSet.ParseFromFilenames(FindAllAssets())));
         }
 
         /// <summary>
