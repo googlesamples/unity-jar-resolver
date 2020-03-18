@@ -205,7 +205,7 @@ internal class PackageManifestModifier {
     /// <summary>
     /// Add a scoped registries.
     /// </summary>
-    /// <para name="registries">Registries to add to the manifest.</para>
+    /// <param name="registries">Registries to add to the manifest.</para>
     /// <returns>true if the registries are added to the manifest, false otherwise.</returns>
     internal bool AddRegistries(IEnumerable<UnityPackageManagerRegistry> registries) {
         List<object> scopedRegistries;
@@ -222,7 +222,7 @@ internal class PackageManifestModifier {
             scopedRegistries = new List<object>();
             manifestDict[MANIFEST_SCOPED_REGISTRIES_KEY] = scopedRegistries;
         }
-        RemoveRegistries(registries);
+        RemoveRegistries(registries, displayWarning: false);
         foreach (var registry in registries) {
             scopedRegistries.Add(new Dictionary<string, object>() {
                                      { MANIFEST_REGISTRY_NAME_KEY, registry.Name },
@@ -236,9 +236,12 @@ internal class PackageManifestModifier {
     /// <summary>
     /// Remove all scoped registries in the given list.
     /// </summary>
-    /// <para name="registries">A list of scoped registry to be removed</para>
+    /// <para, name="registries">A list of scoped registry to be removed</para>
+    /// <param name="displayWarning">Whether to display a warning if specified registries were not
+    /// found.</param>
     /// <returns>true if the registries could be removed, false otherwise.</returns>
-    internal bool RemoveRegistries(IEnumerable<UnityPackageManagerRegistry> registries) {
+    internal bool RemoveRegistries(IEnumerable<UnityPackageManagerRegistry> registries,
+                                   bool displayWarning = true) {
         List<object> scopedRegistries = null;
         try {
             scopedRegistries = ScopedRegistries;
@@ -268,9 +271,11 @@ internal class PackageManifestModifier {
                 if (remaining == 0) removed ++;
             }
         }
-        Logger.Log(String.Format("Removed {0}/{1} registries from '{2}'",
-                                 removed, numberOfRegistries, MANIFEST_FILE_PATH),
-                   level: removed == numberOfRegistries ? LogLevel.Verbose : LogLevel.Warning);
+        if (displayWarning) {
+            Logger.Log(String.Format("Removed {0}/{1} registries from '{2}'",
+                                     removed, numberOfRegistries, MANIFEST_FILE_PATH),
+                       level: removed == numberOfRegistries ? LogLevel.Verbose : LogLevel.Warning);
+        }
         return removed == numberOfRegistries;
     }
 
