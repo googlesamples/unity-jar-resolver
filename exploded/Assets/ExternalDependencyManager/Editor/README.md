@@ -205,7 +205,7 @@ target in the Unity editor.
    2. Copy and rename the
       [SampleDependencies.xml](https://github.com/googlesamples/unity-jar-resolver/blob/master/sample/Assets/ExternalDependencyManager/Editor/SampleDependencies.xml)
       file into your plugin and add the dependencies your plugin requires.
-
+      
       The XML file just needs to be under an `Editor` directory and match the
       name `*Dependencies.xml`. For example,
       `MyPlugin/Editor/MyPluginDependencies.xml`.
@@ -405,7 +405,7 @@ Dependencies for iOS are added by referring to CocoaPods.
    2. Copy and rename the
       [SampleDependencies.xml](https://github.com/googlesamples/unity-jar-resolver/blob/master/sample/Assets/ExternalDependencyManager/Editor/SampleDependencies.xml)
       file into your plugin and add the dependencies your plugin requires.
-
+      
       The XML file just needs to be under an `Editor` directory and match the
       name `*Dependencies.xml`. For example,
       `MyPlugin/Editor/MyPluginDependencies.xml`.
@@ -474,10 +474,10 @@ registry servers and easy for plugin users to manage UPM registry servers.
    2. Copy and rename the
       [SampleRegistries.xml](https://github.com/googlesamples/unity-jar-resolver/blob/master/sample/Assets/ExternalDependencyManager/Editor/sample/Assets/ExternalDependencyManager/Editor/SampleRegistries.xml)
       file into your plugin and add the registries your plugin requires.
-
-     The XML file just needs to be under an `Editor` directory and match the
-     name `*Registries.xml` or labeled with `gumpr_registries`. For example,
-     `MyPlugin/Editor/MyPluginRegistries.xml`.
+      
+      The XML file just needs to be under an `Editor` directory and match the
+      name `*Registries.xml` or labeled with `gumpr_registries`. For example,
+      `MyPlugin/Editor/MyPluginRegistries.xml`.
 
    3. Follow the steps in the [Getting Started](#getting-started)
       section when you are exporting your plugin package.
@@ -631,7 +631,7 @@ selection, upgrade and removal of plugins.
   in assets between the most recent release of a plugin and the previous
   release installed in a project. If a files are removed the Version Handler
   will prompt the user to clean up obsolete files.
-* Plugsin can ship using assets with unique names, unique GUIDs and version
+* Plugins can ship using assets with unique names, unique GUIDs and version
   number labels. Version numbers can be attached to assets using labels or
   added to the filename (e.g `myfile.txt` would be `myfile_version-x.y.z.txt).
   This allows the Version Handler to determine which set of files are the

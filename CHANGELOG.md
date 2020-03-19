@@ -1,3 +1,9 @@
+# Version 1.2.140 - Mar 19, 2020
+## Bug Fixes
+* Fixed measurement reporting in Unity 5.x.
+* Version Handler: Fixed NullReferenceException when an asset doesn't have
+  an AssetImporter.
+
 # Version 1.2.139 - Mar 18, 2020
 ## Changed
 * Added documentation to the built plugin.
