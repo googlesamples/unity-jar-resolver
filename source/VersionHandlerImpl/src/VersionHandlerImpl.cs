@@ -1013,6 +1013,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 } catch (InvalidCastException) {
                     continue;
                 }
+                if (pluginImporter == null) {
+                    continue;
+                }
                 bool editorEnabled = metadata.GetEditorEnabled();
                 var selectedTargets = metadata.GetBuildTargets();
                 var hasBuildTargets = metadata.GetBuildTargetsSpecified();
