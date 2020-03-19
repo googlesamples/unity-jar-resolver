@@ -441,7 +441,12 @@ public class PortableWebRequest : IPortableWebRequest {
         object unityRequest = null;
         if (FindAndCacheRequestType()) {
             if (requestType.Name == "WWW") {
-                var uploadHeaders = new Dictionary<string, string>(headers);
+                var uploadHeaders = new Dictionary<string, string>();
+                if (headers != null) {
+                    foreach (var kv in headers) {
+                        uploadHeaders[kv.Key] = kv.Value;
+                    }
+                }
                 // Need to manually add the Content-Type header when sending a form as the
                 // constructor that takes a WWWForm that doesn't allow the specification of
                 // headers.
@@ -485,7 +490,9 @@ public class PortableWebRequest : IPortableWebRequest {
             string url, IDictionary<string, string> headers,
             IEnumerable<KeyValuePair<string, string>> formFields) {
         var form = new WWWForm();
-        foreach (var formField in formFields) form.AddField(formField.Key, formField.Value);
+        if (formFields != null) {
+            foreach (var formField in formFields) form.AddField(formField.Key, formField.Value);
+        }
 
         try {
             return StartRequestOnMainThread(HttpMethod.Post, url, headers, form);

@@ -25,8 +25,14 @@ public class TestPortableWebRequest {
 
     // Whether the get operation succeeded.
     private static bool getSucceeded = false;
+    // Whether the get operation with no query succeeded.
+    private static bool getNoQuerySucceeded = false;
+    // Whether the get operation with no headers succeeded.
+    private static bool getNoHeadersSucceeded = false;
     // Whether the post operation succeeded.
     private static bool postSucceeded = false;
+    // Whether the post operation with no headers succeeded.
+    private static bool postNoHeadersSucceeded = false;
 
     /// <summary>
     /// Register a method to call when the Version Handler has enabled all plugins in the project.
@@ -92,14 +98,64 @@ public class TestPortableWebRequest {
                                                "echo-bish=Bosh\n" +
                                                "echo-foo=Bar");
                     var result = System.Text.Encoding.Default.GetString(getStatus.Result);
-                    var expected = ("{\"data\": \"Hello from a test server\", " +
-                                    "\"headers\": {\"Echo-Bish\": \"Bosh\", " +
-                                    "\"Echo-Foo\": \"Bar\"}, " +
-                                    "\"path\": \"/get?foo1=bar1&foo2=bar2\", " +
-                                    "\"query\": {\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}}");
+                    var expected =
+                        "{\"data\": \"Hello from a test server\", " +
+                        "\"headers\": {\"Echo-Bish\": \"Bosh\", \"Echo-Foo\": \"Bar\"}, " +
+                        "\"path\": \"/get?foo1=bar1&foo2=bar2\", " +
+                        "\"query\": {\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}}";
                     getSucceeded &= CheckEqual(result, expected);
                     UnityEngine.Debug.Log(String.Format("Get complete succeeded={0}\n{1}",
                                                         getSucceeded, result));
+                }
+                return complete;
+            }, synchronous: true);
+
+        UnityEngine.Debug.Log("Running get with no query test...");
+        var getStatusNoQuery = webRequest.Get("http://localhost:8000/get_with_no_query",
+                                              new Dictionary<string, string> {
+                                                  { "Echo-Foo", "Bar" },
+                                                  { "Echo-Bish", "Bosh" }
+                                              });
+        RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                var complete = getStatusNoQuery.Complete;
+                if (complete) {
+                    getNoQuerySucceeded = CheckEqual(getStatusNoQuery.Status, HttpStatusCode.OK);
+                    getNoQuerySucceeded &= CheckEqual(
+                        DictionaryToString("echo-", true, getStatusNoQuery.Headers),
+                        "echo-bish=Bosh\n" +
+                        "echo-foo=Bar");
+                    var result = System.Text.Encoding.Default.GetString(getStatusNoQuery.Result);
+                    var expected =
+                        "{\"data\": \"Hello from a test server\", " +
+                        "\"headers\": {\"Echo-Bish\": \"Bosh\", \"Echo-Foo\": \"Bar\"}, " +
+                        "\"path\": \"/get_with_no_query\", " +
+                        "\"query\": {}}";
+                    getNoQuerySucceeded &= CheckEqual(result, expected);
+                    UnityEngine.Debug.Log(String.Format("Get with no query succeeded={0}\n{1}",
+                                                        getNoQuerySucceeded, result));
+                }
+                return complete;
+            }, synchronous: true);
+
+        UnityEngine.Debug.Log("Running get with no headers test...");
+        var getStatusNoHeaders = webRequest.Get("http://localhost:8000/get?foo1=bar1&foo2=bar2",
+                                                null);
+        RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                var complete = getStatusNoHeaders.Complete;
+                if (complete) {
+                    getNoHeadersSucceeded = CheckEqual(getStatusNoHeaders.Status,
+                                                       HttpStatusCode.OK);
+                    getNoHeadersSucceeded &= CheckEqual(DictionaryToString("echo-", true,
+                                                                  getStatusNoHeaders.Headers), "");
+                    var result = System.Text.Encoding.Default.GetString(getStatusNoHeaders.Result);
+                    var expected =
+                        "{\"data\": \"Hello from a test server\", " +
+                        "\"headers\": {}, " +
+                        "\"path\": \"/get?foo1=bar1&foo2=bar2\", " +
+                        "\"query\": {\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}}";
+                    getNoHeadersSucceeded &= CheckEqual(result, expected);
+                    UnityEngine.Debug.Log(String.Format("Get with no headers succeeded={0}\n{1}",
+                                                        getNoHeadersSucceeded, result));
                 }
                 return complete;
             }, synchronous: true);
@@ -117,18 +173,17 @@ public class TestPortableWebRequest {
         RunOnMainThread.PollOnUpdateUntilComplete(() => {
                 var complete = postStatus.Complete;
                 if (complete) {
-                    postSucceeded = CheckEqual(getStatus.Status, HttpStatusCode.OK);
-                    postSucceeded &= CheckEqual(DictionaryToString("echo-", true,
-                                                                   getStatus.Headers),
-                                               "echo-bish=Bosh\n" +
-                                               "echo-foo=Bar");
+                    postSucceeded = CheckEqual(postStatus.Status, HttpStatusCode.OK);
+                    postSucceeded &= CheckEqual(
+                        DictionaryToString("echo-", true, postStatus.Headers),
+                        "echo-bish=Bosh\n" +
+                        "echo-foo=Bar");
                     var result = System.Text.Encoding.Default.GetString(postStatus.Result);
                     var expected =
                         "{\"data\": \"Hello from a test server\", " +
-                        "\"form\": {\"foo1\": [\"bar1\"], \"foo2\": " +
-                        "[\"bar2\"]}, " +
-                        "\"headers\": {\"Echo-Bish\": \"Bosh\", " +
-                        "\"Echo-Foo\": \"Bar\"}, \"path\": \"/post\", \"query\": {}}";
+                        "\"form\": {\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}, " +
+                        "\"headers\": {\"Echo-Bish\": \"Bosh\", \"Echo-Foo\": \"Bar\"}, " +
+                        "\"path\": \"/post\", \"query\": {}}";
                     postSucceeded &= CheckEqual(result, expected);
                     UnityEngine.Debug.Log(String.Format("Post complete succeeded={0}\n{1}",
                                                         postSucceeded, result));
@@ -136,8 +191,37 @@ public class TestPortableWebRequest {
                 return complete;
             }, synchronous: true);
 
+        UnityEngine.Debug.Log("Running post test with no headers...");
+        var postNoHeadersStatus = webRequest.Post(
+            "http://localhost:8000/post/with/no/headers",
+            null,
+            new[] {
+                new KeyValuePair<string, string>("foo1", "bar1"),
+                new KeyValuePair<string, string>("foo2", "bar2")
+            });
+        RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                var complete = postNoHeadersStatus.Complete;
+                if (complete) {
+                    postNoHeadersSucceeded = CheckEqual(postNoHeadersStatus.Status,
+                                                        HttpStatusCode.OK);
+                    postNoHeadersSucceeded &= CheckEqual(DictionaryToString(
+                        "echo-", true, postNoHeadersStatus.Headers), "");
+                    var result = System.Text.Encoding.Default.GetString(postNoHeadersStatus.Result);
+                    var expected =
+                        "{\"data\": \"Hello from a test server\", " +
+                        "\"form\": {\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}, " +
+                        "\"headers\": {}, " +
+                        "\"path\": \"/post/with/no/headers\", \"query\": {}}";
+                    postNoHeadersSucceeded &= CheckEqual(result, expected);
+                    UnityEngine.Debug.Log(String.Format("Post with no headers succeeded={0}\n{1}",
+                                                        postNoHeadersSucceeded, result));
+                }
+                return complete;
+            }, synchronous: true);
+
         // Exit when the tests are complete.
-        if (!(getSucceeded && postSucceeded)) {
+        if (!(getSucceeded && getNoQuerySucceeded && getNoHeadersSucceeded && postSucceeded
+              && postNoHeadersSucceeded)) {
             UnityEngine.Debug.Log("Test failed");
             UnityEditor.EditorApplication.Exit(1);
         }
