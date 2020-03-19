@@ -1,3 +1,12 @@
+# Version 1.2.141 - Mar 19, 2020
+## Bug Fixes
+* Fixed a bug when retrieving project settings. If a plugin was configured
+  to fetch project settings, if a setting was fetched (e.g "foo") and this
+  setting existed in the system settings but not the project settings the
+  system value would override the default value leading to unexpected
+  behavior.
+* Fixed a warning when caching web request classes in Unity 5.6.
+
 # Version 1.2.140 - Mar 19, 2020
 ## Bug Fixes
 * Fixed measurement reporting in Unity 5.x.
