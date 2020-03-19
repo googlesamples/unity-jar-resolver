@@ -325,12 +325,29 @@ public class PortableWebRequest : IPortableWebRequest {
     }
 
     /// <summary>
+    /// Try to find a type in a list of assemblies.
+    /// </summary>
+    /// <param name="typeName">Fully qualified type name.</param>
+    /// <param name="assemblyNames">Names of assemblies to search.</param>
+    /// <returns>Type if successful, null otherwise.</returns>
+    private static Type FindTypeInAssemblies(string typeName, IEnumerable<string> assemblyNames) {
+        Type type = null;
+        foreach (var assemblyName in assemblyNames) {
+            type = Type.GetType(String.Format("{0}, {1}", typeName, assemblyName));
+            if (type != null) break;
+        }
+        return type;
+    }
+
+    /// <summary>
     /// Find and cache the UnityWebRequest type and associated classes.
     /// </summary>
     /// <returns>true if successful, false otherwise.</returns>
     private static bool FindAndCacheRequestTypeUnityWebRequest() {
-        requestType = Type.GetType("UnityEngine.Networking.UnityWebRequest, " +
-                                   "UnityEngine.UnityWebRequestModule");
+        // These types moved between assemblies between Unity 5.x and Unity 2017.x
+        var networkingAssemblyNames = new [] { "UnityEngine.UnityWebRequestModule", "UnityEngine" };
+        requestType = FindTypeInAssemblies("UnityEngine.Networking.UnityWebRequest",
+                                           networkingAssemblyNames);
         if (requestType != null) {
             postMethod = requestType.GetMethod("Post",
                                                new [] { typeof(String), typeof(WWWForm) });
@@ -357,8 +374,9 @@ public class PortableWebRequest : IPortableWebRequest {
                 requestType = null;
             }
         }
-        var downloadHandlerType = Type.GetType("UnityEngine.Networking.DownloadHandler, " +
-                                               "UnityEngine.UnityWebRequestModule");
+
+        var downloadHandlerType = FindTypeInAssemblies("UnityEngine.Networking.DownloadHandler",
+                                                       networkingAssemblyNames);
         if (downloadHandlerType != null) {
             downloadHandlerDataProperty = downloadHandlerType.GetProperty("data");
             if (downloadHandlerDataProperty == null) {
