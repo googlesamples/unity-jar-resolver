@@ -356,7 +356,9 @@ namespace Google.VersionHandlerImpl.Tests {
             Assert.That(settings.GetInt("an_int", 21, SettingsLocation.System), Is.EqualTo(42));
             Assert.That(settings.HasKey("an_int", SettingsLocation.System), Is.EqualTo(true));
             Assert.That(settings.HasKey("an_int", SettingsLocation.Project), Is.EqualTo(false));
-            Assert.That(settings.HasKey("an_int"), Is.EqualTo(true));
+            // By default this is configured to read from the project settings so this should
+            // be empty.
+            Assert.That(settings.HasKey("an_int"), Is.EqualTo(false));
 
             Assert.That(settings.GetBool("a_bool", true, SettingsLocation.System),
                         Is.EqualTo(true));
@@ -365,7 +367,7 @@ namespace Google.VersionHandlerImpl.Tests {
                         Is.EqualTo(true));
             Assert.That(settings.HasKey("a_bool", SettingsLocation.System), Is.EqualTo(true));
             Assert.That(settings.HasKey("a_bool", SettingsLocation.Project), Is.EqualTo(false));
-            Assert.That(settings.HasKey("a_bool"), Is.EqualTo(true));
+            Assert.That(settings.HasKey("a_bool"), Is.EqualTo(false));
 
             Assert.That(settings.GetFloat("a_float", 2.72f, SettingsLocation.System),
                         Is.EqualTo(2.72f));
@@ -374,17 +376,17 @@ namespace Google.VersionHandlerImpl.Tests {
                         Is.EqualTo(3.14f));
             Assert.That(settings.HasKey("a_float", SettingsLocation.System), Is.EqualTo(true));
             Assert.That(settings.HasKey("a_float", SettingsLocation.Project), Is.EqualTo(false));
-            Assert.That(settings.HasKey("a_float"), Is.EqualTo(true));
+            Assert.That(settings.HasKey("a_float"), Is.EqualTo(false));
 
             Assert.That(settings.GetString("a_string", "cansada", SettingsLocation.System),
                         Is.EqualTo("cansada"));
             settings.SetString("a_string", "nada", SettingsLocation.System);
             Assert.That(settings.GetString("a_string", "casa", SettingsLocation.System),
                         Is.EqualTo("nada"));
-            Assert.That(settings.HasKey("a_string"), Is.EqualTo(true));
+            Assert.That(settings.HasKey("a_string"), Is.EqualTo(false));
             Assert.That(settings.HasKey("a_string", SettingsLocation.System), Is.EqualTo(true));
             Assert.That(settings.HasKey("a_string", SettingsLocation.Project), Is.EqualTo(false));
-            Assert.That(settings.HasKey("a_string"), Is.EqualTo(true));
+            Assert.That(settings.HasKey("a_string"), Is.EqualTo(false));
 
             // Replace the backing stores for system and project settings.
             ProjectSettings.projectSettings = new InMemorySettings();

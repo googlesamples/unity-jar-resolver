@@ -441,7 +441,7 @@ namespace Google {
         /// Get the location to fetch settings from.
         /// </summary>
         private SettingsLocation GetLocation {
-            get { return UseProjectSettings ? SettingsLocation.All : SettingsLocation.System; }
+            get { return UseProjectSettings ? SettingsLocation.Project : SettingsLocation.System; }
         }
 
         /// <summary>
