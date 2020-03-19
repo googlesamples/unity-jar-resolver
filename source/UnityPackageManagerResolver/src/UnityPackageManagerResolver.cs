@@ -81,6 +81,15 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Display documentation.
+    /// </summary>
+    [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Documentation")]
+    public static void ShowDocumentation() {
+        analytics.OpenUrl(VersionHandlerImpl.DocumentationUrl(
+            "#unity-package-manager-resolver-usage"), "Usage");
+    }
+
+    /// <summary>
     /// Add the settings dialog for this module to the menu and show the
     /// window when the menu item is selected.
     /// </summary>

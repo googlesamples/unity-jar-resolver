@@ -11,6 +11,7 @@ Unity plugin that requires:
      [AARs](https://developer.android.com/studio/projects/android-library.html)).
    * iOS [CocoaPods](https://cocoapods.org/).
    * Version management of transitive dependencies.
+   * Management of Unity Package Manager Registries.
 
 # Background
 
@@ -65,6 +66,22 @@ Using CocoaPods allows multiple plugins to utilize shared components without
 forcing developers to fix either duplicate or incompatible versions of
 libraries included through multiple Unity plugins in their project.
 
+## Unity Package Manager Registry Setup
+
+The [Unity Package Manager](https://docs.unity3d.com/Manual/Packages.html)
+(UPM) makes use of [NPM](https://www.npmjs.com/) registry servers for package
+hosting and provides ways to discover, install, upgrade and uninstall packages.
+This makes it easier for developers to manage plugins within their projects.
+
+However, installing additional package registries requires a few manual steps
+that can potentially be error prone.  The *Unity Package Manager Resolver*
+component of this plugin integrates with
+[UPM](https://docs.unity3d.com/Manual/Packages.html) to provide a way to
+auto-install UPM package registries when a `.unitypackage` is installed which
+allows plugin maintainers to ship a `.unitypackage` that can provide access
+to their own UPM registry server to make it easier for developers to
+manage their plugins.
+
 ## Unity Plugin Version Management
 
 Finally, the *Version Handler* component of this plugin simplifies the process
@@ -106,11 +123,16 @@ section of this document.
 
 # Requirements
 
-The Android Resolver and iOS Resolver components of the plugin only work with
-Unity version 4.6.8 or higher.
+The *Android Resolver* and *iOS Resolver* components of the plugin only work
+with Unity version 4.6.8 or higher.
 
 The *Version Handler* component only works with Unity 5.x or higher as it
 depends upon the `PluginImporter` UnityEditor API.
+
+The *Unity Package Manager Resolver* component only works with
+Unity 2018.4 or above, when
+[scoped registry](https://docs.unity3d.com/Manual/upm-scoped.html)
+support was added to the Unity Package Manager.
 
 # Getting Started
 
@@ -118,9 +140,11 @@ Before you import EDM4U into your plugin project, you first
 need to consider whether you intend to *redistribute* `EDM4U`
 along with your own plugin.
 
-Redistributing `EDM4U` inside your own plugin will ease
-the integration process for your users, by resolving dependency conflicts
-between your plugin and other plugins in a user's project.
+## Plugin Redistribution
+
+If you're a plugin maintainer, redistributing `EDM4U` inside your own plugin
+will ease the integration process for your users, by resolving dependency
+conflicts between your plugin and other plugins in a user's project.
 
 If you wish to redistribute `EDM4U` inside your plugin,
 you **must** follow these steps when importing the
@@ -153,7 +177,7 @@ Unity -gvh_disable \
       -quit
 ```
 
-## Background
+### Background
 
 The *Version Handler* component relies upon deferring the load of editor DLLs
 so that it can run first and determine the latest version of a plugin component
@@ -175,9 +199,10 @@ target in the Unity editor.
       EDM4U with your plugin, you **must** follow the
       import steps in the [Getting Started](#getting-started) section!
 
-   2. Copy and rename the `SampleDependencies.xml` file into your
-      plugin and add the dependencies your plugin requires.
-
+   2. Copy and rename the
+      [SampleDependencies.xml](https://github.com/googlesamples/unity-jar-resolver/blob/master/sample/Assets/ExternalDependencyManager/Editor/SampleDependencies.xml)
+      file into your plugin and add the dependencies your plugin requires.
+      
       The XML file just needs to be under an `Editor` directory and match the
       name `*Dependencies.xml`. For example,
       `MyPlugin/Editor/MyPluginDependencies.xml`.
@@ -324,7 +349,7 @@ results in the execution of the following operations:
      local maven repositories.
    - Inject the required Gradle repositories into `mainTemplate.gradle` at the
      line matching the pattern
-     `.*apply plugin: 'com\.android\.(application|library)'.*"` or the section
+     `.*apply plugin: 'com\.android\.(application|library)'.*` or the section
      starting at the line `// Android Resolver Repos Start`.
      If you want to control the injection point in the file, the section
      delimited by the lines `// Android Resolver Repos Start` and
@@ -374,9 +399,10 @@ Dependencies for iOS are added by referring to CocoaPods.
       EDM4U with your plugin, you **must** follow the
       import steps in the [Getting Started](#getting-started) section!
 
-   2. Copy and rename the SampleDependencies.xml file into your
-      plugin and add the dependencies your plugin requires.
-
+   2. Copy and rename the
+      [SampleDependencies.xml](https://github.com/googlesamples/unity-jar-resolver/blob/master/sample/Assets/ExternalDependencyManager/Editor/SampleDependencies.xml)
+      file into your plugin and add the dependencies your plugin requires.
+      
       The XML file just needs to be under an `Editor` directory and match the
       name `*Dependencies.xml`. For example,
       `MyPlugin/Editor/MyPluginDependencies.xml`.
@@ -419,18 +445,195 @@ private static void PostProcessBuild_iOS(BuildTarget target, string buildPath)
     {
 
         using (StreamWriter sw = File.AppendText(buildPath + "/Podfile"))
-        {   
+        {
             //in this example I'm adding an app extension
             sw.WriteLine("\ntarget 'NSExtension' do\n  pod 'Firebase/Messaging', '6.6.0'\nend");
         }
     }
 }
 ```
+
+# Unity Package Manager Resolver Usage
+
+Adding registries to the
+[Unity Package Manager](https://docs.unity3d.com/Manual/Packages.html)
+(UPM) is a manual process. The Unity Package Manager Resolver (UPMR) component
+of this plugin makes it easy for plugin maintainers to distribute new UPM
+registry servers and easy for plugin users to manage UPM registry servers.
+
+## Adding Registries
+
+   1. Add the `external-dependency-manager-*.unitypackage` to your plugin
+      project (assuming you are developing a plugin). If you are redistributing
+      EDM4U with your plugin, you **must** follow the
+      import steps in the [Getting Started](#getting-started) section!
+
+   2. Copy and rename the
+      [SampleRegistries.xml](https://github.com/googlesamples/unity-jar-resolver/blob/master/sample/Assets/ExternalDependencyManager/Editor/sample/Assets/ExternalDependencyManager/Editor/SampleRegistries.xml)
+      file into your plugin and add the registries your plugin requires.
+      
+      The XML file just needs to be under an `Editor` directory and match the
+      name `*Registries.xml` or labeled with `gumpr_registries`. For example,
+      `MyPlugin/Editor/MyPluginRegistries.xml`.
+
+   3. Follow the steps in the [Getting Started](#getting-started)
+      section when you are exporting your plugin package.
+
+For example, to add a registry for plugins in the scope `com.coolstuff`:
+
+```
+<registries>
+  <registry name="Cool Stuff"
+            url="https://unityregistry.coolstuff.com"
+            termsOfService="https://coolstuff.com/unityregistry/terms"
+            privacyPolicy="https://coolstuff.com/unityregistry/privacy">
+    <scopes>
+      <scope>com.coolstuff</scope>
+    </scopes>
+  </registry>
+</registries>
+```
+
+When UPMR is loaded it will prompt the developer to add the registry to their
+project if it isn't already present in the `Packages/manifest.json` file.
+
+For more information, see Unity's documentation on
+[scoped package registries](https://docs.unity3d.com/Manual/upm-scoped.html).
+
+## Managing Registries
+
+It's possible to add and remove registries that are specified via UPMR
+XML configuration files via the following menu options:
+
+* `Assets > External Dependency Manager > Unity Package Manager Resolver >
+  Add Registries` will prompt the user with a window which allows them to
+  add registries discovered in the project to the Unity Package Manager.
+* `Assets > External Dependency Manager > Unity Package Manager Resolver >
+  Remove Registries` will prompt the user with a window which allows them to
+  remove registries discovered in the project from the Unity Package Manager.
+* `Assets > External Dependency Manager > Unity Package Manager Resolver >
+  Modify Registries` will prompt the user with a window which allows them to
+  add or remove registries discovered in the project.
+
+## Configuration
+
+UPMR can be configured via the `Assets > External Dependency Manager >
+Unity Package Manager Resolver > Settings` menu option:
+
+* `Add package registries` when enabled, when the plugin loads or registry
+  configuration files change, this will prompt the user to add registries
+  that are not present in the Unity Package Manager.
+* `Prompt to add package registries` will cause a developer to be prompted
+  with a window that will ask for confirmation before adding registries.
+  When this is disabled registries are added silently to the project.
+* `Enable Analytics Reporting` when enabled, reports the use of the plugin
+  to the developers so they can make imrpovements.
+* `Verbose logging` when enabled prints debug information to the console
+  which can be useful when filing bug reports.
+
 # Version Handler Usage
 
 The Version Handler component of this plugin manages:
+
 * Shared Unity plugin dependencies.
 * Upgrading Unity plugins by cleaning up old files from previous versions.
+* Uninstallation of plugins that are distributed with manifest files.
+* Restoration of plugin assets to their original install locations if assets
+  are tagged with the `exportpath` label.
+
+Since the Version Handler needs to modify Unity asset metadata (`.meta` files),
+to enable / disable components, rename and delete asset files it does not
+work with Unity Package Manager installed packages. It's still possible to
+include EDM4U in Unity Package Manager packages, the Version Handler component
+simply won't do anything to UPM plugins in this case.
+
+## Using Version Handler Managed Plugins
+
+If a plugin is imported at multiple different versions into a project, if
+the Version Handler is enabled, it will automatically check all managed
+assets to determine the set of assets that are out of date and assets that
+should be removed. To disable automatic checking managed assets disable
+the `Enable version management` option in the
+`Assets > External Dependency Manager > Version Handler > Settings` menu.
+
+If version management is disabled, it's possible to check managed assets
+manually using the
+`Assets > External Dependency Manager > Version Handler > Update` menu option.
+
+### Listing Managed Plugins
+
+Plugins managed by the Version Handler, those that ship with manifest files,
+can displayed using the `Assets > External Dependency Manager >
+Version Handler > Display Managed Packages` menu option. The list of plugins
+are written to the console window along with the set of files used by each
+plugin.
+
+### Uninstalling Managed Plugins
+
+Plugins managed by the Version Handler, those that ship with manifest files,
+can be removed using the `Assets > External Dependency Manager >
+Version Handler > Uninstall Managed Packages` menu option. This operation
+will display a window that allows a developer to select a set of plugins to
+remove which will remove all files owned by each plugin excluding those that
+are in use by other installed plugins.
+
+Files managed by the Version Handler, those labeled with the `gvh` asset label,
+can be checked to see whether anything needs to be upgraded, disabled or
+removed using the `Assets > External Dependency Manager >
+Version Handler > Update` menu option.
+
+### Restore Install Paths
+
+Some developers move assets around in their project which can make it
+harder for plugin maintainers to debug issues if this breaks Unity's
+[special folders](https://docs.unity3d.com/Manual/SpecialFolders.html) rules.
+If assets are labeled with their original install / export path
+(see `gvhp_exportpath` below), Version Handler can restore assets to their
+original locations when using the `Assets > External Dependency Manager >
+Version Handler > Move Files To Install Locations` menu option.
+
+### Settings
+
+Some behavior of the Version Handler can be configured via the
+`Assets > External Dependency Manager > Version Handler > Settings` menu
+option.
+
+* `Enable version management` controls whether the plugin should automatically
+  check asset versions and apply changes. If this is disabled the process
+  should be run manually when installing or upgrading managed plugins using
+  `Assets > External Dependency Manager > Version Handler > Update`.
+* `Rename to canonical filenames` is a legacy option that will rename files to
+  remove version numbers and other labels from filenames.
+* `Prompt for obsolete file deletion` enables the display of a window when
+  obsolete files are deleted allowing the developer to select which files to
+  delete and those to keep.
+* `Allow disabling files via renaming` controls whether obsolete or disabled
+  files should be disabled by renaming them to `myfilename_DISABLED`.
+  Renaming to disable files is required in some scenarios where Unity doesn't
+  support removing files from the build via the PluginImporter.
+* `Enable Analytics Reporting` enables / disables usage reporting to plugin
+  developers to improve the product.
+* `Verbose logging` enables _very_ noisy log output that is useful for
+  debugging while filing a bug report or building a new managed plugin.
+* `Use project settings` saves settings for the plugin in the project rather
+  than system-wide.
+
+## Redistributing a Managed Plugin
+
+The Version Handler employs a couple of methods for managing version
+selection, upgrade and removal of plugins.
+
+* Each plugin can ship with a manifest file that lists the files it includes.
+  This makes it possible for Version Handler to calculate the difference
+  in assets between the most recent release of a plugin and the previous
+  release installed in a project. If a files are removed the Version Handler
+  will prompt the user to clean up obsolete files.
+* Plugins can ship using assets with unique names, unique GUIDs and version
+  number labels. Version numbers can be attached to assets using labels or
+  added to the filename (e.g `myfile.txt` would be `myfile_version-x.y.z.txt).
+  This allows the Version Handler to determine which set of files are the
+  same file at different versions, select the most recent version and prompt
+  the developer to clean up old versions.
 
 Unity plugins can be managed by the Version Handler using the following steps:
 
@@ -474,7 +677,7 @@ If you follow these steps:
      multiple packages that include your plugin, assuming the steps in
      [Plugin Redistribution](#plugin-redistribution) are followed.
 
-## Building from Source
+# Building from Source
 
 To build this plugin from source you need the following tools installed:
    * Unity (with iOS and Android modules installed)
@@ -492,7 +695,7 @@ or Windows:
 ./gradlew.bat build
 ```
 
-### Releasing
+# Releasing
 
 Each time a new build of this plugin is checked into the source tree you
 need to do the following:
