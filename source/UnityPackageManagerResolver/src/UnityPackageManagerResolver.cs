@@ -398,6 +398,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
 
                 // Optional when prompting is enabled or forced.
                 var window = MultiSelectWindow.CreateMultiSelectWindow(PLUGIN_NAME);
+                window.minSize = new Vector2(1024, 500);
                 window.AvailableItems = registryItems;
                 window.Sort(1);
                 window.SelectedItems = selectedRegistryUrls;
