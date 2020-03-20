@@ -519,7 +519,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// Enable / disable management of external registries.
     /// </summary>
     public static bool Enable {
-        get { return settings.GetBool(PreferenceEnable, defaultValue: false); }
+        get { return settings.GetBool(PreferenceEnable, defaultValue: true); }
         set { settings.SetBool(PreferenceEnable, value); }
     }
 
