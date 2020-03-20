@@ -207,6 +207,10 @@ project.ext {
                                sprintf("%s-%s.unitypackage",
                                        currentPluginBasename,
                                        pluginVersion))
+  // Unversioned release plugin file.
+  pluginReleaseFileUnversioned = new File(scriptDirectory,
+                                          sprintf("%s-latest.unitypackage",
+                                                  currentPluginBasename))
 
   // Common arguments used to execute Unity in batch mode.
   unityBatchModeArguments = ["-batchmode", "-nographics"]
@@ -1289,6 +1293,11 @@ task releasePlugin(dependsOn: buildPlugin) {
       from project.ext.pluginExportFile
       into project.ext.pluginReleaseFile.parentFile
       rename { src_filename -> project.ext.pluginReleaseFile.name }
+    }
+    copy {
+      from project.ext.pluginExportFile
+      into project.ext.pluginReleaseFileUnversioned.parentFile
+      rename { src_filename -> project.ext.pluginReleaseFileUnversioned.name }
     }
     delete fileTree(dir: project.ext.pluginExplodedDir)
     copy {
