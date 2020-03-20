@@ -1,4 +1,9 @@
-# Version 1.2.141 - Mar 19, 2020
+# Version 1.2.143 - Mar 20, 2020
+## Bug Fixes
+* Android Resolver: Fixed caching of resolution state which was causing
+  the resolver to always run when no dependencies had changed.
+
+# Version 1.2.142 - Mar 19, 2020
 ## Changes
 * Unity Package Manager Resolver: Enabled auto-add by default.
 
