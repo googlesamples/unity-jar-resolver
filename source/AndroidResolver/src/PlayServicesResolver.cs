@@ -201,7 +201,7 @@ namespace GooglePlayServices {
                                 return true;
                             }
                         }
-                        return false;
+                        return true;
                     })) {
                     return null;
                 }
