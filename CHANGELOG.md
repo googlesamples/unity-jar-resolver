@@ -1,4 +1,8 @@
 # Version 1.2.141 - Mar 19, 2020
+## Changes
+* Unity Package Manager Resolver: Enabled auto-add by default.
+
+# Version 1.2.141 - Mar 19, 2020
 ## Bug Fixes
 * Fixed a bug when retrieving project settings. If a plugin was configured
   to fetch project settings, if a setting was fetched (e.g "foo") and this

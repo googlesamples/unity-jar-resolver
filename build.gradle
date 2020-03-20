@@ -199,7 +199,7 @@ project.ext {
   // Solution which references all projects used by the plugin.
   pluginSolutionFile = new File(pluginSourceDir, "ExternalDependencyManager.sln")
   // Version of the plugin (update this with CHANGELOG.md on each release).
-  pluginVersion = "1.2.141"
+  pluginVersion = "1.2.142"
   // Base filename of the released plugin.
   currentPluginBasename = "external-dependency-manager"
   // Versioned release plugin file.
