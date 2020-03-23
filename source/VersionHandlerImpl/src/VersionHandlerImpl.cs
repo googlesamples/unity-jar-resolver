@@ -1630,6 +1630,19 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public HashSet<string> obsoleteFiles = new HashSet<string>();
 
         /// <summary>
+        /// Cache of all manifest references indexed by package name.
+        /// </summary>
+        private static Dictionary<string, ManifestReferences> cacheAll =
+            new Dictionary<string, ManifestReferences>();
+
+        /// <summary>
+        /// Cache of manifest references installed under Assets (i.e not in the Unity Package
+        /// Manager) indexed by package name.
+        /// </summary>
+        private static Dictionary<string, ManifestReferences> cacheInAssets =
+            new Dictionary<string, ManifestReferences>();
+
+        /// <summary>
         /// Get all files managed by this package, including manifest and obsolete files.
         /// </summary>
         public IEnumerable<string> All {
@@ -1749,19 +1762,28 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="metadataSet">Set to query for manifest files.</param>
         /// <returns>List of ManifestReferences which contain current and
         /// obsolete files referenced in each manifest file.</returns>
-        public static List<ManifestReferences> FindAndReadManifests(
-                FileMetadataSet metadataSet) {
+        public static List<ManifestReferences> FindAndReadManifests(FileMetadataSet metadataSet) {
+            return new List<ManifestReferences>(
+                FindAndReadManifestsByPackageName(metadataSet).Values);
+        }
+
+        /// <summary>
+        /// Find and read all package manifests and bucket by package name.
+        /// </summary>
+        /// <returns>Dictionary of ManifestReferences indexed by package name.</returns>
+        public static Dictionary<string, ManifestReferences> FindAndReadManifestsByPackageName(
+                 FileMetadataSet metadataSet) {
             metadataSet.ConsolidateManifests();
-            var manifestReferencesList = new List<ManifestReferences>();
+            var manifestReferencesByPackageName = new Dictionary<string, ManifestReferences>();
             foreach (var metadataByVersion in metadataSet.Values) {
-                ManifestReferences manifestReferences =
-                    new ManifestReferences();
+                ManifestReferences manifestReferences = new ManifestReferences();
                 if (manifestReferences.ParseManifests(metadataByVersion,
                                                       metadataSet)) {
-                    manifestReferencesList.Add(manifestReferences);
+                    manifestReferencesByPackageName[manifestReferences.filenameCanonical] =
+                        manifestReferences;
                 }
             }
-            return manifestReferencesList;
+            return manifestReferencesByPackageName;
         }
 
         /// <summary>
@@ -1770,16 +1792,35 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <returns>List of ManifestReferences which contain current and
         /// obsolete files referenced in each manifest file.</returns>
         public static List<ManifestReferences> FindAndReadManifests() {
-            return FindAndReadManifests(FileMetadataSet.ParseFromFilenames(FindAllAssets()));
+            if (cacheAll.Count == 0) {
+                cacheAll = FindAndReadManifestsByPackageName(
+                    FileMetadataSet.ParseFromFilenames(FindAllAssets()));
+            }
+            return new List<ManifestReferences>(cacheAll.Values);
         }
 
         /// <summary>
-        /// Find and read all package manifest from Assets folder.
+        /// Find and read all package manifests from the Assets folder and index by name.
+        /// </summary>
+        /// <returns>Dictionary of ManifestReferences indexed by package name.</returns>
+        public static Dictionary<string, ManifestReferences>
+                FindAndReadManifestsInAssetsFolderByPackageName() {
+            if (cacheInAssets.Count == 0) {
+                cacheInAssets = FindAndReadManifestsByPackageName(
+                    FileMetadataSet.FilterOutReadOnlyFiles(
+                        FileMetadataSet.ParseFromFilenames(FindAllAssets())));
+
+            }
+            return cacheInAssets;
+        }
+
+        /// <summary>
+        /// Find and read all package manifests from Assets folder.
         /// </summary>
         /// <returns>List of ManifestReferences from Assets folder</returns>
         public static List<ManifestReferences> FindAndReadManifestsInAssetsFolder() {
-            return FindAndReadManifests(FileMetadataSet.FilterOutReadOnlyFiles(
-                FileMetadataSet.ParseFromFilenames(FindAllAssets())));
+            return new List<ManifestReferences>(
+                FindAndReadManifestsInAssetsFolderByPackageName().Values);
         }
 
         /// <summary>
@@ -1791,11 +1832,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// Force to remove all file even it is referenced by other packages.</param>
         public static void DeletePackages(HashSet<string> packages, bool force = false) {
             // Create a map from canonical name to ManifestReferences.
-            var manifests = FindAndReadManifestsInAssetsFolder();
-            var manifestMap = new Dictionary<string, VersionHandlerImpl.ManifestReferences>();
-            foreach (var manifest in manifests) {
-                manifestMap[manifest.filenameCanonical] = manifest;
-            }
+            var manifestMap = new Dictionary<string, ManifestReferences>(
+                FindAndReadManifestsInAssetsFolderByPackageName());
 
             HashSet<string> filesToRemove = new HashSet<string>();
             foreach (var pkgName in packages) {
@@ -1826,11 +1864,19 @@ public class VersionHandlerImpl : AssetPostprocessor {
 
             if (FileUtils.RemoveAssets(filesToRemove, VersionHandlerImpl.Logger)) {
                 VersionHandlerImpl.analytics.Report("uninstallpackage/delete/success",
-                        "Successfully Delete All Files in Packages");
+                        "Successfully Deleted All Files in Packages");
             } else {
                 VersionHandlerImpl.analytics.Report("uninstallpackage/delete/fail",
                         "Fail to Delete Some Files in Packages");
             }
+        }
+
+        /// <summary>
+        /// Flush the caches.
+        /// </summary>
+        public static void FlushCaches() {
+            cacheAll = new Dictionary<string, ManifestReferences>();
+            cacheInAssets = new Dictionary<string, ManifestReferences>();
         }
     }
 
@@ -2694,6 +2740,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     private static void OnPostprocessAllAssets(
             string[] importedAssets, string[] deletedAssets,
             string[] movedAssets, string[] movedFromPath) {
+        ManifestReferences.FlushCaches();
         UpdateVersionedAssets();
     }
 
