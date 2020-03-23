@@ -1,3 +1,13 @@
+# Version 1.2.144 - Mar 23, 2020
+## Changed
+* iOS Resolver: Removed the ability to configure the Xcode target a Cocoapod
+  is added to.
+
+## Bug Fixes
+* iOS Resolver: Reverted support for adding Cocoapods to multiple targets as
+  it caused a regression (exception thrown during post-build step) in some
+  versions of Unity.
+
 # Version 1.2.143 - Mar 20, 2020
 ## Bug Fixes
 * Android Resolver: Fixed caching of resolution state which was causing
