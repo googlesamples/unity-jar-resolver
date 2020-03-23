@@ -52,13 +52,6 @@ public class IOSResolver : AssetPostprocessor {
         public string version = null;
 
         /// <summary>
-        /// The App's target to which to add the pod.
-        ///
-        /// See: XcodeTargetNames for valid target names.
-        /// </summary>
-        public string target = null;
-
-        /// <summary>
         /// Properties applied to the pod declaration.
         ///
         /// See:
@@ -165,7 +158,6 @@ public class IOSResolver : AssetPostprocessor {
         /// </summary>
         /// <param name="name">Name of the pod.</param>
         /// <param name="version">Version of the pod.</param>
-        /// <param name="target">The App's target to which to add the pod.</param>
         /// <param name="bitcodeEnabled">Whether this pod was compiled with
         /// bitcode.</param>
         /// <param name="minTargetSdk">Minimum target SDK revision required by
@@ -176,12 +168,10 @@ public class IOSResolver : AssetPostprocessor {
         /// a source.</param>
         /// <param name="propertiesByName">Dictionary of additional properties for the pod
         /// reference.</param>
-        public Pod(string name, string version, string target, bool bitcodeEnabled,
-                   string minTargetSdk, IEnumerable<string> sources,
-                   Dictionary<string, string> propertiesByName) {
+        public Pod(string name, string version, bool bitcodeEnabled, string minTargetSdk,
+                   IEnumerable<string> sources, Dictionary<string, string> propertiesByName) {
             this.name = name;
             this.version = version;
-            this.target = target;
             if (propertiesByName != null) {
                 this.propertiesByName = new Dictionary<string, string>(propertiesByName);
             }
@@ -219,7 +209,6 @@ public class IOSResolver : AssetPostprocessor {
             return pod != null &&
                    name == pod.name &&
                    version == pod.version &&
-                   target == pod.target &&
                    propertiesByName.Count == pod.propertiesByName.Count &&
                    propertiesByName.Keys.All(key =>
                        pod.propertiesByName.ContainsKey(key) &&
@@ -314,7 +303,6 @@ public class IOSResolver : AssetPostprocessor {
             var falseStrings = new HashSet<string> { "false", "0" };
             string podName = null;
             string versionSpec = null;
-            string target = null;
             bool bitcodeEnabled = true;
             string minTargetSdk = null;
             var propertiesByName = new Dictionary<string, string>();
@@ -339,20 +327,6 @@ public class IOSResolver : AssetPostprocessor {
                                 }
                             }
                             versionSpec = reader.GetAttribute("version");
-                            target = reader.GetAttribute("target");
-                            if (target == null) {
-                                target = DefaultXcodeTarget;
-                            } else {
-                                // Make sure that the provided target is supported.
-                                if (!XcodeTargetNames.Contains(target)) {
-                                    logger.Log(string.Format("Incorrect target name passed {0}." +
-                                                             "Adding the pod to the default" +
-                                                             "target: {1}",
-                                                            target,
-                                                            DefaultXcodeTarget));
-                                    target = DefaultXcodeTarget;
-                                }
-                            }
                             var bitcodeEnabledString =
                                 (reader.GetAttribute("bitcode") ?? "").ToLower();
                             bitcodeEnabled |= trueStrings.Contains(bitcodeEnabledString);
@@ -367,9 +341,7 @@ public class IOSResolver : AssetPostprocessor {
                                 return false;
                             }
                         } else {
-                            AddPodInternal(podName,
-                                           target,
-                                           preformattedVersion: versionSpec,
+                            AddPodInternal(podName, preformattedVersion: versionSpec,
                                            bitcodeEnabled: bitcodeEnabled,
                                            minTargetSdk: minTargetSdk,
                                            sources: sources,
@@ -561,9 +533,6 @@ public class IOSResolver : AssetPostprocessor {
 
     // Parses a source URL from a Podfile.
     private static Regex PODFILE_SOURCE_REGEX = new Regex(@"^\s*source\s+'([^']*)'");
-
-    // Regex that matches the start of a target line in a pod file.
-    private static Regex PODFILE_TARGET_START_LINE_REGEX = new Regex("^target '([^']+)' do");
 
     // Parses dependencies from XML dependency files.
     private static IOSXmlDependencies xmlDependencies = new IOSXmlDependencies();
@@ -1113,7 +1082,6 @@ public class IOSResolver : AssetPostprocessor {
                               string minTargetSdk = null,
                               IEnumerable<string> sources = null) {
         AddPodInternal(podName,
-                       DefaultXcodeTarget,
                        preformattedVersion: PodVersionExpressionFromVersionDep(version),
                        bitcodeEnabled: bitcodeEnabled, minTargetSdk: minTargetSdk,
                        sources: sources);
@@ -1142,7 +1110,6 @@ public class IOSResolver : AssetPostprocessor {
     /// <param name="propertiesByName">Dictionary of additional properties for the pod
     /// reference.</param>
     private static void AddPodInternal(string podName,
-                                       string target,
                                        string preformattedVersion = null,
                                        bool bitcodeEnabled = true,
                                        string minTargetSdk = null,
@@ -1151,7 +1118,7 @@ public class IOSResolver : AssetPostprocessor {
                                        string createdBy = null,
                                        bool fromXmlFile = false,
                                        Dictionary<string, string> propertiesByName = null) {
-        var pod = new Pod(podName, preformattedVersion, target, bitcodeEnabled, minTargetSdk,
+        var pod = new Pod(podName, preformattedVersion, bitcodeEnabled, minTargetSdk,
                           sources, propertiesByName);
         pod.createdBy = createdBy ?? pod.createdBy;
         pod.fromXmlFile = fromXmlFile;
@@ -1683,21 +1650,10 @@ public class IOSResolver : AssetPostprocessor {
         get {
             // Return hard coded names in the UnityEditor.iOS.Xcode.PBXProject DLL.
             return MultipleXcodeTargetsSupported ?
-                new List<string>() { "Unity-iPhone", "UnityFramework" } :
+                new List<string>() { "UnityFramework" } :
                 new List<string>() { InitializeTargetName() };
         }
     }
-
-    /// <summary>
-    /// Get the default Xcode target name to which to add pods.
-    /// </summary>
-    /// <returns>The Xcode target to which to add the pods to by default.</returns>
-    public static string DefaultXcodeTarget {
-        get {
-            return MultipleXcodeTargetsSupported ? "UnityFramework" : InitializeTargetName();
-        }
-    }
-
     /// <summary>
     /// Get Xcode target GUIDs using a method that works across all Unity versions.
     /// </summary>
@@ -1733,6 +1689,7 @@ public class IOSResolver : AssetPostprocessor {
         }
         return targets;
     }
+
     // Implementation of OnPostProcessPatchProject().
     // NOTE: This is separate from the post-processing method to prevent the
     // Mono runtime from loading the Xcode API before calling the post
@@ -1810,11 +1767,10 @@ public class IOSResolver : AssetPostprocessor {
         string line;
 
         // We are only interested in capturing the dependencies "Pod depName, depVersion", inside
-        // of the targets in XcodeTargetNames. However there can be nested targets such as for
-        // testing, so we're counting the depth to determine when to capture the pods. Also we only
-        // ever enter the first depth if we're in the exact right target.
+        // of the specific target. However there can be nested targets such as for testing, so we're
+        // counting the depth to determine when to capture the pods. Also we only ever enter the
+        // first depth if we're in the exact right target.
         int capturingPodsDepth = 0;
-        string currentTarget = null;
         var sources = new List<string>();
         while ((line = unityPodfile.ReadLine()) != null) {
             line = line.Trim();
@@ -1823,24 +1779,14 @@ public class IOSResolver : AssetPostprocessor {
                 sources.Add(sourceLineMatch.Groups[1].Value);
                 continue;
             }
-
-            var podFileTargetMatch = PODFILE_TARGET_START_LINE_REGEX.Match(line);
-            if (podFileTargetMatch.Success) {
-                var target = podFileTargetMatch.Groups[1].Value;
-                if (XcodeTargetNames.Contains(target))
-                {
-                    capturingPodsDepth++;
-                    currentTarget = target;
-                    continue;
-                }
-            }
-
-            if (capturingPodsDepth == 0) {
-                currentTarget = null;
+            if (line.StartsWith("target 'Unity-iPhone' do")) {
+                capturingPodsDepth++;
                 continue;
             }
 
-            // Handle other scopes roughly
+            if (capturingPodsDepth == 0) continue;
+
+            // handle other scopes roughly
             if (line.EndsWith(" do")) {
                 capturingPodsDepth++;  // Ignore nested targets like tests
             } else if (line == "end") {
@@ -1849,16 +1795,9 @@ public class IOSResolver : AssetPostprocessor {
 
             if (capturingPodsDepth != 1) continue;
 
-            if (currentTarget == null) {
-                Log(string.Format("Couldn't find a valid target for pod {0}, skipping...", line),
-                    verbose: true);
-                continue;
-            }
-
             // Parse "pod" lines from the default target in the file.
             var podLineMatch = PODFILE_POD_REGEX.Match(line);
             var podGroups = podLineMatch.Groups;
-            
             if (podGroups.Count > 1) {
                 var podName = podGroups["podname"].ToString();
                 var podVersion = podGroups["podversion"].ToString();
@@ -1872,7 +1811,6 @@ public class IOSResolver : AssetPostprocessor {
                 }
                 AddPodInternal(
                     podName,
-                    currentTarget,
                     preformattedVersion: String.IsNullOrEmpty(podVersion) ? null : podVersion,
                     sources: sources, createdBy: unityPodfilePath, overwriteExistingPod: false,
                     propertiesByName: propertiesByName);
@@ -1953,9 +1891,8 @@ public class IOSResolver : AssetPostprocessor {
             file.WriteLine(GeneratePodfileSourcesSection() +
                            String.Format("platform :ios, '{0}'\n", TargetSdk));
             foreach (var target in XcodeTargetNames) {
-                var podsToAddToThisTarget = pods.Values.Where(pod => pod.target.Equals(target));
                 file.WriteLine(String.Format("target '{0}' do", target));
-                foreach(var pod in podsToAddToThisTarget) {
+                foreach(var pod in pods.Values) {
                     file.WriteLine(String.Format("  {0}", pod.PodFilePodLine));
                 }
                 file.WriteLine("end");
