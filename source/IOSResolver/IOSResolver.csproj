@@ -72,9 +72,9 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\PlayServicesResolver\PlayServicesResolver.csproj">
+    <ProjectReference Include="..\AndroidResolver\AndroidResolver.csproj">
       <Project>{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}</Project>
-      <Name>PlayServicesResolver</Name>
+      <Name>AndroidResolver</Name>
     </ProjectReference>
     <ProjectReference Include="..\VersionHandler\VersionHandler.csproj">
       <Project>{5378B37A-887E-49ED-A8AE-42FA843AA9DC}</Project>
