@@ -394,24 +394,58 @@ namespace Google {
         }
 
         /// <summary>
+        /// Result of RemoveAssets().
+        /// </summary>
+        public class RemoveAssetsResult {
+
+            /// <summary>
+            /// Assets that were removed.
+            /// </summary>
+            public List<string> Removed { get; set; }
+
+            /// <summary>
+            /// Assets that failed to be removed.
+            /// </summary>
+            public List<string> RemoveFailed { get; set; }
+
+            /// <summary>
+            /// Assets that were missing.
+            /// </summary>
+            public List<string> Missing { get; set; }
+
+            /// <summary>
+            /// Whether the operation was successful.
+            /// </summary>
+            public bool Success { get { return RemoveFailed.Count == 0 && Missing.Count == 0; } }
+
+            /// <summary>
+            /// Construct an empty result.
+            /// </summary>
+            public RemoveAssetsResult() {
+                Removed = new List<string>();
+                RemoveFailed = new List<string>();
+                Missing = new List<string>();
+            }
+        }
+
+        /// <summary>
         /// Remove the given set of files and their folders.
         /// </summary>
         /// <param name = "filenames">Files to be removed/</param>
         /// <param name = "logger">Logger to log results.</param>
         /// <return>True if all files are removed.  False if failed to remove any file or
         /// if any file is missing.</return>
-        public static bool RemoveAssets(IEnumerable<string> filenames, Logger logger = null) {
-            List<string> assetRemoved = new List<string>();
-            List<string> assetRemoveFailed = new List<string>();
-            List<string> assetMissing = new List<string>();
+        public static RemoveAssetsResult RemoveAssets(IEnumerable<string> filenames,
+                                                      Logger logger = null) {
+            var result = new RemoveAssetsResult();
 
             HashSet<string> folderToRemove = new HashSet<string>();
             foreach (var filename in filenames) {
                 if (File.Exists(filename)) {
                     if (AssetDatabase.DeleteAsset(filename)) {
-                        assetRemoved.Add(filename);
+                        result.Removed.Add(filename);
                     } else {
-                        assetRemoveFailed.Add(filename);
+                        result.RemoveFailed.Add(filename);
                     }
 
                     // Add folder and parent folders to be removed later.
@@ -424,7 +458,7 @@ namespace Google {
                         folder = Path.GetDirectoryName(folder);
                     }
                 } else {
-                    assetMissing.Add(filename);
+                    result.Missing.Add(filename);
                 }
             }
 
@@ -448,6 +482,7 @@ namespace Google {
                     Directory.GetDirectories(folder).Length == 0) {
                     if (!AssetDatabase.DeleteAsset(folder)) {
                         folderRemoveFailed.Add(folder);
+                        result.RemoveFailed.Add(folder);
                     }
                 }
             }
@@ -456,12 +491,12 @@ namespace Google {
                 logger.Log(
                     String.Format("Removed:\n{0}\nFailed to Remove:\n{1}\nMissing:\n{2}\n" +
                         "Failed to Remove Folders:\n{3}\n",
-                        String.Join("\n", assetRemoved.ToArray()),
-                        String.Join("\n", assetRemoveFailed.ToArray()),
-                        String.Join("\n", assetMissing.ToArray()),
+                        String.Join("\n", result.Removed.ToArray()),
+                        String.Join("\n", result.RemoveFailed.ToArray()),
+                        String.Join("\n", result.Missing.ToArray()),
                         String.Join("\n", folderRemoveFailed.ToArray())), level : LogLevel.Verbose);
             }
-            return assetRemoveFailed.Count == 0 && assetMissing.Count == 0;
+            return result;
         }
    }
 }

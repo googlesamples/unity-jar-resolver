@@ -1826,11 +1826,14 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <summary>
         /// Delete a subset of packages managed by Version Handler.
         /// </summary>
-        /// <param name="packages">
-        /// A HashSet of canonical name of the packages to be uninstalled</param>
-        /// <param name="force">
-        /// Force to remove all file even it is referenced by other packages.</param>
-        public static void DeletePackages(HashSet<string> packages, bool force = false) {
+        /// <param name="packages">A HashSet of canonical name of the packages to be
+        /// uninstalled</param>
+        /// <param name="force">Force to remove all file even it is referenced by other
+        /// packages.</param>
+        /// <returns>If successful returns an empty collection, a collection of files that could
+        /// not be removed otherwise.</returns>
+        public static ICollection<string> DeletePackages(HashSet<string> packages,
+                                                         bool force = false) {
             // Create a map from canonical name to ManifestReferences.
             var manifestMap = new Dictionary<string, ManifestReferences>(
                 FindAndReadManifestsInAssetsFolderByPackageName());
@@ -1859,16 +1862,18 @@ public class VersionHandlerImpl : AssetPostprocessor {
             VersionHandlerImpl.Log(String.Format("Uninstalling the following packages:\n{0}\n{1}",
                     String.Join("\n", (new List<string>(packages)).ToArray()),
                     filesToKeep.Count == 0 ? "" : String.Format(
-                            "Ignore the following files referenced by other packages:\n{0}\n",
+                            "Ignoring the following files referenced by other packages:\n{0}\n",
                             String.Join("\n", (new List<string>(filesToKeep)).ToArray()))));
 
-            if (FileUtils.RemoveAssets(filesToRemove, VersionHandlerImpl.Logger)) {
+            var result = FileUtils.RemoveAssets(filesToRemove, VersionHandlerImpl.Logger);
+            if (result.Success) {
                 VersionHandlerImpl.analytics.Report("uninstallpackage/delete/success",
                         "Successfully Deleted All Files in Packages");
             } else {
                 VersionHandlerImpl.analytics.Report("uninstallpackage/delete/fail",
                         "Fail to Delete Some Files in Packages");
             }
+            return result.RemoveFailed;
         }
 
         /// <summary>
