@@ -208,6 +208,11 @@ public class RunOnMainThread {
     }
 
     /// <summary>
+    /// Set when the current thread is running ExecuteAll().
+    /// </summary>
+    private static bool runningExecuteAll = false;
+
+    /// <summary>
     /// Flag which indicates whether any jobs are running on the main thread.
     /// This is set and cleared by RunAction().
     /// </summary>
@@ -218,7 +223,7 @@ public class RunOnMainThread {
     /// This property is reset to its' default value after each set of jobs is dispatched.
     /// </summary>
     public static bool ExecuteNow {
-        get { return ExecutionEnvironment.InBatchMode && !runningJobs; }
+        get { return ExecutionEnvironment.InBatchMode && !runningJobs && !runningExecuteAll; }
     }
 
     /// <summary>
@@ -302,7 +307,7 @@ public class RunOnMainThread {
         if (ExecuteNow && OnMainThread) {
             RunAction(() => {
                     while (true) {
-                        ExecuteAll();
+                        ExecuteAllUnnested(true);
                         lock (pollingJobs) {
                             if (pollingJobs.Count == 0) break;
                         }
@@ -316,7 +321,7 @@ public class RunOnMainThread {
                     if (!pollingJobs.Contains(condition)) break;
                 }
                 if (OnMainThread) {
-                    ExecuteAll();
+                    ExecuteAllUnnested(true);
                 } else {
                     // Wait 100ms.
                     Thread.Sleep(100);
@@ -409,7 +414,7 @@ public class RunOnMainThread {
         // If we're not executing the job right now, the job queue is pumped from the UnityEditor
         // update event.
         if (firstJob && (runNow || ExecuteNow) && OnMainThread) {
-            ExecuteAll();
+            ExecuteAllUnnested(false);
         }
     }
 
@@ -437,7 +442,7 @@ public class RunOnMainThread {
     /// <returns>true if the caller is on the main thread, false otherwise.</returns>
     public static bool TryExecuteAll() {
         if (OnMainThread) {
-            ExecuteAll();
+            ExecuteAllUnnested(true);
             return true;
         }
         return false;
@@ -446,22 +451,45 @@ public class RunOnMainThread {
     /// <summary>
     /// Execute all scheduled jobs and remove from the update loop if no jobs are remaining.
     /// </summary>
+    /// <param name="force">Force execution when a re-entrant call of this method is detected.
+    /// This is useful when an application is forcing execution to block the main thread.</param>
     private static void ExecuteAll() {
+        ExecuteAllUnnested(false);
+    }
+
+    /// <summary>
+    /// Execute all scheduled jobs and remove from the update loop if no jobs are remaining.
+    /// </summary>
+    /// <param name="allowNested">Force execution when a re-entrant call of this method is detected.
+    /// This is useful when an application is forcing execution to block the main thread.</param>
+    private static void ExecuteAllUnnested(bool allowNested) {
         if (!OnMainThread) {
             UnityEngine.Debug.LogError("ExecuteAll must be executed from the main thread.");
             return;
         }
 
-        RunAction(() => {
-                // Execute jobs.
-                while (ExecuteNext()) {
-                }
+        // Don't nest job execution on the main thread, return to the last stack frame
+        // running ExecuteAll().
+        if (runningExecuteAll && !allowNested) return;
 
-                // Execute polling jobs.
-                int remainingJobs;
-                do {
-                    remainingJobs = ExecutePollingJobs();
-                } while (remainingJobs > 0 && ExecutionEnvironment.InBatchMode);
+        RunAction(() => {
+                runningExecuteAll = true;
+                bool jobsRemaining = true;
+                while (jobsRemaining) {
+                    jobsRemaining = false;
+                    // Execute jobs.
+                    while (ExecuteNext()) {
+                        jobsRemaining = true;
+                    }
+
+                    // Execute polling jobs.
+                    int remainingJobs = ExecutePollingJobs();
+                    // If we're in batch mode, keep on executing until no polling jobs remain.
+                    if (ExecutionEnvironment.InBatchMode && remainingJobs > 0) {
+                        jobsRemaining = true;
+                    }
+                }
+                runningExecuteAll = false;
             });
     }
 }
