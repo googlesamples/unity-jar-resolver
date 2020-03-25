@@ -131,6 +131,55 @@ public class RunOnMainThread {
     }
 
     /// <summary>
+    /// Enqueues jobs on the main thread to that need to be executed in serial order.
+    /// </summary>
+    public class JobQueue {
+
+        /// <summary>
+        /// Queue of jobs to execute.
+        /// </summary>
+        private Queue<Action> jobs = new Queue<Action>();
+
+        /// <summary>
+        /// Execute the next job.
+        /// </summary>
+        private void ExecuteNext() {
+            var job = jobs.Peek();
+            try {
+                job();
+            } catch (Exception e) {
+                UnityEngine.Debug.LogError(
+                    String.Format("Serial job {0} failed due to exception: {1}",
+                                  job, e.ToString()));
+                Complete();
+            }
+        }
+
+        /// <summary>
+        /// Schedule the execution of a job.
+        /// </summary>
+        /// <param name="job">Action that will be called in future. This job should call
+        /// Complete() to signal the end of the operation.</param>
+        public void Schedule(Action job) {
+            RunOnMainThread.Run(() => {
+                    jobs.Enqueue(job);
+                    if (jobs.Count == 1) ExecuteNext();
+                }, runNow: false);
+        }
+
+        /// <summary>
+        /// Signal the end of job execution.
+        /// </summary>
+        public void Complete() {
+            RunOnMainThread.Run(() => {
+                    var remaining = jobs.Count;
+                    if (remaining > 0) jobs.Dequeue();
+                    if (remaining > 1) ExecuteNext();
+                }, runNow: false);
+        }
+    }
+
+    /// <summary>
     /// ID of the main thread.
     /// </summary>
     private static int mainThreadId;
@@ -365,7 +414,7 @@ public class RunOnMainThread {
     }
 
     /// <summary>
-    /// Execute the next resolve job on the queue.
+    /// Execute the next job on the queue.
     /// </summary>
     private static bool ExecuteNext() {
         Action nextJob = null;
