@@ -176,6 +176,8 @@ project.ext {
   buildDir = new File(scriptDirectory, "build")
   // Directory for testing.
   testDir = new File(scriptDirectory, "test_output")
+  // Version of the plugin (update this with CHANGELOG.md on each release).
+  pluginVersion = "1.2.144"
   // Directory that contains the template plugin.
   // Files under this directory are copied into the staging area for the
   // plugin.
@@ -184,9 +186,14 @@ project.ext {
   pluginStagingAreaDir = new File(buildDir, "staging")
   // Directory where the build plugin is unpacked to.
   pluginExplodedDir = new File(scriptDirectory, "exploded")
+  // Base filename of the released plugin.
+  currentPluginBasename = "external-dependency-manager"
   // Where the exported plugin file is built before it's copied to the release
   // location.
-  pluginExportFile = new File(buildDir, "plugin.unitypackage")
+  pluginExportFile = new File(buildDir, currentPluginBasename + ".unitypackage")
+  // Where the exported UPM plugin file is built.
+  pluginUpmExportFile = new File(buildDir,
+                                 currentPluginBasename + pluginVersion + ".tgz")
   // Directory within the plugin staging area that just contains the plugin.
   pluginAssetsDir = new File("Assets", "ExternalDependencyManager")
   // Directories within the staging area to export.
@@ -198,10 +205,6 @@ project.ext {
   pluginSourceDir = new File(scriptDirectory, "source")
   // Solution which references all projects used by the plugin.
   pluginSolutionFile = new File(pluginSourceDir, "ExternalDependencyManager.sln")
-  // Version of the plugin (update this with CHANGELOG.md on each release).
-  pluginVersion = "1.2.144"
-  // Base filename of the released plugin.
-  currentPluginBasename = "external-dependency-manager"
   // Versioned release plugin file.
   pluginReleaseFile = new File(scriptDirectory,
                                sprintf("%s-%s.unitypackage",
@@ -212,6 +215,12 @@ project.ext {
                                           sprintf("%s-latest.unitypackage",
                                                   currentPluginBasename))
 
+  // Location of the Unity asset uploader application.
+  unityAssetUploaderDir = new File(pluginSourceDir, "UnityAssetUploader")
+
+  // Location of the export_unity_package application.
+  exportUnityPackageDir = new File(pluginSourceDir, "ExportUnityPackage")
+
   // Common arguments used to execute Unity in batch mode.
   unityBatchModeArguments = ["-batchmode", "-nographics"]
   // Extension for Unity asset metadata files.
@@ -221,9 +230,13 @@ project.ext {
   // Changelog file.
   changelog = new File(scriptDirectory, "CHANGELOG.md")
   pythonBootstrapDir = new File(buildDir, "python_bootstrap")
+  pythonBinDir = new File(new File(pythonBootstrapDir, "python"), "bin")
   // Python binary after it has been bootstrapped.
-  pythonExe = new File(new File(new File(pythonBootstrapDir, "python"), "bin"),
-                       "python3")
+  pythonExe = new File(pythonBinDir, "python3")
+  // Pip binary after it has been bootstrapped.
+  pipExe = new File(pythonBinDir, "pip3")
+  // Python packages required by export_unity_package.py
+  exportUnityPackageRequirements = ["absl-py", "PyYAML"]
 }
 
 // Configure com.jetbrains.python.envs to bootstrap a Python install.
@@ -405,26 +418,31 @@ List<String> splitFilenameExtension(File fileObj) {
 
 /*
  * Construct the name of a versioned asset from the source filename and version
- * string.  The encoded string takes the form
+ * string.  If fullVersionPrefix is true, the encoded string takes the form
+ * ${filename}_version-${version}.${extension}
+ * if fullVersionPrefix is false, the string takes the form
  * ${filename}_v${version}.${extension}
  * where extension is derived from the specified filename.
  *
  * @param fileObj File to add version to.
+ * @param fullVersionPrefix if true uses the "_version-" otherwise uses "_v-".
+ * @param postfix Optional string to add before the extensioon.
  *
  * @returns File which includes an encoded version.
  */
-File versionedAssetFile(File fileObj) {
+File versionedAssetFile(File fileObj, Boolean fullVersionPrefix,
+                        String postfix) {
   String basename
   String extension
   (basename, extension) = splitFilenameExtension(fileObj)
   // Encode the DLL version and target names into the DLL in the form...
-  // ${dllname}_v${version}.dll
+  // ${dllname}_version-${version}.dll
   String targetName = basename
   String version = project.ext.pluginVersion
   if (!(version == null || version.isEmpty())) {
-    targetName += "_v" + version
+    targetName += (fullVersionPrefix ? "_version-" : "_v") + version
   }
-  String filename = targetName + extension
+  String filename = targetName + postfix + extension
   return fileObj.parent != null ? new File(fileObj.parent, filename) :
     new File(filename)
 }
@@ -440,10 +458,16 @@ File unversionedAssetFile(File fileObj) {
   String basename
   String extension
   (basename, extension) = splitFilenameExtension(fileObj)
-  def versionRegEx = /^(.*)_(v[^v]+)$/
-  def versionMatch = basename =~ versionRegEx
+  def versionRegExFull = /^(.*)_(version-[^-]+)$/
+  def versionRegExShort = /^(.*)_(v[^v]+)$/
+  def versionMatch = basename =~ versionRegExShort
   if (versionMatch.matches()) {
     basename = versionMatch.group(1)
+  } else {
+    versionMatch = basename =~ versionRegExFull
+    if (versionMatch.matches()) {
+      basename = versionMatch.group(1)
+    }
   }
   String filename = basename + extension
   return fileObj.parent != null ?
@@ -725,7 +749,7 @@ Task createBuildPluginDllTask(String componentName,
       return [
         unversionedFile.path,
         versionDll ?
-          versionedAssetFile(unversionedOutputFile) :
+          versionedAssetFile(unversionedOutputFile, false, "") :
           unversionedOutputFile]
     }
 
@@ -1047,6 +1071,29 @@ Task compileResolverLibTests = createXbuildTask(
 }
 
 /*
+ * Install Python packages.
+ *
+ * @param taskName Name of the task to create.
+ * @param description Description of the task.
+ * @param dependsOn Dependencies of the new task.
+ * @param packages Packages to install.
+ *
+ * @returns Task which executes pip to install packages
+ */
+Task createInstallPythonPackageTask(String taskName, String description,
+                                    Iterable<Task> dependsOn,
+                                    Iterable<String> packages) {
+  Task installPythonPackageTask = tasks.create(
+      name: taskName,
+      description: sprintf("Run Pip to %s", description),
+      type: Exec,
+      dependsOn: dependsOn + ["build_envs"]).with {
+    executable project.ext.pipExe
+    args (["-q", "install"] + packages)
+  }
+}
+
+/*
  * Create a task to execute Python.
  *
  * @param taskName Name of the task to create.
@@ -1054,23 +1101,85 @@ Task compileResolverLibTests = createXbuildTask(
  * @param dependsOn Dependencies of the new task.
  * @param script Python script to run.
  * @param arguments Command line arguments to pass to the Python script.
- * @param inputFiles Files that are required by the script.
- * @param outputFiles Files generated by the script.
+ * @param packages Optional Python packages to install.
  *
  * @returns Task which executes Python.
  */
 Task createPythonTask(String taskName, String description,
                       Iterable<Task> dependsOn,
-                      File script, Iterable<String> arguments) {
+                      File script, Iterable<String> arguments,
+                      Iterable<String> packages) {
+  List<Task> installPackagesTask = []
+  if (packages) {
+    installPackagesTask = [
+      createInstallPythonPackageTask(
+        taskName + "InstallPipPackages",
+        sprintf("install packages %s for %s", packages.toString(), taskName),
+        [],
+        packages)
+    ]
+  }
   Task pythonTask = tasks.create(
       name: taskName,
       description: sprintf("Run Python to %s", description),
       type: Exec,
-      dependsOn: dependsOn + ["build_envs"]).with {
+      dependsOn: (dependsOn + installPackagesTask + ["build_envs"])).with {
     executable project.ext.pythonExe
     args ([script.absolutePath] + arguments)
   }
   return pythonTask
+}
+
+/*
+ * Creates a task that packages a Unity plugin with export_unity_package.py.
+ *
+ * @param taskName Name of the task to create.
+ * @param description Description of the task.
+ * @param dependsOn Dependencies of the new task.
+ * @param configFile Configuration file which specifies input files.
+ * @param guidsFile Optional GUIDs database file.
+ * @param assetsDir Input directory for assets referenced by the configFile.
+ * @param generateUnitypackage Whether to create a .unitypackage.
+ * @param generateUpmTarball Whether to create a UPM tarball.
+ * @param pluginsVersion Version to apply to exported plugins.
+ * @param outputDir Directory to write the the exported archives.
+ * @param arguments Additional arguments for export_unity_package.py
+ */
+Task createExportUnityPackageTask(String taskName,
+                                  String description,
+                                  Iterable<Task> dependsOn,
+                                  File configFile,
+                                  File guidsFile,
+                                  File assetsDir,
+                                  Boolean generateUnityPackage,
+                                  Boolean generateUpmTarball,
+                                  String pluginVersion,
+                                  File outputDir,
+                                  Iterable<String> arguments) {
+  File exportScript = new File(project.ext.exportUnityPackageDir,
+                               "export_unity_package.py")
+  Task exportUnityPackageTask = createPythonTask(
+    taskName,
+    description,
+    dependsOn,
+    exportScript,
+    ["--config_file", configFile,
+     "--assets_dir", assetsDir,
+     "--plugins_version", pluginVersion,
+     "--output_dir", outputDir] +
+    [generateUnityPackage ?
+      "--output_unitypackage" : "--nooutput_unitypackage"] +
+    [generateUpmTarball ? "--output_upm" : "--nooutput_upm"] +
+    (guidsFile ? ["--guids_file", guidsFile] : []) +
+    arguments,
+    exportUnityPackageRequirements)
+  exportUnityPackageTask.with {
+    inputs.files ([configFile] +
+                  (guidsFile ? [guidsFile] : []) +
+                  fileTree(assetsDir) +
+                  [exportScript])
+  }
+  return exportUnityPackageTask
 }
 
 Task testResolverLibTests = createNUnitTask(
@@ -1094,8 +1203,25 @@ createPythonTask(
   "testPackageUploader",
   "Test the unity_asset_uploader.py application.",
   [],
-  new File(project.ext.scriptDirectory, "source/UnityAssetUploader/unity_asset_uploader_test.py"),
+  new File(project.ext.unityAssetUploaderDir, "unity_asset_uploader_test.py"),
+  [],
   [])
+
+createPythonTask(
+  "testExportUnityPackage",
+  "Test the export_unity_package.py application",
+  [],
+  new File(project.ext.exportUnityPackageDir, "export_unity_package_test.py"),
+  [],
+  exportUnityPackageRequirements)
+
+createPythonTask(
+  "testGenGuids",
+  "Test the gen_guids.py application",
+  [],
+  new File(project.ext.exportUnityPackageDir, "gen_guids_test.py"),
+  [],
+  ["absl-py"])
 
 task updateEmbeddedGradleWrapper(type: Zip) {
   description "Update the gradle wrapper in gradle-template.zip"
@@ -1219,9 +1345,9 @@ task generatePluginManifest(dependsOn: [preparePluginStagingAreaDir,
                       project.ext.pluginEditorDllDir.path),
              unversionedManifestName + project.ext.unityMetadataExtension)
   File manifestFile = versionedAssetFile(
-    new File(outputDir, unversionedManifestName))
+    new File(outputDir, unversionedManifestName), true, "_manifest")
   File manifestMetadataFile = versionedAssetFile(
-    new File(outputDir, manifestMetadataTemplateFile.name))
+    new File(outputDir, manifestMetadataTemplateFile.name), true, "_manifest")
 
   description "Generate a manifest for the files in the plug-in."
   inputs.files files(manifestMetadataTemplateFile)
@@ -1246,8 +1372,9 @@ task generatePluginManifest(dependsOn: [preparePluginStagingAreaDir,
   }
 }
 
-Task buildPlugin = createUnityTask(
-    "buildPlugin", "build_plugin", [generatePluginManifest],
+// Deprecated target for packaging the plugin.
+Task buildPluginWithUnity = createUnityTask(
+    "buildPluginWithUnity", "build_plugin", [generatePluginManifest],
     project.ext.pluginStagingAreaDir.name,
     project.ext.buildDir,
     ["-g.building",
@@ -1256,11 +1383,44 @@ Task buildPlugin = createUnityTask(
     [project.ext.pluginExportFile.absolutePath,
      "-gvh_disable",
      "-quit"], true, null)
-buildPlugin.with {
-  description "Exports the plugin staging area directory as a Unity package."
+buildPluginWithUnity.with {
+  description ("(Deprecated) Exports the plugin staging area directory as " +
+               "a Unity package.")
   inputs.files files(copyPluginTemplateToStagingArea.outputs.files,
                      copyPluginComponentsToStagingArea.outputs.files)
   outputs.files files(project.ext.pluginExportFile)
+}
+
+Task buildPlugin = createExportUnityPackageTask(
+  "buildPlugin",
+  "Package the .unitypackage with export_unity_package.py.",
+  [generatePluginManifest],
+  new File(project.ext.scriptDirectory, "export_unity_package_config.json"),
+  new File(project.ext.scriptDirectory, "export_unity_package_guids.json"),
+  new File(project.ext.pluginStagingAreaDir, "Assets"),
+  true,  // Enable .unitypackage export.
+  false, // Disable UPM export.
+  project.ext.pluginVersion,
+  project.ext.pluginExportFile.parentFile,
+  ["--enabled_sections", "unitypackage"])
+buildPlugin.with {
+  outputs.files project.ext.pluginExportFile.absolutePath
+}
+
+Task buildUpmPlugin = createExportUnityPackageTask(
+  "buildUpmPlugin",
+  "Package the .unitypackage with export_unity_package.py.",
+  [generatePluginManifest],
+  new File(project.ext.scriptDirectory, "export_unity_package_config.json"),
+  new File(project.ext.scriptDirectory, "export_unity_package_guids.json"),
+  new File(project.ext.pluginStagingAreaDir, "Assets"),
+  false, // Disable .unitypackage export.
+  true,  // Enable UPM export.
+  project.ext.pluginVersion,
+  project.ext.pluginUpmExportFile.parentFile,
+  [])
+buildUpmPlugin.with {
+  outputs.files project.ext.pluginUpmExportFile.absolutePath
 }
 
 task releasePlugin(dependsOn: buildPlugin) {
@@ -1468,7 +1628,8 @@ createUnityTestBatchAndNonBatch(
                      "VersionHandlerImpl"),
             "test"),
           "webrequest_launcher.py"),
-        runnerArgs)
+        runnerArgs,
+        [])
   })
 
 createUnityTestBatchAndNonBatch(

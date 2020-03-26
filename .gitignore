@@ -19,6 +19,7 @@
 /plugin/obj/
 /plugin/plugin.sln
 /plugin/plugin.userprefs
+/source/ExportUnityPackage/__pycache__/
 
 /source/.idea/
 /unity_dlls/

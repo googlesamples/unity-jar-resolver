@@ -1,0 +1,7 @@
+{
+    "1.2.137": {
+        "com.google.external-dependency-manager/ExternalDependencyManager": "46f5870ddbde4a6091f50656dcd5573e",
+        "com.google.external-dependency-manager/ExternalDependencyManager/Editor": "1f23cd25474841f6ad7555705b4807e9",
+        "com.google.external-dependency-manager/package.json": "9bed450d5c03481d87e61b61431cf00a"
+    }
+}

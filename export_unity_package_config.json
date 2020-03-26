@@ -1,0 +1,91 @@
+{
+  "packages": [
+    {
+      "name": "external-dependency-manager.unitypackage",
+      "imports": [
+        {
+          "importer": "PluginImporter",
+          "platforms": ["Editor"],
+          "paths": [
+            "ExternalDependencyManager/Editor/Google.VersionHandler.dll",
+            "ExternalDependencyManager/Editor/Google.VersionHandler.dll.mdb"
+          ]
+        },
+        {
+          "importer": "PluginImporter",
+          "platforms": [],
+          "labels": ["gvhp_targets-editor"],
+          "paths": [
+            "ExternalDependencyManager/Editor/Google.IOSResolver_*.dll",
+            "ExternalDependencyManager/Editor/Google.IOSResolver_*.dll.mdb",
+            "ExternalDependencyManager/Editor/Google.JarResolver_*.dll",
+            "ExternalDependencyManager/Editor/Google.JarResolver_*.dll.mdb",
+            "ExternalDependencyManager/Editor/Google.VersionHandlerImpl_*.dll",
+            "ExternalDependencyManager/Editor/Google.VersionHandlerImpl_*.dll.mdb",
+            "ExternalDependencyManager/Editor/Google.UnityPackageManagerResolver_*.dll",
+            "ExternalDependencyManager/Editor/Google.UnityPackageManagerResolver_*.dll.mdb"
+          ],
+          "override_metadata_upm": {
+            "PluginImporter": {
+              "platformData": {
+                "Editor": {
+                  "enabled": 1
+                }
+              }
+            }
+          }
+        },
+        {
+          "importer": "DefaultImporter",
+          "paths": [
+            "ExternalDependencyManager/Editor/README.md",
+            "ExternalDependencyManager/Editor/CHANGELOG.md",
+            "ExternalDependencyManager/Editor/LICENSE",
+            "ExternalDependencyManager/Editor/GoogleRegistries.xml",
+            "ExternalDependencyManager/Editor/external-dependency-manager*_manifest.txt"
+          ]
+        },
+        {
+          "sections": ["unitypackage"],
+          "importer": "DefaultImporter",
+          "paths": [
+              "PlayServicesResolver/Editor/play-services-resolver_v1.2.137.0.txt"
+          ]
+        }
+      ],
+      "manifest_path": "ExternalDependencyManager/Editor",
+
+      "readme": "ExternalDependencyManager/Editor/README.md",
+      "license": "ExternalDependencyManager/Editor/LICENSE",
+      "changelog": "ExternalDependencyManager/Editor/CHANGELOG.md",
+
+      "common_manifest" : {
+        "name": "com.google.external-dependency-manager",
+        "display_name": "External Dependency Manager for Unity",
+        "description": [
+          "External Dependency Manager for Unity (EDM4U) can be used by any ",
+          "Unity plugin that requires Android specific libraries (e.g. AARs), ",
+          "iOS CocoaPods, version management of transitive dependencies, ",
+          "and/or management of Unity Package Manager registries."
+        ],
+        "keywords": [
+          "Google", "Android", "Gradle", "Cocoapods", "Dependency",
+          "Unity Package Manager", "Unity",
+          "vh-name:play-services-resolver",
+          "vh-name:unity-jar-resolver"
+        ],
+        "author": {
+          "name" : "Google LLC",
+          "url": "https://github.com/googlesamples/unity-jar-resolver"
+        }
+      },
+
+      "export_upm" : 1,
+      "upm_package_config" : {
+        "manifest" : {
+          "unity": "2017.1"
+        }
+      }
+    }
+  ]
+}
