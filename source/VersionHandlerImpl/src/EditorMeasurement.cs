@@ -174,23 +174,10 @@ public class EditorMeasurement {
     }
 
     /// <summary>
-    /// Delegate that displays a modal dialog with 3 options.
-    /// </summary>
-    /// <param name="title">Title of the dialog.</param>
-    /// <param name="message">Message to display in the dialog.</param>
-    /// <param name="option0">Text for the first option.</param>
-    /// <param name="option1">Text for the second option.</param>
-    /// <param name="option2">Text for the third option.</param>
-    /// <return>0 if option0 is selected, 1 is option1 is selected,
-    /// 2 if option2 is selected. </return>
-    internal delegate int DisplayDialogDelegate(string title, string message, string option0,
-                                                string option1, string option2);
-
-    /// <summary>
     /// Delegate that displays a dialog requesting consent to report analytics.
     /// This is only exposed for testing purposes.
     /// </summary>
-    internal DisplayDialogDelegate displayDialog = DisplayDialog;
+    internal Dialog.DisplayDelegate displayDialog = Dialog.Display;
 
     /// <summary>
     /// Delegate that opens a URL in an external application.
@@ -313,21 +300,6 @@ public class EditorMeasurement {
     }
 
     /// <summary>
-    /// Displays a modal dialog with 3 options.
-    /// </summary>
-    /// <param name="title">Title of the dialog.</param>
-    /// <param name="message">Message to display in the dialog.</param>
-    /// <param name="option0">Text for the first option.</param>
-    /// <param name="option1">Text for the second option.</param>
-    /// <param name="option2">Text for the third option.</param>
-    /// <return>0 if option0 is selected, 1 is option1 is selected,
-    /// 2 if option2 is selected. </return>
-    private static int DisplayDialog(string title, string message, string option0,
-                                     string option1, string option2) {
-        return EditorUtility.DisplayDialogComplex(title, message, option0, option1, option2);
-    }
-
-    /// <summary>
     /// Open a URL in an external application.
     /// </summary>
     /// <param name="url">URL to open.</param>
@@ -378,16 +350,16 @@ public class EditorMeasurement {
                     RequestConsent,
                     PluginName, String.IsNullOrEmpty(DataCollectionDescription) ? "" :
                         String.Format("{0}\n\n", DataCollectionDescription), privacyPolicy),
-                Yes, No, PrivacyPolicy)) {
-                case 0: // Yes
+                Dialog.Option.Selected1, Yes, No, PrivacyPolicy)) {
+                case Dialog.Option.Selected0: // Yes
                     Enabled = true;
                     showDialog = false;
                     break;
-                case 1: // No
+                case Dialog.Option.Selected1: // No
                     Enabled = false;
                     showDialog = false;
                     break;
-                case 2: // Privacy Policy
+                case Dialog.Option.Selected2: // Privacy Policy
                     openUrl(privacyPolicy);
                     break;
             }

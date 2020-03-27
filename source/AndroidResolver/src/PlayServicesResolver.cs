@@ -1689,36 +1689,29 @@ namespace GooglePlayServices {
                 isAutoResolveJob &&
                 !ExecutionEnvironment.InBatchMode) {
                 bool shouldResolve = false;
-                AlertModal alert = new AlertModal {
-                    Title = "Enable Android Auto-resolution?",
-                    Message = "Android Resolver has detected a change " +
-                              " and would to resolve conflicts and download Android dependencies." +
-                              "\n\n\"Disable Auto-Resolution\" will require manually " +
-                              "running resolution using \"Assets > External Dependency Manager " +
-                              "> Android Resolver > Resolve\" menu item. Failure to " +
-                              "resolve Android dependencies will result " +
-                              "in an non-functional application." +
-                              "\n\nEnable auto-resolution again via " +
-                              "\"Assets > External Dependency Manager " +
-                              "> Android Resolver > Settings.",
-                    Ok = new AlertModal.LabeledAction {
-                        Label = "Enable",
-                        DelegateAction = () => {
-                            shouldResolve = true;
-                            SettingsDialogObj.PromptBeforeAutoResolution = false;
-                        }
-                    },
-                    Cancel = new AlertModal.LabeledAction {
-                        Label = "Disable",
-                        DelegateAction = () => {
-                            SettingsDialogObj.EnableAutoResolution = false;
-                            SettingsDialogObj.PromptBeforeAutoResolution = false;
-                            shouldResolve = false;
-                        }
-                    }
-                };
-
-                alert.Display();
+                switch (Dialog.Display(
+                    "Enable Android Auto-resolution?",
+                    "Android Resolver has detected a change " +
+                    " and would to resolve conflicts and download Android dependencies." +
+                    "\n\n\"Disable Auto-Resolution\" will require manually " +
+                    "running resolution using \"Assets > External Dependency Manager " +
+                    "> Android Resolver > Resolve\" menu item. Failure to " +
+                    "resolve Android dependencies will result " +
+                    "in an non-functional application." +
+                    "\n\nEnable auto-resolution again via " +
+                    "\"Assets > External Dependency Manager " +
+                    "> Android Resolver > Settings.",
+                    Dialog.Option.Selected0, "Enable", "Disable")) {
+                    case Dialog.Option.Selected0: // Enable
+                        shouldResolve = true;
+                        SettingsDialogObj.PromptBeforeAutoResolution = false;
+                        break;
+                    case Dialog.Option.Selected1: // Disable
+                        SettingsDialogObj.EnableAutoResolution = false;
+                        SettingsDialogObj.PromptBeforeAutoResolution = false;
+                        shouldResolve = false;
+                        break;
+                }
 
                 if (!shouldResolve) {
                     if (resolutionComplete != null) {
@@ -1820,10 +1813,9 @@ namespace GooglePlayServices {
         /// Display a dialog explaining that the resolver is disabled in the current configuration.
         /// </summary>
         private static void NotAvailableDialog() {
-            EditorUtility.DisplayDialog("Android Resolver.",
-                                        "Resolver not enabled. " +
-                                        "Android platform must be selected.",
-                                        "OK");
+            Dialog.Display("Android Resolver.",
+                           "Resolver not enabled. Android platform must be selected.",
+                           Dialog.Option.Selected0, "OK");
 
         }
 
@@ -1857,11 +1849,12 @@ namespace GooglePlayServices {
             }
             ScheduleResolve(
                 forceResolution, false, (success) => {
-                    EditorUtility.DisplayDialog(
+                    Dialog.Display(
                         "Android Dependencies",
                         String.Format("Resolution {0}", success ? "Succeeded" :
                                       "Failed!\n\nYour application will not run, see " +
-                                      "the log for details."), "OK");
+                                      "the log for details."),
+                        Dialog.Option.Selected0, "OK");
                 }, false);
         }
 
@@ -2306,7 +2299,7 @@ namespace GooglePlayServices {
                 var version = AndroidGradlePluginVersion;
                 if ((new Dependency.VersionComparer()).Compare(
                         MinimumAndroidGradlePluginVersionForJetifier, version) < 0) {
-                    switch (EditorUtility.DisplayDialogComplex(
+                    switch (Dialog.Display(
                         titlePrefix + "Enable Jetifier?",
                         String.Format(
                             "Jetifier for Jetpack (AndroidX) libraries is only " +
@@ -2318,13 +2311,14 @@ namespace GooglePlayServices {
                             "It's possible to use the Jetifier on Android Resolver managed " +
                             "dependencies by disabling mainTemplate.gradle patching.",
                             MinimumAndroidGradlePluginVersionForJetifier, version),
-                        "Disable Jetifier", "Ignore", "Disable mainTemplate.gradle patching")) {
-                        case 0:  // Disable Jetifier
+                        Dialog.Option.Selected1, "Disable Jetifier", "Ignore",
+                        "Disable mainTemplate.gradle patching")) {
+                        case Dialog.Option.Selected0:  // Disable Jetifier
                             useJetifier = false;
                             break;
-                        case 1:  // Ignore
+                        case Dialog.Option.Selected1:  // Ignore
                             break;
-                        case 2:  // Disable mainTemplate.gradle patching
+                        case Dialog.Option.Selected2:  // Disable mainTemplate.gradle patching
                             SettingsDialogObj.PatchMainTemplateGradle = false;
                             break;
                     }
@@ -2335,7 +2329,7 @@ namespace GooglePlayServices {
             const int MinimumApiLevelForJetpack = 28;
             int apiLevel = UnityCompat.GetAndroidTargetSDKVersion();
             if (useJetifier && apiLevel < MinimumApiLevelForJetpack) {
-                switch (EditorUtility.DisplayDialogComplex(
+                switch (Dialog.Display(
                     titlePrefix + "Enable Jetpack?",
                     String.Format(
                         "Jetpack (AndroidX) libraries are only supported when targeting Android " +
@@ -2343,8 +2337,8 @@ namespace GooglePlayServices {
                         "Would you like to set the project's target API level to {0}?",
                         MinimumApiLevelForJetpack,
                         apiLevel > 0 ? apiLevel.ToString() : "auto (max. installed)"),
-                    "Yes", "No", "Disable Jetifier")) {
-                    case 0:  // Yes
+                    Dialog.Option.Selected1, "Yes", "No", "Disable Jetifier")) {
+                    case Dialog.Option.Selected0:  // Yes
                         bool setSdkVersion = UnityCompat.SetAndroidTargetSDKVersion(
                             MinimumApiLevelForJetpack);
                         if (!setSdkVersion) {
@@ -2366,10 +2360,10 @@ namespace GooglePlayServices {
                             useJetifier = false;
                         }
                         break;
-                    case 1:  // No
+                    case Dialog.Option.Selected1:  // No
                         // Don't change the settings but report that AndroidX will not work.
                         return false;
-                    case 2:  // Disable Jetifier
+                    case Dialog.Option.Selected2:  // Disable Jetifier
                         useJetifier = false;
                         break;
                 }

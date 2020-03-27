@@ -135,7 +135,8 @@ namespace Google.VersionHandlerImpl.Tests {
             var analytics = new EditorMeasurement(settings, ProjectSettings.logger, GA_TRACKING_ID,
                                                   SETTINGS_NAMESPACE, PLUGIN_NAME,
                                                   DATA_COLLECTION_DESCRIPTION, PRIVACY_POLICY);
-            analytics.displayDialog = (title, message, option0, option1, option2) => {
+            analytics.displayDialog = (title, message, defaultOption, option0, option1,
+                                       option2) => {
                 throw new Exception("Unexpected dialog displayed");
             };
             analytics.openUrl = (url) => {
@@ -182,10 +183,10 @@ namespace Google.VersionHandlerImpl.Tests {
         /// </summary>
         /// <param name="selectedOption">0..2</param>
         /// <returns>Display dialog delegate.</returns>
-        private EditorMeasurement.DisplayDialogDelegate CreateDisplayDialogDelegate(
-                List<int> selectedOptions) {
-            return (string title, string message, string option0, string option1,
-                    string option2) => {
+        private Dialog.DisplayDelegate CreateDisplayDialogDelegate(
+                List<Dialog.Option> selectedOptions) {
+            return (string title, string message, Dialog.Option defaultOption, string option0,
+                    string option1, string option2) => {
                 Assert.That(title, Is.Not.Empty);
                 Assert.That(message, Is.Not.Empty);
                 Assert.That(option0, Is.Not.Empty);
@@ -203,7 +204,9 @@ namespace Google.VersionHandlerImpl.Tests {
         [Test]
         public void PromptToEnableYes() {
             var analytics = CreateEditorMeasurement();
-            analytics.displayDialog = CreateDisplayDialogDelegate(new List<int> { 0 /* yes */ });
+            analytics.displayDialog = CreateDisplayDialogDelegate(new List<Dialog.Option> {
+                    Dialog.Option.Selected0 /* yes */
+                });
             Assert.That(analytics.Enabled, Is.EqualTo(true));
             Assert.That(analytics.ConsentRequested, Is.EqualTo(false));
             analytics.PromptToEnable();
@@ -218,7 +221,9 @@ namespace Google.VersionHandlerImpl.Tests {
         [Test]
         public void PromptToEnableNo() {
             var analytics = CreateEditorMeasurement();
-            analytics.displayDialog = CreateDisplayDialogDelegate(new List<int> { 1 /* no */ });
+            analytics.displayDialog = CreateDisplayDialogDelegate(new List<Dialog.Option> {
+                    Dialog.Option.Selected1 /* no */
+                });
             Assert.That(analytics.Enabled, Is.EqualTo(true));
             Assert.That(analytics.ConsentRequested, Is.EqualTo(false));
             analytics.PromptToEnable();
@@ -234,10 +239,10 @@ namespace Google.VersionHandlerImpl.Tests {
         [Test]
         public void PromptToEnablePrivacyNo() {
             var analytics = CreateEditorMeasurement();
-            var selectedOptions = new List<int> {
-                2 /* privacy policy */,
-                2 /* privacy policy (should be prompted again) */,
-                1 /* no */
+            var selectedOptions = new List<Dialog.Option> {
+                Dialog.Option.Selected2 /* privacy policy */,
+                Dialog.Option.Selected2 /* privacy policy (should be prompted again) */,
+                Dialog.Option.Selected1 /* no */
             };
             analytics.displayDialog = CreateDisplayDialogDelegate(selectedOptions);
             Assert.That(analytics.Enabled, Is.EqualTo(true));
@@ -259,7 +264,9 @@ namespace Google.VersionHandlerImpl.Tests {
         [Test]
         public void RestoreDefaultSettings() {
             var analytics = CreateEditorMeasurement();
-            analytics.displayDialog = CreateDisplayDialogDelegate(new List<int> { 1 /* no */ });
+            analytics.displayDialog = CreateDisplayDialogDelegate(new List<Dialog.Option> {
+                    Dialog.Option.Selected1 /* no */
+                });
             Assert.That(analytics.Enabled, Is.EqualTo(true));
             Assert.That(analytics.ConsentRequested, Is.EqualTo(false));
             analytics.PromptToEnable();
@@ -278,7 +285,9 @@ namespace Google.VersionHandlerImpl.Tests {
         [Test]
         public void GenerateCookies() {
             var analytics = CreateEditorMeasurement();
-            analytics.displayDialog = CreateDisplayDialogDelegate(new List<int> { 0 /* yes */ });
+            analytics.displayDialog = CreateDisplayDialogDelegate(new List<Dialog.Option> {
+                    Dialog.Option.Selected0 /* yes */
+                });
             Assert.That(analytics.Cookie, Is.EqualTo(""));
             Assert.That(analytics.SystemCookie, Is.EqualTo(""));
             analytics.PromptToEnable();
@@ -293,7 +302,7 @@ namespace Google.VersionHandlerImpl.Tests {
         [Test]
         public void ReportWithoutConsent() {
             var analytics = CreateEditorMeasurement();
-            var selectedOptions = new List<int> { 1 /* no */ };
+            var selectedOptions = new List<Dialog.Option> { Dialog.Option.Selected1 /* no */ };
             analytics.displayDialog = CreateDisplayDialogDelegate(selectedOptions);
             analytics.Report("/a/new/event", "something interesting");
             analytics.Report("/a/new/event", "something else");
@@ -302,7 +311,7 @@ namespace Google.VersionHandlerImpl.Tests {
                                  new KeyValuePair<string, string>("foo", "bar"),
                                  new KeyValuePair<string, string>("bish", "bosh")
                              }, "something with parameters");
-            Assert.That(selectedOptions, Is.EqualTo(new List<int>()));
+            Assert.That(selectedOptions, Is.EqualTo(new List<Dialog.Option>()));
             Assert.That(analytics.Enabled, Is.EqualTo(false));
             Assert.That(analytics.ConsentRequested, Is.EqualTo(true));
             Assert.That(webRequest.PostedUrlAndForms,
@@ -369,15 +378,13 @@ namespace Google.VersionHandlerImpl.Tests {
             };
         }
 
-
-
         /// <summary>
         /// Report an event after obtaining consent.
         /// </summary>
         [Test]
         public void ReportWithConsent() {
             var analytics = CreateEditorMeasurement();
-            var selectedOptions = new List<int> { 0 /* yes */ };
+            var selectedOptions = new List<Dialog.Option> { Dialog.Option.Selected0 /* yes */ };
             analytics.displayDialog = CreateDisplayDialogDelegate(selectedOptions);
             analytics.Report("/a/new/event", "something interesting");
             analytics.Report("/a/new/event#neat", "something else");
@@ -388,7 +395,7 @@ namespace Google.VersionHandlerImpl.Tests {
                                  new KeyValuePair<string, string>("foo", "bar"),
                                  new KeyValuePair<string, string>("bish", "bosh")
                              }, "something with parameters");
-            Assert.That(selectedOptions, Is.EqualTo(new List<int>()));
+            Assert.That(selectedOptions, Is.EqualTo(new List<Dialog.Option>()));
             var expectedEvents = new List<KeyValuePair<string, string>>();
             expectedEvents.AddRange(CreateMeasurementEvents(analytics, "/a/new/event", "", "",
                                                             "something interesting"));
@@ -416,7 +423,7 @@ namespace Google.VersionHandlerImpl.Tests {
             analytics.BasePath = "/myplugin";
             analytics.BaseQuery = "version=1.2.3";
             analytics.BaseReportName = "My Plugin: ";
-            var selectedOptions = new List<int> { 0 /* yes */ };
+            var selectedOptions = new List<Dialog.Option> { Dialog.Option.Selected0 /* yes */ };
             analytics.displayDialog = CreateDisplayDialogDelegate(selectedOptions);
             analytics.Report("/a/new/event", "something interesting");
             Assert.That(webRequest.PostedUrlAndForms,
@@ -439,7 +446,7 @@ namespace Google.VersionHandlerImpl.Tests {
             analytics.BasePath = "/myplugin";
             analytics.BaseQuery = "version=1.2.3";
             analytics.BaseReportName = "My Plugin: ";
-            var selectedOptions = new List<int> { 0 /* yes */ };
+            var selectedOptions = new List<Dialog.Option> { Dialog.Option.Selected0 /* yes */ };
             analytics.displayDialog = CreateDisplayDialogDelegate(selectedOptions);
             analytics.Report("/a/new/event", "something interesting");
             Assert.That(webRequest.PostedUrlAndForms,
@@ -462,7 +469,7 @@ namespace Google.VersionHandlerImpl.Tests {
             analytics.ReportUnityPlatform = true;
             analytics.InstallSource = null;
             analytics.InstallSourceFilename = filename;
-            var selectedOptions = new List<int> { 0 /* yes */ };
+            var selectedOptions = new List<Dialog.Option> { Dialog.Option.Selected0 /* yes */ };
             analytics.displayDialog = CreateDisplayDialogDelegate(selectedOptions);
             analytics.Report("/a/new/event", "something interesting");
             Assert.That(webRequest.PostedUrlAndForms,
@@ -504,11 +511,11 @@ namespace Google.VersionHandlerImpl.Tests {
         [Test]
         public void OpenUrl() {
             var analytics = CreateEditorMeasurement();
-            var selectedOptions = new List<int> { 0 /* yes */ };
+            var selectedOptions = new List<Dialog.Option> { Dialog.Option.Selected0 /* yes */ };
             analytics.displayDialog = CreateDisplayDialogDelegate(selectedOptions);
             analytics.OpenUrl("https://github.com/googlesamples/unity-jar-resolver?do=something" +
                               "#version-handler-usage", "Version Handler Usage");
-            Assert.That(selectedOptions, Is.EqualTo(new List<int>()));
+            Assert.That(selectedOptions, Is.EqualTo(new List<Dialog.Option>()));
             Assert.That(openedUrls,
                         Is.EqualTo(new List<string>() {
                                 "https://github.com/googlesamples/unity-jar-resolver?do=something" +

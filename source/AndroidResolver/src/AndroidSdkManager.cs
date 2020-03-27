@@ -937,7 +937,7 @@ namespace GooglePlayServices {
             var packagesString = AndroidSdkPackageNameVersion.ListToString(packages);
             // TODO: Remove this dialog when the package manager provides feedback while
             // downloading.
-            bool installPackage = UnityEditor.EditorUtility.DisplayDialog(
+            var installPackage = Dialog.Display(
                 "Missing Android SDK packages",
                 String.Format(
                     "Android SDK packages need to be installed:\n" +
@@ -947,8 +947,8 @@ namespace GooglePlayServices {
                     "which may lead you to think Unity has hung / crashed.  Would you like " +
                     "to wait for these package to be installed?",
                     packagesString),
-                "Yes", cancel: "No");
-            if (!installPackage) {
+                Dialog.Option.Selected0, "Yes", "No");
+            if (installPackage == Dialog.Option.Selected0) {
                 PlayServicesResolver.Log(
                     "User cancelled installation of Android SDK tools package.",
                     level: LogLevel.Warning);

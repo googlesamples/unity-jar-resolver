@@ -33,6 +33,13 @@ internal class ExecutionEnvironment {
     }
 
     /// <summary>
+    /// Whether the UI should be treated as interactive.
+    /// </summary>
+    internal static bool InteractiveMode {
+        get { return !Environment.CommandLine.Contains("-gvh_noninteractive"); }
+    }
+
+    /// <summary>
     /// If the Unity version can't be parsed, return a safe-ish version number.
     /// </summary>
     private const float DEFAULT_UNITY_VERSION_MAJOR_MINOR = 5.4f;

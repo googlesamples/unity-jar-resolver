@@ -172,6 +172,10 @@ project.ext {
   // Whether debug symbols should be included.
   debugEnabled = findProperty("NDEBUG") == null
 
+  // Whether interactive mode tests are enabled.
+  interactiveModeTestsEnabled =
+    findProperty("INTERACTIVE_MODE_TESTS_ENABLED", "1") == "1"
+
   // Directory for intermediate and final build outputs.
   buildDir = new File(scriptDirectory, "build")
   // Directory for testing.
@@ -223,6 +227,8 @@ project.ext {
 
   // Common arguments used to execute Unity in batch mode.
   unityBatchModeArguments = ["-batchmode", "-nographics"]
+  // Common arguments used to execute Unity in interactive mode.
+  unityInteractiveModeArguments = ["-gvh_noninteractive"]
   // Extension for Unity asset metadata files.
   unityMetadataExtension = ".meta"
   // Extension for debug files.
@@ -849,6 +855,28 @@ Task createExecTask(String name, String description,
 }
 
 /*
+ * Create a task that does nothing.
+ *
+ * @param taskName Name of the task to create.
+ * @param summary Description of the task.
+ * @param dependsOn Dependencies of the new task.
+ *
+ * @returns Task that does nothing.
+ */
+Task createEmptyTask(String taskName, String summary,
+                     Iterable<Task> dependsOn) {
+  Task emptyTask = tasks.create(name: taskName,
+                                description: sprintf("(disabled) %s", summary),
+                                dependsOn: dependsOn)
+  emptyTask.with {
+    doLast {
+      logger.info(sprintf("%s disabled", taskName))
+    }
+  }
+  return emptyTask
+}
+
+/*
  * Create a task to execute Unity.
  *
  * @param taskName Name of the task to create.
@@ -881,7 +909,11 @@ Task createUnityTask(String taskName, String summary,
   File projectDir = new File(projectContainerDir, projectName)
   List<String> executeArguments = []
 
-  if (batchMode) executeArguments += unityBatchModeArguments
+  if (batchMode) {
+    executeArguments += project.ext.unityBatchModeArguments
+  } else {
+    executeArguments += project.ext.unityInteractiveModeArguments
+  }
   executeArguments += [
     "-logFile", logFile.absolutePath,
     createProject ? "-createProject" : "-projectPath", projectDir.absolutePath]
@@ -896,13 +928,18 @@ Task createUnityTask(String taskName, String summary,
     }
   }
 
-  Task unityTask = createTaskClosure(taskName,
-                                     sprintf(
-                                       "Run Unity to %s (project: %s)",
-                                       summary, projectName),
-                                     dependsOn,
-                                     project.ext.unityExe,
-                                     executeArguments)
+  Task unityTask
+  if (!batchMode && !project.ext.interactiveModeTestsEnabled) {
+    unityTask = createEmptyTask(taskName, summary, dependsOn)
+  } else {
+    unityTask = createTaskClosure(taskName,
+                                  sprintf(
+                                    "Run Unity to %s (project: %s)",
+                                    summary, projectName),
+                                  dependsOn,
+                                  project.ext.unityExe,
+                                  executeArguments)
+  }
   unityTask.with {
     inputs.files fileTree(projectDir)
     outputs.files files(logFile)
@@ -1055,8 +1092,8 @@ Task createUnityTestBatchAndNonBatch(String taskName, String description,
                         createUnityTestTask(
                           sprintf("%sInteractiveMode", taskName),
                           sprintf("%s (Interactive Mode)", description),
-                          dependsOn, testScriptsDir, additionalArguments,
-                          true, createTaskClosure)])
+                          dependsOn, testScriptsDir, additionalArguments, false,
+                          createTaskClosure)])
 }
 
 Task compileResolverLibTests = createXbuildTask(

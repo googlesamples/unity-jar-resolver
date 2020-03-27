@@ -702,14 +702,14 @@ namespace GooglePlayServices
                 // possibly clean up the old versions automatically.
                 if (Dependency.versionComparer.Compare(conflictingVersions[0],
                                                        currentVersion) >= 0) {
-                    if (EditorUtility.DisplayDialog(
+                    if (Dialog.Display(
                             "Resolve Conflict?",
                             warningMessage +
                             "\n" +
                             "The conflicting libraries are older than the library managed by " +
                             "the Android Resolver.  Would you like to remove the old libraries " +
                             "to resolve the conflict?",
-                            "Yes", "No")) {
+                            Dialog.Option.Selected0, "Yes", "No") == Dialog.Option.Selected0) {
                         var deleteFailures = new List<string>();
                         foreach (var filename in conflict.Value) {
                             deleteFailures.AddRange(

@@ -2392,7 +2392,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     public static void UpdateNow() {
         UpdateVersionedAssets(true, () => {
                 if (!ExecutionEnvironment.InBatchMode) {
-                    EditorUtility.DisplayDialog(PLUGIN_NAME, "Update complete.", "OK");
+                    Dialog.Display(PLUGIN_NAME, "Update complete.", 0, "OK");
                 }
             });
     }
