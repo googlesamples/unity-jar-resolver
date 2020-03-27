@@ -55,4 +55,5 @@ using System.Runtime.CompilerServices;
 
 // Uses XmlDependencies class.
 [assembly: InternalsVisibleTo("Google.IOSResolver")]
-
+// Uses all classes for testing.
+[assembly: InternalsVisibleTo("Google.AndroidResolverIntegrationTests")]

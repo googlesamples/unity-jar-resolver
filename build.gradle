@@ -692,6 +692,7 @@ Task createXbuildTask(String taskName, String taskDescription,
            sprintf("/property:OutputPath=%s%s",
                    binaryOutputDir.absolutePath,
                    File.separator),
+           "/verbosity:quiet",
            projectToBuild.absolutePath])
   }
   task.ext.buildDir = outputDir
@@ -1017,6 +1018,8 @@ Task createSetupUnityProjectTask(String taskName, Iterable<Task> dependsOn,
  * @param additionalArguments Additional arguments to pass to Unity when
  *   executing the test.
  * @param batchMode Whether to execute Unity in batch mode.
+ * @param editorAssets Files to copy into the Assets/Editor folder in the
+ *   project.
  * @param createTaskClosure Optional task used to start Unity, this must
  *   conform to tasks.create(name, description, type, dependsOn).
  *
@@ -1024,6 +1027,7 @@ Task createSetupUnityProjectTask(String taskName, Iterable<Task> dependsOn,
  */
 Task createUnityTestTask(String taskName, String description,
                          Iterable<Task> dependsOn, File testScriptsDir,
+                         Iterable<File> editorAssets,
                          Iterable<String> additionalArguments,
                          Boolean batchMode, createTaskClosure) {
   List<File> inputFiles = fileTree(testScriptsDir).collect {
@@ -1043,8 +1047,22 @@ Task createUnityTestTask(String taskName, String description,
     inputFiles, testScriptsDir, setupTestProject.ext.projectDir,
     [setupTestProject], null)
 
+  // Task which copies editor scripts into the project.
+  Task copyEditorAssets = tasks.create(
+    name: sprintf("copyEditorAssetsFor%s", taskName),
+    description: sprintf("Copy the editor assets into the %s Unity project.",
+                         taskName),
+    type: Copy,
+    dependsOn: [setupTestProject])
+  copyEditorAssets.with {
+    from editorAssets
+    into new File(new File(setupTestProject.ext.projectDir, "Assets"),
+                  "Editor")
+  }
+
   // Create the test task.
-  Task testTask = createUnityTask(taskName, "test", [copyTestScripts],
+  Task testTask = createUnityTask(taskName, "test",
+                                  [copyTestScripts, copyEditorAssets],
                                   setupTestProject.ext.projectDir.name,
                                   setupTestProject.ext.containerDir,
                                   additionalArguments, batchMode,
@@ -1070,6 +1088,8 @@ Task createUnityTestTask(String taskName, String description,
  * @param dependsOn Dependencies of the new task.
  * @param testScriptsDir Directory containing scripts to copy into the test
  *   project and execute for testing.
+ * @param editorAssets Files to copy into the Assets/Editor folder in the
+ *   project.
  * @param additionalArguments Additional arguments to pass to Unity.
  * @param createTaskClosure Optional task used to start Unity, this must
  *   conform to tasks.create(name, description, type, dependsOn).
@@ -1079,6 +1099,7 @@ Task createUnityTestTask(String taskName, String description,
 Task createUnityTestBatchAndNonBatch(String taskName, String description,
                                      Iterable<Task> dependsOn,
                                      File testScriptsDir,
+                                     Iterable<File> editorAssets,
                                      Iterable<String> additionalArguments,
                                      createTaskClosure) {
   return tasks.create(name: taskName,
@@ -1087,13 +1108,13 @@ Task createUnityTestBatchAndNonBatch(String taskName, String description,
                         createUnityTestTask(
                           sprintf("%sBatchMode", taskName),
                           sprintf("%s (Batch Mode)", description),
-                          dependsOn, testScriptsDir, additionalArguments, true,
-                          createTaskClosure),
+                          dependsOn, testScriptsDir, editorAssets,
+                          additionalArguments, true, createTaskClosure),
                         createUnityTestTask(
                           sprintf("%sInteractiveMode", taskName),
                           sprintf("%s (Interactive Mode)", description),
-                          dependsOn, testScriptsDir, additionalArguments, false,
-                          createTaskClosure)])
+                          dependsOn, testScriptsDir, editorAssets,
+                          additionalArguments, false, createTaskClosure)])
 }
 
 Task compileResolverLibTests = createXbuildTask(
@@ -1649,7 +1670,9 @@ createUnityTestBatchAndNonBatch(
   ("Imports the plugin into a Unity project and verifies all " +
    "components can be activated by the Version Handler."),
   [buildPlugin],
-  new File(project.ext.scriptDirectory,"source/VersionHandlerImpl/test/activation"), [], null)
+  new File(project.ext.scriptDirectory,
+           "source/VersionHandlerImpl/test/activation"),
+  [], [], null)
 
 // Launch the test via a script that runs a local web server.
 createUnityTestBatchAndNonBatch(
@@ -1657,7 +1680,9 @@ createUnityTestBatchAndNonBatch(
   ("Imports the plugin into a Unity project tests the PortableWebRequest " +
    "class."),
   [buildPlugin],
-  new File(project.ext.scriptDirectory, "source/VersionHandlerImpl/test/webrequest"), [],
+  new File(project.ext.scriptDirectory,
+           "source/VersionHandlerImpl/test/webrequest"),
+  [], [],
   { String name, String description, Iterable<Task> depends,
     File executable, Iterable<String> args ->
       Iterable<String> runnerArgs = [executable.absolutePath] + args
@@ -1678,7 +1703,11 @@ createUnityTestBatchAndNonBatch(
   ("Imports the plugin into a Unity project and tests reflection " +
    "methods."),
   [buildPlugin],
-  new File(project.ext.scriptDirectory, "source/VersionHandler/test/reflection"), [], null)
+  new File(project.ext.scriptDirectory,
+           "source/VersionHandler/test/reflection"),
+  [],
+  [],
+  null)
 
 Task compileIntegrationTester = createXbuildTask(
   "compileIntegrationTester",
@@ -1692,14 +1721,66 @@ Task compileIntegrationTester = createXbuildTask(
    new File("Google.IntegrationTester.dll.mdb")],
   [compileVersionHandler])
 
-createUnityTestBatchAndNonBatch(
-  "testAndroidResolverAsyncResolve",
+/*
+ * Creates a task which compiles and run a Unity integration test.
+ *
+ * @param taskName Name of the test.
+ * @param description Description of the task.
+ * @param dependsOn Dependencies of the new task.
+ * @param integrationTestProject Project within
+ *   project.ext.pluginSolutionFile that contains the integration test.
+ * @param integrationTestProjectSources Source files integrationTestProject
+ *  requires.
+ * @param integrationTestProjectOutputs Assemblies generated by the
+ *   integrationTestProject.
+ * @param unityProjectDir Directory containing a assets to copy into the
+ *   integration test project.
+ * @param arguments Additional arguments for Unity when running the integration
+ *   test.
+ */
+Task createUnityIntegrationTest(String taskName,
+                                String description,
+                                Iterable<Task> dependsOn,
+                                String integrationTestProject,
+                                Iterable<File> integrationTestProjectSources,
+                                Iterable<File> integrationTestProjectOutputs,
+                                File unityProjectDir,
+                                Iterable<String> arguments) {
+  Task compileIntegrationTest = createXbuildTask(
+    sprintf("compile%s", integrationTestProject),
+    sprintf("Compile %s for %s", integrationTestProject, taskName),
+    project.ext.pluginSolutionFile,
+    integrationTestProject,
+    integrationTestProjectSources,
+    new File(project.ext.buildDir, integrationTestProject),
+    integrationTestProjectOutputs,
+    [compileIntegrationTester] + dependsOn)
+
+  createUnityTestBatchAndNonBatch(
+    taskName,
+    description,
+    [buildPlugin],
+    unityProjectDir,
+    compileIntegrationTest.outputs.files +
+    compileIntegrationTester.outputs.files,
+    arguments, null)
+}
+
+createUnityIntegrationTest(
+  "testAndroidResolverIntegrationTests",
   ("Imports the plugin into a Unity project, runs Android resolution with " +
    "a combination of dependencies added via the programmatic API and via " +
    "XML files, verifying all dependencies resolve successfully."),
-  [buildPlugin],
-  new File(project.ext.scriptDirectory, "source/AndroidResolver/test/resolve_async"),
-  ["-buildTarget", "android"], null)  // TODO: Move this into the test!?
+  [compileAndroidResolver],
+  "AndroidResolverIntegrationTests",
+  fileTree(new File(new File(project.ext.pluginSourceDir, "AndroidResolver"),
+                    "test")),
+  [new File("Google.AndroidResolverIntegrationTests.dll"),
+   new File("Google.AndroidResolverIntegrationTests.dll.mdb")],
+  new File(
+    project.ext.scriptDirectory,
+    "source/AndroidResolver/test/AndroidResolverIntegrationTestsUnityProject"),
+  ["-buildTarget", "android"])
 
 task cleanTests(type: Delete) {
   description "Clean test directories."

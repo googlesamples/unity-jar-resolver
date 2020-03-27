@@ -1,4 +1,4 @@
-// <copyright file="TestResolveAsync.cs" company="Google Inc.">
+// <copyright file="AndroidResolverIntegrationTests.cs" company="Google Inc.">
 // Copyright (C) 2018 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,96 +21,12 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 
-[UnityEditor.InitializeOnLoad]
-public class TestResolveAsync {
+using Google.JarResolver;
+using GooglePlayServices;
 
-    /// <summary>
-    /// Test case class.
-    ///
-    /// This specifies a test case to execute.  Each test case has a name which is used to
-    /// log the result of the test and the method to execute as part of the test case.
-    /// </summary>
-    class TestCase {
+namespace Google {
 
-        /// <summary>
-        /// Test case delegate.
-        /// </summary>
-        /// <param name="testCase">Object executing this method.</param>
-        /// <param name="testCaseComplete">Called when the test case is complete.</param>
-        public delegate void MethodDelegate(TestCase testCase,
-                                            Action<TestCaseResult> testCaseComplete);
-
-        /// <summary>
-        /// Name of the test case.
-        /// </summary>
-        public string Name { get; set; }
-
-        /// <summary>
-        /// Delegate that runs the test case logic.
-        /// </summary>
-        public MethodDelegate Method { get; set; }
-    }
-
-    /// <summary>
-    /// Result of a test.
-    /// </summary>
-    class TestCaseResult {
-
-        /// <summary>
-        /// Initialize the class.
-        /// </summary>
-        public TestCaseResult(TestCase testCase) {
-            TestCaseName = testCase.Name;
-            ErrorMessages = new List<string>();
-            Skipped = false;
-        }
-
-        /// <summary>
-        /// Name of the test case.  This does not need to be set by the test case.
-        /// </summary>
-        public string TestCaseName { private get; set; }
-
-        /// <summary>
-        /// Error messages reported by a test case failure.
-        /// </summary>
-        public List<string> ErrorMessages { get; set; }
-
-        /// <summary>
-        /// Whether the test case was skipped.
-        /// </summary>
-        public bool Skipped { get; set; }
-
-        /// <summary>
-        /// Whether the test case succeeded.
-        /// </summary>
-        public bool Succeeded {
-            get {
-                return Skipped || ErrorMessages == null || ErrorMessages.Count == 0;
-            }
-        }
-
-        /// <summary>
-        /// Format the result as a string.
-        /// </summary>
-        /// <param name="includeFailureMessages">Include failure messages in the list.</param>
-        public string FormatString(bool includeFailureMessages) {
-            return String.Format("Test {0}: {1}{2}", TestCaseName,
-                                 Skipped ? "SKIPPED" : Succeeded ? "PASSED" : "FAILED",
-                                 includeFailureMessages && ErrorMessages != null &&
-                                 ErrorMessages.Count > 0 ?
-                                     "\n" + String.Join("\n", ErrorMessages.ToArray()) : "");
-        }
-    }
-
-    /// <summary>
-    /// Executed test case names and failure messages (if any).
-    /// </summary>
-    private static List<TestCaseResult> testCaseResults = new List<TestCaseResult>();
-
-    /// <summary>
-    /// Set of test cases to execute.
-    /// </summary>
-    private static List<TestCase> testCases = new List<TestCase>();
+public class AndroidResolverIntegrationTests {
 
     /// <summary>
     /// EditorUserBuildSettings property which controls the Android build system.
@@ -146,45 +62,10 @@ public class TestResolveAsync {
     private const string GRADLE_TEMPLATE_ENABLED = "Assets/Plugins/Android/mainTemplate.gradle";
 
     /// <summary>
-    /// Major / minor Unity version numbers.
-    /// </summary>
-    private static float unityVersion;
-
-    /// <summary>
-    /// This module can be executed multiple times when the Version Handler is enabling
-    /// so this method uses a temporary file to determine whether the module has been executed
-    /// once in a Unity session.
-    /// </summary>
-    /// <returns>true if the module was previously initialized, false otherwise.</returns>
-    private static bool SetInitialized() {
-        const string INITIALIZED_PATH = "Temp/TestEnabledCallbackInitialized";
-        if (File.Exists(INITIALIZED_PATH)) return true;
-        File.WriteAllText(INITIALIZED_PATH, "Ready");
-        return false;
-    }
-
-    /// <summary>
-    /// Register a method to call when the Version Handler has enabled all plugins in the project.
-    /// </summary>
-    static TestResolveAsync() {
-        // Disable stack traces for more condensed logs.
-        UnityEngine.Application.stackTraceLogType = UnityEngine.StackTraceLogType.None;
-
-        UnityEngine.Debug.Log("Set up callback on Version Handler completion.");
-        Google.VersionHandler.UpdateCompleteMethods = new [] {
-            ":TestResolveAsync:VersionHandlerReady"
-        };
-        UnityEngine.Debug.Log("Enable plugin using the Version Handler.");
-        Google.VersionHandler.UpdateNow();
-    }
-
-    /// <summary>
     /// Configure tests to run.
     /// </summary>
-    /// <param name="unityVersion">Major & minor version of Unity.</param>
-    private static void ConfigureTestCases() {
-        unityVersion = Google.VersionHandler.GetUnityVersionMajorMinor();
-
+    [IntegrationTester.Initializer]
+    public static void ConfigureTestCases() {
         // Set of files to ignore (relative to the Assets/Plugins/Android directory) in all tests
         // that do not use the Gradle template.
         var nonGradleTemplateFilesToIgnore = new HashSet<string>() {
@@ -193,24 +74,24 @@ public class TestResolveAsync {
         };
 
         UnityEngine.Debug.Log("Setting up test cases for execution.");
-        testCases.AddRange(new [] {
+        IntegrationTester.Runner.ScheduleTestCases(new [] {
                 // This *must* be the first test case as other test cases depend upon it.
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ValidateAndroidTargetSelected",
                     Method = ValidateAndroidTargetSelected,
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "SetupDependencies",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
                         SetupDependencies();
 
-                        var testCaseResult = new TestCaseResult(testCase);
+                        var testCaseResult = new IntegrationTester.TestCaseResult(testCase);
                         ValidateDependencies(testCaseResult);
                         testCaseComplete(testCaseResult);
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveForGradleBuildSystemWithTemplate",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -228,12 +109,12 @@ public class TestResolveAsync {
                             });
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolverForGradleBuildSystemWithTemplateUsingJetifier",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
                         SetupDependencies();
-                        UseJetifier = true;
+                        GooglePlayServices.SettingsDialog.UseJetifier = true;
 
                         ResolveWithGradleTemplate(
                             GRADLE_TEMPLATE_DISABLED,
@@ -247,7 +128,7 @@ public class TestResolveAsync {
                             });
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveForGradleBuildSystemLibraryWithTemplate",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -265,7 +146,7 @@ public class TestResolveAsync {
                             });
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveForGradleBuildSystemWithTemplateEmpty",
                     Method = (testCase, testCaseComplete) => {
                         string enabledDependencies =
@@ -281,7 +162,7 @@ public class TestResolveAsync {
                             var error = UnityEditor.AssetDatabase.MoveAsset(enabledDependencies,
                                                                             disabledDependencies);
                             if (!String.IsNullOrEmpty(error)) {
-                                testCaseComplete(new TestCaseResult(testCase) {
+                                testCaseComplete(new IntegrationTester.TestCaseResult(testCase) {
                                         ErrorMessages = new List<string>() { error } });
                                 return;
                             }
@@ -301,7 +182,7 @@ public class TestResolveAsync {
                         }
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveForGradleBuildSystem",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -310,7 +191,7 @@ public class TestResolveAsync {
                                 null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveForGradleBuildSystemSync",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -320,7 +201,7 @@ public class TestResolveAsync {
                                 synchronous: true);
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveForInternalBuildSystem",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -332,12 +213,12 @@ public class TestResolveAsync {
                                 null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveForInternalBuildSystemUsingJetifier",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
                         SetupDependencies();
-                        UseJetifier = true;
+                        GooglePlayServices.SettingsDialog.UseJetifier = true;
                         Resolve("Internal", false,
                                 AarsWithNativeLibrariesSupported ?
                                     "ExpectedArtifacts/NoExport/InternalNativeAarsJetifier" :
@@ -345,7 +226,7 @@ public class TestResolveAsync {
                                 null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveForGradleBuildSystemAndExport",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -354,7 +235,7 @@ public class TestResolveAsync {
                                 null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveAddedDependencies",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -364,7 +245,7 @@ public class TestResolveAsync {
                                 null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveRemovedDependencies",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -376,7 +257,7 @@ public class TestResolveAsync {
                                 null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "DeleteResolvedLibraries",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -384,8 +265,7 @@ public class TestResolveAsync {
                         Resolve("Gradle", true, "ExpectedArtifacts/Export/Gradle",
                                 null, nonGradleTemplateFilesToIgnore,
                                 testCase, (testCaseResult) => {
-                                    Google.VersionHandler.InvokeStaticMethod(
-                                        AndroidResolverClass, "DeleteResolvedLibrariesSync", null);
+                                    PlayServicesResolver.DeleteResolvedLibrariesSync();
                                     var unexpectedFilesMessage = new List<string>();
                                     var resolvedFiles = ListFiles("Assets/Plugins/Android",
                                                                   nonGradleTemplateFilesToIgnore);
@@ -401,7 +281,7 @@ public class TestResolveAsync {
                                 synchronous: true);
                     }
                 },
-                new TestCase {
+                new IntegrationTester.TestCase {
                     Name = "ResolveForGradleBuildSystemWithTemplateDeleteLibraries",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -414,8 +294,7 @@ public class TestResolveAsync {
                             GRADLE_TEMPLATE_DISABLED,
                             "ExpectedArtifacts/NoExport/GradleTemplate",
                             testCase, (testCaseResult) => {
-                                Google.VersionHandler.InvokeStaticMethod(
-                                        AndroidResolverClass, "DeleteResolvedLibrariesSync", null);
+                                PlayServicesResolver.DeleteResolvedLibrariesSync();
                                 testCaseResult.ErrorMessages.AddRange(CompareDirectoryContents(
                                             "ExpectedArtifacts/NoExport/GradleTemplateEmpty",
                                             "Assets/Plugins/Android", filesToIgnore));
@@ -431,30 +310,28 @@ public class TestResolveAsync {
             });
 
         // Test resolution with Android ABI filtering.
-        if (unityVersion >= 2018.0f) {
-            testCases.AddRange(new [] {
-                    new TestCase {
-                        Name = "ResolverForGradleBuildSystemUsingAbisArmeabiv7aAndArm64",
-                        Method = (testCase, testCaseComplete) => {
-                            ClearAllDependencies();
-                            Resolve("Gradle", false,
-                                    "ExpectedArtifacts/NoExport/GradleArmeabiv7aArm64",
-                                    "armeabi-v7a, arm64-v8a", nonGradleTemplateFilesToIgnore,
-                                    testCase, testCaseComplete);
-                        }
+        if (IntegrationTester.Runner.UnityVersion >= 2018.0f) {
+            IntegrationTester.Runner.ScheduleTestCase(
+                new IntegrationTester.TestCase {
+                    Name = "ResolverForGradleBuildSystemUsingAbisArmeabiv7aAndArm64",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        Resolve("Gradle", false,
+                                "ExpectedArtifacts/NoExport/GradleArmeabiv7aArm64",
+                                "armeabi-v7a, arm64-v8a", nonGradleTemplateFilesToIgnore,
+                                testCase, testCaseComplete);
                     }
                 });
-        } else if (unityVersion >= 5.0f) {
-            testCases.AddRange(new [] {
-                    new TestCase {
-                        Name = "ResolverForGradleBuildSystemUsingAbisArmeabiv7a",
-                        Method = (testCase, testCaseComplete) => {
-                            ClearAllDependencies();
-                            Resolve("Gradle", false,
-                                    "ExpectedArtifacts/NoExport/GradleArmeabiv7a",
-                                    "armeabi-v7a", nonGradleTemplateFilesToIgnore,
-                                    testCase, testCaseComplete);
-                        }
+        } else if (IntegrationTester.Runner.UnityVersion >= 5.0f) {
+            IntegrationTester.Runner.ScheduleTestCase(
+                new IntegrationTester.TestCase {
+                    Name = "ResolverForGradleBuildSystemUsingAbisArmeabiv7a",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        Resolve("Gradle", false,
+                                "ExpectedArtifacts/NoExport/GradleArmeabiv7a",
+                                "armeabi-v7a", nonGradleTemplateFilesToIgnore,
+                                testCase, testCaseComplete);
                     }
                 });
         }
@@ -464,7 +341,7 @@ public class TestResolveAsync {
     /// Whether the Gradle builds are supported by the current version of Unity.
     /// </summary>
     private static bool GradleBuildSupported {
-        get { return unityVersion >= 5.5f; }
+        get { return IntegrationTester.Runner.UnityVersion >= 5.5f; }
     }
 
     /// <summary>
@@ -472,45 +349,7 @@ public class TestResolveAsync {
     /// to ant / eclipse projects.
     /// </summary>
     private static bool AarsWithNativeLibrariesSupported {
-        get { return unityVersion < 2017.0f; }
-    }
-
-    /// <summary>
-    /// Get property that gets and sets Android ABIs.
-    /// </summary>
-    private static PropertyInfo AndroidAbisCurrentStringProperty {
-        get {
-            return Google.VersionHandler.FindClass(
-                "Google.JarResolver", "GooglePlayServices.AndroidAbis").GetProperty(
-                    "CurrentString");
-        }
-    }
-
-    /// <summary>
-    /// Set Android ABIs.
-    /// </summary>
-    private static string AndroidAbisCurrentString {
-        set { AndroidAbisCurrentStringProperty.SetValue(null, value, null); }
-        get { return (string)AndroidAbisCurrentStringProperty.GetValue(null, null); }
-    }
-
-    /// <summary>
-    /// Get the property that gets and sets whether the Jetifier is enabled.
-    /// </summary>
-    private static PropertyInfo UseJetifierBoolProperty {
-        get {
-            return Google.VersionHandler.FindClass(
-                "Google.JarResolver", "GooglePlayServices.SettingsDialog").GetProperty(
-                    "UseJetifier", BindingFlags.Static | BindingFlags.NonPublic);
-        }
-    }
-
-    /// <summary>
-    /// Get / set jetifier setting.
-    /// </summary>
-    private static bool UseJetifier {
-        set { UseJetifierBoolProperty.SetValue(null, value, null); }
-        get { return (bool)UseJetifierBoolProperty.GetValue(null, null); }
+        get { return IntegrationTester.Runner.UnityVersion < 2017.0f; }
     }
 
     /// <summary>
@@ -554,143 +393,24 @@ public class TestResolveAsync {
         return Enum.Parse(androidBuildSystemType, value);
     }
 
-
-    /// <summary>
-    /// Log test result summary and quit the application.
-    /// </summary>
-    private static void LogSummaryAndExit() {
-        bool passed = true;
-        var testSummaryLines = new List<string>();
-        foreach (var testCaseResult in testCaseResults) {
-            testSummaryLines.Add(testCaseResult.FormatString(false));
-            passed &= testCaseResult.Succeeded;
-        }
-        UnityEngine.Debug.Log(String.Format("Test(s) {0}.\n{1}", passed ? "PASSED" : "FAILED",
-                                            String.Join("\n", testSummaryLines.ToArray())));
-        UnityEditor.EditorApplication.Exit(passed ? 0 : 1);
-    }
-
-    /// <summary>
-    /// Log a test case result with error details.
-    /// </summary>
-    /// <param name="testCaseResult">Result to log.</param>
-    private static void LogTestCaseResult(TestCaseResult testCaseResult) {
-        testCaseResults.Add(testCaseResult);
-        UnityEngine.Debug.Log(testCaseResult.FormatString(true));
-    }
-
-    /// <summary>
-    /// Execute a function for a test case catching any exceptions and logging the result.
-    /// </summary>
-    /// <param name="testCase">Object executing this method.</param>
-    /// <param name="testCaseAction">Action to execute.</param>
-    /// <param name="executeNext">Whether to execute the next test case if the specified action
-    /// fails.</param>
-    /// <returns>true if the action executed without any exceptions, false otherwise.</returns>
-    private static bool ExecuteTestCase(TestCase testCase, Action testCaseAction,
-                                        bool executeNext) {
-        bool succeeded = true;
-        try {
-            testCaseAction();
-        } catch (Exception e) {
-            LogTestCaseResult(new TestCaseResult(testCase) {
-                    ErrorMessages = new List<string> { e.ToString() }
-                });
-            succeeded = false;
-        }
-        if (!succeeded && executeNext) ExecuteNextTestCase();
-        return succeeded;
-    }
-
-    /// <summary>
-    /// Execute the next queued test case.
-    /// </summary>
-    private static void ExecuteNextTestCase() {
-        bool executeNext;
-        do {
-            executeNext = false;
-            if (testCases.Count > 0) {
-                var testCase = testCases[0];
-                testCases.RemoveAt(0);
-                UnityEngine.Debug.Log(String.Format("Test {0} starting...", testCase.Name));
-                // If the test threw an exception on this thread, execute the next test case
-                // in a loop.
-                executeNext = !ExecuteTestCase(
-                    testCase,
-                    () => {
-                        testCase.Method(testCase, (testCaseResult) => {
-                                UnityEngine.Debug.Log(String.Format("Test {0} complete",
-                                                                    testCase.Name));
-                                testCaseResult.TestCaseName = testCase.Name;
-                                LogTestCaseResult(testCaseResult);
-                                ExecuteNextTestCase();
-                            });
-                    }, false);
-            } else {
-                LogSummaryAndExit();
-            }
-        } while (executeNext);
-    }
-
-    /// <summary>
-    /// Called when the Version Handler has enabled all managed plugins in a project.
-    /// </summary>
-    public static void VersionHandlerReady() {
-        UnityEngine.Debug.Log("VersionHandler is ready.");
-        Google.VersionHandler.UpdateCompleteMethods = null;
-        // If this has already been initialized this session, do not start tests again.
-        if (SetInitialized()) return;
-        // Start executing tests.
-        ConfigureTestCases();
-        ExecuteNextTestCase();
-    }
-
     /// <summary>
     /// Make sure the Android platform is selected for testing.
     /// </summary>
-    private static void ValidateAndroidTargetSelected(TestCase testCase,
-                                                      Action<TestCaseResult> testCaseComplete) {
+    private static void ValidateAndroidTargetSelected(
+            IntegrationTester.TestCase testCase,
+            Action<IntegrationTester.TestCaseResult> testCaseComplete) {
         if (UnityEditor.EditorUserBuildSettings.activeBuildTarget !=
             UnityEditor.BuildTarget.Android) {
-            LogTestCaseResult(new TestCaseResult(testCase) {
+            IntegrationTester.Runner.LogTestCaseResult(
+                new IntegrationTester.TestCaseResult(testCase) {
                     ErrorMessages = new List<string>() { "Target platform must be Android" }
                 });
-            LogSummaryAndExit();
+            IntegrationTester.Runner.LogSummaryAndExit();
         }
         // Also, set the internal Gradle version to a deterministic version number.  This controls
         // how gradle template snippets are generated by GradleTemplateResolver.
-        AndroidResolverClass.GetProperty("GradleVersion").SetValue(null, "2.14", null);
-        testCaseComplete(new TestCaseResult(testCase));
-    }
-
-    /// <summary>
-    /// Get the Android Resolver support instance.
-    /// NOTE: This is deprecated and only exposed for testing.
-    /// </summary>
-    private static object AndroidResolverSupport {
-        get {
-            // Get the deprecated dependency management API.
-            return Google.VersionHandler.InvokeStaticMethod(
-                    Google.VersionHandler.FindClass(
-                        "Google.JarResolver", "Google.JarResolver.PlayServicesSupport"),
-                 "CreateInstance", new object[] { "Test", null, "ProjectSettings" });
-        }
-    }
-
-    /// <summary>
-    /// Cached Android Resolver class.
-    /// </summary>
-    private static Type androidResolverClass = null;
-
-    /// <summary>
-    /// Get the Android Resolver class.
-    /// </summary>
-    private static Type AndroidResolverClass {
-        get {
-            androidResolverClass = androidResolverClass ?? Google.VersionHandler.FindClass(
-                "Google.JarResolver", "GooglePlayServices.PlayServicesResolver");
-            return androidResolverClass;
-        }
+        PlayServicesResolver.GradleVersion = "2.14";
+        testCaseComplete(new IntegrationTester.TestCaseResult(testCase));
     }
 
     /// <summary>
@@ -702,11 +422,9 @@ public class TestResolveAsync {
     /// </summary>
     private static void ClearAllDependencies() {
         UnityEngine.Debug.Log("Clear all loaded dependencies");
-        UseJetifier = false;
-        AndroidResolverSupport.GetType().GetMethod(
-            "ResetDependencies",
-            BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+        GooglePlayServices.SettingsDialog.UseJetifier = false;
 
+        PlayServicesSupport.ResetDependencies();
         UpdateAdditionalDependenciesFile(false);
     }
 
@@ -716,9 +434,8 @@ public class TestResolveAsync {
     /// future.
     /// </summary>
     private static void SetupDependencies() {
-        Google.VersionHandler.InvokeInstanceMethod(
-            AndroidResolverSupport, "DependOn",
-            new object[] { "com.google.firebase", "firebase-common", "16.0.0" });
+        PlayServicesSupport.CreateInstance("Test", null, "ProjectSettings").DependOn(
+            "com.google.firebase", "firebase-common", "16.0.0");
     }
 
     /// <summary>
@@ -726,7 +443,7 @@ public class TestResolveAsync {
     /// </summary>
     /// <param name="testCaseResult">TestCaseResult instance to add errors to if this method
     /// fails. </param>
-    private static void ValidateDependencies(TestCaseResult testCaseResult) {
+    private static void ValidateDependencies(IntegrationTester.TestCaseResult testCaseResult) {
         // Validate set dependencies are present.
         CompareKeyValuePairLists(
             new List<KeyValuePair<string, string>>() {
@@ -738,10 +455,9 @@ public class TestResolveAsync {
                     "Assets/ExternalDependencyManager/Editor/TestDependencies.xml:10"),
                 new KeyValuePair<string, string>(
                     "com.google.firebase:firebase-common:16.0.0",
-                    "TestResolveAsync.SetupDependencies()")
+                    "Google.AndroidResolverIntegrationTests.SetupDependencies()")
             },
-            (IList<KeyValuePair<string, string>>)Google.VersionHandler.InvokeStaticMethod(
-                AndroidResolverClass, "GetPackageSpecs", null),
+            PlayServicesResolver.GetPackageSpecs(),
             "Package Specs", testCaseResult);
         // Validate configured repos are present.
         CompareKeyValuePairLists(
@@ -757,8 +473,7 @@ public class TestResolveAsync {
                        "Assets/Firebase/m2repository").Replace("\\", "/"),
                     "Assets/ExternalDependencyManager/Editor/TestDependencies.xml:10")
             },
-            (IList<KeyValuePair<string, string>>)Google.VersionHandler.InvokeStaticMethod(
-                AndroidResolverClass, "GetRepos", null),
+            PlayServicesResolver.GetRepos(),
             "Repos", testCaseResult);
     }
 
@@ -773,7 +488,7 @@ public class TestResolveAsync {
     private static void CompareKeyValuePairLists(
             IList<KeyValuePair<string, string>> expectedList,
             IList<KeyValuePair<string, string>> testList, string listDescription,
-            TestCaseResult testCaseResult) {
+            IntegrationTester.TestCaseResult testCaseResult) {
         if (expectedList.Count != testList.Count) {
             testCaseResult.ErrorMessages.Add(String.Format(
                 "Returned list of {0} is an unexpected size {1} vs {2}",
@@ -840,13 +555,14 @@ public class TestResolveAsync {
     private static void Resolve(string androidBuildSystem, bool exportProject,
                                 string expectedAssetsDir, string targetAbis,
                                 ICollection<string> filesToIgnore,
-                                TestCase testCase, Action<TestCaseResult> testCaseComplete,
+                                IntegrationTester.TestCase testCase,
+                                Action<IntegrationTester.TestCaseResult> testCaseComplete,
                                 bool synchronous = false) {
         // Set the Android target ABIs.
-        AndroidAbisCurrentString = targetAbis;
+        GooglePlayServices.AndroidAbis.CurrentString = targetAbis;
         // Try setting the build system if this version of Unity supports it.
         if (!GradleBuildSupported && androidBuildSystem == "Gradle") {
-            testCaseComplete(new TestCaseResult(testCase) {
+            testCaseComplete(new IntegrationTester.TestCaseResult(testCase) {
                     Skipped = true,
                     ErrorMessages = new List<string> {
                         "Unity version does not support Gradle builds."
@@ -858,7 +574,7 @@ public class TestResolveAsync {
                 ANDROID_BUILD_SYSTEM, StringToAndroidBuildSystemValue(androidBuildSystem)) &&
               GetEditorUserBuildSettingsProperty(
                 ANDROID_BUILD_SYSTEM, androidBuildSystem).ToString() == androidBuildSystem)) {
-            testCaseComplete(new TestCaseResult(testCase) {
+            testCaseComplete(new IntegrationTester.TestCaseResult(testCase) {
                     ErrorMessages = new List<string> {
                         String.Format("Unable to set AndroidBuildSystem to {0}.",
                                       androidBuildSystem)
@@ -870,7 +586,7 @@ public class TestResolveAsync {
         if (!(SetEditorUserBuildSettingsProperty(EXPORT_ANDROID_PROJECT, exportProject) &&
               (bool)GetEditorUserBuildSettingsProperty(EXPORT_ANDROID_PROJECT,
                                                        exportProject) == exportProject)) {
-            testCaseComplete(new TestCaseResult(testCase) {
+            testCaseComplete(new IntegrationTester.TestCaseResult(testCase) {
                     ErrorMessages = new List<string> {
                         String.Format("Unable to set Android export project to {0}.",
                                       exportProject)
@@ -880,45 +596,20 @@ public class TestResolveAsync {
 
         // Resolve dependencies.
         Action<bool> completeWithResult = (bool complete) => {
-            ExecuteTestCase(
+            IntegrationTester.Runner.ExecuteTestCase(
                 testCase,
                 () => {
-                    testCaseComplete(new TestCaseResult(testCase) {
+                    testCaseComplete(new IntegrationTester.TestCaseResult(testCase) {
                             ErrorMessages = ValidateAndroidResolution(expectedAssetsDir, complete,
                                                                       filesToIgnore)
                         });
                 }, true);
         };
         if (synchronous) {
-            bool success = (bool)Google.VersionHandler.InvokeStaticMethod(
-                AndroidResolverClass, "ResolveSync", args: new object[] { true },
-                namedArgs: null);
+            bool success = PlayServicesResolver.ResolveSync(true);
             completeWithResult(success);
         } else {
-            Google.VersionHandler.InvokeStaticMethod(
-                AndroidResolverClass, "Resolve", args: null,
-                namedArgs: new Dictionary<string, object>() {
-                    {"resolutionCompleteWithResult", completeWithResult}
-                });
-        }
-    }
-
-    /// <summary>
-    /// Accesses the PatchMainTemplateGradle setting.
-    /// </summary>
-    private static bool PatchMainTemplateGradle {
-        get {
-            return (bool)Google.VersionHandler.FindClass(
-                null, "GooglePlayServices.SettingsDialog").GetProperty(
-                    "PatchMainTemplateGradle",
-                    BindingFlags.Static | BindingFlags.NonPublic).GetValue(null, null);
-        }
-
-        set {
-            Google.VersionHandler.FindClass(
-                null, "GooglePlayServices.SettingsDialog").GetProperty(
-                    "PatchMainTemplateGradle",
-                    BindingFlags.Static | BindingFlags.NonPublic).SetValue(null, value, null);
+            PlayServicesResolver.Resolve(resolutionCompleteWithResult: completeWithResult);
         }
     }
 
@@ -935,27 +626,28 @@ public class TestResolveAsync {
     /// <param name="deleteGradleTemplate">Whether to delete the gradle template before
     /// testCaseComplete is called.</param>
     /// <param name="filesToIgnore">Set of files to relative to the generatedAssetsDir.</param>
-    private static void ResolveWithGradleTemplate(string gradleTemplate,
-                                                  string expectedAssetsDir,
-                                                  TestCase testCase,
-                                                  Action<TestCaseResult> testCaseComplete,
-                                                  IEnumerable<string> otherExpectedFiles = null,
-                                                  bool deleteGradleTemplate = true,
-                                                  ICollection<string> filesToIgnore = null) {
+    private static void ResolveWithGradleTemplate(
+            string gradleTemplate,
+            string expectedAssetsDir,
+            IntegrationTester.TestCase testCase,
+            Action<IntegrationTester.TestCaseResult> testCaseComplete,
+            IEnumerable<string> otherExpectedFiles = null,
+            bool deleteGradleTemplate = true,
+            ICollection<string> filesToIgnore = null) {
         var cleanUpFiles = new List<string>();
         if (deleteGradleTemplate) cleanUpFiles.Add(GRADLE_TEMPLATE_ENABLED);
         if (otherExpectedFiles != null) cleanUpFiles.AddRange(otherExpectedFiles);
         Action cleanUpTestCase = () => {
-            PatchMainTemplateGradle = false;
+            GooglePlayServices.SettingsDialog.PatchMainTemplateGradle = false;
             foreach (var filename in cleanUpFiles) {
                 if (File.Exists(filename)) File.Delete(filename);
             }
         };
         try {
-            PatchMainTemplateGradle = true;
+            GooglePlayServices.SettingsDialog.PatchMainTemplateGradle = true;
             File.Copy(gradleTemplate, GRADLE_TEMPLATE_ENABLED);
             Resolve("Gradle", false, expectedAssetsDir, null, filesToIgnore, testCase,
-                    (TestCaseResult testCaseResult) => {
+                    (IntegrationTester.TestCaseResult testCaseResult) => {
                         if (otherExpectedFiles != null) {
                             foreach (var expectedFile in otherExpectedFiles) {
                                 if (!File.Exists(expectedFile)) {
@@ -968,7 +660,7 @@ public class TestResolveAsync {
                         testCaseComplete(testCaseResult);
                     }, synchronous: true);
         } catch (Exception ex) {
-            var testCaseResult = new TestCaseResult(testCase);
+            var testCaseResult = new IntegrationTester.TestCaseResult(testCase);
             testCaseResult.ErrorMessages.Add(ex.ToString());
             cleanUpTestCase();
             testCaseComplete(testCaseResult);
@@ -1018,9 +710,7 @@ public class TestResolveAsync {
         Directory.CreateDirectory(outputDir);
         // This uses reflection to access an internal method for testing purposes.
         // ExtractZip is not part of the public API.
-        bool successful = (bool)AndroidResolverClass.GetMethod(
-            "ExtractZip", BindingFlags.Static | BindingFlags.NonPublic).Invoke(
-                null, new object[]{ zipFile, null, outputDir, false });
+        bool successful = PlayServicesResolver.ExtractZip(zipFile, null, outputDir, false);
         if (!successful) {
             failureMessages.Add(String.Format("Unable to extract {0} to {1}",
                                               zipFile, outputDir));
@@ -1163,4 +853,6 @@ public class TestResolveAsync {
                                                           "Assets/Plugins/Android", filesToIgnore));
         return failureMessages;
     }
+}
+
 }

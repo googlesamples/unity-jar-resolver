@@ -53,3 +53,4 @@ using System.Runtime.CompilerServices;
 //    limitations under the License.
 // </copyright>[assembly: AssemblyKeyFile("")]
 
+[assembly: InternalsVisibleTo("Google.AndroidResolverTests")]
