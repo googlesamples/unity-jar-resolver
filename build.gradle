@@ -1066,7 +1066,8 @@ Task compileResolverLibTests = createXbuildTask(
     fileTree(new File(new File(project.ext.pluginSourceDir,
                                "JarResolverLib"), "src")),
     new File(project.ext.testDir, "ResolverLibTests"),
-    [new File("JarResolverTests.dll")], []).with {
+    [new File("JarResolverTests.dll"),
+     new File("JarResolverTests.dll.mdb")], []).with {
   doFirst { checkNUnitDllPath() }
 }
 
@@ -1571,7 +1572,8 @@ Task compileVersionHandlerImplTests = createXbuildTask(
                  "unit_tests"),
                "src")),
     new File(project.ext.testDir, "VersionHandlerImplTests"),
-    [new File("Google.VersionHandlerImplTests.dll")], []).with {
+    [new File("Google.VersionHandlerImplTests.dll"),
+     new File("Google.VersionHandlerImplTests.dll.mdb")], []).with {
   doFirst { checkNUnitDllPath() }
 }
 
@@ -1592,7 +1594,8 @@ Task compileUnityPackageManagerResolverTests = createXbuildTask(
                  "unit_tests"),
                "src")),
     new File(project.ext.testDir, "UnityPackageManagerResolverTests"),
-    [new File("Google.UnityPackageManagerResolverTests.dll")],
+    [new File("Google.UnityPackageManagerResolverTests.dll"),
+     new File("Google.UnityPackageManagerResolverTests.dll.mdb")],
     [buildUnityPackageManagerResolver]).with {
   doFirst { checkNUnitDllPath() }
 }
