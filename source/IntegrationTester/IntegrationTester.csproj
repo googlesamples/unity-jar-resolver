@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>8.0.30703</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{DBD8D4D9-61AC-4E75-8CDC-CABE7033A040}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Google</RootNamespace>
+    <AssemblyName>Google.IntegrationTester</AssemblyName>
+    <ReleaseVersion>1.2</ReleaseVersion>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>True</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>False</Optimize>
+    <OutputPath>bin\Debug</OutputPath>
+    <DefineConstants>DEBUG;UNITY_EDITOR</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>False</ConsolePause>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugSymbols>True</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>True</Optimize>
+    <OutputPath>bin\Release</OutputPath>
+    <DefineConstants>DEBUG;UNITY_EDITOR</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>False</ConsolePause>
+  </PropertyGroup>
+    <PropertyGroup>
+        <UnityHintPath>..\..\unity_dlls</UnityHintPath>
+   </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="UnityEditor">
+        <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+        <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <ItemGroup>
+    <Folder Include="src\" />
+    <Folder Include="Properties\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="src\Runner.cs" />
+    <Compile Include="src\TestCase.cs" />
+    <Compile Include="src\TestCaseResult.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VersionHandler\VersionHandler.csproj">
+      <Project>{5378B37A-887E-49ED-A8AE-42FA843AA9DC}</Project>
+      <Name>VersionHandler</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\VersionHandlerImpl\VersionHandlerImpl.csproj">
+      <Project>{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}</Project>
+      <Name>VersionHandlerImpl</Name>
+    </ProjectReference>
+  </ItemGroup>
+</Project>

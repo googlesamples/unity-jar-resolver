@@ -1,5 +1,5 @@
 ﻿// <copyright file="AssemblyInfo.cs" company="Google LLC">
-// Copyright (C) 2014 Google Inc. All Rights Reserved.
+// Copyright (C) 2020 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ using System.Runtime.CompilerServices;
 
 // Information about this assembly is defined by the following attributes.
 // Change them to the values specific to your project.
-[assembly: AssemblyTitle("Google.VersionHandlerImpl")]
+[assembly: AssemblyTitle("Google.IntegrationTester")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Google Inc.")]
@@ -53,9 +53,3 @@ using System.Runtime.CompilerServices;
 //    limitations under the License.
 // </copyright>[assembly: AssemblyKeyFile("")]
 
-// Uses VersionHandlerImpl.RestoreDefaultSettings(preferenceKeys)
-[assembly: InternalsVisibleTo("Google.IOSResolver")]
-[assembly: InternalsVisibleTo("Google.JarResolver")]
-[assembly: InternalsVisibleTo("Google.UnityPackageManagerResolver")]
-[assembly: InternalsVisibleTo("Google.VersionHandlerImplTests")]
-[assembly: InternalsVisibleTo("Google.IntegrationTester")]

@@ -5,6 +5,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JarResolverLib", "JarResolv
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "JarResolverTests", "JarResolverTests\JarResolverTests.csproj", "{593254D7-6358-40A6-B0C8-F0616BBF499D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IntegrationTester", "IntegrationTester\IntegrationTester.csproj", "{DBD8D4D9-61AC-4E75-8CDC-CABE7033A040}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AndroidResolver", "AndroidResolver\AndroidResolver.csproj", "{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VersionHandler", "VersionHandler\VersionHandler.csproj", "{5378B37A-887E-49ED-A8AE-42FA843AA9DC}"
@@ -29,6 +31,10 @@ Global
 		{593254D7-6358-40A6-B0C8-F0616BBF499D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{593254D7-6358-40A6-B0C8-F0616BBF499D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{593254D7-6358-40A6-B0C8-F0616BBF499D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DBD8D4D9-61AC-4E75-8CDC-CABE7033A040}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DBD8D4D9-61AC-4E75-8CDC-CABE7033A040}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DBD8D4D9-61AC-4E75-8CDC-CABE7033A040}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DBD8D4D9-61AC-4E75-8CDC-CABE7033A040}.Release|Any CPU.Build.0 = Release|Any CPU
 		{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{82EEDFBE-AFE4-4DEF-99D9-BC929747DD9A}.Release|Any CPU.ActiveCfg = Release|Any CPU

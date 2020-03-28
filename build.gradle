@@ -1680,6 +1680,18 @@ createUnityTestBatchAndNonBatch(
   [buildPlugin],
   new File(project.ext.scriptDirectory, "source/VersionHandler/test/reflection"), [], null)
 
+Task compileIntegrationTester = createXbuildTask(
+  "compileIntegrationTester",
+  "Compile Integration Tester module.",
+  project.ext.pluginSolutionFile,
+  "IntegrationTester",
+  fileTree(new File(project.ext.pluginSourceDir,
+                    "IntegrationTester")),
+  new File(project.ext.buildDir, "IntegrationTester"),
+  [new File("Google.IntegrationTester.dll"),
+   new File("Google.IntegrationTester.dll.mdb")],
+  [compileVersionHandler])
+
 createUnityTestBatchAndNonBatch(
   "testAndroidResolverAsyncResolve",
   ("Imports the plugin into a Unity project, runs Android resolution with " +
