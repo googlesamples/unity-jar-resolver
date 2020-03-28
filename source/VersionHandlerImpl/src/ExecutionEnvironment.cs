@@ -33,10 +33,20 @@ internal class ExecutionEnvironment {
     }
 
     /// <summary>
+    /// Whether the editor was started with a method to executed.
+    /// </summary>
+    public static bool ExecuteMethodEnabled {
+        get { return Environment.CommandLine.Contains("-executeMethod"); }
+    }
+
+    /// <summary>
     /// Whether the UI should be treated as interactive.
     /// </summary>
     internal static bool InteractiveMode {
-        get { return !Environment.CommandLine.Contains("-gvh_noninteractive"); }
+        get {
+            return !(Environment.CommandLine.Contains("-gvh_noninteractive") ||
+                     ExecutionEnvironment.InBatchMode);
+        }
     }
 
     /// <summary>

@@ -78,7 +78,7 @@ public class RunOnMainThread {
                 scheduledJob = new ScheduledJob {
                     Job = job,
                     JobId = nextJobId,
-                    DelayInMilliseconds = ExecutionEnvironment.InBatchMode ? 0.0 :
+                    DelayInMilliseconds = ExecutionEnvironment.ExecuteMethodEnabled ? 0.0 :
                         delayInMilliseconds
                 };
                 scheduledJobs[nextJobId++] = scheduledJob;
@@ -208,9 +208,9 @@ public class RunOnMainThread {
     }
 
     /// <summary>
-    /// Set when the current thread is running ExecuteAll().
+    /// Number of times ExecuteAll() has been called on the current thread.
     /// </summary>
-    private static bool runningExecuteAll = false;
+    private static int runningExecuteAllCount = 0;
 
     /// <summary>
     /// Flag which indicates whether any jobs are running on the main thread.
@@ -223,7 +223,10 @@ public class RunOnMainThread {
     /// This property is reset to its' default value after each set of jobs is dispatched.
     /// </summary>
     public static bool ExecuteNow {
-        get { return ExecutionEnvironment.InBatchMode && !runningJobs && !runningExecuteAll; }
+        get {
+            return ExecutionEnvironment.ExecuteMethodEnabled && !runningJobs &&
+                runningExecuteAllCount == 0;
+        }
     }
 
     /// <summary>
@@ -234,7 +237,7 @@ public class RunOnMainThread {
         mainThreadId = System.Threading.Thread.CurrentThread.ManagedThreadId;
         // NOTE: This hooks ExecuteAll on the main thread here and never unregisters as we can't
         // register event handlers on any thread except for the main thread.
-        if (!ExecutionEnvironment.InBatchMode) OnUpdate += ExecuteAll;
+        OnUpdate += ExecuteAll;
     }
 
     /// <summary>
@@ -261,9 +264,9 @@ public class RunOnMainThread {
         Run(() => {
                 EditorApplication.update -= callback;
                 EditorApplication.update += callback;
-                // If we're in batch mode, execute the callback now as EditorApplication.update
-                // will not be signaled if Unity was launched to execute a single method.
-                if (ExecutionEnvironment.InBatchMode) callback();
+                // If we're in running a single method, execute the callback now as
+                // EditorApplication.update will not be signaled.
+                if (ExecutionEnvironment.ExecuteMethodEnabled) callback();
             });
     }
 
@@ -470,10 +473,10 @@ public class RunOnMainThread {
 
         // Don't nest job execution on the main thread, return to the last stack frame
         // running ExecuteAll().
-        if (runningExecuteAll && !allowNested) return;
+        if (runningExecuteAllCount > 0 && !allowNested) return;
 
         RunAction(() => {
-                runningExecuteAll = true;
+                runningExecuteAllCount ++;
                 bool jobsRemaining = true;
                 while (jobsRemaining) {
                     jobsRemaining = false;
@@ -484,12 +487,13 @@ public class RunOnMainThread {
 
                     // Execute polling jobs.
                     int remainingJobs = ExecutePollingJobs();
-                    // If we're in batch mode, keep on executing until no polling jobs remain.
-                    if (ExecutionEnvironment.InBatchMode && remainingJobs > 0) {
+                    // If we're in running a single method, keep on executing until no polling jobs
+                    // remain.
+                    if (ExecutionEnvironment.ExecuteMethodEnabled && remainingJobs > 0) {
                         jobsRemaining = true;
                     }
                 }
-                runningExecuteAll = false;
+                runningExecuteAllCount --;
             });
     }
 }
