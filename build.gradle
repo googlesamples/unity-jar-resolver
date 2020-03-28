@@ -1209,6 +1209,7 @@ Task createExportUnityPackageTask(String taskName,
       "--output_unitypackage" : "--nooutput_unitypackage"] +
     [generateUpmTarball ? "--output_upm" : "--nooutput_upm"] +
     (guidsFile ? ["--guids_file", guidsFile] : []) +
+    ["-v", "-1"] + // Only display warnings.
     arguments,
     exportUnityPackageRequirements)
   exportUnityPackageTask.with {
