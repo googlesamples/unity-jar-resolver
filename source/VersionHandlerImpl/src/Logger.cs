@@ -45,6 +45,15 @@ namespace Google {
     public class Logger {
 
         /// <summary>
+        /// Whether all log messages should be display.
+        /// </summary>
+        internal static bool DebugLoggingEnabled {
+            get {
+                return Environment.CommandLine.Contains("-gvh_log_debug");
+            }
+        }
+
+        /// <summary>
         /// Filter the log level.
         /// </summary>
         public LogLevel Level { get; set; }
@@ -107,7 +116,7 @@ namespace Google {
         /// <param name="level">Severity of the message, if this is below the currently selected
         /// Level property the message will not be logged.</param>
         public virtual void Log(string message, LogLevel level = LogLevel.Info) {
-            if (level >= Level || ExecutionEnvironment.InBatchMode) {
+            if (level >= Level || DebugLoggingEnabled) {
                 switch (level) {
                     case LogLevel.Debug:
                     case LogLevel.Verbose:
