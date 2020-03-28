@@ -921,6 +921,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Backing store for EnabledEditorDlls.
+        /// </summary>
+        private HashSet<string> enabledEditorDlls = new HashSet<string>();
+
+        /// <summary>
+        /// Full path of DLLs that should be loaded into the editor application domain.
+        /// </summary>
+        public ICollection<string> EnabledEditorDlls { get { return enabledEditorDlls; } }
+
+        /// <summary>
         /// Determine whether the PluginImporter class is available in
         /// UnityEditor. Unity 4 does not have the PluginImporter class so
         /// it's not possible to modify asset metadata without hacking the
@@ -975,6 +985,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             int numberOfVersions = metadataByVersion.Count;
             var disabledVersions = new List<string>();
             string enabledVersion = null;
+            enabledEditorDlls = new HashSet<string>();
 
             // If the canonical file is out of date, update it.
             if (numberOfVersions > 0) {
@@ -1071,6 +1082,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                       dotNetVersionMessage),
                         verbose: true);
                     pluginImporter.SetCompatibleWithEditor(editorEnabled);
+                    if (metadata.filename.ToLower().EndsWith(".dll")) {
+                        enabledEditorDlls.Add(Path.GetFullPath(metadata.filename));
+                    }
                     modifiedThisVersion = true;
                 }
                 bool compatibleWithAnyPlatform = pluginImporter.GetCompatibleWithAnyPlatform();
@@ -1201,6 +1215,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
 
         /// <summary>
+        /// Backing store for EnabledEditorDlls.
+        /// </summary>
+        private HashSet<string> enabledEditorDlls = new HashSet<string>();
+
+        /// <summary>
+        /// Full path of DLLs that should be loaded into the editor application domain.
+        /// </summary>
+        public ICollection<string> EnabledEditorDlls { get { return enabledEditorDlls; } }
+
+        /// <summary>
         /// Construct an instance.
         /// </summary>
         public FileMetadataSet() { }
@@ -1226,6 +1250,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public void Clear() {
             metadataByCanonicalFilename = new Dictionary<string, FileMetadataByVersion>();
             metadataByFilename = new Dictionary<string, FileMetadata>();
+            enabledEditorDlls = new HashSet<string>();
         }
 
         /// <summary>
@@ -1545,6 +1570,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
 
             foreach (var metadataByVersion in Values) {
                 modified |= metadataByVersion.EnableMostRecentPlugins(disableFiles);
+                enabledEditorDlls.UnionWith(metadataByVersion.EnabledEditorDlls);
             }
             return modified;
         }
@@ -2163,6 +2189,23 @@ public class VersionHandlerImpl : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Whether all editor DLLs have been loaded into the app domain.
+    /// </summary>
+    private static bool EnabledEditorDllsLoaded {
+        get {
+            var loadedAssemblyPaths = new HashSet<string>();
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+                try {
+                    loadedAssemblyPaths.Add(Path.GetFullPath(assembly.Location));
+                } catch (NotSupportedException) {
+                    // Dynamic assemblies do not have a file location so ignore.
+                }
+            }
+            return loadedAssemblyPaths.IsSupersetOf(enabledEditorDlls);
+        }
+    }
+
+    /// <summary>
     /// Polls on main thread until compilation is finished prior to calling
     /// NotifyUpdateCompleteMethods() if an asset database refresh was in progress or
     /// forceNotification is true.
@@ -2183,15 +2226,15 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// refreshing.</param>
     private static void NotifyWhenCompliationComplete(bool forceNotification) {
         RunOnMainThread.PollOnUpdateUntilComplete(() => {
-                if (EditorApplication.isCompiling) {
+                if (EditorApplication.isCompiling || !EnabledEditorDllsLoaded) {
                     if (!compiling) {
                         Log("Compiling...", verbose: true);
                     }
                     compiling = true;
-                    // In batch mode this can get stuck forever as PollOnUpdateUntilComplete()
-                    // will block the main thread which prevents the EditorApplication.isCompiling
-                    // flag from being updated by the editor.
-                    return ExecutionEnvironment.InBatchMode;
+                    // When running a single method this can get stuck forever as
+                    // PollOnUpdateUntilComplete() will block the main thread which prevents the
+                    // EditorApplication.isCompiling flag from being updated by the editor.
+                    return ExecutionEnvironment.ExecuteMethodEnabled;
                 }
                 if (compiling) {
                     Log("Compilation complete.", verbose: true);
@@ -2391,9 +2434,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     [MenuItem("Assets/External Dependency Manager/Version Handler/Update")]
     public static void UpdateNow() {
         UpdateVersionedAssets(true, () => {
-                if (!ExecutionEnvironment.InBatchMode) {
-                    Dialog.Display(PLUGIN_NAME, "Update complete.", 0, "OK");
-                }
+                Dialog.Display(PLUGIN_NAME, "Update complete.", 0, "OK");
             });
     }
 
@@ -2535,6 +2576,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
         UpdateVersionedAssets(forceUpdate, () => {});
     }
 
+    /// <summary>
+    /// All editor DLLs enabled by the last pass of UpdateVersionedAssets().
+    /// </summary>
+    private static HashSet<string> enabledEditorDlls = new HashSet<string>();
 
     /// <summary>
     /// Find all files in the asset database with multiple version numbers
@@ -2565,6 +2610,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         var obsoleteFiles = new ObsoleteFiles(
             ManifestReferences.FindAndReadManifests(allMetadataSet), allMetadataSet);
         if (metadataSet.EnableMostRecentPlugins(forceUpdate, obsoleteFiles.All)) {
+            enabledEditorDlls.UnionWith(metadataSet.EnabledEditorDlls);
             analytics.Report("enablemostrecentplugins", "Enable Most Recent Plugins");
             AssetDatabase.Refresh();
             Refreshing = true;
