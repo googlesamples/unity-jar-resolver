@@ -18,6 +18,7 @@ namespace Google {
     using System;
     using System.IO;
     using System.Collections.Generic;
+    using System.Text.RegularExpressions;
     using UnityEditor;
 
     /// <summary>
@@ -37,7 +38,19 @@ namespace Google {
         /// <summary>
         /// The name of Packages folder
         /// </summary>
-        public readonly static string PACKAGES_FOLDER = "Packages";
+        private readonly static string PACKAGES_FOLDER = "Packages";
+
+        /// <summary>
+        /// Regex to match packages folder like "Packages/com.company.pkg"
+        /// </summary>
+        private static Regex PACKAGES_ASSETDB_PATH_REGEX =
+                new Regex(@"^(Packages[/\\][^/\\]+)([/\\].*)?$");
+
+        /// <summary>
+        /// Regex to match packages folder like "Library/PackageCache/com.company.pkg"
+        /// </summary>
+        private static Regex PACKAGES_PHYSICAL_PATH_REGEX =
+                new Regex(@"^(Library[/\\]PackageCache[/\\])([^/\\]+)(@[^/\\]+)([/\\].*)?$");
 
         /// <summary>
         /// Returns the project directory (e.g contains the Assets folder).
@@ -352,6 +365,9 @@ namespace Google {
         /// <param name="directory">Directory to check whether the path is under.</param>
         /// <returns>True if the path is under the directory.</returns>
         public static bool IsUnderDirectory(string path, string directory) {
+            if (String.IsNullOrEmpty(directory)) {
+                return false;
+            }
             if (!directory.EndsWith(Path.DirectorySeparatorChar.ToString())) {
                 directory = directory + Path.DirectorySeparatorChar;
             }
@@ -359,35 +375,89 @@ namespace Google {
         }
 
         /// <summary>
+        /// Enum of different types of package directory.
+        /// </summary>
+        public enum PackageDirectoryType {
+            None = 0,
+            // Package path like "Packages/package-id", which is logical path only AssetDatabase
+            // can recognize.
+            AssetDatabasePath = 1,
+            // Package path like "Library/PackageCache/package-id@version", which is the physical
+            // path on the disk.
+            PhysicalPath = 2
+        }
+
+        /// <summary>
+        /// Checks if the given path is under the Package directory.
+        /// </summary>
+        /// <param name="path">Path to the file/directory.</param>
+        /// <returns>
+        /// PackageDirectoryType.None if the path is not under Package directory.
+        /// PackageDirectoryType.AssetDatabasePath if path matches "Packages/package-id".
+        /// PackageDirectoryType.PhysicalPath if path matches "Library/PackageCache/package-id".
+        /// </returns>
+        public static PackageDirectoryType GetPackageDirectoryType(string path) {
+            if (PACKAGES_ASSETDB_PATH_REGEX.IsMatch(path)) {
+                return PackageDirectoryType.AssetDatabasePath;
+            }
+            if (PACKAGES_PHYSICAL_PATH_REGEX.IsMatch(path)) {
+                return PackageDirectoryType.PhysicalPath;
+            }
+            return PackageDirectoryType.None;
+        }
+
+        /// <summary>
+        /// Checks if the given path is under the Package directory.
+        /// </summary>
+        /// <param name="path">Path to the file/directory.</param>
+        /// <returns> True if the path is under package directory.</returns>
+        public static bool IsUnderPackageDirectory(string path) {
+            return GetPackageDirectoryType(path) != PackageDirectoryType.None;
+        }
+
+        /// <summary>
         /// Get the package directory from the path.
         /// The package directory should look like "Packages/package-id", where package id is
         /// the Unity Package Manager package name.
-        /// Ex. "Packages/com.google.unity-jar-resolver" if actualPath is false, or
-        /// "Library/PackageCache/com.google.unity-jar-resolver@1.2.120/" if true.
-        /// Logical path is
         /// Note that there is no way to get physical path if the package is installed from disk.
         /// </summary>
         /// <param name="path">Path to the file/directory.</param>
-        /// <param name="actualPath">If false, return logical path only recognizable by
-        /// AssetDatabase. Otherwise, return physical path of the package.</param>
-        /// <returns>Package directory part of the given path. Empty string if the path is not valid
-        /// .</returns>
-        public static string GetPackageDirectory(string path, bool actualPath) {
-            if (!IsUnderDirectory(path, PACKAGES_FOLDER)) {
-                return "";
-            }
-
-            string[] components = SplitPathIntoComponents(path);
-            if (components.Length < 2) {
-                return "";
-            }
-
-            string packageDir = components[0] + Path.DirectorySeparatorChar + components[1];
-            if (actualPath) {
-                // This only works if the package is NOT installed from disk. That is, it should
-                // work if the package is installed from a local tarball or from a registry server.
-                string absolutePath = Path.GetFullPath(packageDir);
-                packageDir = absolutePath.Substring(ProjectDirectory.Length + 1);
+        /// <param name="directoryType">
+        /// If PackageDirectoryType.None, return package directoy as it is in the path.
+        /// If PackageDirectoryType.AssetDatabasePath, return package directory like
+        /// "Packages/package-id".
+        /// If PackageDirectoryType.PhysicalPath, return package directory like
+        /// "Library/PackageCache/package-id@version".
+        /// </param>
+        /// <returns>Package directory part of the given path. Empty string if the path is not under
+        /// package directory.</returns>
+        public static string GetPackageDirectory(
+                string path,
+                PackageDirectoryType directoryType = PackageDirectoryType.None) {
+            string packageDir = null;
+            var nameMatch = PACKAGES_ASSETDB_PATH_REGEX.Match(path);
+            if (nameMatch.Success) {
+                packageDir = nameMatch.Groups[1].Value;
+                if (directoryType == PackageDirectoryType.PhysicalPath) {
+                    // This only works if the package is NOT installed from disk. That is, it should
+                    // work if the package is installed from a local tarball or from a registry
+                    // server.
+                    string absolutePath = Path.GetFullPath(packageDir);
+                    packageDir = absolutePath.Substring(ProjectDirectory.Length + 1);
+                }
+            } else {
+                nameMatch = PACKAGES_PHYSICAL_PATH_REGEX.Match(path);
+                if (nameMatch.Success) {
+                    if (directoryType == PackageDirectoryType.AssetDatabasePath) {
+                        packageDir = Path.Combine(PACKAGES_FOLDER, nameMatch.Groups[2].Value);
+                    } else {
+                        packageDir = nameMatch.Groups[1].Value +
+                                     nameMatch.Groups[2].Value +
+                                     nameMatch.Groups[3].Value;
+                    }
+                } else {
+                    packageDir = "";
+                }
             }
 
             return packageDir;

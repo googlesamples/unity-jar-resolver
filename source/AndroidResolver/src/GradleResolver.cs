@@ -163,21 +163,20 @@ namespace GooglePlayServices
 
                 if (FileUtils.IsUnderDirectory(repoPath, FileUtils.ASSETS_FOLDER)) {
                     trimmedRepoPath = repoPath.Substring(FileUtils.ASSETS_FOLDER.Length + 1);
-                } else if (FileUtils.IsUnderDirectory(repoPath, FileUtils.PACKAGES_FOLDER)) {
+                } else if (FileUtils.IsUnderPackageDirectory(repoPath)) {
                     // Trim the Packages/package-id/ part
-                    string packageFolder =
-                        FileUtils.GetPackageDirectory(repoPath, actualPath: false);
+                    string packageFolder = FileUtils.GetPackageDirectory(repoPath);
                     if (!String.IsNullOrEmpty(packageFolder)) {
                         trimmedRepoPath = repoPath.Substring(packageFolder.Length + 1);
                     }
                 }
 
                 // Search under Packages/package-id first if Dependencies.xml is from a UPM package.
-                if (FileUtils.IsUnderDirectory(sourceLocation, FileUtils.PACKAGES_FOLDER)) {
+                if (FileUtils.IsUnderPackageDirectory(sourceLocation)) {
                     // Get the physical package directory.
                     // Ex. Library/PackageCache/com.google.unity-jar-resolver@1.2.120/
-                    string packageFolder =
-                        FileUtils.GetPackageDirectory(sourceLocation, actualPath: true);
+                    string packageFolder = FileUtils.GetPackageDirectory(
+                            sourceLocation, FileUtils.PackageDirectoryType.PhysicalPath);
                     if (!String.IsNullOrEmpty(packageFolder)) {
                         string repoPathUnderPackages =
                             packageFolder + Path.DirectorySeparatorChar + trimmedRepoPath;
