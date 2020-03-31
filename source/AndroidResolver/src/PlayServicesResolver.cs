@@ -2188,9 +2188,7 @@ namespace GooglePlayServices {
         /// Called when settings change.
         /// </summary>
         internal static void OnSettingsChanged() {
-            PlayServicesSupport.verboseLogging =
-                SettingsDialogObj.VerboseLogging ||
-                ExecutionEnvironment.InBatchMode;
+            PlayServicesSupport.verboseLogging = SettingsDialogObj.VerboseLogging;
             logger.Verbose = SettingsDialogObj.VerboseLogging;
             if (gradleResolver != null) {
                 PatchAndroidManifest(GetAndroidApplicationId(), null);

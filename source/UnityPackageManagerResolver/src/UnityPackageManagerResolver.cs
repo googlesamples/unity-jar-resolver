@@ -538,8 +538,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
         get { return settings.GetBool(PreferenceVerboseLoggingEnabled, defaultValue: false); }
         set {
             settings.SetBool(PreferenceVerboseLoggingEnabled, value);
-            logger.Level = ExecutionEnvironment.InBatchMode || value ?
-                LogLevel.Verbose : LogLevel.Info;
+            logger.Level = value ? LogLevel.Verbose : LogLevel.Info;
         }
     }
 

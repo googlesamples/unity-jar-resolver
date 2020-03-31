@@ -893,8 +893,7 @@ public class IOSResolver : AssetPostprocessor {
         get { return settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, defaultValue: false); }
         set {
             settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value);
-            logger.Level = (value || ExecutionEnvironment.InBatchMode) ?
-                LogLevel.Verbose : LogLevel.Info;
+            logger.Level = value ? LogLevel.Verbose : LogLevel.Info;
         }
     }
 

@@ -2325,8 +2325,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                       defaultValue: false); }
         set {
             settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value);
-            logger.Level = System.Environment.CommandLine.Contains("-batchmode") || value ?
-                LogLevel.Verbose : LogLevel.Info;
+            logger.Level = value ? LogLevel.Verbose : LogLevel.Info;
         }
     }
 
