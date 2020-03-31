@@ -730,28 +730,32 @@ Task createXbuildTask(String taskName, String taskDescription,
 
   Task task = tasks.create(name: taskName,
                            description: taskDescription,
-                           type: Exec,
+                           type: Task,
                            dependsOn: compileTaskDependencies).with {
     inputs.files inputFiles
     outputs.files files(outputFilesInBinaryOutputDir)
-    executable project.ext.xbuildExe
-    workingDir projectToBuild.parentFile.absolutePath
-    args ([sprintf("/target:%s", target),
-           sprintf("/property:UnityHintPath=%s",
-                   project.ext.unityDllPath.absolutePath),
-           sprintf("/property:UnityIosPath=%s",
-                   project.ext.unityIosPath.absolutePath),
-           sprintf("/property:NUnityHintPath=%s",
-                   project.ext.unityNUnitDll ?
-                   project.ext.unityNUnitDll.absolutePath: ""),
-           sprintf("/property:BaseIntermediateOutputPath=%s%s",
-                   intermediatesDir.absolutePath,
-                   File.separator),
-           sprintf("/property:OutputPath=%s%s",
-                   binaryOutputDir.absolutePath,
-                   File.separator),
-           "/verbosity:quiet",
-           projectToBuild.absolutePath])
+    doLast {
+      exec {
+        executable project.ext.xbuildExe
+        workingDir projectToBuild.parentFile.absolutePath
+        args ([sprintf("/target:%s", target),
+               sprintf("/property:UnityHintPath=%s",
+                       project.ext.unityDllPath.absolutePath),
+               sprintf("/property:UnityIosPath=%s",
+                       project.ext.unityIosPath.absolutePath),
+               sprintf("/property:NUnityHintPath=%s",
+                       project.ext.unityNUnitDll ?
+                 project.ext.unityNUnitDll.absolutePath: ""),
+               sprintf("/property:BaseIntermediateOutputPath=%s%s",
+                       intermediatesDir.absolutePath,
+                       File.separator),
+               sprintf("/property:OutputPath=%s%s",
+                       binaryOutputDir.absolutePath,
+                       File.separator),
+               "/verbosity:quiet",
+               projectToBuild.absolutePath])
+      }
+    }
   }
   task.ext.buildDir = outputDir
   return task
@@ -871,16 +875,20 @@ Task createNUnitTask(String name, String description, File testDll,
   File xmlLogFile = new File(logFileDir, name + ".xml")
   return tasks.create(name: name,
                       description: description,
-                      type: Exec,
+                      type: Task,
                       dependsOn: dependsOn).with {
-    workingDir project.ext.pluginSourceDir
-    inputs.files testDll
-    outputs.files logFile
-    executable project.ext.nunitConsoleExe
-    args ([sprintf("-output:%s", logFile.absolutePath),
-           sprintf("-xml:%s", xmlLogFile.absolutePath),
-           testDll.absolutePath])
     doFirst { checkNUnitConsolePath() }
+    doLast {
+      exec {
+        workingDir project.ext.pluginSourceDir
+        inputs.files testDll
+        outputs.files logFile
+        executable project.ext.nunitConsoleExe
+        args ([sprintf("-output:%s", logFile.absolutePath),
+               sprintf("-xml:%s", xmlLogFile.absolutePath),
+               testDll.absolutePath])
+      }
+    }
   }
 }
 
