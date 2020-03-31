@@ -112,7 +112,7 @@ project.ext {
     "XBUILD_EXE", false, {
       unityRootDirTree.matching {
         include (operatingSystem == OperatingSystem.WINDOWS ?
-                 "**/Mono/bin/xbuild.bat" : "**/xbuild")
+                 "**/bin/xbuild.bat" : "**/xbuild")
         exclude unitySearchDirExcludes
       }
     })
@@ -120,6 +120,51 @@ project.ext {
     throw new StopActionException("xbuild not found (XBUILD_EXE)")
   }
   saveProperty("XBUILD_EXE", xbuildExe, cacheProperties)
+
+  // Find mono to determine the distribution being used.
+  monoExe = getFileFromPropertyOrFileTree(
+    "MONO_EXE", false, {
+      unityRootDirTree.matching {
+        include (operatingSystem == OperatingSystem.WINDOWS ?
+          "**/bin/mono.bat" : "**/bin/mono")
+        exclude unitySearchDirExcludes
+      }
+    })
+  saveProperty("MONO_EXE", monoExe, cacheProperties)
+
+  // Get the mono distribution version.
+  def versionRegEx = /^.* version ([^ ]+) .*/
+  def stdout = new ByteArrayOutputStream()
+  exec {
+    commandLine monoExe, "-V"
+    ignoreExitValue true
+    standardOutput = stdout
+  }
+  def monoVersionList =
+    stdout.toString().replace("\r\n", "\n").tokenize("\n").findResults {
+      def versionMatch = it =~ versionRegEx
+      if (versionMatch.matches()) {
+        return versionMatch.group(1)
+      }
+      return null
+    }
+  if (!monoVersionList) {
+    throw new StopActionException(
+      sprintf("Unable to determine mono version from %s", monoExe))
+  }
+  monoVersion = monoVersionList[0]
+
+  // Mono 5.x and above generate .pdb files that are compatible with visual
+  // studio as opposed to the mono-specific .pdb files.
+  pdbSupported = monoVersion.tokenize(".")[0].toInteger() >= 5
+
+  if (pdbSupported) {
+    logger.warn(
+      sprintf("Mono %s detected which will generate .pdb files " +
+              "that are not compatible with older versions of Unity. " +
+              "This can be fixed by compiling with Unity 5.6.",
+              monoVersion))
+  }
 
   // Find the NUnit framework dll.
   unityNUnitDll = getFileFromPropertyOrFileTree(
@@ -139,7 +184,7 @@ project.ext {
     "NUNIT_CONSOLE_EXE", false, {
       unityRootDirTree.matching {
         include (operatingSystem == OperatingSystem.WINDOWS ?
-                 "**/Mono/bin/nunit-console2.bat" :
+                 "**/bin/nunit-console2.bat" :
                  "**/nunit-console2")
         exclude unitySearchDirExcludes
       }
@@ -170,7 +215,7 @@ project.ext {
   unityPackagePath = findFileProperty("UNITY_PACKAGE_PATH", null)
 
   // Whether debug symbols should be included.
-  debugEnabled = findProperty("NDEBUG") == null
+  debugEnabled = true
 
   // Whether interactive mode tests are enabled.
   interactiveModeTestsEnabled =
@@ -231,8 +276,8 @@ project.ext {
   unityInteractiveModeArguments = ["-gvh_noninteractive"]
   // Extension for Unity asset metadata files.
   unityMetadataExtension = ".meta"
-  // Extension for debug files.
-  dllMdbExtension = ".mdb"
+  // Extensions for debug files.
+  symbolDatabaseExtension = pdbSupported ? ".pdb" : ".dll.mdb"
   // Changelog file.
   changelog = new File(scriptDirectory, "CHANGELOG.md")
   pythonBootstrapDir = new File(buildDir, "python_bootstrap")
@@ -414,8 +459,8 @@ void checkNUnitConsolePath() {
 List<String> splitFilenameExtension(File fileObj) {
   String filename = fileObj.name
   int extensionIndex =
-    (filename - project.ext.unityMetadataExtension -
-     project.ext.dllMdbExtension).lastIndexOf(".")
+    (filename - project.ext.symbolDatabaseExtension -
+     project.ext.unityMetadataExtension).lastIndexOf(".")
   if (extensionIndex < 0) return [filename, ""]
   String basename = filename.substring(0, extensionIndex)
   String extension = filename.substring(extensionIndex)
@@ -554,7 +599,7 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
   if (!sourceFile.name.endsWith(project.ext.unityMetadataExtension)) {
     return copyFile(sourceFile, targetFile)
   }
-  String[] lines = sourceFile.text.split("\n")
+  String[] lines = sourceFile.text.tokenize("\n")
 
   // Parse the existing version from the asset metadata.
   def folderAssetRegEx = /^folderAsset:\s+yes\s*$/
@@ -639,7 +684,18 @@ Task createXbuildTask(String taskName, String taskDescription,
   Iterable<File> outputFilesInBinaryOutputDir = outputFiles.collect {
     return new File(binaryOutputDir, it.path)
   }
+
+  if (project.ext.debugEnabled) {
+    outputFilesInBinaryOutputDir += outputFilesInBinaryOutputDir.findResults {
+      return it.name.endsWith(".dll") ?
+        new File(it.parentFile.path,
+                 splitFilenameExtension(it)[0] +
+                 project.ext.symbolDatabaseExtension) : null
+    }
+  }
+
   Iterable<Task> dependsOnTasks = dependsOn ? dependsOn : []
+  Iterable<Task> compileTaskDependencies = dependsOnTasks.clone()
   Iterable<Task> patchVersionFilesTasks = inputFiles.findResults {
     if (it.name == "VersionNumber.cs") {
       File versionFile = it
@@ -668,12 +724,14 @@ Task createXbuildTask(String taskName, String taskDescription,
       return patchVersionTask
     }
   }
+  if (patchVersionFilesTasks) {
+    compileTaskDependencies += patchVersionFilesTasks
+  }
+
   Task task = tasks.create(name: taskName,
                            description: taskDescription,
                            type: Exec,
-                           dependsOn: patchVersionFilesTasks ?
-                                          patchVersionFilesTasks :
-                                      dependsOnTasks).with {
+                           dependsOn: compileTaskDependencies).with {
     inputs.files inputFiles
     outputs.files files(outputFilesInBinaryOutputDir)
     executable project.ext.xbuildExe
@@ -723,25 +781,21 @@ Task createBuildPluginDllTask(String componentName,
   File projectDir = new File(project.ext.pluginSourceDir, projectName)
   File projectBuildDir = new File(project.ext.buildDir, projectName)
 
-  List<File> buildFiles = [new File(assemblyDllBasename)]
-  if (project.ext.debugEnabled) {
-    buildFiles += [new File(assemblyDllBasename + project.ext.dllMdbExtension)]
-  }
-
   // Compile the C# project.
   Task compileTask = createXbuildTask(
     sprintf("compile%s", componentName), sprintf("Compile %s", projectName),
     project.ext.pluginSolutionFile, projectName,
     fileTree(new File(projectDir, "src")), projectBuildDir,
-    buildFiles, dependsOn)
+    [new File(assemblyDllBasename)], dependsOn)
   compileTask.ext.componentName = componentName
 
   // Template metadata for the built DLL.
-  Iterable<File> assemblyDllMetaFiles = buildFiles.collect {
-    new File(new File(project.ext.pluginTemplateDir,
-                      project.ext.pluginEditorDllDir.path),
-             it.name + project.ext.unityMetadataExtension)
-  }
+  Iterable<File> assemblyDllMetaFiles =
+    compileTask.outputs.files.collect {
+      new File(new File(project.ext.pluginTemplateDir,
+                        project.ext.pluginEditorDllDir.path),
+               it.name + project.ext.unityMetadataExtension)
+    }
   // Optionally map unversioned to versioned filenames.
   Iterable<File> unversionedFiles = files(compileTask.outputs.files,
                                           assemblyDllMetaFiles)
@@ -942,7 +996,6 @@ Task createUnityTask(String taskName, String summary,
                                   executeArguments)
   }
   unityTask.with {
-    inputs.files fileTree(projectDir)
     outputs.files files(logFile)
   }
   unityTask.ext.projectDir = projectDir
@@ -1030,22 +1083,32 @@ Task createUnityTestTask(String taskName, String description,
                          Iterable<File> editorAssets,
                          Iterable<String> additionalArguments,
                          Boolean batchMode, createTaskClosure) {
-  List<File> inputFiles = fileTree(testScriptsDir).collect {
-    new File(it.absolutePath - testScriptsDir.absolutePath)
+  List<File> testScripts = []
+  if (testScriptsDir) {
+    testScripts = fileTree(testScriptsDir).collect {
+      new File(it.absolutePath.substring(
+                 testScriptsDir.absolutePath.length() + 1))
+    }
   }
+
   // Setup the Unity project.
   Task setupTestProject = createSetupUnityProjectTask(
     sprintf("setup%s", taskName), dependsOn, taskName, batchMode)
   setupTestProject.with {
-    inputs.files inputFiles
+    inputs.files (testScripts + editorAssets)
   }
 
+  List<Task> copyTasks = []
+
   // Task which copies test scripts into the project.
-  Task copyTestScripts = createCopyFilesTask(
-    sprintf("copyScriptsFor%s", taskName),
-    sprintf("Copy the test scripts into the %s Unity project.", taskName),
-    inputFiles, testScriptsDir, setupTestProject.ext.projectDir,
-    [setupTestProject], null)
+  if (testScriptsDir) {
+    Task copyTestScripts = createCopyFilesTask(
+      sprintf("copyScriptsFor%s", taskName),
+      sprintf("Copy the test scripts into the %s Unity project.", taskName),
+      testScripts, testScriptsDir, setupTestProject.ext.projectDir,
+      [setupTestProject], null)
+    copyTasks += [copyTestScripts]
+  }
 
   // Task which copies editor scripts into the project.
   Task copyEditorAssets = tasks.create(
@@ -1059,10 +1122,11 @@ Task createUnityTestTask(String taskName, String description,
     into new File(new File(setupTestProject.ext.projectDir, "Assets"),
                   "Editor")
   }
+  copyTasks += [copyEditorAssets]
 
   // Create the test task.
   Task testTask = createUnityTask(taskName, "test",
-                                  [copyTestScripts, copyEditorAssets],
+                                  copyTasks,
                                   setupTestProject.ext.projectDir.name,
                                   setupTestProject.ext.containerDir,
                                   additionalArguments, batchMode,
@@ -1124,8 +1188,7 @@ Task compileResolverLibTests = createXbuildTask(
     fileTree(new File(new File(project.ext.pluginSourceDir,
                                "JarResolverLib"), "src")),
     new File(project.ext.testDir, "ResolverLibTests"),
-    [new File("JarResolverTests.dll"),
-     new File("JarResolverTests.dll.mdb")], []).with {
+    [new File("JarResolverTests.dll")], []).with {
   doFirst { checkNUnitDllPath() }
 }
 
@@ -1546,7 +1609,7 @@ task gitAddReleaseFilesToStaging(type: Exec, dependsOn: releasePlugin) {
  */
 String readVersionSummaryFromChangelog() {
   String versionSummary = ""
-  for (String line in project.ext.changelog.text.split("\n")) {
+  for (String line in project.ext.changelog.text.tokenize("\n")) {
     String trimmedLine = line.trim()
     if (line.isEmpty()) break
     versionSummary += line + "\n"
@@ -1631,8 +1694,7 @@ Task compileVersionHandlerImplTests = createXbuildTask(
                  "unit_tests"),
                "src")),
     new File(project.ext.testDir, "VersionHandlerImplTests"),
-    [new File("Google.VersionHandlerImplTests.dll"),
-     new File("Google.VersionHandlerImplTests.dll.mdb")], []).with {
+    [new File("Google.VersionHandlerImplTests.dll")], []).with {
   doFirst { checkNUnitDllPath() }
 }
 
@@ -1653,8 +1715,7 @@ Task compileUnityPackageManagerResolverTests = createXbuildTask(
                  "unit_tests"),
                "src")),
     new File(project.ext.testDir, "UnityPackageManagerResolverTests"),
-    [new File("Google.UnityPackageManagerResolverTests.dll"),
-     new File("Google.UnityPackageManagerResolverTests.dll.mdb")],
+    [new File("Google.UnityPackageManagerResolverTests.dll")],
     [buildUnityPackageManagerResolver]).with {
   doFirst { checkNUnitDllPath() }
 }
@@ -1717,8 +1778,7 @@ Task compileIntegrationTester = createXbuildTask(
   fileTree(new File(project.ext.pluginSourceDir,
                     "IntegrationTester")),
   new File(project.ext.buildDir, "IntegrationTester"),
-  [new File("Google.IntegrationTester.dll"),
-   new File("Google.IntegrationTester.dll.mdb")],
+  [new File("Google.IntegrationTester.dll")],
   [compileVersionHandler])
 
 /*
@@ -1775,8 +1835,7 @@ createUnityIntegrationTest(
   "AndroidResolverIntegrationTests",
   fileTree(new File(new File(project.ext.pluginSourceDir, "AndroidResolver"),
                     "test")),
-  [new File("Google.AndroidResolverIntegrationTests.dll"),
-   new File("Google.AndroidResolverIntegrationTests.dll.mdb")],
+  [new File("Google.AndroidResolverIntegrationTests.dll")],
   new File(
     project.ext.scriptDirectory,
     "source/AndroidResolver/test/AndroidResolverIntegrationTestsUnityProject"),

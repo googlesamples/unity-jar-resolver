@@ -7,8 +7,7 @@
           "importer": "PluginImporter",
           "platforms": ["Editor"],
           "paths": [
-            "ExternalDependencyManager/Editor/Google.VersionHandler.dll",
-            "ExternalDependencyManager/Editor/Google.VersionHandler.dll.mdb"
+            "ExternalDependencyManager/Editor/Google.VersionHandler.*"
           ]
         },
         {
@@ -16,14 +15,10 @@
           "platforms": [],
           "labels": ["gvhp_targets-editor"],
           "paths": [
-            "ExternalDependencyManager/Editor/Google.IOSResolver_*.dll",
-            "ExternalDependencyManager/Editor/Google.IOSResolver_*.dll.mdb",
-            "ExternalDependencyManager/Editor/Google.JarResolver_*.dll",
-            "ExternalDependencyManager/Editor/Google.JarResolver_*.dll.mdb",
-            "ExternalDependencyManager/Editor/Google.VersionHandlerImpl_*.dll",
-            "ExternalDependencyManager/Editor/Google.VersionHandlerImpl_*.dll.mdb",
-            "ExternalDependencyManager/Editor/Google.UnityPackageManagerResolver_*.dll",
-            "ExternalDependencyManager/Editor/Google.UnityPackageManagerResolver_*.dll.mdb"
+            "ExternalDependencyManager/Editor/Google.IOSResolver_*.*",
+            "ExternalDependencyManager/Editor/Google.JarResolver_*.*",
+            "ExternalDependencyManager/Editor/Google.VersionHandlerImpl_*.*",
+            "ExternalDependencyManager/Editor/Google.UnityPackageManagerResolver_*.*"
           ],
           "override_metadata_upm": {
             "PluginImporter": {
