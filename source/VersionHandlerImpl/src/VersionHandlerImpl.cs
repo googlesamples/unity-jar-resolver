@@ -1774,10 +1774,17 @@ public class VersionHandlerImpl : AssetPostprocessor {
             var obsoleteFilesSorted = new List<string>(obsoleteFiles);
             currentFilesSorted.Sort();
             obsoleteFilesSorted.Sort();
-            Log(String.Format("'{0}' Manifest:\n\nCurrent files:\n{1}\n\nObsolete files:\n{2}",
-                              filenameCanonical,
-                              String.Join("\n", currentFilesSorted.ToArray()),
-                              String.Join("\n", obsoleteFilesSorted.ToArray())),
+            var components = new List<string>();
+            if (currentFilesSorted.Count > 0) {
+                components.Add(String.Format("Current files:\n{0}",
+                                             String.Join("\n", currentFilesSorted.ToArray())));
+            }
+            if (obsoleteFilesSorted.Count > 0) {
+                components.Add(String.Format("Obsolete files:\n{0}",
+                                             String.Join("\n", obsoleteFilesSorted.ToArray())));
+            }
+            Log(String.Format("'{0}' Manifest:\n{1}",
+                              filenameCanonical, String.Join("\n", components.ToArray())),
                 verbose: true);
             return true;
         }
@@ -2149,6 +2156,13 @@ public class VersionHandlerImpl : AssetPostprocessor {
     };
 
     /// <summary>
+    /// Load log preferences.
+    /// </summary>
+    private static void LoadLogPreferences() {
+        VerboseLoggingEnabled = VerboseLoggingEnabled;
+    }
+
+    /// <summary>
     /// Enables / disables assets imported at multiple revisions / versions.
     /// In addition, this module will read text files matching _manifest_
     /// and remove files from older manifest files.
@@ -2156,8 +2170,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     static VersionHandlerImpl() {
         Log("Loaded VersionHandlerImpl", verbose: true);
         RunOnMainThread.Run(() => {
-                // Load log preferences.
-                VerboseLoggingEnabled = VerboseLoggingEnabled;
+                LoadLogPreferences();
                 UpdateVersionedAssetsOnUpdate();
             }, runNow: false);
     }
@@ -2196,7 +2209,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
             var loadedAssemblyPaths = new HashSet<string>();
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
                 try {
-                    loadedAssemblyPaths.Add(Path.GetFullPath(assembly.Location));
+                    var path = Path.GetFullPath(assembly.Location);
+                    if (enabledEditorDlls.Contains(path)) {
+                        loadedAssemblyPaths.Add(path);
+                    }
                 } catch (NotSupportedException) {
                     // Dynamic assemblies do not have a file location so ignore.
                 }
@@ -2432,6 +2448,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     [MenuItem("Assets/External Dependency Manager/Version Handler/Update")]
     public static void UpdateNow() {
+        LoadLogPreferences();
         UpdateVersionedAssets(true, () => {
                 Dialog.Display(PLUGIN_NAME, "Update complete.", 0, "OK");
             });
@@ -2589,6 +2606,20 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// <param name="forceUpdate">Whether to force an update.</param>
     /// <param name="complete">Called when this is method is complete.</param>
     public static void UpdateVersionedAssets(bool forceUpdate, Action complete) {
+        CancelUpdateVersionedAssets();
+        RunOnMainThread.Run(() => { UpdateVersionedAssetsOnMainThread(forceUpdate, complete); },
+                            runNow: false);
+    }
+
+    /// <summary>
+    /// Find all files in the asset database with multiple version numbers
+    /// encoded in their filename, select the most recent revisions and
+    /// delete obsolete versions and files referenced by old manifests that
+    /// are not present in the most recent manifests.
+    /// </summary>
+    /// <param name="forceUpdate">Whether to force an update.</param>
+    /// <param name="complete">Called when this is method is complete.</param>
+    private static void UpdateVersionedAssetsOnMainThread(bool forceUpdate, Action complete) {
         // If this module is disabled do nothing.
         if (!forceUpdate && !Enabled) {
             complete();
@@ -2784,6 +2815,19 @@ public class VersionHandlerImpl : AssetPostprocessor {
         return ExecutionEnvironment.VersionMajorMinor;
     }
 
+    // ID of the scheduled job which performs an update.
+    private static int updateVersionedAssetsJob = 0;
+
+    /// <summary>
+    /// Cancel the update versioned assets job.
+    /// </summary>
+    private static void CancelUpdateVersionedAssets() {
+        if (updateVersionedAssetsJob > 0) {
+            RunOnMainThread.Cancel(updateVersionedAssetsJob);
+            updateVersionedAssetsJob = 0;
+        }
+    }
+
     /// <summary>
     /// Scanned for versioned assets and apply modifications if required.
     /// </summary>
@@ -2791,7 +2835,15 @@ public class VersionHandlerImpl : AssetPostprocessor {
             string[] importedAssets, string[] deletedAssets,
             string[] movedAssets, string[] movedFromPath) {
         ManifestReferences.FlushCaches();
-        UpdateVersionedAssets();
+        if (Enabled) {
+            const double UpdateDelayInMiliseconds = 2000;
+            CancelUpdateVersionedAssets();
+            updateVersionedAssetsJob =
+                RunOnMainThread.Schedule(() => {
+                        UpdateVersionedAssets();
+                    },
+                    UpdateDelayInMiliseconds);
+        }
     }
 
     /// <summary>
