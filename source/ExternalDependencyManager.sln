@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityPackageManagerResolver
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityPackageManagerClientIntegrationTests", "UnityPackageManagerResolver\test\UnityPackageManagerClientIntegrationTests.csproj", "{00A0DB5E-1120-24C9-331A-BE692C1F7C01}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageMigratorIntegrationTests", "UnityPackageManagerResolver\test\PackageMigratorIntegrationTests.csproj", "{4DBDEE33-4B6C-A866-93FE-04C15486BB03}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -79,5 +81,9 @@ Global
 		{00A0DB5E-1120-24C9-331A-BE692C1F7C01}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{00A0DB5E-1120-24C9-331A-BE692C1F7C01}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{00A0DB5E-1120-24C9-331A-BE692C1F7C01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4DBDEE33-4B6C-A866-93FE-04C15486BB03}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4DBDEE33-4B6C-A866-93FE-04C15486BB03}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4DBDEE33-4B6C-A866-93FE-04C15486BB03}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4DBDEE33-4B6C-A866-93FE-04C15486BB03}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -1204,7 +1204,7 @@ internal static class UnityPackageManagerClient {
     /// <summary>
     /// Logger for this class.
     /// </summary>
-    public static Logger Logger = new Logger();
+    public static Logger Logger = UnityPackageManagerResolver.logger;
 
     /// <summary>
     /// Job queue for package managers jobs.

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{4DBDEE33-4B6C-A866-93FE-04C15486BB03}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>Google.PackageMigratorIntegrationTests</RootNamespace>
+    <AssemblyName>Google.PackageMigratorIntegrationTests</AssemblyName>
+	<TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <ReleaseVersion>1.2</ReleaseVersion>
+    <ProductVersion>12.0.0</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>True</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>False</Optimize>
+    <OutputPath>bin\Debug</OutputPath>
+    <DefineConstants>DEBUG;</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>False</ConsolePause>
+  </PropertyGroup>
+   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+     <DebugType>none</DebugType>
+     <Optimize>True</Optimize>
+     <OutputPath>bin\Release</OutputPath>
+     <ErrorReport>prompt</ErrorReport>
+     <WarningLevel>4</WarningLevel>
+     <ConsolePause>False</ConsolePause>
+   </PropertyGroup>
+   <ItemGroup>
+     <Reference Include="UnityEditor">
+       <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
+     </Reference>
+     <Reference Include="UnityEngine">
+       <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
+     </Reference>
+     <Reference Include="System" />
+     <Reference Include="System.Core" />
+   </ItemGroup>
+   <ItemGroup>
+     <Compile Include="PackageMigratorIntegrationTests\PackageMigratorIntegrationTests.cs" />
+   </ItemGroup>
+   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+   <ItemGroup>
+     <ProjectReference Include="..\..\VersionHandler\VersionHandler.csproj">
+       <Project>{5378B37A-887E-49ED-A8AE-42FA843AA9DC}</Project>
+       <Name>VersionHandler</Name>
+     </ProjectReference>
+     <ProjectReference Include="..\..\VersionHandlerImpl\VersionHandlerImpl.csproj">
+       <Project>{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}</Project>
+       <Name>VersionHandlerImpl</Name>
+     </ProjectReference>
+     <ProjectReference Include="..\..\IntegrationTester/IntegrationTester.csproj">
+       <Project>{DBD8D4D9-61AC-4E75-8CDC-CABE7033A040}</Project>
+       <Name>IntegrationTester</Name>
+     </ProjectReference>
+     <ProjectReference Include="..\UnityPackageManagerResolver.csproj">
+       <Project>{77EBE819-CBE6-4CA8-A791-ED747EA29D30}</Project>
+       <Name>UnityPackageManagerResolver</Name>
+     </ProjectReference>
+   </ItemGroup>
+</Project>

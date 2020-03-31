@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 582ec7fc4a96a07e46c1bd207510d1b8
+labels:
+- gvh_version-6.13.0
+- gvh
+- gvh_manifest
+- gvhp_manifestname-0Firebase Authentication
+- gvhp_manifestname-FirebaseAuth
+timeCreated: 1474401009
+licenseType: Pro
+TextScriptImporter:
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

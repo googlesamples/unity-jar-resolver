@@ -1863,6 +1863,23 @@ createUnityIntegrationTest(
    new File("Google.UnityPackageManagerClientIntegrationTests.dll.mdb")],
   null, [])
 
+createUnityIntegrationTest(
+  "testPackageMigratorIntegrationTests",
+  ("Imports the plugin into a Unity project and uses the Package Migrator " +
+   "list packages that can be migrated and self migrate EDM to UPM. "),
+  [compileUnityPackageManagerResolver],
+  "PackageMigratorIntegrationTests",
+  fileTree(new File(new File(new File(project.ext.pluginSourceDir,
+                             "UnityPackageManagerResolver"), "test"),
+                    "PackageMigratorIntegrationTests")),
+  [new File("Google.PackageMigratorIntegrationTests.dll"),
+   new File("Google.PackageMigratorIntegrationTests.dll.mdb")],
+  new File(
+    project.ext.scriptDirectory,
+    "source/UnityPackageManagerResolver/test/" +
+    "PackageMigratorIntegrationTestsUnityProject"),
+  [])
+
 task cleanTests(type: Delete) {
   description "Clean test directories."
   delete project.ext.testDir

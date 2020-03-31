@@ -53,5 +53,6 @@ using System.Runtime.CompilerServices;
 //    limitations under the License.
 // </copyright>[assembly: AssemblyKeyFile("")]
 
+[assembly: InternalsVisibleTo("Google.PackageMigratorIntegrationTests")]
 [assembly: InternalsVisibleTo("Google.UnityPackageManagerResolverTests")]
 [assembly: InternalsVisibleTo("Google.UnityPackageManagerClientIntegrationTests")]

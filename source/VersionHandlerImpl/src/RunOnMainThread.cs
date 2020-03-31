@@ -180,6 +180,58 @@ public class RunOnMainThread {
     }
 
     /// <summary>
+    /// Job which calls a function periodically over an interval.
+    /// </summary>
+    public class PeriodicJob {
+
+        /// <summary>
+        /// ID of the next update.
+        /// </summary>
+        private int jobId;
+
+        /// <summary>
+        /// Closure to execute on each update.
+        /// </summary>
+        private Func<bool> condition;
+
+        /// <summary>
+        /// Interval to wait between each execution of the job.
+        /// </summary>
+        public double IntervalInMilliseconds;
+
+        /// <summary>
+        /// Construct a periodic job.
+        /// </summary>
+        /// <param name="condition">Method that returns true when the operation is complete, false
+        /// otherwise.</param>
+        public PeriodicJob(Func<bool> condition) {
+            this.condition = condition;
+        }
+
+        /// <summary>
+        /// Execute the condition and if it isn't complete, schedule the next execution.
+        /// </summary>
+        public void Execute() {
+            if (condition != null) {
+                if (!condition()) {
+                    jobId = RunOnMainThread.Schedule(() => { Execute(); }, IntervalInMilliseconds);
+                } else {
+                    Stop();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Stop periodic execution of the job.
+        /// </summary>
+        public void Stop() {
+            RunOnMainThread.Cancel(jobId);
+            jobId = 0;
+            condition = null;
+        }
+    }
+
+    /// <summary>
     /// ID of the main thread.
     /// </summary>
     private static int mainThreadId;

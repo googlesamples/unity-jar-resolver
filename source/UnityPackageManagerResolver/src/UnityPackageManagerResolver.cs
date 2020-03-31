@@ -312,10 +312,10 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// addition.</param>
     /// <param name="scopePrefixFilter">List of scope prefixes used to filter the set of registries
     /// being operated on.</param>
-    private static void UpdateManifest(ManifestModificationMode mode,
-                                       bool promptBeforeAction = true,
-                                       bool showDisableButton = false,
-                                       IEnumerable<string> scopePrefixFilter = null) {
+    internal static void UpdateManifest(ManifestModificationMode mode,
+                                        bool promptBeforeAction = true,
+                                        bool showDisableButton = false,
+                                        IEnumerable<string> scopePrefixFilter = null) {
         if (!ScopedRegistriesSupported) {
             logger.Log(String.Format("Scoped registries not supported in this version of Unity."),
                        level: LogLevel.Verbose);
@@ -493,7 +493,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// <summary>
     /// Logger for this module.
     /// </summary>
-    private static Logger logger = new Logger();
+    internal static Logger logger = new Logger();
 
     // Analytics reporter.
     internal static EditorMeasurement analytics =
