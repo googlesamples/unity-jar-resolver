@@ -558,13 +558,26 @@ namespace Google {
             }
 
             if(logger != null) {
-                logger.Log(
-                    String.Format("Removed:\n{0}\nFailed to Remove:\n{1}\nMissing:\n{2}\n" +
-                        "Failed to Remove Folders:\n{3}\n",
-                        String.Join("\n", result.Removed.ToArray()),
-                        String.Join("\n", result.RemoveFailed.ToArray()),
-                        String.Join("\n", result.Missing.ToArray()),
-                        String.Join("\n", folderRemoveFailed.ToArray())), level : LogLevel.Verbose);
+                var components = new List<string>();
+                if (result.Removed.Count > 0) {
+                    components.Add(String.Format("Removed:\n{0}",
+                                                 String.Join("\n", result.Removed.ToArray())));
+                }
+                if (result.RemoveFailed.Count > 0) {
+                    components.Add(String.Format("Failed to Remove:\n{0}",
+                                                 String.Join("\n", result.RemoveFailed.ToArray())));
+                }
+                if (result.Missing.Count > 0) {
+                    components.Add(String.Format("Missing:\n{0}",
+                                                 String.Join("\n", result.Missing.ToArray())));
+                }
+                if (folderRemoveFailed.Count > 0) {
+                    components.Add(String.Format("Failed to Remove Folders:\n{0}",
+                                                 String.Join("\n", folderRemoveFailed.ToArray())));
+                }
+                if (components.Count > 0) {
+                    logger.Log(String.Join("\n", components.ToArray()), level: LogLevel.Verbose);
+                }
             }
             return result;
         }
