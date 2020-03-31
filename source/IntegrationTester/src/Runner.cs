@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
+using System.Xml;
 
 using Google;
 
@@ -72,6 +73,11 @@ namespace Google.IntegrationTester {
         private static bool defaultTestCaseCalled = false;
 
         /// <summary>
+        /// File to store snapshot of test case results.
+        /// </summary>
+        private static string TestCaseResultsFilename = "Temp/GvhRunnerTestCaseResults.xml";
+
+        /// <summary>
         /// Register a method to call when the Version Handler has enabled all plugins in the
         /// project.
         /// </summary>
@@ -117,26 +123,11 @@ namespace Google.IntegrationTester {
         }
 
         /// <summary>
-        /// This module can be executed multiple times when the Version Handler is enabling
-        /// so this method uses a temporary file to determine whether the module has been executed
-        /// once in a Unity session.
-        /// </summary>
-        /// <returns>true if the module was previously initialized, false otherwise.</returns>
-        private static bool SetInitialized() {
-            const string INITIALIZED_PATH = "Temp/TestEnabledCallbackInitialized";
-            if (File.Exists(INITIALIZED_PATH)) return true;
-            File.WriteAllText(INITIALIZED_PATH, "Ready");
-            return false;
-        }
-
-        /// <summary>
         /// Called when the Version Handler has enabled all managed plugins in a project.
         /// </summary>
         public static void VersionHandlerReady() {
             UnityEngine.Debug.Log("VersionHandler is ready.");
             Google.VersionHandler.UpdateCompleteMethods = null;
-            // If this has already been initialized this session, do not start tests again.
-            if (SetInitialized()) return;
             // Start executing tests.
             ConfigureTestCases();
             RunOnMainThread.Run(() => { ExecuteNextTestCase(); }, runNow: false);
@@ -157,7 +148,16 @@ namespace Google.IntegrationTester {
             var testCaseMethods = new List<MethodInfo>();
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
                 foreach (var type in assembly.GetTypes()) {
-                    foreach (var method in type.GetMethods()) {
+                    IEnumerable<MethodInfo> methods;
+                    try {
+                        methods = type.GetMethods();
+                    } catch (Exception) {
+                        // TargetInvocationException, TypeLoadException and others can be thrown
+                        // when retrieving the methods of some .NET assemblies
+                        // (e.g System.Web.UI.WebControls.ModelDataSourceView) so ignore them.
+                        continue;
+                    }
+                    foreach (var method in methods) {
                         foreach (var attribute in method.GetCustomAttributes(true)) {
                             if (attribute is InitializerAttribute) {
                                 initializerMethods.Add(method);
@@ -198,6 +198,22 @@ namespace Google.IntegrationTester {
                     initializationSuccessful = false;
                 }
             }
+
+            // Restore for all executed test cases, restore results and remove all pending test
+            // cases that are complete.
+            var executedTestCaseNames = new HashSet<string>();
+            foreach (var executedTestCase in ReadTestCaseResults()) {
+                testCaseResults.Add(executedTestCase);
+                executedTestCaseNames.Add(executedTestCase.TestCaseName);
+            }
+            var filteredTestCases = new List<TestCase>();
+            foreach (var testCase in testCases) {
+                if (!executedTestCaseNames.Contains(testCase.Name)) {
+                    filteredTestCases.Add(testCase);
+                }
+            }
+            defaultTestCaseCalled = executedTestCaseNames.Contains("DefaultTestCase");
+            testCases = filteredTestCases;
 
             if (!defaultInitializerCalled) {
                 UnityEngine.Debug.Log("FAILED: Default Initializer not called.");
@@ -257,12 +273,119 @@ namespace Google.IntegrationTester {
         }
 
         /// <summary>
+        /// Read test case results from the journal.
+        /// </summary>
+        /// <returns>List of TestCaseResults.</returns>
+        private static List<TestCaseResult> ReadTestCaseResults() {
+            var readTestCaseResults = new List<TestCaseResult>();
+            if (!File.Exists(TestCaseResultsFilename)) return readTestCaseResults;
+
+            bool successful = XmlUtilities.ParseXmlTextFileElements(
+                TestCaseResultsFilename, new Logger(),
+                (XmlTextReader reader, string elementName, bool isStart, string parentElementName,
+                 List<string> elementNameStack) => {
+                    TestCaseResult currentTestCaseResult = null;
+                    int testCaseResultsCount = readTestCaseResults.Count;
+                    if (testCaseResultsCount > 0) {
+                        currentTestCaseResult = readTestCaseResults[testCaseResultsCount - 1];
+                    }
+                    if (elementName == "TestCaseResults" && parentElementName == "") {
+                        if (isStart) {
+                            readTestCaseResults.Clear();
+                        }
+                        return true;
+                    } else if (elementName == "TestCaseResult" &&
+                               parentElementName == "TestCaseResults") {
+                        if (isStart) {
+                            readTestCaseResults.Add(new TestCaseResult(new TestCase()));
+                        }
+                        return true;
+                    } else if (elementName == "TestCaseName" &&
+                               parentElementName == "TestCaseResult") {
+                        if (isStart && reader.Read() && reader.NodeType == XmlNodeType.Text) {
+                            currentTestCaseResult.TestCaseName = reader.ReadContentAsString();
+                        }
+                        return true;
+                    } else if (elementName == "Skipped" && parentElementName == "TestCaseResult") {
+                        if (isStart && reader.Read() && reader.NodeType == XmlNodeType.Text) {
+                            currentTestCaseResult.Skipped = reader.ReadContentAsBoolean();
+                        }
+                        return true;
+                    } else if (elementName == "ErrorMessages" &&
+                               parentElementName == "TestCaseResult") {
+                        return true;
+                    } else if (elementName == "ErrorMessage" &&
+                               parentElementName == "ErrorMessages") {
+                        if (isStart && reader.Read() && reader.NodeType == XmlNodeType.Text) {
+                            currentTestCaseResult.ErrorMessages.Add(reader.ReadContentAsString());
+                        }
+                        return true;
+                    }
+                    return false;
+                });
+            if (!successful) {
+                UnityEngine.Debug.LogWarning(
+                    String.Format("Failed while reading {0}, test execution will restart if the " +
+                                  "app domain is reloaded.", TestCaseResultsFilename));
+            }
+            return readTestCaseResults;
+        }
+
+        /// <summary>
+        // Log a test case result to the journal so that it isn't executed again if the app
+        // domain is reloaded.
+        /// </summary>
+        private static bool WriteTestCaseResult(TestCaseResult testCaseResult) {
+            var existingTestCaseResults = ReadTestCaseResults();
+            existingTestCaseResults.Add(testCaseResult);
+            try {
+                Directory.CreateDirectory(Path.GetDirectoryName(TestCaseResultsFilename));
+                using (var writer = new XmlTextWriter(new StreamWriter(TestCaseResultsFilename)) {
+                        Formatting = Formatting.Indented
+                    }) {
+                    writer.WriteStartElement("TestCaseResults");
+                    foreach (var result in existingTestCaseResults) {
+                        writer.WriteStartElement("TestCaseResult");
+                        if (!String.IsNullOrEmpty(result.TestCaseName)) {
+                            writer.WriteStartElement("TestCaseName");
+                            writer.WriteValue(result.TestCaseName);
+                            writer.WriteEndElement();
+                        }
+                        writer.WriteStartElement("Skipped");
+                        writer.WriteValue(result.Skipped);
+                        writer.WriteEndElement();
+                        if (result.ErrorMessages.Count > 0) {
+                            writer.WriteStartElement("ErrorMessages");
+                            foreach (var errorMessage in result.ErrorMessages) {
+                                writer.WriteStartElement("ErrorMessage");
+                                writer.WriteValue(errorMessage);
+                                writer.WriteEndElement();
+                            }
+                            writer.WriteEndElement();
+                        }
+                        writer.WriteEndElement();
+                    }
+                    writer.WriteEndElement();
+                    writer.Flush();
+                    writer.Close();
+                }
+            } catch (Exception e) {
+                UnityEngine.Debug.LogWarning(
+                    String.Format("Failed while writing {0} ({1}), test execution will restart " +
+                                  "if the app domain is reloaded.", TestCaseResultsFilename, e));
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
         /// Log a test case result with error details.
         /// </summary>
         /// <param name="testCaseResult">Result to log.</param>
         public static void LogTestCaseResult(TestCaseResult testCaseResult) {
             testCaseResults.Add(testCaseResult);
             UnityEngine.Debug.Log(testCaseResult.FormatString(true));
+            WriteTestCaseResult(testCaseResult);
         }
 
         /// <summary>
@@ -297,6 +420,7 @@ namespace Google.IntegrationTester {
             bool executeNext;
             do {
                 executeNext = false;
+                UnityEngine.Debug.Log(String.Format("Remaining test cases {0}", testCases.Count));
                 if (testCases.Count > 0) {
                     var testCase = testCases[0];
                     testCases.RemoveAt(0);
