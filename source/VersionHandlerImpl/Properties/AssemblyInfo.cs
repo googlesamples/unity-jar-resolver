@@ -59,3 +59,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Google.UnityPackageManagerResolver")]
 [assembly: InternalsVisibleTo("Google.VersionHandlerImplTests")]
 [assembly: InternalsVisibleTo("Google.IntegrationTester")]
+[assembly: InternalsVisibleTo("Google.UnityPackageManagerClientIntegrationTests")]

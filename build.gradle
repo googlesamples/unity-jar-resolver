@@ -1715,7 +1715,8 @@ createNUnitTask(
 Task compileUnityPackageManagerResolverTests = createXbuildTask(
     "compileUnityPackageManagerResolverTests",
     "Compile tests for UnityPackageManagerResolver.",
-    project.ext.pluginSolutionFile, "UnityPackageManagerResolverTests",
+    project.ext.pluginSolutionFile,
+    "UnityPackageManagerResolverTests",
     fileTree(new File(
                new File(
                  new File(project.ext.pluginSourceDir,
@@ -1848,6 +1849,19 @@ createUnityIntegrationTest(
     project.ext.scriptDirectory,
     "source/AndroidResolver/test/AndroidResolverIntegrationTestsUnityProject"),
   ["-buildTarget", "android"])
+
+createUnityIntegrationTest(
+  "testUnityPackageManagerClientIntegrationTests",
+  ("Imports the plugin into a Unity project and uses the Unity Package " +
+   "Manager client to list, search, install and remove packages. "),
+  [compileUnityPackageManagerResolver],
+  "UnityPackageManagerClientIntegrationTests",
+  fileTree(new File(new File(new File(project.ext.pluginSourceDir,
+                             "UnityPackageManagerResolver"), "test"),
+                    "UnityPackageManagerClientIntegrationTests")),
+  [new File("Google.UnityPackageManagerClientIntegrationTests.dll"),
+   new File("Google.UnityPackageManagerClientIntegrationTests.dll.mdb")],
+  null, [])
 
 task cleanTests(type: Delete) {
   description "Clean test directories."

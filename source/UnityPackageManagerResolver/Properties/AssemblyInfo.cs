@@ -54,4 +54,4 @@ using System.Runtime.CompilerServices;
 // </copyright>[assembly: AssemblyKeyFile("")]
 
 [assembly: InternalsVisibleTo("Google.UnityPackageManagerResolverTests")]
-
+[assembly: InternalsVisibleTo("Google.UnityPackageManagerClientIntegrationTests")]

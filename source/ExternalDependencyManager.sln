@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityPackageManagerResolver
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityPackageManagerResolverTests", "UnityPackageManagerResolver\unit_tests\UnityPackageManagerResolverTests.csproj", "{FEECDCE1-F528-4931-A4CF-808DDBCE1A8D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityPackageManagerClientIntegrationTests", "UnityPackageManagerResolver\test\UnityPackageManagerClientIntegrationTests.csproj", "{00A0DB5E-1120-24C9-331A-BE692C1F7C01}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -73,5 +75,9 @@ Global
 		{FEECDCE1-F528-4931-A4CF-808DDBCE1A8D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FEECDCE1-F528-4931-A4CF-808DDBCE1A8D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FEECDCE1-F528-4931-A4CF-808DDBCE1A8D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{00A0DB5E-1120-24C9-331A-BE692C1F7C01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{00A0DB5E-1120-24C9-331A-BE692C1F7C01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{00A0DB5E-1120-24C9-331A-BE692C1F7C01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{00A0DB5E-1120-24C9-331A-BE692C1F7C01}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

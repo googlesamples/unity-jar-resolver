@@ -61,6 +61,7 @@
   <ItemGroup>
     <Compile Include="src\PackageManifestModifier.cs" />
     <Compile Include="src\SettingsDialog.cs" />
+    <Compile Include="src\UnityPackageManagerClient.cs" />
     <Compile Include="src\UnityPackageManagerResolver.cs" />
     <Compile Include="src\XmlUnityPackageManagerRegistries.cs" />
     <Compile Include="src\UnityPackageManagerRegistry.cs" />
