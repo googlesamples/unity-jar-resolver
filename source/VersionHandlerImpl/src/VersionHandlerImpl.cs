@@ -359,7 +359,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// false otherwise.</return>
         public bool IsReadOnly {
             get {
-                return FileUtils.IsUnderDirectory(filename, FileUtils.PACKAGES_FOLDER);
+                return FileUtils.IsUnderPackageDirectory(filename);
             }
         }
 

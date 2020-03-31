@@ -43,6 +43,7 @@
    <ItemGroup>
      <Compile Include="src\EditorMeasurementTest.cs" />
      <Compile Include="src\ProjectSettingsTest.cs" />
+     <Compile Include="src\FileUtilsTest.cs" />
    </ItemGroup>
    <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
    <ItemGroup>
