@@ -332,6 +332,31 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public string exportPath = "";
 
         /// <summary>
+        /// Path of the file when it was originally exported as a package in the project.
+        /// </summary>
+        public string ExportPathInProject {
+            get {
+                var exportPathInProject = exportPath;
+                if (!String.IsNullOrEmpty(exportPathInProject)) {
+                    // Remove the assets folder, if specified.
+                    if (FileUtils.IsUnderDirectory(exportPathInProject, FileUtils.ASSETS_FOLDER)) {
+                        exportPathInProject =
+                            exportPath.Substring(FileUtils.ASSETS_FOLDER.Length + 1);
+                    }
+                    // Determine whether this package is installed as a package or asset to
+                    // determine the root directory.
+                    var packageDirectory = FileUtils.GetPackageDirectory(filename);
+                    var installRoot = !String.IsNullOrEmpty(packageDirectory) ?
+                        packageDirectory : FileUtils.ASSETS_FOLDER;
+                    // Translate exportPath into a package relative path.
+                    exportPathInProject = FileUtils.PosixPathSeparators(
+                        Path.Combine(installRoot, exportPathInProject));
+                }
+                return exportPathInProject;
+            }
+        }
+
+        /// <summary>
         /// If this is a manifest, get the display name.
         /// </summary>
         /// <returns>If this file is a  manifest, returns the display name of the manifest,
@@ -373,8 +398,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
             ParseMetadataFromAssetLabels();
 
             // If the export path was specified, override the canonical filename.
-            if (!String.IsNullOrEmpty(exportPath)) {
-                filenameCanonical = ParseMetadataFromFilename(exportPath);
+            var exportPathInProject = ExportPathInProject;
+            if (!String.IsNullOrEmpty(exportPathInProject)) {
+                filenameCanonical = ParseMetadataFromFilename(exportPathInProject);
             }
             UpdateAssetLabels();
         }
@@ -524,7 +550,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
             values = MatchPrefixesGetValues(token, TOKEN_EXPORT_PATH, prefix);
             if (values != null) {
-                exportPath = FileUtils.NormalizePathSeparators(
+                exportPath = FileUtils.PosixPathSeparators(
                                  String.Join(FIELD_SEPARATOR[0].ToString(), values));
                 return true;
             }
@@ -780,20 +806,24 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 }
             }
             try {
-              // This is *really* slow.
-              string error = AssetDatabase.MoveAsset(filename, newFilename);
-              if (!String.IsNullOrEmpty(error)) {
-                  string renameError = AssetDatabase.RenameAsset(
-                      filename, filenameComponents.basenameNoExtension);
-                  error = String.IsNullOrEmpty(renameError) ?
-                      renameError : String.Format("{0}, {1}", error, renameError);
-              }
-              if (!String.IsNullOrEmpty(error)) {
-                  Log("Failed to rename asset " + filename + " to " +
-                      newFilename + " (" + error + ")",
-                      level: LogLevel.Error);
-                  return false;
-              }
+                var targetDir = Path.GetDirectoryName(filename);
+                if (!String.IsNullOrEmpty(targetDir)) {
+                    Directory.CreateDirectory(targetDir);
+                }
+                // This is *really* slow.
+                string error = AssetDatabase.MoveAsset(filename, newFilename);
+                if (!String.IsNullOrEmpty(error)) {
+                    string renameError = AssetDatabase.RenameAsset(
+                        filename, filenameComponents.basenameNoExtension);
+                    error = String.IsNullOrEmpty(renameError) ?
+                        renameError : String.Format("{0}, {1}", error, renameError);
+                }
+                if (!String.IsNullOrEmpty(error)) {
+                    Log("Failed to rename asset " + filename + " to " +
+                        newFilename + " (" + error + ")",
+                        level: LogLevel.Error);
+                    return false;
+                }
             } catch (Exception) {
                 // Unity 5.3 and below can end up throw all sorts of
                 // exceptions here when attempting to reload renamed
@@ -1290,8 +1320,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="metadata">File metadata to add to the set.</param>
         private void UpdateMetadataByFilename(FileMetadata metadata) {
             metadataByFilename[metadata.filename] = metadata;
-            if (!String.IsNullOrEmpty(metadata.exportPath)) {
-                metadataByFilename[metadata.exportPath] = metadata;
+            if (!String.IsNullOrEmpty(metadata.ExportPathInProject)) {
+                metadataByFilename[metadata.ExportPathInProject] = metadata;
             }
         }
 
@@ -2485,12 +2515,13 @@ public class VersionHandlerImpl : AssetPostprocessor {
             if (!String.IsNullOrEmpty(pkg.filenameCanonical) && pkg.metadataByVersion != null) {
                 var logLines = new List<string>();
                 foreach (var metadata in pkg.metadataByFilename.Values) {
-                    if (!String.IsNullOrEmpty(metadata.exportPath)) {
+                    var exportPathInProject = metadata.ExportPathInProject;
+                    if (!String.IsNullOrEmpty(exportPathInProject)) {
                         var originalFilename = metadata.filename;
-                        if (originalFilename != metadata.exportPath &&
-                            metadata.RenameAsset(metadata.exportPath)) {
+                        if (originalFilename != exportPathInProject &&
+                            metadata.RenameAsset(exportPathInProject)) {
                             logLines.Add(String.Format("{0} --> {1}", originalFilename,
-                                                       metadata.exportPath));
+                                                       exportPathInProject));
                         }
                     }
                 }

@@ -644,7 +644,7 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
       } else if (exportPathMatch.matches()) {
         // Update the export path of the asset.
         line = sprintf("%s%s", exportPathMatch.group(1),
-                       targetFile.path.replaceFirst(/.*\/Assets\//, "Assets/"))
+                       targetFile.path.replaceFirst(/.*\/Assets\//, ""))
         line = line.substring(0, line.length() -
                               project.ext.unityMetadataExtension.length())
       }
