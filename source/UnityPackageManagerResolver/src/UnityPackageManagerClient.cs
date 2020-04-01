@@ -125,8 +125,10 @@ internal static class UnityPackageManagerClient {
         public Error(object error) : base(error) {
             type = type ??
                 VersionHandler.FindClass("UnityEditor", "UnityEditor.PackageManager.Error");
-            errorCodeProperty = errorCodeProperty ?? type.GetProperty("errorCode");
-            messageProperty = messageProperty ?? type.GetProperty("message");
+            if (type != null) {
+                errorCodeProperty = errorCodeProperty ?? type.GetProperty("errorCode");
+                messageProperty = messageProperty ?? type.GetProperty("message");
+            }
             instance = error;
             fallbackMessage = instance != null ? "Package Manager Not Supported" : "";
         }
@@ -199,9 +201,11 @@ internal static class UnityPackageManagerClient {
         public AuthorInfo(object authorInfo) : base(authorInfo) {
             type = type ??
                 VersionHandler.FindClass("UnityEditor", "UnityEditor.PackageManager.AuthorInfo");
-            emailProperty = emailProperty ?? type.GetProperty("email");
-            nameProperty = nameProperty ?? type.GetProperty("name");
-            urlProperty = urlProperty ?? type.GetProperty("url");
+            if (type != null) {
+                emailProperty = emailProperty ?? type.GetProperty("email");
+                nameProperty = nameProperty ?? type.GetProperty("name");
+                urlProperty = urlProperty ?? type.GetProperty("url");
+            }
             instance = authorInfo;
         }
 
@@ -267,8 +271,10 @@ internal static class UnityPackageManagerClient {
             type = type ??
                 VersionHandler.FindClass("UnityEditor",
                                          "UnityEditor.PackageManager.DependencyInfo");
-            nameProperty = nameProperty ?? type.GetProperty("name");
-            versionProperty = versionProperty ?? type.GetProperty("version");
+            if (type != null) {
+                nameProperty = nameProperty ?? type.GetProperty("name");
+                versionProperty = versionProperty ?? type.GetProperty("version");
+            }
             instance = dependencyInfo;
         }
 
@@ -338,12 +344,14 @@ internal static class UnityPackageManagerClient {
         public VersionsInfo(object versionsInfo) : base(versionsInfo) {
             type = type ??
                 VersionHandler.FindClass("UnityEditor", "UnityEditor.PackageManager.VersionsInfo");
-            allProperty = allProperty ?? type.GetProperty("all");
-            compatibleProperty = compatibleProperty ?? type.GetProperty("compatible");
-            latestProperty = latestProperty ?? type.GetProperty("latest");
-            latestCompatibleProperty = latestCompatibleProperty ??
-                type.GetProperty("latestCompatible");
-            recommendedProperty = recommendedProperty ?? type.GetProperty("recommended");
+            if (type != null) {
+                allProperty = allProperty ?? type.GetProperty("all");
+                compatibleProperty = compatibleProperty ?? type.GetProperty("compatible");
+                latestProperty = latestProperty ?? type.GetProperty("latest");
+                latestCompatibleProperty = latestCompatibleProperty ??
+                    type.GetProperty("latestCompatible");
+                recommendedProperty = recommendedProperty ?? type.GetProperty("recommended");
+            }
             instance = versionsInfo;
         }
 
@@ -473,18 +481,20 @@ internal static class UnityPackageManagerClient {
         /// <param name="packageInfo">PackageInfo to wrap.</param>
         public PackageInfo(object packageInfo) : base(packageInfo) {
             var type = Type;
-            authorProperty = authorProperty ?? type.GetProperty("author");
-            categoryProperty = categoryProperty ?? type.GetProperty("category");
-            dependenciesProperty = dependenciesProperty ?? type.GetProperty("dependencies");
-            descriptionProperty = descriptionProperty ?? type.GetProperty("description");
-            displayNameProperty = displayNameProperty ?? type.GetProperty("displayName");
-            keywordsProperty = keywordsProperty ?? type.GetProperty("keywords");
-            nameProperty = nameProperty ?? type.GetProperty("name");
-            packageIdProperty = packageIdProperty ?? type.GetProperty("packageId");
-            resolvedDependenciesProperty = resolvedDependenciesProperty ??
-                type.GetProperty("resolvedDependencies");
-            versionProperty = versionProperty ?? type.GetProperty("version");
-            versionsProperty = versionsProperty ?? type.GetProperty("versions");
+            if (type != null) {
+                authorProperty = authorProperty ?? type.GetProperty("author");
+                categoryProperty = categoryProperty ?? type.GetProperty("category");
+                dependenciesProperty = dependenciesProperty ?? type.GetProperty("dependencies");
+                descriptionProperty = descriptionProperty ?? type.GetProperty("description");
+                displayNameProperty = displayNameProperty ?? type.GetProperty("displayName");
+                keywordsProperty = keywordsProperty ?? type.GetProperty("keywords");
+                nameProperty = nameProperty ?? type.GetProperty("name");
+                packageIdProperty = packageIdProperty ?? type.GetProperty("packageId");
+                resolvedDependenciesProperty = resolvedDependenciesProperty ??
+                    type.GetProperty("resolvedDependencies");
+                versionProperty = versionProperty ?? type.GetProperty("version");
+                versionsProperty = versionsProperty ?? type.GetProperty("versions");
+            }
         }
 
         /// <summary>
@@ -642,8 +652,10 @@ internal static class UnityPackageManagerClient {
             type = type ??
                 VersionHandler.FindClass("UnityEditor",
                                          "UnityEditor.PackageManager.Requests.Request");
-            errorProperty = errorProperty ?? type.GetProperty("Error");
-            isCompletedProperty = isCompletedProperty ?? type.GetProperty("IsCompleted");
+            if (type != null) {
+                errorProperty = errorProperty ?? type.GetProperty("Error");
+                isCompletedProperty = isCompletedProperty ?? type.GetProperty("IsCompleted");
+            }
         }
 
         /// <summary>
@@ -690,7 +702,9 @@ internal static class UnityPackageManagerClient {
             collectionRequestType =
                 VersionHandler.FindClass("UnityEditor",
                                          "UnityEditor.PackageManager.Requests." + typeName);
-            resultProperty = collectionRequestType.GetProperty("Result");
+            if (collectionRequestType != null) {
+                resultProperty = collectionRequestType.GetProperty("Result");
+            }
         }
 
         /// <summary>
@@ -727,7 +741,9 @@ internal static class UnityPackageManagerClient {
             addRequestType = addRequestType ??
                 VersionHandler.FindClass("UnityEditor",
                                          "UnityEditor.PackageManager.Requests.AddRequest");
-            resultProperty = resultProperty ?? addRequestType.GetProperty("Result");
+            if (addRequestType != null) {
+                resultProperty = resultProperty ?? addRequestType.GetProperty("Result");
+            }
         }
 
         /// <summary>
@@ -764,7 +780,9 @@ internal static class UnityPackageManagerClient {
             removeRequestType = removeRequestType ??
                 VersionHandler.FindClass("UnityEditor",
                                          "UnityEditor.PackageManager.Requests.RemoveRequest");
-            resultProperty = resultProperty ?? removeRequestType.GetProperty("PackageIdOrName");
+            if (removeRequestType != null) {
+                resultProperty = resultProperty ?? removeRequestType.GetProperty("PackageIdOrName");
+            }
         }
 
         /// <summary>
@@ -847,13 +865,15 @@ internal static class UnityPackageManagerClient {
         static Client() {
             type = type ??
                 VersionHandler.FindClass("UnityEditor", "UnityEditor.PackageManager.Client");
-            addMethod = addMethod ?? type.GetMethod("Add", new [] { typeof(String) });
-            removeMethod = removeMethod ?? type.GetMethod("Remove", new [] { typeof(String) });
-            listMethod = listMethod ?? type.GetMethod("List", Type.EmptyTypes);
-            listMethodOfflineMode =
-                listMethodOfflineMode ?? type.GetMethod("List", new [] { typeof(bool) });
-            searchMethod = searchMethod ?? type.GetMethod("Search", new [] { typeof(String) });
-            searchAllMethod = searchAllMethod ?? type.GetMethod("SearchAll", Type.EmptyTypes);
+            if (type != null) {
+                addMethod = addMethod ?? type.GetMethod("Add", new [] { typeof(String) });
+                removeMethod = removeMethod ?? type.GetMethod("Remove", new [] { typeof(String) });
+                listMethod = listMethod ?? type.GetMethod("List", Type.EmptyTypes);
+                listMethodOfflineMode =
+                    listMethodOfflineMode ?? type.GetMethod("List", new [] { typeof(bool) });
+                searchMethod = searchMethod ?? type.GetMethod("Search", new [] { typeof(String) });
+                searchAllMethod = searchAllMethod ?? type.GetMethod("SearchAll", Type.EmptyTypes);
+            }
         }
 
         /// <summary>

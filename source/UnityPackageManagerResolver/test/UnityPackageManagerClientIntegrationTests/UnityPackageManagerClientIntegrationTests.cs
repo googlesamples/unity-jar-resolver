@@ -200,10 +200,11 @@ public static class UnityPackageManagerClientTests {
                 "com.unity.analytics@2.0.13"
             },
             (result) => {
-                var expectedPackageNameByQuery = new Dictionary<string, string>() {
-                    {"com.unity.ads", "com.unity.ads"},
-                    {"com.unity.analytics@2.0.13", "com.unity.analytics"},
-                };
+                var expectedPackageNameByQuery = UpmAvailable ?
+                    new Dictionary<string, string>() {
+                        {"com.unity.ads", "com.unity.ads"},
+                        {"com.unity.analytics@2.0.13", "com.unity.analytics"},
+                    } : new Dictionary<string, string>();
 
                 // Make sure all expected queries were performed.
                 var queriesPerformed = new HashSet<string>(result.Keys);
@@ -303,9 +304,9 @@ public static class UnityPackageManagerClientTests {
         UnityPackageManagerClient.AddPackage(
             installPackage,
             (result) => {
-                var message = CheckChangeResult(
+                var message = UpmAvailable ? CheckChangeResult(
                     result.Error, result.Package != null ? result.Package.Name : null,
-                    installPackage, testCaseResult);
+                    installPackage, testCaseResult) : "";
                 if (testCaseResult.ErrorMessages.Count == 0) {
                     UnityEngine.Debug.Log(message);
                 }
@@ -327,16 +328,19 @@ public static class UnityPackageManagerClientTests {
         UnityPackageManagerClient.AddPackage(
             packageToModify,
             (result) => {
-                CheckChangeResult(result.Error,
-                                  result.Package != null ? result.Package.Name : null,
-                                  packageToModify, testCaseResult);
+                if (UpmAvailable) {
+                    CheckChangeResult(result.Error,
+                                      result.Package != null ? result.Package.Name : null,
+                                      packageToModify, testCaseResult);
+                }
             });
 
         UnityPackageManagerClient.RemovePackage(
             packageToModify,
             (result) => {
-                var message = CheckChangeResult(result.Error, result.PackageId, packageToModify,
-                                                testCaseResult);
+                var message = UpmAvailable ?
+                    CheckChangeResult(result.Error, result.PackageId, packageToModify,
+                                      testCaseResult) : "";
                 if (testCaseResult.ErrorMessages.Count == 0) {
                     UnityEngine.Debug.Log(message);
                 }
