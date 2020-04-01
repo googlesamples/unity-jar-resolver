@@ -2154,6 +2154,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
     // Path of the file that indicates whether the asset database is currently being refreshed
     // due to this module.
     private const string REFRESH_PATH = "Temp/VersionHandlerImplRefresh";
+    // Path of the file that indicates whether files need to be cleaned up after an asset database
+    // refresh.
+    private const string CLEANUP_FILES_PENDING_PATH = "Temp/VersionHandlerImplCleanupFilesPending";
 
     // Whether compilation is currently occuring.
     private static bool compiling = false;
@@ -2232,6 +2235,26 @@ public class VersionHandlerImpl : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Whether files need to be cleaned up after an asset database refresh.
+    /// </summary>
+    private static bool CleanupFilesPending {
+        get {
+            return File.Exists(CLEANUP_FILES_PENDING_PATH);
+        }
+
+        set {
+            bool pending = CleanupFilesPending;
+            if (pending != value) {
+                if (value) {
+                    File.WriteAllText(CLEANUP_FILES_PENDING_PATH, "Cleanup files after refresh");
+                } else {
+                    File.Delete(CLEANUP_FILES_PENDING_PATH);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Whether all editor DLLs have been loaded into the app domain.
     /// </summary>
     private static bool EnabledEditorDllsLoaded {
@@ -2289,7 +2312,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 // If a refresh was initiated by this module, clear the refresh flag.
                 var wasRefreshing = Refreshing;
                 Refreshing = false;
-                if (wasRefreshing || forceNotification) NotifyUpdateCompleteMethods();
+                if (wasRefreshing || forceNotification) {
+                    if (CleanupFilesPending) {
+                        CleanupFilesPending = false;
+                        RunOnMainThread.Run(() => {
+                                UpdateVersionedAssetsOnMainThread(false, () => {},
+                                                                  setCleanupFilesPending: false);
+                            }, runNow: false);
+                    }
+                    NotifyUpdateCompleteMethods();
+                }
                 return true;
             });
     }
@@ -2638,8 +2670,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// <param name="complete">Called when this is method is complete.</param>
     public static void UpdateVersionedAssets(bool forceUpdate, Action complete) {
         CancelUpdateVersionedAssets();
-        RunOnMainThread.Run(() => { UpdateVersionedAssetsOnMainThread(forceUpdate, complete); },
-                            runNow: false);
+        RunOnMainThread.Run(() => {
+                UpdateVersionedAssetsOnMainThread(forceUpdate, complete); },
+            runNow: false);
     }
 
     /// <summary>
@@ -2650,7 +2683,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     /// <param name="forceUpdate">Whether to force an update.</param>
     /// <param name="complete">Called when this is method is complete.</param>
-    private static void UpdateVersionedAssetsOnMainThread(bool forceUpdate, Action complete) {
+    /// <param name="setCleanupFilesPending">Whether to set the CleanupFilesPending flag to run
+    /// this method again after an asset database refresh is complete.</param>
+    private static void UpdateVersionedAssetsOnMainThread(bool forceUpdate,
+                                                          Action complete,
+                                                          bool setCleanupFilesPending = true) {
         // If this module is disabled do nothing.
         if (!forceUpdate && !Enabled) {
             complete();
@@ -2709,7 +2746,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
             }
         }
 
-        if (cleanupFiles.Count > 0 && !Refreshing) {
+        bool cleanupFilesPending = cleanupFiles.Count > 0;
+        if (cleanupFilesPending && !Refreshing) {
             var window = MultiSelectWindow.CreateMultiSelectWindow(PLUGIN_NAME);
             Action<string> logObsoleteFile = (filename) => {
                 Log("Leaving obsolete file: " + filename, verbose: true);
@@ -2749,6 +2787,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             window.OnCancel = leaveFiles;
             window.Show();
         } else {
+            if (cleanupFilesPending && setCleanupFilesPending) CleanupFilesPending = true;
             complete();
         }
 
