@@ -1448,7 +1448,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <summary>
         /// Use manifest aliases to cosolidate manifest metadata.
         /// </summary>
-        public void ConsolidateManifests() {
+        /// <returns>Flattened map of highest priority manifest name by each alias of the manifest
+        /// name.</returns>
+        public Dictionary<string, string> ConsolidateManifests() {
             var aliasesByName = GetManifestAliasesByName();
             // Flatten graph of manifest aliases so that each entry maps to the highest priority
             // name.
@@ -1494,6 +1496,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                         canonicalFilenameAndMetadataByVersion.Value);
                 }
             }
+            return manifestAliases;
         }
 
         /// <summary>
@@ -1686,6 +1689,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
         public HashSet<string> obsoleteFiles = new HashSet<string>();
 
         /// <summary>
+        /// Backing store of Aliases.
+        /// </summary>
+        private HashSet<string> aliases = new HashSet<string>();
+
+        /// <summary>
+        /// Alias names of this manifest.
+        /// </summary>
+        public ICollection<string> Aliases { get { return aliases; } }
+
+        /// <summary>
         /// Cache of all manifest references indexed by package name.
         /// </summary>
         private static Dictionary<string, ManifestReferences> cacheAll =
@@ -1838,12 +1851,28 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <returns>Dictionary of ManifestReferences indexed by package name.</returns>
         public static Dictionary<string, ManifestReferences> FindAndReadManifestsByPackageName(
                  FileMetadataSet metadataSet) {
-            metadataSet.ConsolidateManifests();
+            var manifestAliases = metadataSet.ConsolidateManifests();
+            // Invert the map of manifest aliases to create a dictionary that maps canonical name
+            // to a set of aliases.
+            var aliasesByName = new Dictionary<string, HashSet<string>>();
+            foreach (var aliasAndName in manifestAliases) {
+                var alias = aliasAndName.Key;
+                var name = aliasAndName.Value;
+                HashSet<string> aliases;
+                if (!aliasesByName.TryGetValue(name, out aliases)) {
+                    aliases = new HashSet<string>();
+                    aliasesByName[name] = aliases;
+                }
+                aliases.Add(alias);
+            }
+
             var manifestReferencesByPackageName = new Dictionary<string, ManifestReferences>();
             foreach (var metadataByVersion in metadataSet.Values) {
                 ManifestReferences manifestReferences = new ManifestReferences();
                 if (manifestReferences.ParseManifests(metadataByVersion,
                                                       metadataSet)) {
+                    manifestReferences.aliases =
+                        aliasesByName[manifestReferences.filenameCanonical];
                     manifestReferencesByPackageName[manifestReferences.filenameCanonical] =
                         manifestReferences;
                 }
