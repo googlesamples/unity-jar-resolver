@@ -1747,7 +1747,9 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 new StreamReader(metadata.filename);
             string line;
             while ((line = manifestFile.ReadLine()) != null) {
-                var manifestFileMetadata = new FileMetadata(line.Trim());
+                var strippedLine = line.Trim();
+                if (String.IsNullOrEmpty(strippedLine)) continue;
+                var manifestFileMetadata = new FileMetadata(strippedLine);
                 // Check for a renamed file.
                 long version = manifestFileMetadata.CalculateVersion();
                 var existingFileMetadata =
