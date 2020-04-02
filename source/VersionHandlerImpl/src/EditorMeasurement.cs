@@ -426,8 +426,8 @@ public class EditorMeasurement {
             var queryComponents = new List<string>();
             foreach (var kv in parameters) {
                 // URL escape keys and values.
-                queryComponents.Add(String.Format("{0}={1}", Uri.EscapeDataString(kv.Key),
-                                                  Uri.EscapeDataString(kv.Value)));
+                queryComponents.Add(String.Format("{0}={1}", Uri.EscapeDataString(kv.Key).Trim(),
+                                                  Uri.EscapeDataString(kv.Value).Trim()));
             }
             reportUrl = reportUrl + "?" + String.Join("&", queryComponents.ToArray());
         }
@@ -454,6 +454,8 @@ public class EditorMeasurement {
         var fragment = uri.Fragment;
         if (!String.IsNullOrEmpty(BasePath)) path = BasePath + path;
         if (!String.IsNullOrEmpty(BaseReportName)) reportName = BaseReportName + reportName;
+        // Strip all extraneous path separators.
+        while (path.Contains("//")) path = path.Replace("//", "/");
         foreach (var cookie in
                  new KeyValuePair<string, string>[] {
                      new KeyValuePair<string, string>(Cookie, queryPrefix + "project"),
@@ -482,7 +484,9 @@ public class EditorMeasurement {
             if (status != null) reported = true;
         }
         if (reported) {
-            logger.Log(String.Format("Reporting analytics data: {0} '{1}'", reportUrl, reportName),
+            logger.Log(String.Format("Reporting analytics data: {0}{1}{2} '{3}'", path,
+                                     String.IsNullOrEmpty(queryPrefix) ? "" : "?" + queryPrefix,
+                                     fragment, reportName),
                        level: LogLevel.Verbose);
         }
     }
