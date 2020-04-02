@@ -208,6 +208,9 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
                         "promptToAddRegistries",
                         UnityPackageManagerResolver.PromptToAddRegistries.ToString()),
                     new KeyValuePair<string, string>(
+                        "promptToMigratePackages",
+                        UnityPackageManagerResolver.PromptToMigratePackages.ToString()),
+                    new KeyValuePair<string, string>(
                         "verboseLoggingEnabled",
                         UnityPackageManagerResolver.VerboseLoggingEnabled.ToString()),
                 },

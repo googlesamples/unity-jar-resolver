@@ -753,14 +753,20 @@ internal class PackageMigrator {
                         return;
                     }
                 } catch (IOException ioError) {
-                    complete(ioError.Message);
+                    UnityPackageManagerResolver.analytics.Report(
+                        "package_migrator/migration/failed/read_snapshot",
+                        "Migrate Packages: Read Snapshot Failed");
                     migrationJobQueue.Complete();
+                    complete(ioError.Message);
                     return;
                 }
                 // Fetch the list of installed packages before starting migration.
                 PackageMap.CacheInstalledPackageInfo(
                     false, (error) => {
                         if (!String.IsNullOrEmpty(error.Message)) {
+                            UnityPackageManagerResolver.analytics.Report(
+                                "package_migrator/migration/failed/find_packages",
+                                "Migrate Packages: Find Packages Failed");
                             migrationJobQueue.Complete();
                             complete(error.Message);
                             return;
@@ -777,6 +783,32 @@ internal class PackageMigrator {
     static PackageMigrator() {
         ResumeMigration();
     }
+
+    /// <summary>
+    /// Report that package migration failed.
+    /// </summary>
+    private static void ReportPackageMigrationFailed() {
+        int numberOfSelectedPackages = -1;
+        int numberOfMigratedPackages = -1;
+        try {
+            ReadMigrationState();
+            numberOfSelectedPackages = inProgressPackageMaps.Count;
+            numberOfMigratedPackages = 0;
+            foreach (var packageMap in inProgressPackageMaps) {
+                if (packageMap.Migrated) numberOfMigratedPackages ++;
+            }
+        } catch (IOException) {
+            // Ignore the exception.
+        }
+        UnityPackageManagerResolver.analytics.Report(
+            "package_migrator/migration/failed",
+            new KeyValuePair<string, string>[] {
+                new KeyValuePair<string, string>("selected", numberOfSelectedPackages.ToString()),
+                new KeyValuePair<string, string>("migrated", numberOfMigratedPackages.ToString()),
+            },
+            "Migrate Packages: Failed");
+    }
+
 
     /// <summary>
     /// Resume migration after an app domain reload.
@@ -798,6 +830,7 @@ internal class PackageMigrator {
                 } catch (IOException ioError) {
                     Logger.Log(String.Format("Failed to resume package migration: {0}", ioError),
                                level: LogLevel.Error);
+                    ReportPackageMigrationFailed();
                 }
             }, runNow: false);
     }
@@ -848,6 +881,15 @@ internal class PackageMigrator {
 
         Action<string> clearProgressAndComplete = (error) => {
             EditorUtility.ClearProgressBar();
+            if (String.IsNullOrEmpty(error)) {
+                UnityPackageManagerResolver.analytics.Report(
+                    "package_migrator/migration/success",
+                    new KeyValuePair<string, string>[] {
+                        new KeyValuePair<string, string>(
+                            "migrated", inProgressPackageMaps.Count.ToString()),
+                    },
+                    "Migrate Packages: Success");
+            }
             ClearMigrationState();
             complete(error);
         };
@@ -860,6 +902,9 @@ internal class PackageMigrator {
 
                 PackageMap.FindPackagesToMigrate((error, packageMaps) => {
                         if (!String.IsNullOrEmpty(error)) {
+                            UnityPackageManagerResolver.analytics.Report(
+                                "package_migrator/migration/failed/find_packages",
+                                "Migrate Packages: Find Packages Failed");
                            clearProgressAndComplete(error);
                            return;
                         }
@@ -940,6 +985,9 @@ internal class PackageMigrator {
 
                 // If an error occurs, display a dialog.
                 if (!String.IsNullOrEmpty(findError)) {
+                    UnityPackageManagerResolver.analytics.Report(
+                        "package_migrator/migration/failed/find_packages",
+                        "Migrate Packages: Find Packages Failed");
                     DisplayError(findError);
                     return;
                 }
@@ -947,6 +995,9 @@ internal class PackageMigrator {
                 // Show a package selection window and start migration if the user selects apply.
                 DisplaySelectionWindow(availablePackageMaps, (selectedPackageMaps) => {
                         if (selectedPackageMaps.Count == 0) {
+                            UnityPackageManagerResolver.analytics.Report(
+                                "package_migrator/migration/canceled",
+                                "Migrate Packages: Canceled");
                             ClearMigrationState();
                             return;
                         }
@@ -955,6 +1006,9 @@ internal class PackageMigrator {
                             PackageMap.WriteToFile(selectedPackageMaps);
                         } catch (IOException e) {
                             DisplayError(String.Format("Migration failed ({0})", e.Message));
+                            UnityPackageManagerResolver.analytics.Report(
+                                "package_migrator/migration/failed/write_snapshot",
+                                "Migrate Packages: Write Snapshot Failed");
                             return;
                         }
 
