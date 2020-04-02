@@ -230,6 +230,8 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// <param name="invertSelection">If false, adds the selected registries and removes the
     /// unselected registries.  If true, removes the selected registries and adds the unselected
     /// registries.</param>
+    /// <param name="addedRegistries">If specified, is extended with the list of registries added
+    /// to the manifest.<param>
     /// <returns>true if successful, false otherwise.</returns>
     private static bool SyncRegistriesToManifest(
             PackageManifestModifier manifestModifier,
@@ -238,7 +240,8 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
             HashSet<string> selectedRegistryUrls,
             bool addRegistries = true,
             bool removeRegistries = true,
-            bool invertSelection = false) {
+            bool invertSelection = false,
+            List<UnityPackageManagerRegistry> addedRegistries = null) {
         // Build a list of registries to add to and remove from the manifest.
         var registriesToAdd = new List<UnityPackageManagerRegistry>();
         var registriesToRemove = new List<UnityPackageManagerRegistry>();
@@ -280,6 +283,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
                         "Added registries to {0}:\n{1}",
                         PackageManifestModifier.MANIFEST_FILE_PATH,
                         UnityPackageManagerRegistry.ToString(registriesToAdd)));
+                    if (addedRegistries != null) addedRegistries.AddRange(registriesToAdd);
                 }
                 if (registriesToRemove.Count > 0) {
                     logger.Log(String.Format(
@@ -379,13 +383,19 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
 
         // Applies the manifest modification based upon the modification mode.
         Action<HashSet<string>> syncRegistriesToManifest = (urlSelectionToApply) => {
+            var addedRegistries = new List<UnityPackageManagerRegistry>();
             SyncRegistriesToManifest(modifier, xmlRegistries, manifestRegistries,
                                      urlSelectionToApply,
                                      addRegistries: (mode == ManifestModificationMode.Add ||
                                                      mode == ManifestModificationMode.Modify),
                                      removeRegistries: (mode == ManifestModificationMode.Remove ||
                                                         mode == ManifestModificationMode.Modify),
-                                     invertSelection: mode == ManifestModificationMode.Remove);
+                                     invertSelection: mode == ManifestModificationMode.Remove,
+                                     addedRegistries: addedRegistries);
+            // If any registries were added try migration if enabled.
+            if (addedRegistries.Count > 0 && PromptToMigratePackages) {
+                PackageMigrator.MigratePackages();
+            }
         };
 
         if (xmlRegistries.Count > 0) {
@@ -470,12 +480,15 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
         "Google.UnityPackageManagerResolver.Enable";
     private const string PreferencePromptToAddRegistries =
         "Google.UnityPackageManagerResolver.PromptToAddRegistries";
+    private const string PreferencePromptToMigratePackages =
+        "Google.UnityPackageManagerResolver.PromptToMigratePackages";
     private const string PreferenceVerboseLoggingEnabled =
         "Google.UnityPackageManagerResolver.VerboseLoggingEnabled";
     // List of preference keys, used to restore default settings.
     private static string[] PreferenceKeys = new[] {
         PreferenceEnable,
         PreferencePromptToAddRegistries,
+        PreferencePromptToMigratePackages,
         PreferenceVerboseLoggingEnabled
     };
 
@@ -529,6 +542,15 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     public static bool PromptToAddRegistries {
         get { return settings.GetBool(PreferencePromptToAddRegistries, defaultValue: true); }
         set { settings.SetBool(PreferencePromptToAddRegistries, value); }
+    }
+
+    /// <summary>
+    /// Enable / disable prompting the user to migrate Version Handler to UPM packages after a
+    /// registry has been added.
+    /// </summary>
+    public static bool PromptToMigratePackages {
+        get { return settings.GetBool(PreferencePromptToMigratePackages, defaultValue: true); }
+        set { settings.SetBool(PreferencePromptToMigratePackages, value); }
     }
 
     /// <summary>

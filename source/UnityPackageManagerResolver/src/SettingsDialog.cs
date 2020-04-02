@@ -40,6 +40,13 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         /// </summary>
         internal bool promptToAddRegistries;
 
+
+        /// <summary>
+        /// Whether to prompt the user to migrate Version Handler to UPM packages after a
+        /// registry has been added.
+        /// </summary>
+        internal bool promptToMigratePackages;
+
         /// <summary>
         /// Whether to enable / disable verbose logging.
         /// </summary>
@@ -61,6 +68,7 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         internal Settings() {
             enable = UnityPackageManagerResolver.Enable;
             promptToAddRegistries = UnityPackageManagerResolver.PromptToAddRegistries;
+            promptToMigratePackages = UnityPackageManagerResolver.PromptToMigratePackages;
             verboseLoggingEnabled = UnityPackageManagerResolver.VerboseLoggingEnabled;
             useProjectSettings = UnityPackageManagerResolver.UseProjectSettings;
             analyticsSettings =
@@ -73,6 +81,7 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         internal void Save() {
             UnityPackageManagerResolver.Enable = enable;
             UnityPackageManagerResolver.PromptToAddRegistries = promptToAddRegistries;
+            UnityPackageManagerResolver.PromptToMigratePackages = promptToMigratePackages;
             UnityPackageManagerResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
             UnityPackageManagerResolver.UseProjectSettings = useProjectSettings;
             analyticsSettings.Save();
@@ -80,6 +89,8 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
     }
 
     private Settings settings;
+
+    private Vector2 scrollPosition = new Vector2(0, 0);
 
     /// <summary>
     /// Load settings for this dialog.
@@ -92,7 +103,7 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
     /// Setup the window's initial position and size.
     /// </summary>
     public void Initialize() {
-        minSize = new Vector2(350, 400);
+        minSize = new Vector2(350, 430);
         position = new Rect(UnityEngine.Screen.width / 3,
                             UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
@@ -120,6 +131,8 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
                                       UnityPackageManagerResolverVersionNumber.Value.Minor,
                                       UnityPackageManagerResolverVersionNumber.Value.Build));
 
+        scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+
         if (!UnityPackageManagerResolver.ScopedRegistriesSupported) {
             GUILayout.Label(
                 String.Format("Only supported from Unity {0} and above.",
@@ -145,6 +158,15 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         GUILayout.Label("When this option is enabled, this plugin will prompt for confirmation " +
                         "before adding Unity Package Manager registries to the project's " +
                         "manifest.");
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Prompt to migrate packages", EditorStyles.boldLabel);
+        settings.promptToMigratePackages = EditorGUILayout.Toggle(settings.promptToMigratePackages);
+        GUILayout.EndHorizontal();
+        GUILayout.Label("When this option is enabled, this plugin will search the Unity Package " +
+                        "Manager (UPM) for available packages that are currently installed in " +
+                        "the project in the `Assets` directory that have equivalent or newer " +
+                        "versions available on UPM and prompt to migrate these packages.");
 
         settings.analyticsSettings.RenderGui();
 
@@ -196,6 +218,8 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
             UnityPackageManagerResolver.CheckRegistries();
         }
         GUILayout.EndHorizontal();
+
+        EditorGUILayout.EndScrollView();
         GUILayout.EndVertical();
 
         // Re-enable GUI
