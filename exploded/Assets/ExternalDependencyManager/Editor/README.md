@@ -518,6 +518,35 @@ XML configuration files via the following menu options:
   Modify Registries` will prompt the user with a window which allows them to
   add or remove registries discovered in the project.
 
+## Migration
+
+UPMR can migrate Version Handler packages installed in the `Assets` folder
+to UPM packages. This requires the plugins to implement the following:
+
+* `.unitypackage` must include a Version Handler manifests that describes
+   the components of the plugin. If the plugin has no dependencies
+   the manifest would just include the files in the plugin.
+* The UPM package JSON provided by the registry must include a keyword
+  (in the `versions.VERSION.keyword` list) that maps the UPM package
+  to a Version Handler package using the format
+  `vh-name:VERSION_HANDLER_MANIFEST_NAME` where `VERSION_HANDLER_MANIFEST_NAME`
+  is the name of the manifest defined in the `.unitypackage`.  For
+  more information see the description of the `gvhp_manifestname` asset label
+  in the *Version Handler Usage* section.
+
+When using the `Assets > External Dependency Manager >
+Unity Package Manager Resolver > Migrate Packages` menu option, UPMR then
+will:
+
+* List all Version Handler manager packages in the project.
+* Search all available packages in the UPM registries and fetch keywords
+  associated with each package parsing the Version Handler manifest names
+  for each package.
+* Map each installed Version Handler package to a UPM package.
+* Prompt the user to migrate the discovered packages.
+* Perform package migration for all selected packages if the user clicks
+  the `Apply` button.
+
 ## Configuration
 
 UPMR can be configured via the `Assets > External Dependency Manager >
@@ -529,6 +558,9 @@ Unity Package Manager Resolver > Settings` menu option:
 * `Prompt to add package registries` will cause a developer to be prompted
   with a window that will ask for confirmation before adding registries.
   When this is disabled registries are added silently to the project.
+* `Prompt to migrate packages` will cause a developer to be prompted
+  with a window that will ask for confirmation before migrating packages
+  installed in the `Assets` directory to UPM packages.
 * `Enable Analytics Reporting` when enabled, reports the use of the plugin
   to the developers so they can make imrpovements.
 * `Verbose logging` when enabled prints debug information to the console

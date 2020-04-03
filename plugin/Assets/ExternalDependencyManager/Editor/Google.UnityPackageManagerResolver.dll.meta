@@ -1,8 +1,8 @@
 fileFormatVersion: 2
-guid: 9b7b6f84d4eb4f549252df73305e17c8
+guid: fc0675acd68c4c7283c49e8d626a5b50
 labels:
-- gvh_version-1.2.144
-- gvhp_exportpath-ExternalDependencyManager/Editor/Google.UnityPackageManagerResolver_v1.2.144.dll
+- gvh_version-1.2.145
+- gvhp_exportpath-ExternalDependencyManager/Editor/Google.UnityPackageManagerResolver_v1.2.145.dll
 - gvh
 - gvhp_targets-editor
 PluginImporter:
