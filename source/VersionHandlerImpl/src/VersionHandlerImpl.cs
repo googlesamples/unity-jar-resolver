@@ -1998,12 +1998,12 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// Obsolete files that are referenced by manifests.  Each item in
         /// the dictionary contains a list of manifests referencing the file.
         /// </summary>
-        public Dictionary<string, List<string>> referenced;
+        public Dictionary<string, List<ManifestReferences>> referenced;
 
         /// <summary>
         /// Same as the "referenced" member excluding manifest files.
         /// </summary>
-        public Dictionary<string, List<string>> referencedExcludingManifests;
+        public Dictionary<string, List<ManifestReferences>> referencedExcludingManifests;
 
         /// <summary>
         /// Get all referenced and unreferenced obsolete files.
@@ -2058,17 +2058,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
             // which contains a list of manifest filenames which reference
             // each file.
             var referencedObsoleteFiles =
-                new Dictionary<string, List<string>>();
-            var referencedObsoleteFilesExcludingManifests = new Dictionary<string, List<string>>();
+                new Dictionary<string, List<ManifestReferences>>();
+            var referencedObsoleteFilesExcludingManifests =
+                new Dictionary<string, List<ManifestReferences>>();
             var obsoleteFilesToDelete = new HashSet<string>();
             var obsoleteFilesToDeleteExcludingManifests = new HashSet<string>();
             foreach (var obsoleteFile in obsoleteFiles) {
-                var manifestsReferencingFile = new List<string>();
+                var manifestsReferencingFile = new List<ManifestReferences>();
                 foreach (var manifestReferences in manifestReferencesList) {
-                    if (manifestReferences.currentFiles.Contains(
-                            obsoleteFile)) {
-                        manifestsReferencingFile.Add(
-                            manifestReferences.currentMetadata.filename);
+                    if (manifestReferences.currentFiles.Contains(obsoleteFile)) {
+                        manifestsReferencingFile.Add(manifestReferences);
                     }
                 }
                 // If the referenced file doesn't exist, ignore it.
@@ -2777,7 +2776,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
             if (!ExecutionEnvironment.InBatchMode) {
                 foreach (var item in obsoleteFiles.referenced) {
                     var filename = item.Key;
-                    var references = item.Value;
+                    var manifestReferencesList = item.Value;
+                    var references = new List<string>();
+                    foreach (var manifestReferences in manifestReferencesList) {
+                        references.Add(manifestReferences.filenameCanonical);
+                    }
                     cleanupFiles.Add(
                         new KeyValuePair<string, string>(
                             filename,
