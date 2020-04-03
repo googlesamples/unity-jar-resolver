@@ -1356,7 +1356,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="addEntry">Whether to add an entry if the metadata isn't found.</param>
         /// <returns>Reference to the metadata by version if successful or addEntry is true,
         /// null otherwise.</returns>
-        private FileMetadataByVersion FindMetadataByVersion(string filenameCanonical,
+        public FileMetadataByVersion FindMetadataByVersion(string filenameCanonical,
                                                             bool addEntry) {
             FileMetadataByVersion metadataByVersion;
             if (!metadataByCanonicalFilename.TryGetValue(
@@ -1446,7 +1446,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
 
         /// <summary>
-        /// Use manifest aliases to cosolidate manifest metadata.
+        /// Use manifest aliases to consolidate manifest metadata.
         /// </summary>
         /// <returns>Flattened map of highest priority manifest name by each alias of the manifest
         /// name.</returns>
@@ -1752,10 +1752,13 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// project.  This is used to handle file renaming in the parsed
         /// manifest.  If the manifest contains files that have been
         /// renamed it's updated with the new filenames.</param>
-        /// <returns>Metadata of files in the package indexed by current filename.<returns>
-        public Dictionary<string, FileMetadata> ParseLegacyManifest(FileMetadata metadata,
-                                                                    FileMetadataSet metadataSet) {
-            var filesInManifest = new Dictionary<string, FileMetadata>();
+        /// <returns>Metadata of files in the package indexed by current filename.
+        /// The FileMetadataByVersion will be null for files that aren't present in the
+        /// asset database.returns>
+        public Dictionary<string, KeyValuePair<FileMetadata, FileMetadataByVersion>>
+                ParseLegacyManifest(FileMetadata metadata, FileMetadataSet metadataSet) {
+            var filesInManifest =
+                new Dictionary<string, KeyValuePair<FileMetadata, FileMetadataByVersion>>();
             StreamReader manifestFile =
                 new StreamReader(metadata.filename);
             string line;
@@ -1769,7 +1772,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
                     metadataSet.FindMetadata(manifestFileMetadata.filenameCanonical, version) ??
                     metadataSet.FindMetadata(manifestFileMetadata.filename, version);
                 if (existingFileMetadata != null) manifestFileMetadata = existingFileMetadata;
-                filesInManifest[manifestFileMetadata.filename] = manifestFileMetadata;
+                filesInManifest[manifestFileMetadata.filename] =
+                    new KeyValuePair<FileMetadata, FileMetadataByVersion>(
+                        manifestFileMetadata,
+                        metadataSet.FindMetadataByVersion(manifestFileMetadata.filenameCanonical,
+                                                          false));
             }
             manifestFile.Close();
             return filesInManifest;
@@ -1802,15 +1809,36 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                   metadataByVersion.filenameCanonical), verbose: true);
                 this.metadataByVersion = metadataByVersion;
                 var filesInManifest = ParseLegacyManifest(metadata, metadataSet);
-                var filenames = new HashSet<string>(filesInManifest.Keys);
                 // If this is the most recent manifest version, remove all
                 // current files from the set to delete.
                 if (versionIndex == numberOfVersions) {
+                    var filenames = new HashSet<string>();
+                    // Add references to the most recent file metadata for each referenced file.
+                    metadataByFilename = new Dictionary<string, FileMetadata>();
+                    foreach (var kv in filesInManifest.Values) {
+                        var fileMetadataByVersion = kv.Value;
+                        var mostRecentMetadata =
+                            fileMetadataByVersion != null ?
+                            fileMetadataByVersion.MostRecentVersion : kv.Key;
+                        metadataByFilename[mostRecentMetadata.filename] = mostRecentMetadata;
+                        filenames.Add(mostRecentMetadata.filename);
+                        if (fileMetadataByVersion != null) {
+                            var versions = fileMetadataByVersion.Values;
+                            int numberOfFileVersions = versions.Count;
+                            int fileVersionIndex = 0;
+                            foreach (var version in versions) {
+                                fileVersionIndex ++;
+                                if (fileVersionIndex == numberOfFileVersions) break;
+                                obsoleteFiles.Add(version.filename);
+                            }
+                        }
+                    }
+
                     currentFiles.UnionWith(filenames);
                     obsoleteFiles.ExceptWith(filenames);
                     currentMetadata = metadata;
-                    metadataByFilename = filesInManifest;
                 } else {
+                    var filenames = new HashSet<string>(filesInManifest.Keys);
                     obsoleteFiles.UnionWith(filenames);
                 }
             }
@@ -1866,6 +1894,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 aliases.Add(alias);
             }
 
+            var allObsoleteFiles = new HashSet<string>();
             var manifestReferencesByPackageName = new Dictionary<string, ManifestReferences>();
             foreach (var metadataByVersion in metadataSet.Values) {
                 ManifestReferences manifestReferences = new ManifestReferences();
@@ -1875,8 +1904,18 @@ public class VersionHandlerImpl : AssetPostprocessor {
                         aliasesByName[manifestReferences.filenameCanonical];
                     manifestReferencesByPackageName[manifestReferences.filenameCanonical] =
                         manifestReferences;
+                    allObsoleteFiles.UnionWith(manifestReferences.obsoleteFiles);
                 }
             }
+
+            // Move globally obsolete files to the obsolete files set across all manifests.
+            foreach (var manifestReferences in manifestReferencesByPackageName.Values) {
+                var newlyObsoleteFiles = new HashSet<string>(manifestReferences.currentFiles);
+                newlyObsoleteFiles.IntersectWith(allObsoleteFiles);
+                manifestReferences.currentFiles.ExceptWith(newlyObsoleteFiles);
+                manifestReferences.obsoleteFiles.UnionWith(newlyObsoleteFiles);
+            }
+
             return manifestReferencesByPackageName;
         }
 
