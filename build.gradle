@@ -458,9 +458,14 @@ void checkNUnitConsolePath() {
  */
 List<String> splitFilenameExtension(File fileObj) {
   String filename = fileObj.name
-  int extensionIndex =
-    (filename - project.ext.symbolDatabaseExtension -
-     project.ext.unityMetadataExtension).lastIndexOf(".")
+  String trimmedFilename = filename
+  if (trimmedFilename.endsWith(project.ext.unityMetadataExtension)) {
+    trimmedFilename -= project.ext.unityMetadataExtension
+  }
+  if (trimmedFilename.endsWith(".dll.mdb")) {
+    trimmedFilename -= ".mdb"
+  }
+  int extensionIndex = trimmedFilename.lastIndexOf(".")
   if (extensionIndex < 0) return [filename, ""]
   String basename = filename.substring(0, extensionIndex)
   String extension = filename.substring(extensionIndex)
