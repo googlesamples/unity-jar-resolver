@@ -2559,11 +2559,23 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 foreach (var fileMetadata in pkg.metadataByVersion.Values) {
                     versions.Add(fileMetadata.versionString);
                 }
+                var lines = new List<string>();
+                lines.Add(String.Format("{0}: [{1}]", pkg.filenameCanonical,
+                                        String.Join(", ", versions.ToArray())));
+
                 var packageFiles = new List<string>(pkg.currentFiles);
                 packageFiles.Sort();
-                Log(String.Format("{0}: [{1}]\n{2}", pkg.filenameCanonical,
-                                  String.Join(", ", versions.ToArray()),
-                                  String.Join("\n", packageFiles.ToArray())));
+                if (packageFiles.Count > 0) {
+                    lines.Add(String.Format("Up-to-date files:\n{0}\n\n",
+                                            String.Join("\n", packageFiles.ToArray())));
+                }
+                var obsoleteFiles = new List<string>(pkg.obsoleteFiles);
+                obsoleteFiles.Sort();
+                if (obsoleteFiles.Count > 0) {
+                    lines.Add(String.Format("Obsolete files:\n{0}\n\n",
+                                            String.Join("\n", obsoleteFiles.ToArray())));
+                }
+                Log(String.Join("\n", lines.ToArray()));
             }
         }
     }
