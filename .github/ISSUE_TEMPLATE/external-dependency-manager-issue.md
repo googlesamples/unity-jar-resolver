@@ -10,6 +10,7 @@ assignees: ''
 ### Please fill in the following fields:
 Unity editor version: 
 External Dependency Manager version: 
+Source you installed EDM (from .unitypackage or Unity Package Manager):
 Features in External Dependency Manager in use (Android Resolver, iOS Resolver, VersionHandler, etc.):
 Plugins SDK in use (Firebase, Admob, Facebook, etc.):
 Platform you are using the Unity editor on (Mac, Windows, or Linux): 
