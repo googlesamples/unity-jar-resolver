@@ -1041,7 +1041,7 @@ class PackageConfigurationTest(absltest.TestCase):
         export_unity_package.DEFAULT_METADATA_TEMPLATE)
     self.expected_manifest_metadata_prebuild["labels"] = [
         "gvh", "gvh_manifest", "gvh_version-1.2.3",
-        "gvhp_manifestname-0NiceName"]
+        "gvhp_manifestname-0NiceName", "gvhp_manifestname-1Test"]
     # Metadata when write() is called.
     self.expected_manifest_metadata = copy.deepcopy(
         export_unity_package.DEFAULT_METADATA_TEMPLATE)
@@ -3024,7 +3024,10 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
         "displayName": "Play Services Resolver",
         "version": "1.0.0",
         "unity": "2017.1",
-        "keywords": ["vh_name:play-services-resolver"],
+        "keywords": [
+            "vh-name:play-services-resolver",
+            "vh-name:Play Services Resolver"
+        ],
         "dependencies": {
             "com.some.third-party-package": "1.2.3",
             "com.google.ios-resolver": "1.0.0"

@@ -176,11 +176,11 @@ The json file should have the following format:
 
                 # A list of keywords for the package. Potentially used for
                 # filtering or searching. Optional.
-                # Add "vh_name:legacy_manifest_name" to link this package to
+                # Add "vh-name:legacy_manifest_name" to link this package to
                 # a renamed package imported as an asset package.
                 # Note that this script will automatically add
-                # "vh_name:current_package_name" to keywords.
-                "keywords": [ "Google", "Firebase", "vh_name:MyOldName"],
+                # "vh-name:current_package_name" to keywords.
+                "keywords": [ "Google", "Firebase", "vh-name:MyOldName"],
 
                 # Author information for the package. Optional.
                 "author": {
@@ -524,7 +524,7 @@ SHARED_LIBRARY_PATH = re.compile(
     (r"(^|{sep})Plugins{sep}(x86|x86_64){sep}(.*{sep}|)[^{sep}]+"
      r"\.(so|dll|bundle)$").format(sep=os.path.sep))
 # Prefix of the keywords to be added to UPM manifest to link to legacy manifest.
-UPM_KEYWORDS_MANIFEST_PREFIX = "vh_name:"
+UPM_KEYWORDS_MANIFEST_PREFIX = "vh-name:"
 # Everything in a Unity plugin - at the moment - lives under the Assets
 # directory
 ASSETS_DIRECTORY = "Assets"
@@ -2277,14 +2277,20 @@ class PackageConfiguration(ConfigurationBlock):
     if manifest_type == VERSION_HANDLER_MANIFEST_TYPE_LEGACY:
       labels.add(
           version_handler_tag(field=VERSION_HANDLER_MANIFEST_FIELD_PREFIX))
+
       # Add gvhp_manifestname-0DisplayName
-      preferred_alias = self.package_name
+      priority = 0
       if self.common_package_display_name:
-        preferred_alias = self.common_package_display_name
-      labels.add(VERSION_HANDLER_PRESERVE_LABEL_PREFIX +
-                 VERSION_HANDLER_FIELD_SEPARATOR +
-                 VERSION_HANDLER_PRESERVE_MANIFEST_NAME_FIELD_PREFIX + "0" +
-                 preferred_alias)
+        labels.add(VERSION_HANDLER_PRESERVE_LABEL_PREFIX +
+                   VERSION_HANDLER_FIELD_SEPARATOR +
+                   VERSION_HANDLER_PRESERVE_MANIFEST_NAME_FIELD_PREFIX +
+                   str(priority) + self.common_package_display_name)
+        priority += 1
+      if self.package_name != self.common_package_display_name:
+        labels.add(VERSION_HANDLER_PRESERVE_LABEL_PREFIX +
+                   VERSION_HANDLER_FIELD_SEPARATOR +
+                   VERSION_HANDLER_PRESERVE_MANIFEST_NAME_FIELD_PREFIX +
+                   str(priority) + self.package_name)
 
     elif manifest_type == VERSION_HANDLER_MANIFEST_TYPE_UPM:
       # gupmr_manifest
@@ -2372,9 +2378,10 @@ class PackageConfiguration(ConfigurationBlock):
     if self.export and self.manifest_path:
       keywords = safe_dict_get_value(package_manifest, "keywords",
                                      default_value=[])
-      legacy_manifest_keyword = (UPM_KEYWORDS_MANIFEST_PREFIX +
-                                 self.package_name)
-      keywords.append(legacy_manifest_keyword)
+      keywords.append(UPM_KEYWORDS_MANIFEST_PREFIX + self.package_name)
+      if self.common_package_display_name != self.package_name:
+        keywords.append(UPM_KEYWORDS_MANIFEST_PREFIX +
+                        self.common_package_display_name)
       package_manifest["keywords"] = keywords
 
     # Add minimum Unity version
