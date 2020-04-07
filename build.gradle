@@ -1559,7 +1559,7 @@ buildUpmPlugin.with {
   outputs.files project.ext.pluginUpmExportFile.absolutePath
 }
 
-task releasePlugin(dependsOn: buildPlugin) {
+task releasePlugin(dependsOn: [buildPlugin, buildUpmPlugin]) {
   Map<File, File> pluginTemplateFilesMap = files(
       copyPluginTemplateToStagingArea.outputs.files,
       copyPluginComponentsToStagingArea.outputs.files).collectEntries {
