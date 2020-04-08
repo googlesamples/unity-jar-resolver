@@ -858,9 +858,10 @@ internal class PackageMigrator {
     /// <param name="progress">Progress (0..1).</param>
     /// <param name="packageMap">Package being migrated.</param>
     private static void UpdatePackageMigrationProgressBar(float progress, PackageMap packageMap) {
-        var description = String.Format("{0} --> {1}",
-                                        packageMap.VersionHandlerPackageId,
-                                        packageMap.UnityPackageManagerPackageId);
+        var description = packageMap != null ?
+            String.Format("{0} --> {1}",
+                          packageMap.VersionHandlerPackageId,
+                          packageMap.UnityPackageManagerPackageId) : "(none)";
         var message = String.Format("Migrating package(s) {0}%: {1}",
                                     (int)(progress * 100.0f), description);
         Logger.Log(message, level: LogLevel.Verbose);
