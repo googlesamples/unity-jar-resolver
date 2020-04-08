@@ -1,3 +1,8 @@
+# Version 1.2.146 - Apr 8, 2020
+## Bug Fixes
+* Version Handler: Fixed exception in manifest parsing when a manifest is
+  detected with no aliases.
+
 # Version 1.2.145 - Apr 2, 2020
 ## New Features
 * Unity Package Manager Resolver: Added a method to migrate Version Handler
