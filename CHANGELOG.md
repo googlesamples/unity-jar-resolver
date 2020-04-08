@@ -1,3 +1,8 @@
+# Version 1.2.147 - Apr 8, 2020
+## Bug Fixes
+* Version Handler: Fixed alias traversal bug which caused problems when
+  migrating from installed .unitypackage files to UPM packages.
+
 # Version 1.2.146 - Apr 8, 2020
 ## Bug Fixes
 * Version Handler: Fixed exception in manifest parsing when a manifest is
