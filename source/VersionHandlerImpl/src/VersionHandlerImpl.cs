@@ -1429,12 +1429,27 @@ public class VersionHandlerImpl : AssetPostprocessor {
                         }
                         aliases.Add(metadata.customManifestNames.Values[0]);
                     }
+                }
+            }
+            // If manifest isn't an alias and doesn't have any aliases store an empty set.
+            foreach (var metadataByVersion in Values) {
+                var metadata = metadataByVersion.MostRecentVersion;
+                if (metadata.isManifest) {
+                    var manifestName = metadata.ManifestName;
+                    bool found = false;
+                    foreach (var kv in aliasesByName) {
+                        if (kv.Key == manifestName || kv.Value.Contains(manifestName)) {
+                            found = true;
+                            break;
+                        }
+                    }
                     // If there are no aliases, store an empty set.
-                    if (metadata.customManifestNames.Values.Count == 0) {
+                    if (!found) {
                         aliasesByName[metadata.ManifestName] = new HashSet<string>();
                     }
                 }
             }
+
             // Display adjacency list for debugging.
             var logLines = new List<string>();
             foreach (var nameAndAliases in aliasesByName) {
