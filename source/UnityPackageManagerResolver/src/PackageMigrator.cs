@@ -1052,7 +1052,9 @@ internal static class PackageInfoVersionHandlerExtensions {
     /// <returns>Numeric version of the package that can be compared with Version Handler package
     /// versions.</returns>
     public static long CalculateVersion(this UnityPackageManagerClient.PackageInfo packageInfo) {
-        return VersionHandlerImpl.FileMetadata.CalculateVersion(packageInfo.Version);
+        var version = packageInfo.Version;
+        return version != null ?
+            VersionHandlerImpl.FileMetadata.CalculateVersion(version) : 0;
     }
 }
 
