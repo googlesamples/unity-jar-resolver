@@ -1383,7 +1383,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
             if (depth > maxDepth) {
                 Log(String.Format(
                         "Detected manifest name alias loop for name {0}, to fix this change the " +
-                        "list (see below) to not contain a loop:\n{1}" +
+                        "list (see below) to not contain a loop:\n{1}",
                         name, String.Join("\n", (new List<string>(aliasesByName.Keys)).ToArray())),
                     level: LogLevel.Warning);
                 return new KeyValuePair<string, int>(name, -1);
@@ -1428,6 +1428,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
                             aliasesByName[name] = aliases;
                         }
                         aliases.Add(metadata.customManifestNames.Values[0]);
+                    }
+                    // If there are no aliases, store an empty set.
+                    if (metadata.customManifestNames.Values.Count == 0) {
+                        aliasesByName[metadata.ManifestName] = new HashSet<string>();
                     }
                 }
             }
