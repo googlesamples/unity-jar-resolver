@@ -823,8 +823,10 @@ internal class PackageMigrator {
                                                  inProgressPackageMaps.Count),
                                    level: LogLevel.Verbose);
                         TryMigration((error) => {
-                                Logger.Log(String.Format("Migration failed: {0}", error),
-                                           level: LogLevel.Error);
+                                if (!String.IsNullOrEmpty(error)) {
+                                    Logger.Log(String.Format("Migration failed: {0}", error),
+                                               level: LogLevel.Error);
+                                }
                             });
                     }
                 } catch (IOException ioError) {
