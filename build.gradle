@@ -1622,10 +1622,14 @@ task gitAddReleaseFilesToStaging(type: Exec, dependsOn: releasePlugin) {
  */
 String readVersionSummaryFromChangelog() {
   String versionSummary = ""
+  Boolean foundVersion = false
   for (String line in project.ext.changelog.text.tokenize("\n")) {
     String trimmedLine = line.trim()
-    if (line.isEmpty()) break
-    versionSummary += line + "\n"
+    if (line =~ /^# Version/) {
+      if (foundVersion) break
+      foundVersion = true
+    }
+    versionSummary += line.replace("#", "-") + "\n"
   }
   return versionSummary
 }
