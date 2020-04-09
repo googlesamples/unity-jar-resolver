@@ -1,3 +1,9 @@
+# Version 1.2.150 - Apr 9, 2020
+## Bug Fixes
+* All: The new packaging script when run on MacOS was generating a
+  .unitypackage archive that could not be read by Unity on Windows.
+  This release simply repackages the plugin with tar/gzip to fix the problem.
+
 # Version 1.2.149 - Apr 8, 2020
 ## Bug Fixes
 * Unity Package Manager Resolver: Fixed spurious error message when resuming
