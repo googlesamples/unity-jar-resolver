@@ -2475,7 +2475,11 @@ class PackageConfiguration(ConfigurationBlock):
         os.makedirs(archive_dir)
 
       # Create a tar.gz archive.
-      if platform.system() == "Linux":
+      tar_available = (platform.system() == "Linux" or
+                       platform.system() == "Darwin")
+      gnu_tar_available = platform.system() == "Linux"
+      # Whether a reproducible tar.gz is required.
+      if tar_available:
         # tarfile is 10x slower than the tar command so use the command line
         # tool where it's available and can generate a reproducible archive.
         list_filename = os.path.join(tempfile.mkdtemp(), "input_files.txt")
@@ -2487,13 +2491,26 @@ class PackageConfiguration(ConfigurationBlock):
 
           tar_args = ["tar"]
           tar_args.extend(["-c", "-z", "-f", archive_filename])
-          if FLAGS.timestamp:
-            tar_args.append("--mtime=@%d" % FLAGS.timestamp)
-          # Hard code the user and group of files in the tar file so that
-          # the process is reproducible.
-          tar_args.extend(["--owner=%s" % FLAGS.owner,
-                           "--group=%s" % FLAGS.group])
-          tar_args.append("--no-recursion")
+          if gnu_tar_available:
+            if FLAGS.timestamp:
+              tar_args.append("--mtime=@%d" % FLAGS.timestamp)
+            # Hard code the user and group of files in the tar file so that
+            # the process is reproducible.
+            tar_args.extend(["--owner=%s" % FLAGS.owner,
+                             "--group=%s" % FLAGS.group])
+            tar_args.append("--no-recursion")
+          else: # Assume BSD tar.
+            # Set the modification time of each file since BSD tar doesn't have
+            # an option to override this.
+            if FLAGS.timestamp:
+              for filename in input_filenames:
+                os.utime(filename, (FLAGS.timestamp, FLAGS.timestamp))
+            # Don't recurse directories.
+            tar_args.append("-n")
+            # If timestamp, group or owner are present strip all fields from
+            # the tar so that it's reproducible.
+            if FLAGS.timestamp or FLAGS.owner or FLAGS.group:
+              tar_args.extend(["--options", "mtree:!all"])
           tar_args.extend(["-T", list_filename])
           # Disable timestamp in the gzip header.
           tar_env = os.environ.copy()
