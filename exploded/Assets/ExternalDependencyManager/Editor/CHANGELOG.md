@@ -1,3 +1,8 @@
+# Version 1.2.149 - Apr 8, 2020
+## Bug Fixes
+* Unity Package Manager Resolver: Fixed spurious error message when resuming
+  migration after installing a UPM package.
+
 # Version 1.2.148 - Apr 8, 2020
 ## Bug Fixes
 * Unity Package Manager Resolver: Fixed an exception when resuming migration
