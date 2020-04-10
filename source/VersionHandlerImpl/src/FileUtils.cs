@@ -44,13 +44,13 @@ namespace Google {
         /// Regex to match packages folder like "Packages/com.company.pkg"
         /// </summary>
         private static Regex PACKAGES_ASSETDB_PATH_REGEX =
-                new Regex(@"^(Packages[/\\][^/\\]+)([/\\].*)?$");
+                new Regex(@"^(Packages[/\\][^/\\]+)[/\\](.*)?$");
 
         /// <summary>
         /// Regex to match packages folder like "Library/PackageCache/com.company.pkg"
         /// </summary>
         private static Regex PACKAGES_PHYSICAL_PATH_REGEX =
-                new Regex(@"^(Library[/\\]PackageCache[/\\])([^/\\]+)(@[^/\\]+)([/\\].*)?$");
+                new Regex(@"^(Library[/\\]PackageCache[/\\])([^/\\]+)(@[^/\\]+)[/\\](.*)?$");
 
         /// <summary>
         /// Returns the project directory (e.g contains the Assets folder).
@@ -464,6 +464,37 @@ namespace Google {
         }
 
         /// <summary>
+        /// Get the relative path from a path under "Assets" or "Packages" folder.
+        /// </summary>
+        /// <param name="path">Path to the file/directory.</param>
+        /// <param name="basePath">Return the base path under project folder such as "Assets",
+        /// "Packages/package-id" or "Library/ProjectCache/package-id@version". Empty string
+        /// if the path is under neither of them.</param>
+        /// <param name="relativePath">Return relative path from "Assets", "Packages/package-id"
+        /// or "Library/ProjectCache/package-id@version". Return path if it is under neither of
+        /// them.</param>
+        /// <returns>True if the path is under Assets or Package folder. False otherwise.</returns>
+        public static bool GetRelativePathFromAssetsOrPackagesFolder(
+                string path, out string basePath, out string relativePath){
+            if (IsUnderDirectory(path, ASSETS_FOLDER)) {
+                basePath = ASSETS_FOLDER;
+                relativePath = path.Length >= (basePath.Length + 1) ?
+                        path.Substring(basePath.Length + 1) : "";
+                return true;
+            } else if (IsUnderPackageDirectory(path)) {
+                basePath = GetPackageDirectory(path);
+                relativePath = path.Length >= (basePath.Length + 1) ?
+                        path.Substring(basePath.Length + 1) : "";
+                return true;
+            }
+
+            // No under Assets folder or Packages folder.
+            basePath = "";
+            relativePath = path;
+            return false;
+        }
+
+        /// <summary>
         /// Result of RemoveAssets().
         /// </summary>
         public class RemoveAssetsResult {
@@ -581,5 +612,22 @@ namespace Google {
             }
             return result;
         }
-   }
+
+        /// <summary>
+        /// Recursively create all parent folders given a path.
+        /// </summary>
+        /// <param name="path">Path to the file/directory that needs checking.</param>
+        /// <returns>True if all folders are created successfully.</returns>
+        public static bool CreateFolder(string path) {
+            if (AssetDatabase.IsValidFolder(path)) {
+                return true;
+            }
+            DirectoryInfo di = new DirectoryInfo(path);
+            var parentFolder = Path.GetDirectoryName(path);
+            if (!CreateFolder(parentFolder)) {
+                return false;
+            }
+            return !String.IsNullOrEmpty(AssetDatabase.CreateFolder(parentFolder, di.Name));
+        }
+    }
 }

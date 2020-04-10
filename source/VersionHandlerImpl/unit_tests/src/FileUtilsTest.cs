@@ -81,6 +81,8 @@ namespace Google.VersionHandlerImpl.Tests {
             Assert.That(FileUtils.GetPackageDirectoryType("Packages/"),
                         Is.EqualTo(FileUtils.PackageDirectoryType.None));
             Assert.That(FileUtils.GetPackageDirectoryType("Packages/com.company.pkg"),
+                        Is.EqualTo(FileUtils.PackageDirectoryType.None));
+            Assert.That(FileUtils.GetPackageDirectoryType("Packages/com.company.pkg/"),
                         Is.EqualTo(FileUtils.PackageDirectoryType.AssetDatabasePath));
             Assert.That(FileUtils.GetPackageDirectoryType("Packages/com.company.pkg/Foo"),
                         Is.EqualTo(FileUtils.PackageDirectoryType.AssetDatabasePath));
@@ -94,7 +96,7 @@ namespace Google.VersionHandlerImpl.Tests {
                         Is.EqualTo(FileUtils.PackageDirectoryType.None));
             Assert.That(FileUtils.GetPackageDirectoryType(
                         "Library/PackageCache/com.company.pkg@1.2.3"),
-                        Is.EqualTo(FileUtils.PackageDirectoryType.PhysicalPath));
+                        Is.EqualTo(FileUtils.PackageDirectoryType.None));
             Assert.That(FileUtils.GetPackageDirectoryType(
                         "Library/PackageCache/com.company.pkg@1.2.3/Foo"),
                         Is.EqualTo(FileUtils.PackageDirectoryType.PhysicalPath));
@@ -117,7 +119,7 @@ namespace Google.VersionHandlerImpl.Tests {
             Assert.That(FileUtils.IsUnderPackageDirectory("Packages/"),
                         Is.EqualTo(false));
             Assert.That(FileUtils.IsUnderPackageDirectory("Packages/com.company.pkg"),
-                        Is.EqualTo(true));
+                        Is.EqualTo(false));
             Assert.That(FileUtils.IsUnderPackageDirectory("Packages/com.company.pkg/Foo"),
                         Is.EqualTo(true));
             Assert.That(FileUtils.IsUnderPackageDirectory("Packages/com.company.pkg/Foo/Bar"),
@@ -130,7 +132,7 @@ namespace Google.VersionHandlerImpl.Tests {
                         Is.EqualTo(false));
             Assert.That(FileUtils.IsUnderPackageDirectory(
                         "Library/PackageCache/com.company.pkg@1.2.3"),
-                        Is.EqualTo(true));
+                        Is.EqualTo(false));
             Assert.That(FileUtils.IsUnderPackageDirectory(
                         "Library/PackageCache/com.company.pkg@1.2.3/Foo"),
                         Is.EqualTo(true));
@@ -152,12 +154,17 @@ namespace Google.VersionHandlerImpl.Tests {
             Assert.That(FileUtils.GetPackageDirectory("Packages"), Is.EqualTo(""));
             Assert.That(FileUtils.GetPackageDirectory("Packages/"), Is.EqualTo(""));
             Assert.That(FileUtils.GetPackageDirectory("Packages/com.company.pkg"),
+                        Is.EqualTo(""));
+            Assert.That(FileUtils.GetPackageDirectory("Packages/com.company.pkg/"),
                         Is.EqualTo(expectedAssetDBPath));
             Assert.That(FileUtils.GetPackageDirectory("Packages/com.company.pkg/Foo"),
                         Is.EqualTo(expectedAssetDBPath));
             Assert.That(FileUtils.GetPackageDirectory("Packages/com.company.pkg/Foo/Bar"),
                         Is.EqualTo(expectedAssetDBPath));
             Assert.That(FileUtils.GetPackageDirectory("Packages/com.company.pkg",
+                        FileUtils.PackageDirectoryType.AssetDatabasePath),
+                        Is.EqualTo(""));
+            Assert.That(FileUtils.GetPackageDirectory("Packages/com.company.pkg/",
                         FileUtils.PackageDirectoryType.AssetDatabasePath),
                         Is.EqualTo(expectedAssetDBPath));
             Assert.That(FileUtils.GetPackageDirectory("Packages/com.company.pkg/Foo",
@@ -185,6 +192,9 @@ namespace Google.VersionHandlerImpl.Tests {
                         Is.EqualTo(""));
             Assert.That(FileUtils.GetPackageDirectory(
                         "Library/PackageCache/com.company.pkg@1.2.3"),
+                        Is.EqualTo(""));
+            Assert.That(FileUtils.GetPackageDirectory(
+                        "Library/PackageCache/com.company.pkg@1.2.3/"),
                         Is.EqualTo(expectedActualPath));
             Assert.That(FileUtils.GetPackageDirectory(
                         "Library/PackageCache/com.company.pkg@1.2.3/Foo"),
@@ -194,6 +204,10 @@ namespace Google.VersionHandlerImpl.Tests {
                         Is.EqualTo(expectedActualPath));
             Assert.That(FileUtils.GetPackageDirectory(
                         "Library/PackageCache/com.company.pkg@1.2.3",
+                        FileUtils.PackageDirectoryType.AssetDatabasePath),
+                        Is.EqualTo(""));
+            Assert.That(FileUtils.GetPackageDirectory(
+                        "Library/PackageCache/com.company.pkg@1.2.3/",
                         FileUtils.PackageDirectoryType.AssetDatabasePath),
                         Is.EqualTo(expectedAssetDBPath));
             Assert.That(FileUtils.GetPackageDirectory(
@@ -206,6 +220,10 @@ namespace Google.VersionHandlerImpl.Tests {
                         Is.EqualTo(expectedAssetDBPath));
             Assert.That(FileUtils.GetPackageDirectory(
                         "Library/PackageCache/com.company.pkg@1.2.3",
+                        FileUtils.PackageDirectoryType.PhysicalPath),
+                        Is.EqualTo(""));
+            Assert.That(FileUtils.GetPackageDirectory(
+                        "Library/PackageCache/com.company.pkg@1.2.3/",
                         FileUtils.PackageDirectoryType.PhysicalPath),
                         Is.EqualTo(expectedActualPath));
             Assert.That(FileUtils.GetPackageDirectory(
@@ -217,6 +235,127 @@ namespace Google.VersionHandlerImpl.Tests {
                         FileUtils.PackageDirectoryType.PhysicalPath),
                         Is.EqualTo(expectedActualPath));
 
+        }
+
+        /// <summary>
+        /// Test FileUtils.GetRelativePathFromAssetsOrPackagesFolder()
+        /// </summary>
+        [Test]
+        public void GetRelativePathFromAssetsOrPackagesFolder() {
+            string basePath;
+            string relativePath;
+            bool result;
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Assets", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(false));
+            Assert.That(basePath, Is.EqualTo(""));
+            Assert.That(relativePath, Is.EqualTo("Assets"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Assets/", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Assets"));
+            Assert.That(relativePath, Is.EqualTo(""));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Assets/Foo", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Assets"));
+            Assert.That(relativePath, Is.EqualTo("Foo"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Assets/Foo/", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Assets"));
+            Assert.That(relativePath, Is.EqualTo("Foo/"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Assets/Foo/Bar", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Assets"));
+            Assert.That(relativePath, Is.EqualTo("Foo/Bar"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Packages/com.company.pkg", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(false));
+            Assert.That(basePath, Is.EqualTo(""));
+            Assert.That(relativePath, Is.EqualTo("Packages/com.company.pkg"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Packages/com.company.pkg/", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Packages/com.company.pkg"));
+            Assert.That(relativePath, Is.EqualTo(""));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Packages/com.company.pkg/Foo", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Packages/com.company.pkg"));
+            Assert.That(relativePath, Is.EqualTo("Foo"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Packages/com.company.pkg/Foo/", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Packages/com.company.pkg"));
+            Assert.That(relativePath, Is.EqualTo("Foo/"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Packages/com.company.pkg/Foo/Bar", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Packages/com.company.pkg"));
+            Assert.That(relativePath, Is.EqualTo("Foo/Bar"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Library/PackageCache/com.company.pkg@1.2.3", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(false));
+            Assert.That(basePath, Is.EqualTo(""));
+            Assert.That(relativePath, Is.EqualTo("Library/PackageCache/com.company.pkg@1.2.3"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Library/PackageCache/com.company.pkg@1.2.3/", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Library/PackageCache/com.company.pkg@1.2.3"));
+            Assert.That(relativePath, Is.EqualTo(""));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Library/PackageCache/com.company.pkg@1.2.3/Foo",
+                    out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Library/PackageCache/com.company.pkg@1.2.3"));
+            Assert.That(relativePath, Is.EqualTo("Foo"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Library/PackageCache/com.company.pkg@1.2.3/Foo/",
+                    out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Library/PackageCache/com.company.pkg@1.2.3"));
+            Assert.That(relativePath, Is.EqualTo("Foo/"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Library/PackageCache/com.company.pkg@1.2.3/Foo/Bar",
+                    out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(true));
+            Assert.That(basePath, Is.EqualTo("Library/PackageCache/com.company.pkg@1.2.3"));
+            Assert.That(relativePath, Is.EqualTo("Foo/Bar"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "/Foo", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(false));
+            Assert.That(basePath, Is.EqualTo(""));
+            Assert.That(relativePath, Is.EqualTo("/Foo"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Foo", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(false));
+            Assert.That(basePath, Is.EqualTo(""));
+            Assert.That(relativePath, Is.EqualTo("Foo"));
+
+            result = FileUtils.GetRelativePathFromAssetsOrPackagesFolder(
+                    "Foo/Bar", out basePath, out relativePath);
+            Assert.That(result, Is.EqualTo(false));
+            Assert.That(basePath, Is.EqualTo(""));
+            Assert.That(relativePath, Is.EqualTo("Foo/Bar"));
         }
     }
 }
