@@ -629,5 +629,24 @@ namespace Google {
             }
             return !String.IsNullOrEmpty(AssetDatabase.CreateFolder(parentFolder, di.Name));
         }
+
+        /// <summary>
+        /// Replace "Assets/", "Packages/package-id", or "Library/PackageCache/package-id@version"
+        /// base in the path with the new base.
+        /// </summary>
+        /// <param name="path">Path to the file/directory to be modified.</param>
+        /// <param name="newBase">New base used to replace the given path.</param>
+        /// <returns>If the path is under Assets or Packages folder, return the new path.
+        /// Otherwise, return the original path.</returns>
+        public static string ReplaceBaseAssetsOrPackagesFolder(string path, string newBase) {
+            string result = path;
+            string baseDir;
+            string relativeDir;
+            if (GetRelativePathFromAssetsOrPackagesFolder(
+                    path, out baseDir, out relativeDir)) {
+                result = Path.Combine(newBase, relativeDir);
+            }
+            return result;
+        }
     }
 }

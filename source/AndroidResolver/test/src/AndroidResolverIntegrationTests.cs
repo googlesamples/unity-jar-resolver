@@ -102,8 +102,8 @@ public class AndroidResolverIntegrationTests {
                             "ExpectedArtifacts/NoExport/GradleTemplate",
                             testCase, testCaseComplete,
                             otherExpectedFiles: new [] {
-                                "Assets/Firebase/m2repository/com/google/firebase/" +
-                                "firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
+                                "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
+                                "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
                             filesToIgnore: new HashSet<string> {
                                 Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
                             });
@@ -121,8 +121,8 @@ public class AndroidResolverIntegrationTests {
                             "ExpectedArtifacts/NoExport/GradleTemplateJetifier",
                             testCase, testCaseComplete,
                             otherExpectedFiles: new [] {
-                                "Assets/Firebase/m2repository/com/google/firebase/" +
-                                "firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
+                                "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
+                                "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
                             filesToIgnore: new HashSet<string> {
                                 Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
                             });
@@ -139,8 +139,8 @@ public class AndroidResolverIntegrationTests {
                             "ExpectedArtifacts/NoExport/GradleTemplateLibrary",
                             testCase, testCaseComplete,
                             otherExpectedFiles: new [] {
-                                "Assets/Firebase/m2repository/com/google/firebase/" +
-                                "firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
+                                "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
+                                "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
                             filesToIgnore: new HashSet<string> {
                                 Path.GetFileName(GRADLE_TEMPLATE_DISABLED)
                             });
