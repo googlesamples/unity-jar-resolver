@@ -744,13 +744,13 @@ Task createXbuildTask(String taskName, String taskDescription,
         executable project.ext.xbuildExe
         workingDir projectToBuild.parentFile.absolutePath
         args ([sprintf("/target:%s", target),
-               sprintf("/property:UnityHintPath=%s",
+               sprintf("/property:UnityHintPath=%s" + File.separator,
                        project.ext.unityDllPath.absolutePath),
-               sprintf("/property:UnityIosPath=%s",
+               sprintf("/property:UnityIosPath=%s" + File.separator,
                        project.ext.unityIosPath.absolutePath),
                sprintf("/property:NUnityHintPath=%s",
                        project.ext.unityNUnitDll ?
-                 project.ext.unityNUnitDll.absolutePath: ""),
+                 project.ext.unityNUnitDll.absolutePath + File.separator: ""),
                sprintf("/property:BaseIntermediateOutputPath=%s%s",
                        intermediatesDir.absolutePath,
                        File.separator),

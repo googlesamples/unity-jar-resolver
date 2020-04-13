@@ -7,7 +7,7 @@
     <OutputType>Library</OutputType>
     <RootNamespace>JarResolverLib</RootNamespace>
     <AssemblyName>JarResolverLib</AssemblyName>
-    <TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <ReleaseVersion>1.2</ReleaseVersion>
     <ProductVersion>12.0.0</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
@@ -31,12 +31,15 @@
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
   </PropertyGroup>
+  <PropertyGroup>
+    <UnityHintPath>$(SolutionDir)..\unity_dlls\</UnityHintPath>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="UnityEditor">
-        <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
+      <HintPath>$(UnityHintPath)UnityEditor.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
-        <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
+      <HintPath>$(UnityHintPath)UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Xml" />
