@@ -2507,10 +2507,6 @@ class PackageConfiguration(ConfigurationBlock):
                 os.utime(filename, (FLAGS.timestamp, FLAGS.timestamp))
             # Don't recurse directories.
             tar_args.append("-n")
-            # If timestamp, group or owner are present strip all fields from
-            # the tar so that it's reproducible.
-            if FLAGS.timestamp or FLAGS.owner or FLAGS.group:
-              tar_args.extend(["--options", "mtree:!all"])
           tar_args.extend(["-T", list_filename])
           # Disable timestamp in the gzip header.
           tar_env = os.environ.copy()
