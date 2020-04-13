@@ -2349,6 +2349,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         get {
             var loadedAssemblyPaths = new HashSet<string>();
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+                if (String.IsNullOrEmpty(assembly.Location)) continue;
                 try {
                     var path = Path.GetFullPath(assembly.Location);
                     if (enabledEditorDlls.Contains(path)) {
