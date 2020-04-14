@@ -91,24 +91,27 @@ namespace GooglePlayServices {
         /// <returns>true if successful, false otherwise.</returns>
         private static bool CopySrcAars(ICollection<Dependency> dependencies) {
             bool succeeded = true;
-            var aarFiles = new List<string>();
+            var aarFiles = new List<KeyValuePair<string, string>>();
             // Copy each .srcaar file to .aar while configuring the plugin importer to ignore the
             // file.
             foreach (var aar in LocalMavenRepository.FindAarsInLocalRepos(dependencies)) {
-                var dir = Path.GetDirectoryName(aar);
-                var filename = Path.GetFileNameWithoutExtension(aar);
+                var aarPath = aar;
+                if (FileUtils.IsUnderPackageDirectory(aar)) {
+                    var logicalPackagePath = FileUtils.GetPackageDirectory(aar,
+                            FileUtils.PackageDirectoryType.AssetDatabasePath);
+                    aarPath = FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                        aar, logicalPackagePath);
+                }
+                var dir = FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                        Path.GetDirectoryName(aar),
+                        GooglePlayServices.SettingsDialog.LocalMavenRepoDir);
+                var filename = Path.GetFileNameWithoutExtension(aarPath);
                 var targetFilename = Path.Combine(dir, filename + ".aar");
                 bool configuredAar = File.Exists(targetFilename);
                 if (!configuredAar) {
-                    bool copiedAndLabeledAar = AssetDatabase.CopyAsset(aar, targetFilename);
-                    if (copiedAndLabeledAar) {
-                        var unlabeledAssets = new HashSet<string>();
-                        PlayServicesResolver.LabelAssets(
-                            new [] { targetFilename },
-                            complete: (unlabeled) => { unlabeledAssets.UnionWith(unlabeled); });
-                        copiedAndLabeledAar = unlabeledAssets.Count == 0;
-                    }
-                    if (copiedAndLabeledAar) {
+                    var error = PlayServicesResolver.CopyAssetAndLabel(
+                            aarPath, targetFilename);
+                    if (String.IsNullOrEmpty(error)) {
                         try {
                             PluginImporter importer = (PluginImporter)AssetImporter.GetAtPath(
                                 targetFilename);
@@ -125,24 +128,25 @@ namespace GooglePlayServices {
                     } else {
                         PlayServicesResolver.Log(String.Format(
                             "Unable to copy {0} to {1}.  {1} will not be included in Gradle " +
-                            "builds.", aar, targetFilename), level: LogLevel.Error);
-                    }
-                    if (configuredAar) {
-                        aarFiles.Add(targetFilename);
-                        // Some versions of Unity do not mark the asset database as dirty when
-                        // plugin importer settings change so reimport the asset to synchronize
-                        // the state.
-                        AssetDatabase.ImportAsset(targetFilename, ImportAssetOptions.ForceUpdate);
-                    } else {
-                        if (File.Exists(targetFilename)) {
-                            AssetDatabase.DeleteAsset(targetFilename);
-                        }
-                        succeeded = false;
+                            "builds. Reason: {2}", aarPath, targetFilename, error),
+                            level: LogLevel.Error);
                     }
                 }
+                if (configuredAar) {
+                    aarFiles.Add(new KeyValuePair<string, string>(aarPath, targetFilename));
+                    // Some versions of Unity do not mark the asset database as dirty when
+                    // plugin importer settings change so reimport the asset to synchronize
+                    // the state.
+                    AssetDatabase.ImportAsset(targetFilename, ImportAssetOptions.ForceUpdate);
+                } else {
+                    if (File.Exists(targetFilename)) {
+                        AssetDatabase.DeleteAsset(targetFilename);
+                    }
+                    succeeded = false;
+                }
             }
-            foreach (var aar in aarFiles) {
-                if (!LocalMavenRepository.PatchPomFile(aar)) succeeded = false;
+            foreach (var keyValue in aarFiles) {
+                succeeded &= LocalMavenRepository.PatchPomFile(keyValue.Value, keyValue.Key);
             }
             return succeeded;
         }

@@ -38,6 +38,7 @@ namespace GooglePlayServices {
             internal bool explodeAars;
             internal bool patchAndroidManifest;
             internal bool patchMainTemplateGradle;
+            internal string localMavenRepoDir;
             internal bool useJetifier;
             internal bool verboseLogging;
             internal bool autoResolutionDisabledWarning;
@@ -57,6 +58,7 @@ namespace GooglePlayServices {
                 explodeAars = SettingsDialog.ExplodeAars;
                 patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
                 patchMainTemplateGradle = SettingsDialog.PatchMainTemplateGradle;
+                localMavenRepoDir = SettingsDialog.LocalMavenRepoDir;
                 useJetifier = SettingsDialog.UseJetifier;
                 verboseLogging = SettingsDialog.VerboseLogging;
                 autoResolutionDisabledWarning = SettingsDialog.AutoResolutionDisabledWarning;
@@ -77,6 +79,7 @@ namespace GooglePlayServices {
                 SettingsDialog.ExplodeAars = explodeAars;
                 SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
                 SettingsDialog.PatchMainTemplateGradle = patchMainTemplateGradle;
+                SettingsDialog.LocalMavenRepoDir = localMavenRepoDir;
                 SettingsDialog.UseJetifier = useJetifier;
                 SettingsDialog.VerboseLogging = verboseLogging;
                 SettingsDialog.AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
@@ -94,6 +97,7 @@ namespace GooglePlayServices {
         private const string ExplodeAarsKey = Namespace + "ExplodeAars";
         private const string PatchAndroidManifestKey = Namespace + "PatchAndroidManifest";
         private const string PatchMainTemplateGradleKey = Namespace + "PatchMainTemplateGradle";
+        private const string LocalMavenRepoDirKey = Namespace + "LocalMavenRepoDir";
         private const string UseJetifierKey = Namespace + "UseJetifier";
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
         private const string AutoResolutionDisabledWarningKey =
@@ -111,6 +115,7 @@ namespace GooglePlayServices {
             ExplodeAarsKey,
             PatchAndroidManifestKey,
             PatchMainTemplateGradleKey,
+            LocalMavenRepoDirKey,
             UseJetifierKey,
             VerboseLoggingKey,
             AutoResolutionDisabledWarningKey,
@@ -125,6 +130,7 @@ namespace GooglePlayServices {
         // with a workaround - this can be enabled.
         static bool ConfigurablePackageDir = false;
         static string DefaultPackageDir = AndroidPluginsDir;
+        static string DefaultLocalMavenRepoDir = "Assets/GeneratedLocalRepo";
 
         private Settings settings;
 
@@ -229,6 +235,14 @@ namespace GooglePlayServices {
             get { return projectSettings.GetBool(PatchMainTemplateGradleKey, true); }
         }
 
+        internal static string LocalMavenRepoDir {
+            private set { projectSettings.SetString(LocalMavenRepoDirKey, value); }
+            get {
+                return FileUtils.PosixPathSeparators(ValidateLocalMavenRepoDir(
+                        projectSettings.GetString(LocalMavenRepoDirKey, DefaultLocalMavenRepoDir)));
+            }
+        }
+
         internal static bool UseJetifier {
             set { projectSettings.SetBool(UseJetifierKey, value); }
             get { return projectSettings.GetBool(UseJetifierKey, false); }
@@ -268,6 +282,29 @@ namespace GooglePlayServices {
                                   directory), level: LogLevel.Warning);
             }
             previouslyValidatedPackageDir = searchDirectory;
+
+            return directory;
+        }
+
+        internal static string ValidateLocalMavenRepoDir(string directory) {
+            if (!directory.ToLowerInvariant().StartsWith(FileUtils.ASSETS_FOLDER.ToLower())) {
+                directory = DefaultLocalMavenRepoDir;
+            }
+            directory = FileUtils.NormalizePathSeparators(directory);
+
+            // TODO: Remove these restrictions
+            // Cannot set to be under "Assets/Plugins/Android".  Seems like all .aar and .pom
+            // genereted under this folder will be removed in gradle template mode after
+            // being generated.  Need to investigate why.
+            if (directory.StartsWith(AndroidPluginsDir)) {
+                directory = DefaultLocalMavenRepoDir;
+                PlayServicesResolver.Log(String.Format(
+                        "Currently LocalMavenRepoDir does not work at any folder " +
+                        "under \"Assets/Plugins/Android\""), level: LogLevel.Warning);
+            }
+            if (directory.EndsWith(Path.DirectorySeparatorChar.ToString())) {
+                directory = directory.Substring(0, directory.Length - 1);
+            }
 
             return directory;
         }
@@ -429,6 +466,32 @@ namespace GooglePlayServices {
                     settings.packageDir));
             }
 
+            if (settings.patchMainTemplateGradle) {
+                GUILayout.BeginHorizontal();
+                string previousDir = settings.localMavenRepoDir;
+                GUILayout.Label("Local Maven Repo Directory", EditorStyles.boldLabel);
+                if (GUILayout.Button("Browse")) {
+                    string path = EditorUtility.OpenFolderPanel("Set Local Maven Repo Directory",
+                                                                settings.localMavenRepoDir, "");
+                    int startOfPath = path.IndexOf(
+                        FileUtils.ASSETS_FOLDER + Path.DirectorySeparatorChar);
+                    settings.localMavenRepoDir = FileUtils.PosixPathSeparators(
+                        startOfPath < 0 ? DefaultLocalMavenRepoDir :
+                        path.Substring(startOfPath, path.Length - startOfPath));
+                }
+                if (!previousDir.Equals(settings.localMavenRepoDir)) {
+                    settings.localMavenRepoDir =
+                        ValidateLocalMavenRepoDir(settings.localMavenRepoDir);
+                }
+                GUILayout.EndHorizontal();
+                GUILayout.Label(
+                    "Please pick a folder under Assets folder.  Currently it won't work at " +
+                    "any folder under \"Assets/Plugins/Android\"");
+                settings.localMavenRepoDir = FileUtils.PosixPathSeparators(
+                        ValidateLocalMavenRepoDir(EditorGUILayout.TextField(
+                                settings.localMavenRepoDir)));
+            }
+
             GUILayout.BeginHorizontal();
             GUILayout.Label("Use Jetifier.", EditorStyles.boldLabel);
             settings.useJetifier = EditorGUILayout.Toggle(settings.useJetifier);
@@ -497,6 +560,9 @@ namespace GooglePlayServices {
                             "patchAndroidManifest",
                             SettingsDialog.PatchAndroidManifest.ToString()),
                         new KeyValuePair<string, string>(
+                            "localMavenRepoDir",
+                            SettingsDialog.LocalMavenRepoDir.ToString()),
+                        new KeyValuePair<string, string>(
                             "useJetifier",
                             SettingsDialog.UseJetifier.ToString()),
                         new KeyValuePair<string, string>(
@@ -510,6 +576,7 @@ namespace GooglePlayServices {
                             SettingsDialog.PromptBeforeAutoResolution.ToString()),
                     },
                     "Settings Save");
+
                 settings.Save();
                 PlayServicesResolver.OnSettingsChanged();
             }

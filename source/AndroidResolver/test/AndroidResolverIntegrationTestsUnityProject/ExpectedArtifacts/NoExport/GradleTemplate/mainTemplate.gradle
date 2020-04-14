@@ -33,7 +33,7 @@ allprojects {
             url (unityProjectPath + "/project_relative_path/repo") // Assets/ExternalDependencyManager/Editor/TestDependencies.xml:15
         }
         maven {
-            url (unityProjectPath + "/Assets/Firebase/m2repository") // Assets/ExternalDependencyManager/Editor/TestDependencies.xml:10
+            url (unityProjectPath + "/Assets/GeneratedLocalRepo/Firebase/m2repository") // Assets/ExternalDependencyManager/Editor/TestDependencies.xml:10
         }
         mavenLocal()
         jcenter()

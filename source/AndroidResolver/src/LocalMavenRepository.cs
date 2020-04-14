@@ -84,7 +84,7 @@ namespace GooglePlayServices {
         /// </summary>
         /// <param name="filename">Path to a file.</param>
         /// <returns>Path (including directory) without a filename extension.</returns>
-        private static string PathWithoutExtension(string path) {
+        internal static string PathWithoutExtension(string path) {
             return Path.Combine(Path.GetDirectoryName(path),
                                 Path.GetFileNameWithoutExtension(path));
         }
@@ -95,16 +95,37 @@ namespace GooglePlayServices {
         /// file.
         /// </summary>
         /// <param name="artifactFilename">artifactFilename</param>
+        /// <param name="sourceFilename">If artifactFilename is copied from a different location,
+        /// pass the original location where POM file lives.</param>
         /// <returns>true if successful, false otherwise.</returns>
-        public static bool PatchPomFile(string artifactFilename) {
+        public static bool PatchPomFile(string artifactFilename, string sourceFilename) {
+            if (sourceFilename == null) {
+                sourceFilename = artifactFilename;
+            }
+            if (FileUtils.IsUnderPackageDirectory(artifactFilename)) {
+                // File under Packages folder is immutable.
+                PlayServicesResolver.Log(
+                    String.Format("Cannot patch POM from Packages directory since it is immutable" +
+                        " ({0})", artifactFilename), level: LogLevel.Error);
+                return false;
+            }
+
             var failureImpact = String.Format("{0} may not be included in your project",
                                               Path.GetFileName(artifactFilename));
             var pomFilename = PathWithoutExtension(artifactFilename) + ".pom";
-            if (!File.Exists(pomFilename)) {
-                PlayServicesResolver.Log(
-                    String.Format("Maven POM {0} for {1} does not exist. " + failureImpact,
-                                  pomFilename, artifactFilename), level: LogLevel.Warning);
-                return false;
+            // Copy POM file if artifact has been copied from a different location as well.
+            if (String.Compare(sourceFilename, artifactFilename) != 0 &&
+                !File.Exists(pomFilename)) {
+                var sourcePomFilename = PathWithoutExtension(sourceFilename) + ".pom";
+                var error = PlayServicesResolver.CopyAssetAndLabel(
+                        sourcePomFilename, pomFilename);
+                if (!String.IsNullOrEmpty(error)) {
+                    PlayServicesResolver.Log(
+                            String.Format("Failed to copy POM from {0} to {1} due to:\n{2}",
+                                    sourcePomFilename, pomFilename, error),
+                            level: LogLevel.Error);
+                    return false;
+                }
             }
             var artifactPackaging = Path.GetExtension(artifactFilename).ToLower().Substring(1);
             var pom = new XmlDocument();
@@ -168,6 +189,10 @@ namespace GooglePlayServices {
             // Filename extensions by the basename of each file path.
             var extensionsByBasenames = new Dictionary<string, HashSet<string>>();
             foreach (var filename in FindAarsInLocalRepos(dependencies)) {
+                // No need to patch POM under package folder.
+                if (FileUtils.IsUnderPackageDirectory(filename)) {
+                    continue;
+                }
                 var pathWithoutExtension = PathWithoutExtension(filename);
                 HashSet<string> extensions;
                 if (!extensionsByBasenames.TryGetValue(pathWithoutExtension, out extensions)) {
@@ -191,7 +216,8 @@ namespace GooglePlayServices {
                     }
                     if (foundFile) break;
                 }
-                successful &= PatchPomFile(kv.Key + filePackagingToUse);
+                var artifect = kv.Key + filePackagingToUse;
+                successful &= PatchPomFile(artifect, artifect);
             }
             return successful;
         }

@@ -461,7 +461,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Asset label applied to files managed by this plugin.
         /// </summary>
-        private const string ManagedAssetLabel = "gpsr";
+        internal const string ManagedAssetLabel = "gpsr";
 
         /// <summary>
         /// Get a boolean property from UnityEditor.EditorUserBuildSettings.
@@ -1436,12 +1436,23 @@ namespace GooglePlayServices {
         /// </summary>
         /// <param name="filenames">Files or directories to delete.</param>
         /// <returns>true if files are deleted, false otherwise.</returns>
-        private static bool DeleteFiles(IEnumerable<string> filenames)
-        {
+        private static bool DeleteFiles(IEnumerable<string> filenames) {
             if (filenames == null) return false;
             var failedToDelete = new List<string>();
             foreach (string artifact in filenames) {
                 failedToDelete.AddRange(FileUtils.DeleteExistingFileOrDirectory(artifact));
+                // Attempt to remove empty parent folders.
+                var folder = Path.GetDirectoryName(artifact);
+                while (!String.IsNullOrEmpty(folder) &&
+                    !Path.IsPathRooted(folder) &&
+                    String.Compare(folder, FileUtils.ASSETS_FOLDER) != 0) {
+                    if (Directory.GetFiles(folder).Length != 0 ||
+                        Directory.GetDirectories(folder).Length != 0) {
+                        break;
+                    }
+                    failedToDelete.AddRange(FileUtils.DeleteExistingFileOrDirectory(folder));
+                    folder = Path.GetDirectoryName(folder);
+                }
             }
             var deleteError = FileUtils.FormatError("Failed to delete files:", failedToDelete);
             if (!String.IsNullOrEmpty(deleteError)) {
@@ -1937,20 +1948,36 @@ namespace GooglePlayServices {
                 lines.Add("        maven {");
                 lines.Add("            url \"https://maven.google.com\"");
                 lines.Add("        }");
+
+                // Consolidate repos url from Packages folders like
+                //   "Packages/com.company.pkg1/Path/To/m2repository" and
+                //   "Packages/com.company.pkg2/Path/To/m2repository"
+                Dictionary< string, List<string> > repoUriToSources =
+                        new Dictionary<string, List<string>>();
                 foreach (var repoAndSources in GetRepos(dependencies: dependencies)) {
                     string repoUri;
                     if (repoAndSources.Key.StartsWith(projectFileUri) && !exportEnabled) {
-                        repoUri = String.Format(
-                            "(unityProjectPath + \"/{0}\")",
-                            repoAndSources.Key.Substring(projectFileUri.Length + 1));
+                        var repoPath = repoAndSources.Key.Substring(projectFileUri.Length + 1);
+                        repoPath = FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                                repoPath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir);
+                        repoUri = String.Format("(unityProjectPath + \"/{0}\")", repoPath);
                     } else {
                         repoUri = String.Format("\"{0}\"", repoAndSources.Key);
                     }
+                    List<string> sources;
+                    if (!repoUriToSources.TryGetValue(repoUri, out sources)) {
+                        sources = new List<string>();
+                        repoUriToSources[repoUri] = sources;
+                    }
+                    sources.Add(repoAndSources.Value);
+                }
+                foreach(var kv in repoUriToSources) {
                     lines.Add("        maven {");
-                    lines.Add(String.Format("            url {0} // {1}", repoUri,
-                                            repoAndSources.Value));
+                    lines.Add(String.Format("            url {0} // {1}", kv.Key,
+                                            String.Join(", ", kv.Value.ToArray())));
                     lines.Add("        }");
                 }
+
                 lines.Add("        mavenLocal()");
                 lines.Add("        jcenter()");
                 lines.Add("        mavenCentral()");
@@ -2169,6 +2196,66 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Copy asset to target location and apply labels to be managed by this plugin.
+        /// </summary>
+        /// <param name="sourceLocation">Location to copy from.</param>
+        /// <param name="targetLocation">Location to copy to.</param>
+        /// <param name="force">If true, this will attempt to delete existing file at target
+        /// location. If false, this will return error if target file exists.</param>
+        /// <returns>Error message. Empty if no error occurs.</returns>
+        internal static string CopyAssetAndLabel(string sourceLocation, string targetLocation,
+                bool force = false) {
+            if (String.Compare(sourceLocation, targetLocation) == 0) {
+                return "";
+            }
+            if (!File.Exists(sourceLocation)) {
+                return String.Format("Source file {0} not found.",
+                        sourceLocation);
+            }
+            if (File.Exists(targetLocation)) {
+                if (force) {
+                    if (FileUtils.DeleteExistingFileOrDirectory(targetLocation, true).Count != 0) {
+                        return String.Format(
+                            "Failed to remove existing target file {0}.",
+                            targetLocation);
+                    }
+                } else {
+                    return String.Format("Target file {0} exists.",
+                            targetLocation);
+                }
+            }
+
+            var targetDir = Path.GetDirectoryName(targetLocation);
+            if (!FileUtils.CreateFolder(targetDir)) {
+                return String.Format("Failed to create folders at {0}", targetDir);
+            }
+
+            PlayServicesResolver.Log(String.Format("Copying {0} to {1}",
+                    sourceLocation, targetLocation),
+                    level: LogLevel.Verbose);
+
+            if (!AssetDatabase.CopyAsset(sourceLocation, targetLocation)) {
+                return String.Format("Failed to copy {0} to {1}.",
+                        sourceLocation, targetLocation);
+            }
+
+            var unlabeledAssets = new HashSet<string>();
+            LabelAssets(
+                new [] { targetLocation },
+                complete: (unlabeled) => { unlabeledAssets.UnionWith(unlabeled); });
+            if (unlabeledAssets.Count != 0) {
+                return String.Format("Cannot label {0} properly.", targetLocation);
+            }
+
+            if (!File.Exists(targetLocation)) {
+                return String.Format("Cannot find the file at target location {0} after copy.",
+                        targetLocation);
+            }
+
+            return "";
+        }
+
+        /// <summary>
         /// Find the set of assets managed by this plugin.
         /// </summary>
         internal static IEnumerable<string> FindLabeledAssets() {
@@ -2209,6 +2296,7 @@ namespace GooglePlayServices {
                 {"explodeAars", SettingsDialogObj.ExplodeAars.ToString()},
                 {"patchAndroidManifest", SettingsDialogObj.PatchAndroidManifest.ToString()},
                 {"patchMainTemplateGradle", SettingsDialogObj.PatchMainTemplateGradle.ToString()},
+                {"localMavenRepoDir", SettingsDialogObj.LocalMavenRepoDir.ToString()},
                 {"useJetifier", SettingsDialogObj.UseJetifier.ToString()},
                 {"bundleId", GetAndroidApplicationId()},
                 {"gradleBuildEnabled", buildSystemSettings.GradleBuildEnabled.ToString()},
@@ -2224,6 +2312,7 @@ namespace GooglePlayServices {
             "explodeAars",
             "patchAndroidManifest",
             "patchMainTemplateGradle",
+            "localMavenRepoDir",
             "useJetifier",
             "gradleBuildEnabled",
             "gradleTemplateEnabled",

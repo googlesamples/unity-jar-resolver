@@ -357,5 +357,39 @@ namespace Google.VersionHandlerImpl.Tests {
             Assert.That(basePath, Is.EqualTo(""));
             Assert.That(relativePath, Is.EqualTo("Foo/Bar"));
         }
+
+        /// <summary>
+        /// Test FileUtils.ReplaceBaseAssetsOrPackagesFolder()
+        /// </summary>
+        [Test]
+        public void ReplaceBaseAssetsOrPackagesFolder() {
+            Assert.That(
+                FileUtils.ReplaceBaseAssetsOrPackagesFolder("Assets/Bar", "Foo"),
+                Is.EqualTo("Foo/Bar"));
+            Assert.That(
+                FileUtils.ReplaceBaseAssetsOrPackagesFolder("Assets/Bar", "Assets/Foo"),
+                Is.EqualTo("Assets/Foo/Bar"));
+            Assert.That(
+                FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                    "Packages/com.company.pkg/Bar", "Foo"),
+                Is.EqualTo("Foo/Bar"));
+            Assert.That(
+                FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                    "Packages/com.company.pkg/Bar", "Assets/Foo"),
+                Is.EqualTo("Assets/Foo/Bar"));
+            Assert.That(
+                FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                    "Library/PackageCache/com.company.pkg@1.2.3/Bar", "Foo"),
+                Is.EqualTo("Foo/Bar"));
+            Assert.That(
+                FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                    "Library/PackageCache/com.company.pkg@1.2.3/Bar", "Assets/Foo"),
+                Is.EqualTo("Assets/Foo/Bar"));
+
+            Assert.That(
+                FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                    "Foo/Bar", "Assets"),
+                Is.EqualTo("Foo/Bar"));
+        }
     }
 }
