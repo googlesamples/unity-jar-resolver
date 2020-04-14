@@ -882,12 +882,12 @@ Task createNUnitTask(String name, String description, File testDll,
                       description: description,
                       type: Task,
                       dependsOn: dependsOn).with {
+    inputs.files testDll
+    outputs.files logFile
     doFirst { checkNUnitConsolePath() }
     doLast {
       exec {
         workingDir project.ext.pluginSourceDir
-        inputs.files testDll
-        outputs.files logFile
         executable project.ext.nunitConsoleExe
         args ([sprintf("-output:%s", logFile.absolutePath),
                sprintf("-xml:%s", xmlLogFile.absolutePath),
