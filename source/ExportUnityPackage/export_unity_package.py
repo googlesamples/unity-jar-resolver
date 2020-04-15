@@ -281,6 +281,10 @@ flags.DEFINE_string("config_file", None, ("Config file that describes how to "
 flags.DEFINE_string("guids_file", None, "Json file with stable guids cache.")
 flags.DEFINE_string("plugins_version", None, "Version of the plugins to "
                     "package.")
+flags.DEFINE_boolean("use_tar", True, "Whether to use the tar command line "
+                     "application, when available, to generate archives rather "
+                     "than Python's tarfile module.  NOTE: On macOS tar / gzip "
+                     "generate Unity compatible but non-reproducible archives.")
 flags.DEFINE_boolean(
     "enforce_semver", True, "Whether to enforce semver (major.minor.patch) for"
     "plugins_version.  This is required to build UPM package.")
@@ -2479,7 +2483,7 @@ class PackageConfiguration(ConfigurationBlock):
                        platform.system() == "Darwin")
       gnu_tar_available = platform.system() == "Linux"
       # Whether a reproducible tar.gz is required.
-      if tar_available:
+      if tar_available and FLAGS.use_tar:
         # tarfile is 10x slower than the tar command so use the command line
         # tool where it's available and can generate a reproducible archive.
         list_filename = os.path.join(tempfile.mkdtemp(), "input_files.txt")

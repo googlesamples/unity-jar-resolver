@@ -20,11 +20,13 @@ import copy
 import filecmp
 import json
 import os
+import platform
 import re
 import shutil
 import stat
 import sys
 import tarfile
+import time
 from absl import flags
 from absl.testing import absltest
 
@@ -2618,7 +2620,12 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
     """Create a unitypackage archive."""
     test_case_dir = os.path.join(FLAGS.test_tmpdir, "test_create_archive")
     os.makedirs(test_case_dir)
+    use_tar = export_unity_package.FLAGS.use_tar
     try:
+      # Disable use of tar command line application until this is reproducible on
+      # macOS.
+      export_unity_package.FLAGS.use_tar = (platform.system() != "Darwin")
+
       archive_dir = os.path.join(test_case_dir, "archive_dir")
       os.makedirs(archive_dir)
       # Create some files to archive.
@@ -2655,6 +2662,9 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
       other_archive_filename = os.path.join(test_case_dir,
                                             "archive2.unitypackage")
       os.rename(archive_filename, other_archive_filename)
+      # Wait before writing another archive so that any potential changes to
+      # timestamps can be written.
+      time.sleep(1)
       # We create the archive with the original filename as the filename is
       # embedded in the archive.
       export_unity_package.PackageConfiguration.create_archive(archive_filename,
@@ -2663,6 +2673,7 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
 
     finally:
       shutil.rmtree(test_case_dir)
+      export_unity_package.FLAGS.use_tar = use_tar
 
   def test_package_write(self):
     """Write a .unitypackage file."""
