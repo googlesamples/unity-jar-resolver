@@ -1,8 +1,8 @@
 fileFormatVersion: 2
-guid: 9cc9316b6f114129b20186e40ff06dff
+guid: 95719d6bbc4a4099bed9b47237c8ae9c
 labels:
-- gvh_version-1.2.150
-- gvhp_exportpath-ExternalDependencyManager/Editor/Google.JarResolver_v1.2.150.dll.mdb
+- gvh_version-1.2.151
+- gvhp_exportpath-ExternalDependencyManager/Editor/Google.IOSResolver_v1.2.151.dll.mdb
 - gvh
 timeCreated: 1538009133
 licenseType: Pro
