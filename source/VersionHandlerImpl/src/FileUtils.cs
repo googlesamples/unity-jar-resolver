@@ -326,6 +326,11 @@ namespace Google {
                     (!UnityEditor.VersionControl.Provider.requiresNetwork ||
                      UnityEditor.VersionControl.Provider.onlineState ==
                      UnityEditor.VersionControl.OnlineState.Online)) {
+
+                    // Some versions of Unity seem to have bug to convert "string path" to
+                    // "AssetList assets" (See #359). Generate it in advance as a workaround.
+                    var assetList = new UnityEditor.VersionControl.AssetList();
+                    assetList.Add(new UnityEditor.VersionControl.Asset(path));
                     // Unity 2019.1+ broke backwards compatibility of Checkout() by adding an
                     // optional argument to the method so we dynamically invoke the method to add
                     // the optional
@@ -333,7 +338,7 @@ namespace Google {
                     var task = (UnityEditor.VersionControl.Task)VersionHandler.InvokeStaticMethod(
                         typeof(UnityEditor.VersionControl.Provider),
                         "Checkout",
-                        new object[] { path, UnityEditor.VersionControl.CheckoutMode.Exact },
+                        new object[] { assetList, UnityEditor.VersionControl.CheckoutMode.Exact },
                         namedArgs: null);
                     task.Wait();
                     if (!task.success) {
