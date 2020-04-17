@@ -1958,8 +1958,9 @@ namespace GooglePlayServices {
                     string repoUri;
                     if (repoAndSources.Key.StartsWith(projectFileUri) && !exportEnabled) {
                         var repoPath = repoAndSources.Key.Substring(projectFileUri.Length + 1);
-                        repoPath = FileUtils.ReplaceBaseAssetsOrPackagesFolder(
-                                repoPath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir);
+                        repoPath = FileUtils.PosixPathSeparators(
+                            FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                                repoPath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir));
                         repoUri = String.Format("(unityProjectPath + \"/{0}\")", repoPath);
                     } else {
                         repoUri = String.Format("\"{0}\"", repoAndSources.Key);
