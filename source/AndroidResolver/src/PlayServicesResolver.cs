@@ -750,8 +750,8 @@ namespace GooglePlayServices {
         // Analytics reporter.
         internal static EditorMeasurement analytics = new EditorMeasurement(
                 GooglePlayServices.SettingsDialog.projectSettings, logger,
-                VersionHandlerImpl.GA_TRACKING_ID, "com.google.external-dependency-manager",
-                "Android Resolver", "", VersionHandlerImpl.PRIVACY_POLICY) {
+                VersionHandlerImpl.GA_TRACKING_ID, VersionHandlerImpl.MEASUREMENT_ID,
+                VersionHandlerImpl.PLUGIN_SUITE_NAME, "", VersionHandlerImpl.PRIVACY_POLICY) {
             BasePath = "/androidresolver/",
             BaseQuery = String.Format("version={0}", AndroidResolverVersionNumber.Value.ToString()),
             BaseReportName = "Android Resolver: ",

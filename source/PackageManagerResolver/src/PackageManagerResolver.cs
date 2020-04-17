@@ -507,8 +507,9 @@ public class PackageManagerResolver : AssetPostprocessor {
     // Analytics reporter.
     internal static EditorMeasurement analytics =
         new EditorMeasurement(settings, logger, VersionHandlerImpl.GA_TRACKING_ID,
-            "com.google.external-dependency-manager", PLUGIN_NAME, "",
-            VersionHandlerImpl.PRIVACY_POLICY) {
+                              VersionHandlerImpl.MEASUREMENT_ID,
+                              VersionHandlerImpl.PLUGIN_SUITE_NAME, "",
+                              VersionHandlerImpl.PRIVACY_POLICY) {
         BasePath = "/upmresolver/",
         BaseQuery =
             String.Format("version={0}", PackageManagerResolverVersionNumber.Value.ToString()),

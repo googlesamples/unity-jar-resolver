@@ -989,7 +989,7 @@ public class IOSResolver : AssetPostprocessor {
     // Analytics reporter.
     internal static EditorMeasurement analytics = new EditorMeasurement(
           settings, logger, VersionHandlerImpl.GA_TRACKING_ID,
-          "com.google.external-dependency-manager", "iOS Resolver", "",
+          VersionHandlerImpl.MEASUREMENT_ID, VersionHandlerImpl.PLUGIN_SUITE_NAME, "",
           VersionHandlerImpl.PRIVACY_POLICY) {
         BasePath = "/iosresolver/",
         BaseQuery = String.Format("version={0}", IOSResolverVersionNumber.Value.ToString()),

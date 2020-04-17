@@ -2263,13 +2263,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
 
     // Google Analytics tracking ID.
     internal const string GA_TRACKING_ID = "UA-54627617-3";
+    internal const string MEASUREMENT_ID = "com.google.external-dependency-manager";
+    // Name of the plugin suite.
+    internal const string PLUGIN_SUITE_NAME = "External Dependency Manager";
     // Privacy policy for analytics data usage.
     internal const string PRIVACY_POLICY = "https://policies.google.com/privacy";
 
     // Analytics reporter.
     internal static EditorMeasurement analytics = new EditorMeasurement(
-            settings, logger, GA_TRACKING_ID, "com.google.external-dependency-manager",
-            "Version Handler", "", PRIVACY_POLICY) {
+            settings, logger, GA_TRACKING_ID, MEASUREMENT_ID, PLUGIN_SUITE_NAME, "",
+            PRIVACY_POLICY) {
         BasePath = "/versionhandler/",
         BaseQuery = String.Format("version={0}", VersionHandlerVersionNumber.Value.ToString()),
         BaseReportName = "Version Handler: ",
