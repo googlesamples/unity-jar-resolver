@@ -2349,14 +2349,17 @@ public class VersionHandlerImpl : AssetPostprocessor {
         get {
             var loadedAssemblyPaths = new HashSet<string>();
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies()) {
-                if (String.IsNullOrEmpty(assembly.Location)) continue;
+                string location;
                 try {
-                    var path = Path.GetFullPath(assembly.Location);
-                    if (enabledEditorDlls.Contains(path)) {
-                        loadedAssemblyPaths.Add(path);
-                    }
+                    location = assembly.Location;
                 } catch (NotSupportedException) {
                     // Dynamic assemblies do not have a file location so ignore.
+                    continue;
+                }
+                if (String.IsNullOrEmpty(location)) continue;
+                var path = Path.GetFullPath(location);
+                if (enabledEditorDlls.Contains(path)) {
+                    loadedAssemblyPaths.Add(path);
                 }
             }
             return loadedAssemblyPaths.IsSupersetOf(enabledEditorDlls);
