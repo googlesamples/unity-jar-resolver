@@ -1,4 +1,4 @@
-// <copyright file="UnityPackageManagerRegistry.cs" company="Google Inc.">
+// <copyright file="PackageManagerRegistry.cs" company="Google Inc.">
 // Copyright (C) 2020 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,12 +21,12 @@ namespace Google {
     /// <summary>
     /// UPM/NPM package registry.
     /// </summary>
-    internal class UnityPackageManagerRegistry {
+    internal class PackageManagerRegistry {
 
         /// <summary>
         /// Construct an empty registry.
         /// </summary>
-        public UnityPackageManagerRegistry() {
+        public PackageManagerRegistry() {
             Scopes = new List<string>();
         }
 
@@ -96,7 +96,7 @@ namespace Google {
         /// <returns>true if both objects have the same contents excluding CreatedBy,
         /// false otherwise.</returns>
         public override bool Equals(System.Object obj) {
-            var other = obj as UnityPackageManagerRegistry;
+            var other = obj as PackageManagerRegistry;
             return other != null &&
                 Name == other.Name &&
                 Url == other.Url &&
@@ -127,12 +127,12 @@ namespace Google {
         }
 
         /// <summary>
-        /// Convert a list of UnityPackageManagerRegistry instances to a list of strings.
+        /// Convert a list of PackageManagerRegistry instances to a list of strings.
         /// </summary>
         /// <param name="registries">List of registries to convert to strings.</param>
         /// <returns>List of strings.</returns>
         public static List<string> ToStringList(
-                IEnumerable<UnityPackageManagerRegistry> registries) {
+                IEnumerable<PackageManagerRegistry> registries) {
             var registryStrings = new List<string>();
             foreach (var registry in registries) {
                 registryStrings.Add(registry.ToString());
@@ -141,11 +141,11 @@ namespace Google {
         }
 
         /// <summary>
-        /// Convert a list of UnityPackageManagerRegistry instance to a newline separated string.
+        /// Convert a list of PackageManagerRegistry instance to a newline separated string.
         /// </summary>
         /// <param name="registries">List of registries to convert to strings.</param>
         /// <returns>String representation of the list.</returns>
-        public static string ToString(IEnumerable<UnityPackageManagerRegistry> registries) {
+        public static string ToString(IEnumerable<PackageManagerRegistry> registries) {
             return String.Join("\n", ToStringList(registries).ToArray());
         }
     }

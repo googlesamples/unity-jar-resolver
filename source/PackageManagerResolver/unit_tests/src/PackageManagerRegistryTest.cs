@@ -1,4 +1,4 @@
-// <copyright file="UnityPackageManagerRegistryTest.cs" company="Google LLC">
+// <copyright file="PackageManagerRegistryTest.cs" company="Google LLC">
 // Copyright (C) 2020 Google LLC All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
 //    limitations under the License.
 // </copyright>
 
-namespace Google.UnityPackageManagerResolver.Tests {
+namespace Google.PackageManagerResolver.Tests {
     using NUnit.Framework;
     using System;
     using System.Collections.Generic;
@@ -23,17 +23,17 @@ namespace Google.UnityPackageManagerResolver.Tests {
     using Google;
 
     /// <summary>
-    /// Tests the UnityPackageManagerRegistry class.
+    /// Tests the PackageManagerRegistry class.
     /// </summary>
     [TestFixture]
-    public class UnityPackageManagerRegistryTest {
+    public class PackageManagerRegistryTest {
 
         /// <summary>
-        /// Construct a UnityPackageManagerRegistry and use all accessors.
+        /// Construct a PackageManagerRegistry and use all accessors.
         /// </summary>
         [Test]
         public void TestConstruct() {
-            var registry = new UnityPackageManagerRegistry() {
+            var registry = new PackageManagerRegistry() {
                 Name = "Reg",
                 Url = "http://unity.reg.org",
                 Scopes = new List<string> { "org.foo.bar" },
@@ -56,10 +56,10 @@ namespace Google.UnityPackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestCompareAndGetHashCode() {
-            var reg = new UnityPackageManagerRegistry();
+            var reg = new PackageManagerRegistry();
             Assert.That(reg.GetHashCode(), Is.EqualTo(0));
 
-            var reg1 = new UnityPackageManagerRegistry() {
+            var reg1 = new PackageManagerRegistry() {
                 Name = "Reg",
                 Url = "http://reg1.org",
                 Scopes = new List<string> { "org.foo.bar" },
@@ -68,7 +68,7 @@ namespace Google.UnityPackageManagerResolver.Tests {
                 CreatedBy = "foo.xml:123",
                 CustomData = "hello world"
             };
-            var reg2 = new UnityPackageManagerRegistry() {
+            var reg2 = new PackageManagerRegistry() {
                 Name = "Reg",
                 Url = "http://reg1.org",
                 Scopes = new List<string> { "org.foo.bar" },
@@ -119,11 +119,11 @@ namespace Google.UnityPackageManagerResolver.Tests {
         }
 
         /// <summary>
-        /// Convert a UnityPackageManagerRegistry to a string representation.
+        /// Convert a PackageManagerRegistry to a string representation.
         /// </summary>
         [Test]
         public void TestToString() {
-            var registry = new UnityPackageManagerRegistry() {
+            var registry = new PackageManagerRegistry() {
                 Name = "Reg",
                 Url = "http://unity.reg.org",
                 Scopes = new List<string> { "org.foo.bar", "org.foo.baz"},
@@ -137,22 +137,22 @@ namespace Google.UnityPackageManagerResolver.Tests {
         }
 
         /// <summary>
-        /// Convert a list of UnityPackageManagerRegistry instances to a list of strings.
+        /// Convert a list of PackageManagerRegistry instances to a list of strings.
         /// </summary>
         [Test]
         public void TestToStringList() {
-            var registries = new UnityPackageManagerRegistry[] {
-                new UnityPackageManagerRegistry() {
+            var registries = new PackageManagerRegistry[] {
+                new PackageManagerRegistry() {
                     Name = "foo",
                     Url = "http://foo.com",
                     Scopes = new List<string>() { "foo.bar" },
                 },
-                new UnityPackageManagerRegistry() {
+                new PackageManagerRegistry() {
                     Name = "bar",
                     Url = "http://bar.com"
                 }
             };
-            Assert.That(UnityPackageManagerRegistry.ToStringList(registries),
+            Assert.That(PackageManagerRegistry.ToStringList(registries),
                         Is.EqualTo(new List<string>() {
                                        "name: foo, url: http://foo.com, scopes: [foo.bar]",
                                        "name: bar, url: http://bar.com, scopes: []"
@@ -160,22 +160,22 @@ namespace Google.UnityPackageManagerResolver.Tests {
         }
 
         /// <summary>
-        /// Convert a list of UnityPackageManagerRegistry instances to a string.
+        /// Convert a list of PackageManagerRegistry instances to a string.
         /// </summary>
         [Test]
         public void TestListToString() {
-            var registries = new UnityPackageManagerRegistry[] {
-                new UnityPackageManagerRegistry() {
+            var registries = new PackageManagerRegistry[] {
+                new PackageManagerRegistry() {
                     Name = "foo",
                     Url = "http://foo.com",
                     Scopes = new List<string>() { "foo.bar" },
                 },
-                new UnityPackageManagerRegistry() {
+                new PackageManagerRegistry() {
                     Name = "bar",
                     Url = "http://bar.com"
                 }
             };
-            Assert.That(UnityPackageManagerRegistry.ToString(registries),
+            Assert.That(PackageManagerRegistry.ToString(registries),
                         Is.EqualTo("name: foo, url: http://foo.com, scopes: [foo.bar]\n" +
                                    "name: bar, url: http://bar.com, scopes: []"));
         }

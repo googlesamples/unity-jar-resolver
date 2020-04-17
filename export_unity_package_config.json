@@ -18,7 +18,7 @@
             "ExternalDependencyManager/Editor/Google.IOSResolver_*.*",
             "ExternalDependencyManager/Editor/Google.JarResolver_*.*",
             "ExternalDependencyManager/Editor/Google.VersionHandlerImpl_*.*",
-            "ExternalDependencyManager/Editor/Google.UnityPackageManagerResolver_*.*"
+            "ExternalDependencyManager/Editor/Google.PackageManagerResolver_*.*"
           ],
           "override_metadata_upm": {
             "PluginImporter": {

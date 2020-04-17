@@ -5,8 +5,8 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{00A0DB5E-1120-24C9-331A-BE692C1F7C01}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>Google.UnityPackageManagerClientIntegrationTests</RootNamespace>
-    <AssemblyName>Google.UnityPackageManagerClientIntegrationTests</AssemblyName>
+    <RootNamespace>Google.PackageManagerClientIntegrationTests</RootNamespace>
+    <AssemblyName>Google.PackageManagerClientIntegrationTests</AssemblyName>
 	<TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
     <ReleaseVersion>1.2</ReleaseVersion>
     <ProductVersion>12.0.0</ProductVersion>
@@ -41,7 +41,7 @@
      <Reference Include="System.Core" />
    </ItemGroup>
    <ItemGroup>
-     <Compile Include="UnityPackageManagerClientIntegrationTests\UnityPackageManagerClientIntegrationTests.cs" />
+     <Compile Include="PackageManagerClientIntegrationTests\PackageManagerClientIntegrationTests.cs" />
    </ItemGroup>
    <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
    <ItemGroup>
@@ -57,9 +57,9 @@
        <Project>{DBD8D4D9-61AC-4E75-8CDC-CABE7033A040}</Project>
        <Name>IntegrationTester</Name>
      </ProjectReference>
-     <ProjectReference Include="..\UnityPackageManagerResolver.csproj">
+     <ProjectReference Include="..\PackageManagerResolver.csproj">
        <Project>{77EBE819-CBE6-4CA8-A791-ED747EA29D30}</Project>
-       <Name>UnityPackageManagerResolver</Name>
+       <Name>PackageManagerResolver</Name>
      </ProjectReference>
    </ItemGroup>
 </Project>

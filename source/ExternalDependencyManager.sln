@@ -19,13 +19,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VersionHandlerImplTests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IOSResolver", "IOSResolver\IOSResolver.csproj", "{5B581BAE-D432-41AB-AEED-FD269AEA081D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityPackageManagerResolver", "UnityPackageManagerResolver\UnityPackageManagerResolver.csproj", "{77EBE819-CBE6-4CA8-A791-ED747EA29D30}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageManagerResolver", "PackageManagerResolver\PackageManagerResolver.csproj", "{77EBE819-CBE6-4CA8-A791-ED747EA29D30}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityPackageManagerResolverTests", "UnityPackageManagerResolver\unit_tests\UnityPackageManagerResolverTests.csproj", "{FEECDCE1-F528-4931-A4CF-808DDBCE1A8D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageManagerResolverTests", "PackageManagerResolver\unit_tests\PackageManagerResolverTests.csproj", "{FEECDCE1-F528-4931-A4CF-808DDBCE1A8D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnityPackageManagerClientIntegrationTests", "UnityPackageManagerResolver\test\UnityPackageManagerClientIntegrationTests.csproj", "{00A0DB5E-1120-24C9-331A-BE692C1F7C01}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageManagerClientIntegrationTests", "PackageManagerResolver\test\PackageManagerClientIntegrationTests.csproj", "{00A0DB5E-1120-24C9-331A-BE692C1F7C01}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageMigratorIntegrationTests", "UnityPackageManagerResolver\test\PackageMigratorIntegrationTests.csproj", "{4DBDEE33-4B6C-A866-93FE-04C15486BB03}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageMigratorIntegrationTests", "PackageManagerResolver\test\PackageMigratorIntegrationTests.csproj", "{4DBDEE33-4B6C-A866-93FE-04C15486BB03}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

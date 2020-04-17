@@ -19,7 +19,7 @@ using System.Runtime.CompilerServices;
 
 // Information about this assembly is defined by the following attributes.
 // Change them to the values specific to your project.
-[assembly: AssemblyTitle("Google.UnityPackageManagerResolver")]
+[assembly: AssemblyTitle("Google.PackageManagerResolver")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Google LLC")]
@@ -54,5 +54,5 @@ using System.Runtime.CompilerServices;
 // </copyright>[assembly: AssemblyKeyFile("")]
 
 [assembly: InternalsVisibleTo("Google.PackageMigratorIntegrationTests")]
-[assembly: InternalsVisibleTo("Google.UnityPackageManagerResolverTests")]
-[assembly: InternalsVisibleTo("Google.UnityPackageManagerClientIntegrationTests")]
+[assembly: InternalsVisibleTo("Google.PackageManagerResolverTests")]
+[assembly: InternalsVisibleTo("Google.PackageManagerClientIntegrationTests")]

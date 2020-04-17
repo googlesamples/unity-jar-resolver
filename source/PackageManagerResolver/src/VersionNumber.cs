@@ -22,7 +22,7 @@ namespace Google {
     /// <summary>
     /// Get the version number of this plugin.
     /// </summary>
-    public class UnityPackageManagerResolverVersionNumber {
+    public class PackageManagerResolverVersionNumber {
 
         /// <summary>
         /// Version number, patched by the build process.

@@ -8,7 +8,7 @@
     <ProjectGuid>{77EBE819-CBE6-4CA8-A791-ED747EA29D30}</ProjectGuid>
     <OutputType>Library</OutputType>
     <RootNamespace>Google</RootNamespace>
-    <AssemblyName>Google.UnityPackageManagerResolver</AssemblyName>
+    <AssemblyName>Google.PackageManagerResolver</AssemblyName>
     <ReleaseVersion>1.2</ReleaseVersion>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
   </PropertyGroup>
@@ -62,10 +62,10 @@
     <Compile Include="src\PackageManifestModifier.cs" />
     <Compile Include="src\PackageMigrator.cs" />
     <Compile Include="src\SettingsDialog.cs" />
-    <Compile Include="src\UnityPackageManagerClient.cs" />
-    <Compile Include="src\UnityPackageManagerResolver.cs" />
-    <Compile Include="src\XmlUnityPackageManagerRegistries.cs" />
-    <Compile Include="src\UnityPackageManagerRegistry.cs" />
+    <Compile Include="src\PackageManagerClient.cs" />
+    <Compile Include="src\PackageManagerResolver.cs" />
+    <Compile Include="src\XmlPackageManagerRegistries.cs" />
+    <Compile Include="src\PackageManagerRegistry.cs" />
     <Compile Include="src\VersionNumber.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

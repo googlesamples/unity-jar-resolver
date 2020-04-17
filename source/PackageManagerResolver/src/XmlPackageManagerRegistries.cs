@@ -28,7 +28,7 @@ namespace Google {
     /// Parses XML declared Unity Package Manager (UPM) registries required by a Unity plugin into
     /// the XmlRegistries.Registry class.
     /// </summary>
-    internal class XmlUnityPackageManagerRegistries {
+    internal class XmlPackageManagerRegistries {
 
         /// <summary>
         /// Set of regular expressions that match files which contain dependency
@@ -51,23 +51,23 @@ namespace Google {
         /// <summary>
         /// Asset managed by this module.
         /// </summary>
-        private static readonly string UPM_REGISTRIES = "Unity Package Manager Registries";
+        private static readonly string UPM_REGISTRIES = "Package Manager Registries";
 
         /// <summary>
         /// Registries read from files indexed by URL.
         /// </summary>
-        internal Dictionary<string, UnityPackageManagerRegistry> Registries;
+        internal Dictionary<string, PackageManagerRegistry> Registries;
 
         /// <summary>
         /// Construct an empty XML UPM registries reader.
         /// </summary>
-        public XmlUnityPackageManagerRegistries() { Clear(); }
+        public XmlPackageManagerRegistries() { Clear(); }
 
         /// <summary>
         /// Clear the cached registries.
         /// </summary>
         internal void Clear() {
-            Registries = new Dictionary<string, UnityPackageManagerRegistry>();
+            Registries = new Dictionary<string, PackageManagerRegistry>();
         }
 
         /// <summary>
@@ -107,7 +107,7 @@ namespace Google {
         /// <param name="logger">Logger class.</param>
         /// <returns>true if the file was read successfully, false otherwise.</returns>
         internal bool Read(string filename, Logger logger) {
-            UnityPackageManagerRegistry upmRegistry = null;
+            PackageManagerRegistry upmRegistry = null;
             logger.Log(String.Format("Reading {0} XML file {1}", UPM_REGISTRIES, filename),
                        level: LogLevel.Verbose);
             if (!XmlUtilities.ParseXmlTextFileElements(
@@ -118,7 +118,7 @@ namespace Google {
                     } else if (elementName == "registry" &&
                                parentElementName == "registries" &&
                                isStart) {
-                        upmRegistry = new UnityPackageManagerRegistry() {
+                        upmRegistry = new PackageManagerRegistry() {
                             Name = reader.GetAttribute("name") ?? "",
                             Url = reader.GetAttribute("url") ?? "",
                             TermsOfService = reader.GetAttribute("termsOfService") ?? "",
@@ -145,7 +145,7 @@ namespace Google {
                         if (!(String.IsNullOrEmpty(upmRegistry.Name) ||
                               String.IsNullOrEmpty(upmRegistry.Url) ||
                               upmRegistry.Scopes.Count == 0)) {
-                            UnityPackageManagerRegistry existingRegistry;
+                            PackageManagerRegistry existingRegistry;
                             if (!Registries.TryGetValue(upmRegistry.Url, out existingRegistry)) {
                                 Registries[upmRegistry.Url] = upmRegistry;
                             } else if (!existingRegistry.Equals(upmRegistry)) {

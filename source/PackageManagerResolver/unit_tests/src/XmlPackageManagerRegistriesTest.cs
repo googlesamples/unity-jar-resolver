@@ -1,4 +1,4 @@
-// <copyright file="UnityPackageManagerRegistryTest.cs" company="Google LLC">
+// <copyright file="PackageManagerRegistryTest.cs" company="Google LLC">
 // Copyright (C) 2020 Google LLC All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
 //    limitations under the License.
 // </copyright>
 
-namespace Google.UnityPackageManagerResolver.Tests {
+namespace Google.PackageManagerResolver.Tests {
     using NUnit.Framework;
     using System;
     using System.Collections.Generic;
@@ -23,10 +23,10 @@ namespace Google.UnityPackageManagerResolver.Tests {
     using Google;
 
     /// <summary>
-    /// Tests the UnityPackageManagerRegistry class.
+    /// Tests the PackageManagerRegistry class.
     /// </summary>
     [TestFixture]
-    public class XmlUnityPackageManagerRegistriesTest {
+    public class XmlPackageManagerRegistriesTest {
 
         /// <summary>
         /// Name of the test configuration file.
@@ -36,7 +36,7 @@ namespace Google.UnityPackageManagerResolver.Tests {
         /// <summary>
         /// Object under test.
         /// </summary>
-        private XmlUnityPackageManagerRegistries registries;
+        private XmlPackageManagerRegistries registries;
 
         /// <summary>
         /// Logger for this test.
@@ -60,7 +60,7 @@ namespace Google.UnityPackageManagerResolver.Tests {
         /// </summary>
         [SetUp]
         public void Setup() {
-            registries = new XmlUnityPackageManagerRegistries();
+            registries = new XmlPackageManagerRegistries();
         }
 
         /// <summary>
@@ -76,7 +76,7 @@ namespace Google.UnityPackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestClear() {
-            registries.Registries["http://foo.bar.com"] = new UnityPackageManagerRegistry() {
+            registries.Registries["http://foo.bar.com"] = new PackageManagerRegistry() {
                 Name = "foobar",
                 Url = "http://foo.bar.com",
                 Scopes = new List<string>() { "com.bar" }
@@ -91,25 +91,25 @@ namespace Google.UnityPackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestIsRegistriesFile() {
-            Assert.That(XmlUnityPackageManagerRegistries.IsRegistriesFile(
+            Assert.That(XmlPackageManagerRegistries.IsRegistriesFile(
                             "Assets/SomeRegistries.xml"),
                         Is.EqualTo(false));
-            Assert.That(XmlUnityPackageManagerRegistries.IsRegistriesFile(
+            Assert.That(XmlPackageManagerRegistries.IsRegistriesFile(
                             "Assets/MyPlugin/SomeRegistries.xml"),
                         Is.EqualTo(false));
-            Assert.That(XmlUnityPackageManagerRegistries.IsRegistriesFile(
+            Assert.That(XmlPackageManagerRegistries.IsRegistriesFile(
                             "Assets/Editor/SomeRegistries.txt"),
                         Is.EqualTo(false));
-            Assert.That(XmlUnityPackageManagerRegistries.IsRegistriesFile(
+            Assert.That(XmlPackageManagerRegistries.IsRegistriesFile(
                             "Assets/Editor/SomeRegistries.xml"),
                         Is.EqualTo(true));
-            Assert.That(XmlUnityPackageManagerRegistries.IsRegistriesFile(
+            Assert.That(XmlPackageManagerRegistries.IsRegistriesFile(
                             "Assets\\Editor\\SomeRegistries.xml"),
                         Is.EqualTo(true));
-            Assert.That(XmlUnityPackageManagerRegistries.IsRegistriesFile(
+            Assert.That(XmlPackageManagerRegistries.IsRegistriesFile(
                             "Assets/MyPlugin/Editor/SomeRegistries.xml"),
                         Is.EqualTo(true));
-            Assert.That(XmlUnityPackageManagerRegistries.IsRegistriesFile(
+            Assert.That(XmlPackageManagerRegistries.IsRegistriesFile(
                             "Assets\\MyPlugin\\Editor\\SomeRegistries.xml"),
                         Is.EqualTo(true));
         }

@@ -3,10 +3,10 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{4DBDEE33-4B6C-A866-93FE-04C15486BB03}</ProjectGuid>
+    <ProjectGuid>{FEECDCE1-F528-4931-A4CF-808DDBCE1A8D}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>Google.PackageMigratorIntegrationTests</RootNamespace>
-    <AssemblyName>Google.PackageMigratorIntegrationTests</AssemblyName>
+    <RootNamespace>Google.PackageManagerResolver.Tests</RootNamespace>
+    <AssemblyName>Google.PackageManagerResolverTests</AssemblyName>
 	<TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
     <ReleaseVersion>1.2</ReleaseVersion>
     <ProductVersion>12.0.0</ProductVersion>
@@ -30,36 +30,26 @@
      <WarningLevel>4</WarningLevel>
      <ConsolePause>False</ConsolePause>
    </PropertyGroup>
+   <PropertyGroup>
+         <NUnityHintPath>..\packages\NUnit.2.6.3\lib\</NUnityHintPath>
+   </PropertyGroup>
    <ItemGroup>
-     <Reference Include="UnityEditor">
-       <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
-     </Reference>
-     <Reference Include="UnityEngine">
-       <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
-     </Reference>
      <Reference Include="System" />
      <Reference Include="System.Core" />
+  <Reference Include="nunit.framework">
+         <HintPath>$(NUnityHintPath)/nunit.framework.dll</HintPath>
+  </Reference>
    </ItemGroup>
    <ItemGroup>
-     <Compile Include="PackageMigratorIntegrationTests\PackageMigratorIntegrationTests.cs" />
+     <Compile Include="src\PackageManifestModifierTest.cs" />
+     <Compile Include="src\PackageManagerRegistryTest.cs" />
+     <Compile Include="src\XmlPackageManagerRegistriesTest.cs" />
    </ItemGroup>
    <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
    <ItemGroup>
-     <ProjectReference Include="..\..\VersionHandler\VersionHandler.csproj">
-       <Project>{5378B37A-887E-49ED-A8AE-42FA843AA9DC}</Project>
-       <Name>VersionHandler</Name>
-     </ProjectReference>
-     <ProjectReference Include="..\..\VersionHandlerImpl\VersionHandlerImpl.csproj">
-       <Project>{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}</Project>
-       <Name>VersionHandlerImpl</Name>
-     </ProjectReference>
-     <ProjectReference Include="..\..\IntegrationTester/IntegrationTester.csproj">
-       <Project>{DBD8D4D9-61AC-4E75-8CDC-CABE7033A040}</Project>
-       <Name>IntegrationTester</Name>
-     </ProjectReference>
-     <ProjectReference Include="..\UnityPackageManagerResolver.csproj">
+     <ProjectReference Include="..\PackageManagerResolver.csproj">
        <Project>{77EBE819-CBE6-4CA8-A791-ED747EA29D30}</Project>
-       <Name>UnityPackageManagerResolver</Name>
+       <Name>PackageManagerResolver</Name>
      </ProjectReference>
    </ItemGroup>
 </Project>

@@ -14,7 +14,7 @@
 //    limitations under the License.
 // </copyright>
 
-namespace Google.UnityPackageManagerResolver.Tests {
+namespace Google.PackageManagerResolver.Tests {
     using NUnit.Framework;
     using System;
     using System.Collections.Generic;
@@ -124,8 +124,8 @@ namespace Google.UnityPackageManagerResolver.Tests {
         /// Try to retrieve registries from a modifier that hasn't read a manifest.
         /// </summary>
         [Test]
-        public void TestUnityPackageManagerRegistriesWithNoManifestLoaded() {
-            Assert.That(modifier.UnityPackageManagerRegistries.Count, Is.EqualTo(0));
+        public void TestPackageManagerRegistriesWithNoManifestLoaded() {
+            Assert.That(modifier.PackageManagerRegistries.Count, Is.EqualTo(0));
         }
 
         /// <summary>
@@ -163,11 +163,11 @@ namespace Google.UnityPackageManagerResolver.Tests {
         /// Parse registries from a manifest.
         /// </summary>
         [Test]
-        public void TestUnityPackageManagerRegistries() {
+        public void TestPackageManagerRegistries() {
             WriteManifest(MANIFEST);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
 
-            var registries = modifier.UnityPackageManagerRegistries;
+            var registries = modifier.PackageManagerRegistries;
 
             Assert.That(registries.ContainsKey("https://reg1.com"), Is.EqualTo(true));
             Assert.That(registries.ContainsKey("https://unity.reg2.com"), Is.EqualTo(true));
@@ -195,7 +195,7 @@ namespace Google.UnityPackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestAddRegistriesWithNoManifestLoaded() {
-            Assert.That(modifier.AddRegistries(new List<UnityPackageManagerRegistry>()),
+            Assert.That(modifier.AddRegistries(new List<PackageManagerRegistry>()),
                         Is.EqualTo(false));
         }
 
@@ -206,7 +206,7 @@ namespace Google.UnityPackageManagerResolver.Tests {
         public void TestAddRegistriesEmptyAndWriteManifest() {
             WriteManifest(MANIFEST);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
-            Assert.That(modifier.AddRegistries(new List<UnityPackageManagerRegistry>()),
+            Assert.That(modifier.AddRegistries(new List<PackageManagerRegistry>()),
                         Is.EqualTo(true));
             Assert.That(modifier.WriteManifest(), Is.EqualTo(true));
             Assert.That(ReadManifest(), Is.EqualTo(MANIFEST));
@@ -220,18 +220,18 @@ namespace Google.UnityPackageManagerResolver.Tests {
             WriteManifest(MANIFEST);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
             Assert.That(
-                modifier.AddRegistries(new UnityPackageManagerRegistry[] {
-                        new UnityPackageManagerRegistry() {
+                modifier.AddRegistries(new PackageManagerRegistry[] {
+                        new PackageManagerRegistry() {
                             Name = "Reg1",
                             Url = "https://reg1.com",
                             Scopes = new List<string>() { "com.reg1.foo", "com.reg1.bar" }
                         },
-                        new UnityPackageManagerRegistry() {
+                        new PackageManagerRegistry() {
                             Name = "Reg1 Ext",
                             Url = "https://reg1.com",
                             Scopes = new List<string>() { "com.reg1.ext" }
                         },
-                        new UnityPackageManagerRegistry() {
+                        new PackageManagerRegistry() {
                             Name = "Reg2",
                             Url = "https://unity.reg2.com",
                             Scopes = new List<string>() { "com.reg2.bish" }
@@ -247,7 +247,7 @@ namespace Google.UnityPackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestRemoveRegistriesWithNoManifestLoader() {
-            Assert.That(modifier.RemoveRegistries(new List<UnityPackageManagerRegistry>()),
+            Assert.That(modifier.RemoveRegistries(new List<PackageManagerRegistry>()),
                         Is.EqualTo(false));
         }
 
@@ -258,7 +258,7 @@ namespace Google.UnityPackageManagerResolver.Tests {
         public void TestRemoveRegistriesEmptyAndWriteManifest() {
             WriteManifest(MANIFEST);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
-            Assert.That(modifier.RemoveRegistries(new List<UnityPackageManagerRegistry>()),
+            Assert.That(modifier.RemoveRegistries(new List<PackageManagerRegistry>()),
                         Is.EqualTo(true));
             Assert.That(modifier.WriteManifest(), Is.EqualTo(true));
             Assert.That(ReadManifest(), Is.EqualTo(MANIFEST));
@@ -272,8 +272,8 @@ namespace Google.UnityPackageManagerResolver.Tests {
             WriteManifest(MANIFEST);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
             Assert.That(
-               modifier.RemoveRegistries(new UnityPackageManagerRegistry[] {
-                       new UnityPackageManagerRegistry {
+               modifier.RemoveRegistries(new PackageManagerRegistry[] {
+                       new PackageManagerRegistry {
                            Name = "Texture It",
                            Url = "http://unity.cooltextures.org",
                            Scopes = new List<string>() { "org.cooltextures.textureit" }
@@ -292,8 +292,8 @@ namespace Google.UnityPackageManagerResolver.Tests {
             WriteManifest(MANIFEST);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
             Assert.That(
-               modifier.RemoveRegistries(new UnityPackageManagerRegistry[] {
-                        new UnityPackageManagerRegistry() {
+               modifier.RemoveRegistries(new PackageManagerRegistry[] {
+                        new PackageManagerRegistry() {
                             Name = "Reg1 Ext",
                             Url = "https://reg1.com",
                             Scopes = new List<string>() { "com.reg1.ext" }

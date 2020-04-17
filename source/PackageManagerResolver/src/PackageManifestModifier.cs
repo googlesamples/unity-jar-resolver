@@ -129,9 +129,9 @@ internal class PackageManifestModifier {
     /// <summary>
     /// Extract scoped registries from the parsed manifest.
     /// </summary>
-    internal Dictionary<string, List<UnityPackageManagerRegistry>> UnityPackageManagerRegistries {
+    internal Dictionary<string, List<PackageManagerRegistry>> PackageManagerRegistries {
         get {
-            var upmRegistries = new Dictionary<string, List<UnityPackageManagerRegistry>>();
+            var upmRegistries = new Dictionary<string, List<PackageManagerRegistry>>();
             List<object> scopedRegistries = null;
             try {
                 scopedRegistries = ScopedRegistries;
@@ -171,7 +171,7 @@ internal class PackageManifestModifier {
                         }
                     }
                 }
-                var upmRegistry = new UnityPackageManagerRegistry() {
+                var upmRegistry = new PackageManagerRegistry() {
                     Name = name,
                     Url = url,
                     Scopes = scopes,
@@ -181,9 +181,9 @@ internal class PackageManifestModifier {
                 if (!String.IsNullOrEmpty(name) &&
                     !String.IsNullOrEmpty(url) &&
                     scopes.Count > 0) {
-                    List<UnityPackageManagerRegistry> upmRegistryList;
+                    List<PackageManagerRegistry> upmRegistryList;
                     if (!upmRegistries.TryGetValue(url, out upmRegistryList)) {
-                        upmRegistryList = new List<UnityPackageManagerRegistry>();
+                        upmRegistryList = new List<PackageManagerRegistry>();
                         upmRegistries[url] = upmRegistryList;
                     }
                     upmRegistryList.Add(upmRegistry);
@@ -207,14 +207,14 @@ internal class PackageManifestModifier {
     /// </summary>
     /// <param name="registries">Registries to add to the manifest.</para>
     /// <returns>true if the registries are added to the manifest, false otherwise.</returns>
-    internal bool AddRegistries(IEnumerable<UnityPackageManagerRegistry> registries) {
+    internal bool AddRegistries(IEnumerable<PackageManagerRegistry> registries) {
         List<object> scopedRegistries;
         try {
             scopedRegistries = ScopedRegistries;
         } catch (ParseException exception) {
             Logger.Log(String.Format("{0}  Unable to add registries:\n",
                                      exception.ToString(),
-                                     UnityPackageManagerRegistry.ToString(registries)),
+                                     PackageManagerRegistry.ToString(registries)),
                        level: LogLevel.Error);
             return false;
         }
@@ -240,23 +240,23 @@ internal class PackageManifestModifier {
     /// <param name="displayWarning">Whether to display a warning if specified registries were not
     /// found.</param>
     /// <returns>true if the registries could be removed, false otherwise.</returns>
-    internal bool RemoveRegistries(IEnumerable<UnityPackageManagerRegistry> registries,
+    internal bool RemoveRegistries(IEnumerable<PackageManagerRegistry> registries,
                                    bool displayWarning = true) {
         List<object> scopedRegistries = null;
         try {
             scopedRegistries = ScopedRegistries;
         } catch (ParseException exception) {
             Logger.Log(String.Format("{0}  Unable to remove registries:\n", exception.ToString(),
-                                     UnityPackageManagerRegistry.ToString(registries)),
+                                     PackageManagerRegistry.ToString(registries)),
                        level: LogLevel.Error);
             return false;
         }
         int removed = 0;
         int numberOfRegistries = 0;
-        var scopedRegistriesByUrl = UnityPackageManagerRegistries;
+        var scopedRegistriesByUrl = PackageManagerRegistries;
         foreach (var registry in registries) {
             numberOfRegistries ++;
-            List<UnityPackageManagerRegistry> existingRegistries;
+            List<PackageManagerRegistry> existingRegistries;
             if (scopedRegistriesByUrl.TryGetValue(registry.Url, out existingRegistries)) {
                 int remaining = existingRegistries.Count;
                 foreach (var existingRegistry in existingRegistries) {

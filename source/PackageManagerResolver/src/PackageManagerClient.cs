@@ -26,7 +26,7 @@ namespace Google {
 /// Provides a safe, simple interface that can be used across any Unity version for interaction
 /// with the Unity Package Manager.
 /// </summary>
-internal static class UnityPackageManagerClient {
+internal static class PackageManagerClient {
 
     /// <summary>
     /// Wrapper object.
@@ -671,7 +671,7 @@ internal static class UnityPackageManagerClient {
         public Error Error {
             get {
                 var error = errorProperty.GetValue(instance, null);
-                return error != null ? new UnityPackageManagerClient.Error(error) : null;
+                return error != null ? new PackageManagerClient.Error(error) : null;
             }
         }
     }
@@ -986,7 +986,7 @@ internal static class UnityPackageManagerClient {
                 try {
                     progress(itemProgress, item);
                 } catch (Exception e) {
-                    UnityPackageManagerClient.Logger.Log(
+                    PackageManagerClient.Logger.Log(
                         String.Format("Progress reporter raised exception {0}", e),
                         level: LogLevel.Error);
                 }
@@ -1204,7 +1204,7 @@ internal static class UnityPackageManagerClient {
     /// <summary>
     /// Logger for this class.
     /// </summary>
-    public static Logger Logger = UnityPackageManagerResolver.logger;
+    public static Logger Logger = PackageManagerResolver.logger;
 
     /// <summary>
     /// Job queue for package managers jobs.

@@ -56,7 +56,7 @@ using System.Runtime.CompilerServices;
 // Uses VersionHandlerImpl.RestoreDefaultSettings(preferenceKeys)
 [assembly: InternalsVisibleTo("Google.IOSResolver")]
 [assembly: InternalsVisibleTo("Google.JarResolver")]
-[assembly: InternalsVisibleTo("Google.UnityPackageManagerResolver")]
+[assembly: InternalsVisibleTo("Google.PackageManagerResolver")]
 [assembly: InternalsVisibleTo("Google.VersionHandlerImplTests")]
 [assembly: InternalsVisibleTo("Google.IntegrationTester")]
-[assembly: InternalsVisibleTo("Google.UnityPackageManagerClientIntegrationTests")]
+[assembly: InternalsVisibleTo("Google.PackageManagerClientIntegrationTests")]

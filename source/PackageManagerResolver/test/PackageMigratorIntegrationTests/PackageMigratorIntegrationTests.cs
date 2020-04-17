@@ -35,11 +35,11 @@ public static class PackageManagerTests {
     [IntegrationTester.Initializer]
     public static void Initialize() {
         // Enable verbose logging.
-        UnityPackageManagerResolver.logger.Level = LogLevel.Verbose;
+        PackageManagerResolver.logger.Level = LogLevel.Verbose;
 
         // Ensure the game package registry is added for the test.
-        UnityPackageManagerResolver.UpdateManifest(
-            UnityPackageManagerResolver.ManifestModificationMode.Add,
+        PackageManagerResolver.UpdateManifest(
+            PackageManagerResolver.ManifestModificationMode.Add,
             promptBeforeAction: false,
             showDisableButton: false);
     }
@@ -57,8 +57,8 @@ public static class PackageManagerTests {
             IntegrationTester.TestCaseResult testCaseResult,
             Action<IntegrationTester.TestCaseResult> testCaseComplete) {
         // If scoped registries support isn't available, expect this to fail.
-        if (!(UnityPackageManagerClient.Available &&
-              UnityPackageManagerResolver.ScopedRegistriesSupported)) {
+        if (!(PackageManagerClient.Available &&
+              PackageManagerResolver.ScopedRegistriesSupported)) {
             if (String.IsNullOrEmpty(completionError)) {
                 testCaseResult.ErrorMessages.Add("Expected failure but returned no error");
             }
@@ -99,7 +99,7 @@ public static class PackageManagerTests {
                 var packageMapStrings = new List<string>();
                 var packageMapsByUpmName = new Dictionary<string, PackageMigrator.PackageMap>();
                 foreach (var packageMap in packageMaps) {
-                    packageMapsByUpmName[packageMap.AvailableUnityPackageManagerPackageInfo.Name] =
+                    packageMapsByUpmName[packageMap.AvailablePackageManagerPackageInfo.Name] =
                         packageMap;
                     packageMapStrings.Add(packageMap.ToString());
                 }
@@ -122,12 +122,12 @@ public static class PackageManagerTests {
                                 packageMap.VersionHandlerPackageName, expectedVhName,
                                 expectedUpmName));
                         }
-                        if (packageMap.AvailableUnityPackageManagerPackageInfo.CalculateVersion() <
+                        if (packageMap.AvailablePackageManagerPackageInfo.CalculateVersion() <
                             packageMap.VersionHandlerPackageCalculatedVersion) {
                             testCaseResult.ErrorMessages.Add(String.Format(
                                 "Returned older UPM package {0} than VH package {1} for " +
                                 "{2} --> {3}",
-                                packageMap.AvailableUnityPackageManagerPackageInfo.Version,
+                                packageMap.AvailablePackageManagerPackageInfo.Version,
                                 packageMap.VersionHandlerPackageVersion, expectedVhName,
                                 expectedUpmName));
                         }
@@ -186,7 +186,7 @@ public static class PackageManagerTests {
                 }
 
                 // Make sure the expected UPM packages are installed.
-                UnityPackageManagerClient.ListInstalledPackages((listResult) => {
+                PackageManagerClient.ListInstalledPackages((listResult) => {
                         var installedPackageNames = new HashSet<string>();
                         foreach (var pkg in listResult.Packages) {
                             installedPackageNames.Add(pkg.Name);

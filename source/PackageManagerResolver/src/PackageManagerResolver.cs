@@ -1,4 +1,4 @@
-// <copyright file="UnityPackageManagerResolver.cs" company="Google LLC">
+// <copyright file="PackageManagerResolver.cs" company="Google LLC">
 // Copyright (C) 2020 Google LLC All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -23,12 +23,12 @@ using System.Reflection;
 namespace Google {
 
 [InitializeOnLoad]
-public class UnityPackageManagerResolver : AssetPostprocessor {
+public class PackageManagerResolver : AssetPostprocessor {
 
     /// <summary>
     /// Name of the plugin.
     /// </summary>
-    internal const string PLUGIN_NAME = "Unity Package Manager Resolver";
+    internal const string PLUGIN_NAME = "Package Manager Resolver";
 
     /// <summary>
     /// The operation to perform when modifying the manifest.
@@ -58,7 +58,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
         "unselected UPM registries from your project?";
     private const string MODIFY_MENU_ITEM_DESCRIPTION =
         "You can always add or remove registries at a later time using menu item:\n" +
-        "'Assets > External Dependency Manager > Unity Package Manager Resolver > " +
+        "'Assets > External Dependency Manager > Package Manager Resolver > " +
         "Modify Registries'.";
 
     /// <summary>
@@ -67,11 +67,10 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     private static readonly string[] googleScopes = new [] { "com.google" };
 
     /// <summary>
-    /// Enables / disables external package registries for Unity Package
-    /// Manager.
+    /// Enables / disables external package registries for Unity Package Manager.
     /// </summary>
-    static UnityPackageManagerResolver() {
-        logger.Log("Loaded UnityPackageManagerResolver", level: LogLevel.Verbose);
+    static PackageManagerResolver() {
+        logger.Log("Loaded PackageManagerResolver", level: LogLevel.Verbose);
 
         RunOnMainThread.Run(() => {
                 // Load log preferences.
@@ -83,21 +82,21 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// <summary>
     /// Display documentation.
     /// </summary>
-    [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Documentation")]
+    [MenuItem("Assets/External Dependency Manager/Package Manager Resolver/Documentation")]
     public static void ShowDocumentation() {
         analytics.OpenUrl(VersionHandlerImpl.DocumentationUrl(
-            "#unity-package-manager-resolver-usage"), "Usage");
+            "#package-manager-resolver-usage"), "Usage");
     }
 
     /// <summary>
     /// Add the settings dialog for this module to the menu and show the
     /// window when the menu item is selected.
     /// </summary>
-    [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Settings")]
+    [MenuItem("Assets/External Dependency Manager/Package Manager Resolver/Settings")]
     public static void ShowSettings() {
-         UnityPackageManagerResolverSettingsDialog window =
-             (UnityPackageManagerResolverSettingsDialog)EditorWindow.GetWindow(
-             typeof(UnityPackageManagerResolverSettingsDialog), true, PluginName + " Settings");
+         PackageManagerResolverSettingsDialog window =
+             (PackageManagerResolverSettingsDialog)EditorWindow.GetWindow(
+             typeof(PackageManagerResolverSettingsDialog), true, PLUGIN_NAME + " Settings");
          window.Initialize();
          window.Show();
     }
@@ -139,14 +138,14 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
         var checkAssets = new List<string>(importedAssets);
         checkAssets.AddRange(movedAssets);
         foreach (var asset in checkAssets) {
-            if (XmlUnityPackageManagerRegistries.IsRegistriesFile(asset)) {
+            if (XmlPackageManagerRegistries.IsRegistriesFile(asset)) {
                 registriesChanged = true;
                 break;
             }
             AssetImporter importer = AssetImporter.GetAtPath(asset);
             if (importer != null) {
                 foreach (var assetLabel in AssetDatabase.GetLabels(importer)) {
-                    if (assetLabel == XmlUnityPackageManagerRegistries.REGISTRIES_LABEL) {
+                    if (assetLabel == XmlPackageManagerRegistries.REGISTRIES_LABEL) {
                         registriesChanged = true;
                         break;
                     }
@@ -159,7 +158,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// <summary>
     /// Add registries in the XML configuration to the project manifest.
     /// </summary>
-    [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Add Registries")]
+    [MenuItem("Assets/External Dependency Manager/Package Manager Resolver/Add Registries")]
     public static void AddRegistries() {
         UpdateManifest(ManifestModificationMode.Add, promptBeforeAction: true,
                        showDisableButton: false);
@@ -168,7 +167,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// <summary>
     /// Remove registries in the XML configuration from the project manifest.
     /// </summary>
-    [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Remove Registries")]
+    [MenuItem("Assets/External Dependency Manager/Package Manager Resolver/Remove Registries")]
     public static void RemoveRegistries() {
         UpdateManifest(ManifestModificationMode.Remove, promptBeforeAction: true,
                        showDisableButton: false);
@@ -178,7 +177,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// Add or remove registries in the project manifest based upon the set available in the XML
     /// configuration.
     /// </summary>
-    [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Modify Registries")]
+    [MenuItem("Assets/External Dependency Manager/Package Manager Resolver/Modify Registries")]
     public static void ModifyRegistries() {
         UpdateManifest(ManifestModificationMode.Modify, promptBeforeAction: true,
                        showDisableButton: false);
@@ -208,9 +207,9 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// Read registries from XML configuration files.
     /// </summary>
     /// <returns>Dictionary of registries indexed by URL.</returns>
-    private static Dictionary<string, UnityPackageManagerRegistry> ReadRegistriesFromXml() {
+    private static Dictionary<string, PackageManagerRegistry> ReadRegistriesFromXml() {
         // Read registries from XML files.
-        var xmlReader = new XmlUnityPackageManagerRegistries();
+        var xmlReader = new XmlPackageManagerRegistries();
         xmlReader.ReadAll(logger);
         return xmlReader.Registries;
     }
@@ -235,16 +234,16 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     /// <returns>true if successful, false otherwise.</returns>
     private static bool SyncRegistriesToManifest(
             PackageManifestModifier manifestModifier,
-            Dictionary<string, UnityPackageManagerRegistry> availableRegistries,
-            Dictionary<string, List<UnityPackageManagerRegistry>> manifestRegistries,
+            Dictionary<string, PackageManagerRegistry> availableRegistries,
+            Dictionary<string, List<PackageManagerRegistry>> manifestRegistries,
             HashSet<string> selectedRegistryUrls,
             bool addRegistries = true,
             bool removeRegistries = true,
             bool invertSelection = false,
-            List<UnityPackageManagerRegistry> addedRegistries = null) {
+            List<PackageManagerRegistry> addedRegistries = null) {
         // Build a list of registries to add to and remove from the manifest.
-        var registriesToAdd = new List<UnityPackageManagerRegistry>();
-        var registriesToRemove = new List<UnityPackageManagerRegistry>();
+        var registriesToAdd = new List<PackageManagerRegistry>();
+        var registriesToRemove = new List<PackageManagerRegistry>();
 
         foreach (var availableRegistry in availableRegistries.Values) {
             var url = availableRegistry.Url;
@@ -282,14 +281,14 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
                     logger.Log(String.Format(
                         "Added registries to {0}:\n{1}",
                         PackageManifestModifier.MANIFEST_FILE_PATH,
-                        UnityPackageManagerRegistry.ToString(registriesToAdd)));
+                        PackageManagerRegistry.ToString(registriesToAdd)));
                     if (addedRegistries != null) addedRegistries.AddRange(registriesToAdd);
                 }
                 if (registriesToRemove.Count > 0) {
                     logger.Log(String.Format(
                         "Removed registries from {0}:\n{1}",
                         PackageManifestModifier.MANIFEST_FILE_PATH,
-                        UnityPackageManagerRegistry.ToString(registriesToRemove)));
+                        PackageManagerRegistry.ToString(registriesToRemove)));
                 }
                 analytics.Report(
                     "registry_manifest/write/success",
@@ -327,10 +326,10 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
         }
 
         PackageManifestModifier modifier = new PackageManifestModifier() { Logger = logger };
-        Dictionary<string, List<UnityPackageManagerRegistry>> manifestRegistries =
-            modifier.ReadManifest() ? modifier.UnityPackageManagerRegistries : null;
+        Dictionary<string, List<PackageManagerRegistry>> manifestRegistries =
+            modifier.ReadManifest() ? modifier.PackageManagerRegistries : null;
         if (manifestRegistries == null) {
-            UnityPackageManagerResolver.analytics.Report(
+            PackageManagerResolver.analytics.Report(
                "registry_manifest/read/failed",
                "Update Manifest failed: Read/Parse manifest failed");
             return;
@@ -339,7 +338,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
         var xmlRegistries = ReadRegistriesFromXml();
         // Filter registries using the scope prefixes.
         if (scopePrefixFilter != null) {
-            foreach (var registry in new List<UnityPackageManagerRegistry>(xmlRegistries.Values)) {
+            foreach (var registry in new List<PackageManagerRegistry>(xmlRegistries.Values)) {
                 bool removeRegistry = true;
                 foreach (var scope in registry.Scopes) {
                     foreach (var scopePrefix in scopePrefixFilter) {
@@ -383,7 +382,7 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
 
         // Applies the manifest modification based upon the modification mode.
         Action<HashSet<string>> syncRegistriesToManifest = (urlSelectionToApply) => {
-            var addedRegistries = new List<UnityPackageManagerRegistry>();
+            var addedRegistries = new List<PackageManagerRegistry>();
             SyncRegistriesToManifest(modifier, xmlRegistries, manifestRegistries,
                                      urlSelectionToApply,
                                      addRegistries: (mode == ManifestModificationMode.Add ||
@@ -477,13 +476,13 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
     // Keys in the editor preferences which control the behavior of this
     // module.
     private const string PreferenceEnable =
-        "Google.UnityPackageManagerResolver.Enable";
+        "Google.PackageManagerResolver.Enable";
     private const string PreferencePromptToAddRegistries =
-        "Google.UnityPackageManagerResolver.PromptToAddRegistries";
+        "Google.PackageManagerResolver.PromptToAddRegistries";
     private const string PreferencePromptToMigratePackages =
-        "Google.UnityPackageManagerResolver.PromptToMigratePackages";
+        "Google.PackageManagerResolver.PromptToMigratePackages";
     private const string PreferenceVerboseLoggingEnabled =
-        "Google.UnityPackageManagerResolver.VerboseLoggingEnabled";
+        "Google.PackageManagerResolver.VerboseLoggingEnabled";
     // List of preference keys, used to restore default settings.
     private static string[] PreferenceKeys = new[] {
         PreferenceEnable,
@@ -492,16 +491,13 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
         PreferenceVerboseLoggingEnabled
     };
 
-    // Name of this plugin.
-    private const string PluginName = "Google Unity Package Manager Resolver";
-
     // Unity started supporting scoped registries from 2018.4.
     internal const float MinimumUnityVersionFloat = 2018.4f;
     internal const string MinimumUnityVersionString = "2018.4";
 
     // Settings used by this module.
     internal static ProjectSettings settings =
-        new ProjectSettings("Google.UnityPackageManagerResolver.");
+        new ProjectSettings("Google.PackageManagerResolver.");
 
     /// <summary>
     /// Logger for this module.
@@ -515,9 +511,9 @@ public class UnityPackageManagerResolver : AssetPostprocessor {
             VersionHandlerImpl.PRIVACY_POLICY) {
         BasePath = "/upmresolver/",
         BaseQuery =
-            String.Format("version={0}", UnityPackageManagerResolverVersionNumber.Value.ToString()),
-        BaseReportName = "Unity Package Manager Resolver: ",
-        InstallSourceFilename = Assembly.GetAssembly(typeof(UnityPackageManagerResolver)).Location
+            String.Format("version={0}", PackageManagerResolverVersionNumber.Value.ToString()),
+        BaseReportName = "Package Manager Resolver: ",
+        InstallSourceFilename = Assembly.GetAssembly(typeof(PackageManagerResolver)).Location
     };
 
     /// <summary>

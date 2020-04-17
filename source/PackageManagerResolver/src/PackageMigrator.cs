@@ -31,25 +31,25 @@ namespace Google {
 internal class PackageMigrator {
 
     /// <summary>
-    /// Map of Version Handler determined package to Unity Package Manager Package ID and version.
+    /// Map of Version Handler determined package to Package Manager Package ID and version.
     /// </summary>
     internal class PackageMap {
 
         /// <summary>
-        /// Available Unity Package Manager package information indexed by package ID.
+        /// Available Package Manager package information indexed by package ID.
         /// This should be set via CacheAvailablePackageInfo() before creating new (i.e
         /// not read from a file) PackageMap instances. </summary>
-        private static readonly Dictionary<string, UnityPackageManagerClient.PackageInfo>
+        private static readonly Dictionary<string, PackageManagerClient.PackageInfo>
             availablePackageInfoCache =
-                new Dictionary<string, UnityPackageManagerClient.PackageInfo>();
+                new Dictionary<string, PackageManagerClient.PackageInfo>();
 
         /// <summary>
-        /// Installed Unity Package Manager package information indexed by package ID.
+        /// Installed Package Manager package information indexed by package ID.
         /// This should be set via CacheInstalledPackageInfo() before creating PackageMap
         /// instances. </summary>
-        private static readonly Dictionary<string, UnityPackageManagerClient.PackageInfo>
+        private static readonly Dictionary<string, PackageManagerClient.PackageInfo>
             installedPackageInfoCache =
-                new Dictionary<string, UnityPackageManagerClient.PackageInfo>();
+                new Dictionary<string, PackageManagerClient.PackageInfo>();
 
         /// <summary>
         /// Version Handler package name.
@@ -106,25 +106,25 @@ internal class PackageMigrator {
         }
 
         /// <summary>
-        /// Get the Unity Package Manager Package ID in the form "name@version".
+        /// Get the Package Manager Package ID in the form "name@version".
         /// </summary>
-        public string UnityPackageManagerPackageId { get; set; }
+        public string PackageManagerPackageId { get; set; }
 
         /// <summary>
-        /// Get the Unity Package Manager package info associated with the specific package ID.
+        /// Get the Package Manager package info associated with the specific package ID.
         /// </summary>
-        public UnityPackageManagerClient.PackageInfo AvailableUnityPackageManagerPackageInfo {
+        public PackageManagerClient.PackageInfo AvailablePackageManagerPackageInfo {
             get {
-                return FindPackageInfoById(availablePackageInfoCache, UnityPackageManagerPackageId);
+                return FindPackageInfoById(availablePackageInfoCache, PackageManagerPackageId);
             }
         }
 
         /// <summary>
-        /// Get the Unity Package Manager package info associated with the specific package ID.
+        /// Get the Package Manager package info associated with the specific package ID.
         /// </summary>
-        public UnityPackageManagerClient.PackageInfo InstalledUnityPackageManagerPackageInfo {
+        public PackageManagerClient.PackageInfo InstalledPackageManagerPackageInfo {
             get {
-                return FindPackageInfoById(installedPackageInfoCache, UnityPackageManagerPackageId);
+                return FindPackageInfoById(installedPackageInfoCache, PackageManagerPackageId);
             }
         }
 
@@ -133,7 +133,7 @@ internal class PackageMigrator {
         /// </summary>
         public bool Migrated {
             get {
-                return InstalledUnityPackageManagerPackageInfo != null &&
+                return InstalledPackageManagerPackageInfo != null &&
                     VersionHandlerManifest == null;
             }
         }
@@ -143,7 +143,7 @@ internal class PackageMigrator {
         /// </summary>
         public PackageMap() {
             VersionHandlerPackageName = "";
-            UnityPackageManagerPackageId = "";
+            PackageManagerPackageId = "";
         }
 
         /// <summary>
@@ -156,7 +156,7 @@ internal class PackageMigrator {
             var other = obj as PackageMap;
             return other != null &&
                 VersionHandlerPackageName == other.VersionHandlerPackageName &&
-                UnityPackageManagerPackageId == other.UnityPackageManagerPackageId;
+                PackageManagerPackageId == other.PackageManagerPackageId;
         }
 
         /// <summary>
@@ -165,7 +165,7 @@ internal class PackageMigrator {
         /// <returns>Hash of this object.</returns>
         public override int GetHashCode() {
             return VersionHandlerPackageName.GetHashCode() ^
-                UnityPackageManagerPackageId.GetHashCode();
+                PackageManagerPackageId.GetHashCode();
         }
 
         /// <summary>
@@ -173,14 +173,14 @@ internal class PackageMigrator {
         /// </summary>
         public override string ToString() {
             return String.Format("Migrated: {0}, {1} -> '{2}'", Migrated, VersionHandlerPackageId,
-                                 UnityPackageManagerPackageId);
+                                 PackageManagerPackageId);
         }
 
         /// <summary>
         /// Stores a set of PackageMap instances.
         /// </summary>
         internal static readonly string PackageMapFile =
-            Path.Combine("Temp", "UnityPackageManagerResolverPackageMap.xml");
+            Path.Combine("Temp", "PackageManagerResolverPackageMap.xml");
 
         /// <summary>
         /// Read a set of PackageMap instances from a file.
@@ -204,7 +204,7 @@ internal class PackageMigrator {
                                 !String.IsNullOrEmpty(
                                     currentPackageMap.VersionHandlerPackageName) &&
                                 !String.IsNullOrEmpty(
-                                    currentPackageMap.UnityPackageManagerPackageId)) {
+                                    currentPackageMap.PackageManagerPackageId)) {
                                 packageMaps.Add(currentPackageMap);
                             }
                         }
@@ -221,7 +221,7 @@ internal class PackageMigrator {
                     } else if (elementName == "unityPackageManagerPackageId" &&
                                parentElementName == "packageMap") {
                         if (isStart && reader.Read() && reader.NodeType == XmlNodeType.Text) {
-                            currentPackageMap.UnityPackageManagerPackageId =
+                            currentPackageMap.PackageManagerPackageId =
                                 reader.ReadContentAsString();
                         }
                         return true;
@@ -283,7 +283,7 @@ internal class PackageMigrator {
                         writer.WriteValue(pkg.VersionHandlerPackageName);
                         writer.WriteEndElement();
                         writer.WriteStartElement("unityPackageManagerPackageId");
-                        writer.WriteValue(pkg.UnityPackageManagerPackageId);
+                        writer.WriteValue(pkg.PackageManagerPackageId);
                         writer.WriteEndElement();
                         writer.WriteEndElement();
                     }
@@ -302,9 +302,9 @@ internal class PackageMigrator {
         /// <param name="cache">Cache to search.</param>
         /// <param name="packageId">Package ID to search with.</param>
         /// <returns>PackageInfo if found, null otherwise.</returns>
-        private static UnityPackageManagerClient.PackageInfo FindPackageInfoById(
-                Dictionary<string, UnityPackageManagerClient.PackageInfo> cache, string packageId) {
-            UnityPackageManagerClient.PackageInfo packageInfo;
+        private static PackageManagerClient.PackageInfo FindPackageInfoById(
+                Dictionary<string, PackageManagerClient.PackageInfo> cache, string packageId) {
+            PackageManagerClient.PackageInfo packageInfo;
             if (cache.TryGetValue(packageId, out packageInfo)) {
                 return packageInfo;
             }
@@ -312,11 +312,11 @@ internal class PackageMigrator {
         }
 
         /// <summary>
-        /// Delegate used to list / search for Unity Package Manager packages.
+        /// Delegate used to list / search for Package Manager packages.
         /// </summary>
         /// <param name="result">Called with the result of the list / search operation.</param>
-        private delegate void SearchUnityPackageManagerDelegate(
-            Action<UnityPackageManagerClient.SearchResult> result);
+        private delegate void SearchPackageManagerDelegate(
+            Action<PackageManagerClient.SearchResult> result);
 
         /// <summary>
         /// Reports progress of the package search process.
@@ -326,7 +326,7 @@ internal class PackageMigrator {
         public delegate void FindPackagesProgressDelegate(float progress, string description);
 
         /// <summary>
-        /// Cache Unity Package Manager packages.
+        /// Cache Package Manager packages.
         /// </summary>
         /// <param name="refresh">Whether to refresh the cache or data in memory.</param>
         /// <param name="search">Search operation that returns a result to cache.</param>
@@ -339,14 +339,14 @@ internal class PackageMigrator {
         /// progress of the search operation. The search will be reported as complete in this
         /// length of time.</param>
         private static void CachePackageInfo(
-                bool refresh, SearchUnityPackageManagerDelegate search, string searchDescription,
-                Dictionary<string, UnityPackageManagerClient.PackageInfo> cache,
-                Action<UnityPackageManagerClient.Error> complete,
+                bool refresh, SearchPackageManagerDelegate search, string searchDescription,
+                Dictionary<string, PackageManagerClient.PackageInfo> cache,
+                Action<PackageManagerClient.Error> complete,
                 FindPackagesProgressDelegate progressDelegate,
                 float simulateProgressTimeInMilliseconds) {
             if (!refresh && cache.Count > 0) {
                 progressDelegate(1.0f, searchDescription);
-                complete(new UnityPackageManagerClient.Error(null));
+                complete(new PackageManagerClient.Error(null));
                 return;
             }
             progressDelegate(0.0f, searchDescription);
@@ -383,42 +383,42 @@ internal class PackageMigrator {
         }
 
         /// <summary>
-        /// Cache installed Unity Package Manager packages.
+        /// Cache installed Package Manager packages.
         /// </summary>
         /// <param name="refresh">Whether to refresh the cache or data in memory.</param>
         /// <param name="complete">Called when packages have been cached by this class.</param>
         /// <param name="progressDelegate">Called as the operation progresses.</param>
         public static void CacheInstalledPackageInfo(
-                bool refresh, Action<UnityPackageManagerClient.Error> complete,
+                bool refresh, Action<PackageManagerClient.Error> complete,
                 FindPackagesProgressDelegate progressDelegate) {
-            CachePackageInfo(refresh, UnityPackageManagerClient.ListInstalledPackages,
+            CachePackageInfo(refresh, PackageManagerClient.ListInstalledPackages,
                              "Listing installed UPM packages",
                              installedPackageInfoCache, complete, progressDelegate,
                              2000.0f /* 2 seconds */);
         }
 
         /// <summary>
-        /// Cache available Unity Package Manager packages.
+        /// Cache available Package Manager packages.
         /// </summary>
         /// <param name="refresh">Whether to refresh the cache or data in memory.</param>
         /// <param name="complete">Called when packages have been cached by this class.</param>
         public static void CacheAvailablePackageInfo(
-                bool refresh, Action<UnityPackageManagerClient.Error> complete,
+                bool refresh, Action<PackageManagerClient.Error> complete,
                 FindPackagesProgressDelegate progressDelegate) {
-            CachePackageInfo(refresh, UnityPackageManagerClient.SearchAvailablePackages,
+            CachePackageInfo(refresh, PackageManagerClient.SearchAvailablePackages,
                              "Searching for available UPM packages",
                              availablePackageInfoCache, complete, progressDelegate,
                              20000.0f /* 20 seconds */);
         }
 
         /// <summary>
-        /// Cache available and installed Unity Package Manager packages.
+        /// Cache available and installed Package Manager packages.
         /// </summary>
         /// <param name="refresh">Whether to refresh the cache or data in memory.</param>
         /// <param name="complete">Called when packages have been cached by this class.</param>
         /// <param name="progressDelegate">Called as the operation progresses.</param>
         public static void CachePackageInfo(bool refresh,
-                                            Action<UnityPackageManagerClient.Error> complete,
+                                            Action<PackageManagerClient.Error> complete,
                                             FindPackagesProgressDelegate progressDelegate) {
             // Fraction of caching progress for each of the following operations.
             const float CacheInstallPackageProgress = 0.1f;
@@ -446,7 +446,7 @@ internal class PackageMigrator {
 
         /// <summary>
         /// Find packages in the project managed by the Version Handler that can be migrated to
-        /// the Unity Package Manager.
+        /// the Package Manager.
         /// </summary>
         /// <param name="complete">Called with an error string (empty if no error occured) and the
         /// list of packages that should be migrated.</param>
@@ -495,7 +495,7 @@ internal class PackageMigrator {
                         complete(error.Message, packageMaps);
                         return;
                     }
-                    var packageInfos = new List<UnityPackageManagerClient.PackageInfo>(
+                    var packageInfos = new List<PackageManagerClient.PackageInfo>(
                         installedPackageInfoCache.Values);
                     packageInfos.AddRange(availablePackageInfoCache.Values);
 
@@ -542,23 +542,23 @@ internal class PackageMigrator {
                                  canonicalVersionHandlerPackageNames) {
                             var packageMap = new PackageMap() {
                                 VersionHandlerPackageName = versionHandlerPackageName,
-                                UnityPackageManagerPackageId = pkg.PackageId
+                                PackageManagerPackageId = pkg.PackageId
                             };
                             Logger.Log(
                                 String.Format("Found Version Handler package to migrate to UPM " +
                                               "package {0} --> '{1}'.",
                                               packageMap.VersionHandlerPackageId,
-                                              packageMap.UnityPackageManagerPackageId),
+                                              packageMap.PackageManagerPackageId),
                                 level: LogLevel.Verbose);
                             if (!includeOutOfDatePackages &&
-                                packageMap.AvailableUnityPackageManagerPackageInfo.
+                                packageMap.AvailablePackageManagerPackageInfo.
                                     CalculateVersion() <
                                 packageMap.VersionHandlerPackageCalculatedVersion) {
                                 Logger.Log(
                                     String.Format(
                                         "Ignoring UPM package '{0}' as it's older than " +
                                         "installed package '{1}' at version {2}.",
-                                        packageMap.UnityPackageManagerPackageId,
+                                        packageMap.PackageManagerPackageId,
                                         packageMap.VersionHandlerPackageName,
                                         packageMap.VersionHandlerPackageVersion),
                                     level: LogLevel.Verbose);
@@ -590,7 +590,7 @@ internal class PackageMigrator {
     /// <summary>
     /// Logger for this module.
     /// </summary>
-    public static Logger Logger = UnityPackageManagerResolver.logger;
+    public static Logger Logger = PackageManagerResolver.logger;
 
     /// <summary>
     /// Job queue to execute package migration.
@@ -619,8 +619,8 @@ internal class PackageMigrator {
     /// </summary>
     public static bool Available {
         get {
-            return UnityPackageManagerClient.Available &&
-                UnityPackageManagerResolver.ScopedRegistriesSupported;
+            return PackageManagerClient.Available &&
+                PackageManagerResolver.ScopedRegistriesSupported;
         }
     }
 
@@ -683,7 +683,7 @@ internal class PackageMigrator {
 
                 Logger.Log(String.Format("Removing {0} to replace with {1}",
                                          packageMap.VersionHandlerPackageName,
-                                         packageMap.UnityPackageManagerPackageId),
+                                         packageMap.PackageManagerPackageId),
                            level: LogLevel.Verbose);
                 // Uninstall the .unitypackage.
                 var deleteResult = VersionHandlerImpl.ManifestReferences.DeletePackages(
@@ -694,25 +694,25 @@ internal class PackageMigrator {
                                               "halted package migration to '{1}'. You will need " +
                                               "to reinstall '{0}' to restore your project",
                                               packageMap.VersionHandlerPackageName,
-                                              packageMap.UnityPackageManagerPackageId);
+                                              packageMap.PackageManagerPackageId);
                     migrationJobQueue.Complete();
                     complete(error);
                     return;
                 }
 
                 Logger.Log(String.Format("Installing {0} to replace {1}",
-                                         packageMap.UnityPackageManagerPackageId,
+                                         packageMap.PackageManagerPackageId,
                                          packageMap.VersionHandlerPackageName),
                            level: LogLevel.Verbose);
-                UnityPackageManagerClient.AddPackage(
-                    packageMap.UnityPackageManagerPackageId,
+                PackageManagerClient.AddPackage(
+                    packageMap.PackageManagerPackageId,
                     (result) => {
                         if (!String.IsNullOrEmpty(result.Error.Message)) {
                             var error = String.Format("Installation of package '{0}' failed, " +
                                                       "halted package migration ({1}). You will " +
                                                       "need to reinstall {2} to restore your " +
                                                       "project.",
-                                                      packageMap.UnityPackageManagerPackageId,
+                                                      packageMap.PackageManagerPackageId,
                                                       result.Error.Message,
                                                       packageMap.VersionHandlerPackageName);
                             migrationJobQueue.Complete();
@@ -753,7 +753,7 @@ internal class PackageMigrator {
                         return;
                     }
                 } catch (IOException ioError) {
-                    UnityPackageManagerResolver.analytics.Report(
+                    PackageManagerResolver.analytics.Report(
                         "package_migrator/migration/failed/read_snapshot",
                         "Migrate Packages: Read Snapshot Failed");
                     migrationJobQueue.Complete();
@@ -764,7 +764,7 @@ internal class PackageMigrator {
                 PackageMap.CacheInstalledPackageInfo(
                     false, (error) => {
                         if (!String.IsNullOrEmpty(error.Message)) {
-                            UnityPackageManagerResolver.analytics.Report(
+                            PackageManagerResolver.analytics.Report(
                                 "package_migrator/migration/failed/find_packages",
                                 "Migrate Packages: Find Packages Failed");
                             migrationJobQueue.Complete();
@@ -800,7 +800,7 @@ internal class PackageMigrator {
         } catch (IOException) {
             // Ignore the exception.
         }
-        UnityPackageManagerResolver.analytics.Report(
+        PackageManagerResolver.analytics.Report(
             "package_migrator/migration/failed",
             new KeyValuePair<string, string>[] {
                 new KeyValuePair<string, string>("selected", numberOfSelectedPackages.ToString()),
@@ -863,7 +863,7 @@ internal class PackageMigrator {
         var description = packageMap != null ?
             String.Format("{0} --> {1}",
                           packageMap.VersionHandlerPackageId,
-                          packageMap.UnityPackageManagerPackageId) : "(none)";
+                          packageMap.PackageManagerPackageId) : "(none)";
         var message = String.Format("Migrating package(s) {0}%: {1}",
                                     (int)(progress * 100.0f), description);
         Logger.Log(message, level: LogLevel.Verbose);
@@ -885,7 +885,7 @@ internal class PackageMigrator {
         Action<string> clearProgressAndComplete = (error) => {
             EditorUtility.ClearProgressBar();
             if (String.IsNullOrEmpty(error)) {
-                UnityPackageManagerResolver.analytics.Report(
+                PackageManagerResolver.analytics.Report(
                     "package_migrator/migration/success",
                     new KeyValuePair<string, string>[] {
                         new KeyValuePair<string, string>(
@@ -905,7 +905,7 @@ internal class PackageMigrator {
 
                 PackageMap.FindPackagesToMigrate((error, packageMaps) => {
                         if (!String.IsNullOrEmpty(error)) {
-                            UnityPackageManagerResolver.analytics.Report(
+                            PackageManagerResolver.analytics.Report(
                                 "package_migrator/migration/failed/find_packages",
                                 "Migrate Packages: Find Packages Failed");
                            clearProgressAndComplete(error);
@@ -936,11 +936,11 @@ internal class PackageMigrator {
         var packageMapsByPackageId = new Dictionary<string, PackageMap>();
         var items = new List<KeyValuePair<string, string>>();
         foreach (var pkg in packageMaps) {
-            packageMapsByPackageId[pkg.UnityPackageManagerPackageId] = pkg;
+            packageMapsByPackageId[pkg.PackageManagerPackageId] = pkg;
             items.Add(new KeyValuePair<string, string>(
-                pkg.UnityPackageManagerPackageId,
+                pkg.PackageManagerPackageId,
                 String.Format("{0} --> {1}", pkg.VersionHandlerPackageId,
-                              pkg.UnityPackageManagerPackageId)));
+                              pkg.PackageManagerPackageId)));
         }
 
         var window = MultiSelectWindow.CreateMultiSelectWindow(WindowTitle);
@@ -981,14 +981,14 @@ internal class PackageMigrator {
     /// Find packages to migrate, display a window to provide the user a way to select the packages
     /// to migrate and start migration if they're selected.
     /// </summary>
-    [MenuItem("Assets/External Dependency Manager/Unity Package Manager Resolver/Migrate Packages")]
+    [MenuItem("Assets/External Dependency Manager/Package Manager Resolver/Migrate Packages")]
     public static void MigratePackages() {
         PackageMap.FindPackagesToMigrate((findError, availablePackageMaps) => {
                 EditorUtility.ClearProgressBar();
 
                 // If an error occurs, display a dialog.
                 if (!String.IsNullOrEmpty(findError)) {
-                    UnityPackageManagerResolver.analytics.Report(
+                    PackageManagerResolver.analytics.Report(
                         "package_migrator/migration/failed/find_packages",
                         "Migrate Packages: Find Packages Failed");
                     DisplayError(findError);
@@ -998,7 +998,7 @@ internal class PackageMigrator {
                 // Show a package selection window and start migration if the user selects apply.
                 DisplaySelectionWindow(availablePackageMaps, (selectedPackageMaps) => {
                         if (selectedPackageMaps.Count == 0) {
-                            UnityPackageManagerResolver.analytics.Report(
+                            PackageManagerResolver.analytics.Report(
                                 "package_migrator/migration/canceled",
                                 "Migrate Packages: Canceled");
                             ClearMigrationState();
@@ -1009,7 +1009,7 @@ internal class PackageMigrator {
                             PackageMap.WriteToFile(selectedPackageMaps);
                         } catch (IOException e) {
                             DisplayError(String.Format("Migration failed ({0})", e.Message));
-                            UnityPackageManagerResolver.analytics.Report(
+                            PackageManagerResolver.analytics.Report(
                                 "package_migrator/migration/failed/write_snapshot",
                                 "Migrate Packages: Write Snapshot Failed");
                             return;
@@ -1036,11 +1036,11 @@ internal static class PackageInfoVersionHandlerExtensions {
     private static Regex KEYWORD_VERSION_HANDLER_NAME_REGEX = new Regex("^vh[-_]name:(.*)");
 
     /// <summary>
-    /// Get Version Handler package names associated with this Unity Package Manager package.
+    /// Get Version Handler package names associated with this Package Manager package.
     /// </summary>
     /// <returns>Set of package names associataed with this package.</returns>
     public static HashSet<string> GetVersionHandlerPackageNames(
-            this UnityPackageManagerClient.PackageInfo packageInfo) {
+            this PackageManagerClient.PackageInfo packageInfo) {
         var versionHandlerPackageNames = new HashSet<string>();
         foreach (var keyword in packageInfo.Keywords) {
             var match = KEYWORD_VERSION_HANDLER_NAME_REGEX.Match(keyword);
@@ -1050,11 +1050,11 @@ internal static class PackageInfoVersionHandlerExtensions {
     }
 
     /// <summary>
-    /// Get a numeric version of the Unity Package Manager package.
+    /// Get a numeric version of the Package Manager package.
     /// </summary>
     /// <returns>Numeric version of the package that can be compared with Version Handler package
     /// versions.</returns>
-    public static long CalculateVersion(this UnityPackageManagerClient.PackageInfo packageInfo) {
+    public static long CalculateVersion(this PackageManagerClient.PackageInfo packageInfo) {
         var version = packageInfo.Version;
         return version != null ?
             VersionHandlerImpl.FileMetadata.CalculateVersion(version) : 0;

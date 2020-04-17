@@ -1381,9 +1381,9 @@ Task buildAndroidResolver = createBuildPluginDllTask(
 Task buildIosResolver = createBuildPluginDllTask(
   "IosResolver", "IOSResolver", "Google.IOSResolver.dll", true,
   [buildAndroidResolver])
-Task buildUnityPackageManagerResolver = createBuildPluginDllTask(
-  "UnityPackageManagerResolver", "UnityPackageManagerResolver",
-  "Google.UnityPackageManagerResolver.dll", true,
+Task buildPackageManagerResolver = createBuildPluginDllTask(
+  "PackageManagerResolver", "PackageManagerResolver",
+  "Google.PackageManagerResolver.dll", true,
   [buildVersionHandlerImpl])
 
 task preparePluginStagingAreaDir(type: Task) {
@@ -1446,7 +1446,7 @@ Iterable<Task> copyComponentsToStagingAreaTasks = [
     copyVersionHandlerStaging,
     copyVersionHandlerImplStaging,
     copyIosResolverStaging,
-    copyUnityPackageManagerResolverStaging].collect {
+    copyPackageManagerResolverStaging].collect {
   task ->
     createCopyFilesTask(
       sprintf("copy%sToStagingArea", task.ext.componentName),
@@ -1721,28 +1721,28 @@ createNUnitTask(
   compileVersionHandlerImplTests.outputs.files[0],
   [compileVersionHandlerImplTests])
 
-Task compileUnityPackageManagerResolverTests = createXbuildTask(
-    "compileUnityPackageManagerResolverTests",
-    "Compile tests for UnityPackageManagerResolver.",
+Task compilePackageManagerResolverTests = createXbuildTask(
+    "compilePackageManagerResolverTests",
+    "Compile tests for PackageManagerResolver.",
     project.ext.pluginSolutionFile,
-    "UnityPackageManagerResolverTests",
+    "PackageManagerResolverTests",
     fileTree(new File(
                new File(
                  new File(project.ext.pluginSourceDir,
-                          "UnityPackageManagerResolver"),
+                          "PackageManagerResolver"),
                  "unit_tests"),
                "src")),
-    new File(project.ext.testDir, "UnityPackageManagerResolverTests"),
-    [new File("Google.UnityPackageManagerResolverTests.dll")],
-    [buildUnityPackageManagerResolver]).with {
+    new File(project.ext.testDir, "PackageManagerResolverTests"),
+    [new File("Google.PackageManagerResolverTests.dll")],
+    [buildPackageManagerResolver]).with {
   doFirst { checkNUnitDllPath() }
 }
 
 createNUnitTask(
-  "testUnityPackageManagerResolver",
-  "Runs tests for the UnityPackageManagerResolver module",
-  compileUnityPackageManagerResolverTests.outputs.files[0],
-  [compileUnityPackageManagerResolverTests])
+  "testPackageManagerResolver",
+  "Runs tests for the PackageManagerResolver module",
+  compilePackageManagerResolverTests.outputs.files[0],
+  [compilePackageManagerResolverTests])
 
 createUnityTestBatchAndNonBatch(
   "testVersionHandlerActivation",
@@ -1860,32 +1860,32 @@ createUnityIntegrationTest(
   ["-buildTarget", "android"])
 
 createUnityIntegrationTest(
-  "testUnityPackageManagerClientIntegrationTests",
+  "testPackageManagerClientIntegrationTests",
   ("Imports the plugin into a Unity project and uses the Unity Package " +
    "Manager client to list, search, install and remove packages. "),
-  [compileUnityPackageManagerResolver],
-  "UnityPackageManagerClientIntegrationTests",
+  [compilePackageManagerResolver],
+  "PackageManagerClientIntegrationTests",
   fileTree(new File(new File(new File(project.ext.pluginSourceDir,
-                             "UnityPackageManagerResolver"), "test"),
-                    "UnityPackageManagerClientIntegrationTests")),
-  [new File("Google.UnityPackageManagerClientIntegrationTests.dll"),
-   new File("Google.UnityPackageManagerClientIntegrationTests.dll.mdb")],
+                             "PackageManagerResolver"), "test"),
+                    "PackageManagerClientIntegrationTests")),
+  [new File("Google.PackageManagerClientIntegrationTests.dll"),
+   new File("Google.PackageManagerClientIntegrationTests.dll.mdb")],
   null, [])
 
 createUnityIntegrationTest(
   "testPackageMigratorIntegrationTests",
   ("Imports the plugin into a Unity project and uses the Package Migrator " +
    "list packages that can be migrated and self migrate EDM to UPM. "),
-  [compileUnityPackageManagerResolver],
+  [compilePackageManagerResolver],
   "PackageMigratorIntegrationTests",
   fileTree(new File(new File(new File(project.ext.pluginSourceDir,
-                             "UnityPackageManagerResolver"), "test"),
+                             "PackageManagerResolver"), "test"),
                     "PackageMigratorIntegrationTests")),
   [new File("Google.PackageMigratorIntegrationTests.dll"),
    new File("Google.PackageMigratorIntegrationTests.dll.mdb")],
   new File(
     project.ext.scriptDirectory,
-    "source/UnityPackageManagerResolver/test/" +
+    "source/PackageManagerResolver/test/" +
     "PackageMigratorIntegrationTestsUnityProject"),
   [])
 

@@ -22,9 +22,9 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Settings dialog for UnityPackageManagerResolver.
+/// Settings dialog for PackageManagerResolver.
 /// </summary>
-public class UnityPackageManagerResolverSettingsDialog : EditorWindow
+public class PackageManagerResolverSettingsDialog : EditorWindow
 {
     /// <summary>
     /// Loads / saves settings for this dialog.
@@ -66,24 +66,24 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         /// Load settings into the dialog.
         /// </summary>
         internal Settings() {
-            enable = UnityPackageManagerResolver.Enable;
-            promptToAddRegistries = UnityPackageManagerResolver.PromptToAddRegistries;
-            promptToMigratePackages = UnityPackageManagerResolver.PromptToMigratePackages;
-            verboseLoggingEnabled = UnityPackageManagerResolver.VerboseLoggingEnabled;
-            useProjectSettings = UnityPackageManagerResolver.UseProjectSettings;
+            enable = PackageManagerResolver.Enable;
+            promptToAddRegistries = PackageManagerResolver.PromptToAddRegistries;
+            promptToMigratePackages = PackageManagerResolver.PromptToMigratePackages;
+            verboseLoggingEnabled = PackageManagerResolver.VerboseLoggingEnabled;
+            useProjectSettings = PackageManagerResolver.UseProjectSettings;
             analyticsSettings =
-                new EditorMeasurement.Settings(UnityPackageManagerResolver.analytics);
+                new EditorMeasurement.Settings(PackageManagerResolver.analytics);
         }
 
         /// <summary>
         /// Save dialog settings to preferences.
         /// </summary>
         internal void Save() {
-            UnityPackageManagerResolver.Enable = enable;
-            UnityPackageManagerResolver.PromptToAddRegistries = promptToAddRegistries;
-            UnityPackageManagerResolver.PromptToMigratePackages = promptToMigratePackages;
-            UnityPackageManagerResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
-            UnityPackageManagerResolver.UseProjectSettings = useProjectSettings;
+            PackageManagerResolver.Enable = enable;
+            PackageManagerResolver.PromptToAddRegistries = promptToAddRegistries;
+            PackageManagerResolver.PromptToMigratePackages = promptToMigratePackages;
+            PackageManagerResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
+            PackageManagerResolver.UseProjectSettings = useProjectSettings;
             analyticsSettings.Save();
         }
     }
@@ -107,7 +107,7 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         position = new Rect(UnityEngine.Screen.width / 3,
                             UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
-        UnityPackageManagerResolver.analytics.Report("settings/show", "Settings");
+        PackageManagerResolver.analytics.Report("settings/show", "Settings");
     }
 
     /// <summary>
@@ -126,21 +126,21 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
         GUILayout.BeginVertical();
 
         GUILayout.Label(String.Format("{0} (version {1}.{2}.{3})",
-                                      UnityPackageManagerResolver.PLUGIN_NAME,
-                                      UnityPackageManagerResolverVersionNumber.Value.Major,
-                                      UnityPackageManagerResolverVersionNumber.Value.Minor,
-                                      UnityPackageManagerResolverVersionNumber.Value.Build));
+                                      PackageManagerResolver.PLUGIN_NAME,
+                                      PackageManagerResolverVersionNumber.Value.Major,
+                                      PackageManagerResolverVersionNumber.Value.Minor,
+                                      PackageManagerResolverVersionNumber.Value.Build));
 
         scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
-        if (!UnityPackageManagerResolver.ScopedRegistriesSupported) {
+        if (!PackageManagerResolver.ScopedRegistriesSupported) {
             GUILayout.Label(
                 String.Format("Only supported from Unity {0} and above.",
-                    UnityPackageManagerResolver.MinimumUnityVersionString));
+                    PackageManagerResolver.MinimumUnityVersionString));
         }
 
         // Disable all GUI if scoped registries are not supported.
-        GUI.enabled = UnityPackageManagerResolver.ScopedRegistriesSupported;
+        GUI.enabled = PackageManagerResolver.ScopedRegistriesSupported;
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Add package registries", EditorStyles.boldLabel);
@@ -186,39 +186,39 @@ public class UnityPackageManagerResolverSettingsDialog : EditorWindow
             // Load default settings into the dialog but preserve the state in the user's
             // saved preferences.
             var backupSettings = new Settings();
-            UnityPackageManagerResolver.RestoreDefaultSettings();
-            UnityPackageManagerResolver.analytics.Report("settings/reset", "Settings Reset");
+            PackageManagerResolver.RestoreDefaultSettings();
+            PackageManagerResolver.analytics.Report("settings/reset", "Settings Reset");
             LoadSettings();
             backupSettings.Save();
         }
 
         GUILayout.BeginHorizontal();
         if (GUILayout.Button("Cancel")) {
-            UnityPackageManagerResolver.analytics.Report("settings/cancel", "Settings Cancel");
+            PackageManagerResolver.analytics.Report("settings/cancel", "Settings Cancel");
             Close();
         }
         if (GUILayout.Button("OK")) {
-            UnityPackageManagerResolver.analytics.Report(
+            PackageManagerResolver.analytics.Report(
                 "settings/save",
                 new KeyValuePair<string, string>[] {
                     new KeyValuePair<string, string>(
                         "enabled",
-                        UnityPackageManagerResolver.Enable.ToString()),
+                        PackageManagerResolver.Enable.ToString()),
                     new KeyValuePair<string, string>(
                         "promptToAddRegistries",
-                        UnityPackageManagerResolver.PromptToAddRegistries.ToString()),
+                        PackageManagerResolver.PromptToAddRegistries.ToString()),
                     new KeyValuePair<string, string>(
                         "promptToMigratePackages",
-                        UnityPackageManagerResolver.PromptToMigratePackages.ToString()),
+                        PackageManagerResolver.PromptToMigratePackages.ToString()),
                     new KeyValuePair<string, string>(
                         "verboseLoggingEnabled",
-                        UnityPackageManagerResolver.VerboseLoggingEnabled.ToString()),
+                        PackageManagerResolver.VerboseLoggingEnabled.ToString()),
                 },
                 "Settings Save");
             settings.Save();
             Close();
 
-            UnityPackageManagerResolver.CheckRegistries();
+            PackageManagerResolver.CheckRegistries();
         }
         GUILayout.EndHorizontal();
 

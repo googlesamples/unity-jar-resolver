@@ -1,4 +1,4 @@
-// <copyright file="UnityPackageManagerClientTests.cs" company="Google LLC">
+// <copyright file="PackageManagerClientTests.cs" company="Google LLC">
 // Copyright (C) 2020 Google Inc. All Rights Reserved.
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,12 +22,12 @@ using System.IO;
 
 using Google;
 
-namespace Google.UnityPackageManagerClientIntegrationTests {
+namespace Google.PackageManagerClientIntegrationTests {
 
 /// <summary>
-/// Integration tests for UnityPackageManagerClient.
+/// Integration tests for PackageManagerClient.
 /// </summary>
-public static class UnityPackageManagerClientTests {
+public static class PackageManagerClientTests {
 
     /// <summary>
     /// Whether the Unity Package Manager is available in the current version of Unity.
@@ -53,10 +53,10 @@ public static class UnityPackageManagerClientTests {
     public static void TestAvailable(IntegrationTester.TestCase testCase,
                                      Action<IntegrationTester.TestCaseResult> testCaseComplete) {
         var testCaseResult = new IntegrationTester.TestCaseResult(testCase);
-        if (UpmAvailable != UnityPackageManagerClient.Available) {
-            testCaseResult.ErrorMessages.Add(String.Format("UnityPackageManagerClient.Available " +
+        if (UpmAvailable != PackageManagerClient.Available) {
+            testCaseResult.ErrorMessages.Add(String.Format("PackageManagerClient.Available " +
                                                            "returned {0}, expected {1}",
-                                                           UnityPackageManagerClient.Available,
+                                                           PackageManagerClient.Available,
                                                            UpmAvailable));
         }
         testCaseComplete(testCaseResult);
@@ -68,7 +68,7 @@ public static class UnityPackageManagerClientTests {
     /// <param name="packageInfos">List of PackageInfo instances to convert to strings.</param>
     /// <returns>List of string representation of the specified packages.</returns>
     private static List<string> PackageInfoListToStringList(
-            IEnumerable<UnityPackageManagerClient.PackageInfo> packageInfos) {
+            IEnumerable<PackageManagerClient.PackageInfo> packageInfos) {
         var packageInfosAsStrings = new List<string>();
         if (packageInfos != null) {
             foreach (var pkg in packageInfos) packageInfosAsStrings.Add(pkg.ToString());
@@ -82,7 +82,7 @@ public static class UnityPackageManagerClientTests {
     /// <param name="packageInfos">List of PackageInfo instances to convert to strings.</param>
     /// <returns>List of package names of the specified packages.</returns>
     private static List<string> PackageInfoListToNameList(
-            IEnumerable<UnityPackageManagerClient.PackageInfo> packageInfos) {
+            IEnumerable<PackageManagerClient.PackageInfo> packageInfos) {
         var packageInfosAsStrings = new List<string>();
         if (packageInfos != null) {
             foreach (var pkg in packageInfos) packageInfosAsStrings.Add(pkg.Name);
@@ -101,7 +101,7 @@ public static class UnityPackageManagerClientTests {
     /// expectedPackageNames are not in packageInfos.</param>
     private static void CheckPackageNamesInPackageInfos(
             List<string> expectedPackageNames,
-            IEnumerable<UnityPackageManagerClient.PackageInfo> packageInfos,
+            IEnumerable<PackageManagerClient.PackageInfo> packageInfos,
             IntegrationTester.TestCaseResult testCaseResult,
             string errorMessagePrefix) {
         var packageNames = PackageInfoListToNameList(packageInfos);
@@ -123,7 +123,7 @@ public static class UnityPackageManagerClientTests {
             IntegrationTester.TestCase testCase,
             Action<IntegrationTester.TestCaseResult> testCaseComplete) {
         var testCaseResult = new IntegrationTester.TestCaseResult(testCase);
-        UnityPackageManagerClient.ListInstalledPackages((result) => {
+        PackageManagerClient.ListInstalledPackages((result) => {
                 // Unity 2017.x doesn't install any default packages.
                 if (ExecutionEnvironment.VersionMajorMinor >= 2018.0) {
                     // Make sure a subset of the default packages installed in all a newly created
@@ -158,7 +158,7 @@ public static class UnityPackageManagerClientTests {
             IntegrationTester.TestCase testCase,
             Action<IntegrationTester.TestCaseResult> testCaseComplete) {
         var testCaseResult = new IntegrationTester.TestCaseResult(testCase);
-        UnityPackageManagerClient.SearchAvailablePackages(
+        PackageManagerClient.SearchAvailablePackages(
             (result) => {
                 // Make sure common optional Unity packages are returned in the search result.
                 if (UpmSearchAllAvailable) {
@@ -194,7 +194,7 @@ public static class UnityPackageManagerClientTests {
             Action<IntegrationTester.TestCaseResult> testCaseComplete) {
         var testCaseResult = new IntegrationTester.TestCaseResult(testCase);
         var progressLines = new List<string>();
-        UnityPackageManagerClient.SearchAvailablePackages(
+        PackageManagerClient.SearchAvailablePackages(
             new [] {
                 "com.unity.ads",
                 "com.unity.analytics@2.0.13"
@@ -275,7 +275,7 @@ public static class UnityPackageManagerClientTests {
     /// indicates a failure or doesn't match the expected package name.</param>
     /// <returns>String description of the result.</returns>
     private static string CheckChangeResult(
-            UnityPackageManagerClient.Error error, string packageName,
+            PackageManagerClient.Error error, string packageName,
             string expectedPackageName, IntegrationTester.TestCaseResult testCaseResult) {
         var message = String.Format("Error '{0}', Package Installed '{1}'", error, packageName);
         if (!String.IsNullOrEmpty(error.ToString())) {
@@ -301,7 +301,7 @@ public static class UnityPackageManagerClientTests {
             Action<IntegrationTester.TestCaseResult> testCaseComplete) {
         var testCaseResult = new IntegrationTester.TestCaseResult(testCase);
         const string installPackage = "com.unity.analytics";
-        UnityPackageManagerClient.AddPackage(
+        PackageManagerClient.AddPackage(
             installPackage,
             (result) => {
                 var message = UpmAvailable ? CheckChangeResult(
@@ -325,7 +325,7 @@ public static class UnityPackageManagerClientTests {
             Action<IntegrationTester.TestCaseResult> testCaseComplete) {
         var testCaseResult = new IntegrationTester.TestCaseResult(testCase);
         const string packageToModify = "com.unity.ads";
-        UnityPackageManagerClient.AddPackage(
+        PackageManagerClient.AddPackage(
             packageToModify,
             (result) => {
                 if (UpmAvailable) {
@@ -335,7 +335,7 @@ public static class UnityPackageManagerClientTests {
                 }
             });
 
-        UnityPackageManagerClient.RemovePackage(
+        PackageManagerClient.RemovePackage(
             packageToModify,
             (result) => {
                 var message = UpmAvailable ?
