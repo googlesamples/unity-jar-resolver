@@ -132,8 +132,10 @@ namespace GooglePlayServices
 
         // Add to body text.
         public void AddBodyText(string text) {
-            bodyText += text;
-            Repaint();
+            RunOnMainThread.Run(() => {
+                    bodyText += text;
+                    Repaint();
+                });
         }
 
         /// <summary>
