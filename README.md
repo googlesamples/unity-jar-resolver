@@ -738,7 +738,7 @@ need to do the following:
    * Bump the plugin version variable `pluginVersion` in `build.gradle`
    * Update `CHANGELOG.md` with the new version number and changes included in
      the release.
-   * Build the release using `./gradle release` which performs the following:
+   * Build the release using `./gradlew release` which performs the following:
       * Updates `external-dependency-manager-*.unitypackage`
       * Copies the unpacked plugin to the `exploded` directory.
       * Updates template metadata files in the `plugin` directory.
@@ -747,9 +747,9 @@ need to do the following:
         versions of the plugin to be imported into a Unity project which allows
         the most recent version to be activated by the Version Handler
         component.
-   * Create the release commit and tag the release using
-     `./gradle gitTagRelease` which performs the following:
-     * `git add -A` to pick up all modified, new and deleted files in the tree.
-     * `git commit --amend -a` to create a release commit with the release notes
-       in the change log.
-     * `git tag -a RELEASE -m "version RELEASE"` to tag the release.
+   * Create release commit using `./gradlew gitCreateReleaseCommit` which
+     performs `git commit -a -m "description from CHANGELOG.md"`
+   * Once the release commit is merge, tag the release using
+     `./gradlew gitTagRelease` which performs the following:
+     * `git tag -a pluginVersion -m "version RELEASE"` to tag the release.
+   * Update tags on remote branch using `git push --tag REMOTE HEAD:master`
