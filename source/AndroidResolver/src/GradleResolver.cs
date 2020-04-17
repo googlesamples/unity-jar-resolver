@@ -484,39 +484,44 @@ namespace GooglePlayServices
                             SettingsDialog.UseJetifier = true;
                             // Make sure Jetpack is supported, prompting the user to configure Unity
                             // in a supported configuration.
-                            if (PlayServicesResolver.CanEnableJetifierOrPromptUser(
-                                    "Jetpack (AndroidX) libraries detected, ")) {
-                                PlayServicesResolver.analytics.Report(
-                                    "/resolve/gradle/enablejetifier/enable",
-                                    "Gradle Resolve: Enable Jetifier");
-                                if (jetifierEnabled != SettingsDialog.UseJetifier) {
-                                    PlayServicesResolver.Log(
-                                        "Detected Jetpack (AndroidX) libraries, enabled the " +
-                                        "jetifier and resolving again.");
-                                    // Run resolution again with the Jetifier enabled.
-                                    PlayServicesResolver.DeleteLabeledAssets();
-                                    GradleResolution(destinationDirectory,
-                                                     androidSdkPath,
-                                                     logErrorOnMissingArtifacts,
-                                                     closeWindowOnCompletion,
-                                                     resolutionComplete);
-                                    return;
-                                }
-                            } else {
-                                PlayServicesResolver.analytics.Report(
-                                    "/resolve/gradle/enablejetifier/abort",
-                                    "Gradle Resolve: Enable Jetifier Aborted");
-                                // If the user didn't change their configuration, delete all
-                                // resolved libraries and abort resolution as the build will fail.
-                                PlayServicesResolver.DeleteLabeledAssets();
-                                resolutionState.missingArtifactsAsDependencies =
-                                    allDependenciesList;
-                                resolutionCompleteRestoreLogger();
-                                return;
-                            }
+                            PlayServicesResolver.CanEnableJetifierOrPromptUser(
+                                "Jetpack (AndroidX) libraries detected, ", (useJetifier) => {
+                                    if (useJetifier) {
+                                        PlayServicesResolver.analytics.Report(
+                                            "/resolve/gradle/enablejetifier/enable",
+                                            "Gradle Resolve: Enable Jetifier");
+                                        if (jetifierEnabled != SettingsDialog.UseJetifier) {
+                                            PlayServicesResolver.Log(
+                                                "Detected Jetpack (AndroidX) libraries, enabled " +
+                                                "the jetifier and resolving again.");
+                                            // Run resolution again with the Jetifier enabled.
+                                            PlayServicesResolver.DeleteLabeledAssets();
+                                            GradleResolution(destinationDirectory,
+                                                             androidSdkPath,
+                                                             logErrorOnMissingArtifacts,
+                                                             closeWindowOnCompletion,
+                                                             resolutionComplete);
+                                            return;
+                                        }
+                                        processAars();
+                                    } else {
+                                        PlayServicesResolver.analytics.Report(
+                                            "/resolve/gradle/enablejetifier/abort",
+                                            "Gradle Resolve: Enable Jetifier Aborted");
+                                        // If the user didn't change their configuration, delete all
+                                        // resolved libraries and abort resolution as the build will
+                                        // fail.
+                                        PlayServicesResolver.DeleteLabeledAssets();
+                                        resolutionState.missingArtifactsAsDependencies =
+                                            allDependenciesList;
+                                        resolutionCompleteRestoreLogger();
+                                        return;
+                                    }
+                                });
+                        } else {
+                            // Successful, proceed with processing libraries.
+                            processAars();
                         }
-                        // Successful, proceed with processing libraries.
-                        processAars();
                     },
                     synchronous: false,
                     progressUpdate: (progress, message) => {
@@ -581,7 +586,9 @@ namespace GooglePlayServices
         ///     and play-services-base-9.2.4.aar (unmanaged))
         ///    The user is warned about the unmanaged conflicting libraries and, if they're
         ///    older than the managed library, prompted to delete the unmanaged libraries.
-        private void FindAndResolveConflicts() {
+        ///
+        /// <param name="complete">Called when the operation is complete.</param>
+        private void FindAndResolveConflicts(Action complete) {
             Func<string, string> getVersionlessArtifactFilename = (filename) => {
                 var basename = Path.GetFileName(filename);
                 int split = basename.LastIndexOf("-");
@@ -679,77 +686,114 @@ namespace GooglePlayServices
                 string basename = Path.GetFileNameWithoutExtension(Path.GetFileName(filename));
                 return basename.Substring(getVersionlessArtifactFilename(basename).Length + 1);
             };
-            int cleanedUpConflicts = 0;
-            foreach (var conflict in conflicts) {
-                var currentVersion = getVersionFromFilename(conflict.Key);
-                var conflictingVersionsSet = new HashSet<string>();
-                foreach (var conflictFilename in conflict.Value) {
-                    conflictingVersionsSet.Add(getVersionFromFilename(conflictFilename));
+
+            // List of conflicts that haven't been removed.
+            var leftConflicts = new List<string>();
+            // Reports conflict count.
+            Action reportConflictCount = () => {
+                int numberOfConflicts = conflicts.Count;
+                if (numberOfConflicts > 0) {
+                    PlayServicesResolver.analytics.Report(
+                        "/androidresolver/resolve/conflicts/cleanup",
+                        new KeyValuePair<string, string>[] {
+                            new KeyValuePair<string, string>(
+                                "numFound", numberOfConflicts.ToString()),
+                            new KeyValuePair<string, string>(
+                                "numRemoved",
+                                (numberOfConflicts - leftConflicts.Count).ToString()),
+                        },
+                        "Gradle Resolve: Cleaned Up Conflicting Libraries");
                 }
-                var conflictingVersions = new List<string>(conflictingVersionsSet);
-                conflictingVersions.Sort(Dependency.versionComparer);
+            };
 
-                var warningMessage = String.Format(
-                    "Found conflicting Android library {0}\n" +
-                    "\n" +
-                    "{1} (managed by the Android Resolver) conflicts with:\n" +
-                    "{2}\n",
-                    getVersionlessArtifactFilename(conflict.Key),
-                    conflict.Key, String.Join("\n", conflict.Value.ToArray()));
+            var conflictsEnumerator = conflicts.GetEnumerator();
 
-                // If the conflicting versions are older than the current version we can
-                // possibly clean up the old versions automatically.
-                if (Dependency.versionComparer.Compare(conflictingVersions[0],
-                                                       currentVersion) >= 0) {
-                    if (Dialog.Display(
+            // Move to the next conflicting package and prompt the user to delete a package.
+            Action promptToDeleteNextConflict;
+
+            promptToDeleteNextConflict = () => {
+                bool conflictEnumerationComplete = false;
+                while (true) {
+                    if (!conflictsEnumerator.MoveNext()) {
+                        conflictEnumerationComplete = true;
+                        break;
+                    }
+
+                    var conflict = conflictsEnumerator.Current;
+                    var currentVersion = getVersionFromFilename(conflict.Key);
+                    var conflictingVersionsSet = new HashSet<string>();
+                    foreach (var conflictFilename in conflict.Value) {
+                        conflictingVersionsSet.Add(getVersionFromFilename(conflictFilename));
+                    }
+                    var conflictingVersions = new List<string>(conflictingVersionsSet);
+                    conflictingVersions.Sort(Dependency.versionComparer);
+
+                    var warningMessage = String.Format(
+                        "Found conflicting Android library {0}\n" +
+                        "\n" +
+                        "{1} (managed by the Android Resolver) conflicts with:\n" +
+                        "{2}\n",
+                        getVersionlessArtifactFilename(conflict.Key),
+                        conflict.Key, String.Join("\n", conflict.Value.ToArray()));
+
+                    // If the conflicting versions are older than the current version we can
+                    // possibly clean up the old versions automatically.
+                    if (Dependency.versionComparer.Compare(conflictingVersions[0],
+                                                           currentVersion) >= 0) {
+                        Dialog.Display(
                             "Resolve Conflict?",
                             warningMessage +
                             "\n" +
                             "The conflicting libraries are older than the library managed by " +
                             "the Android Resolver.  Would you like to remove the old libraries " +
                             "to resolve the conflict?",
-                            Dialog.Option.Selected0, "Yes", "No") == Dialog.Option.Selected0) {
-                        var deleteFailures = new List<string>();
-                        foreach (var filename in conflict.Value) {
-                            deleteFailures.AddRange(
-                                FileUtils.DeleteExistingFileOrDirectory(filename));
-                        }
-                        var deleteError = FileUtils.FormatError("Unable to delete old libraries",
-                                                                deleteFailures);
-                        if (!String.IsNullOrEmpty(deleteError)) {
-                            PlayServicesResolver.Log(deleteError, level: LogLevel.Error);
-                        } else {
-                            cleanedUpConflicts++;
-                        }
-                        warningMessage = null;
+                            Dialog.Option.Selected0, "Yes", "No",
+                            (selectedOption) => {
+                                bool deleted = false;
+                                if (selectedOption == Dialog.Option.Selected0) {
+                                    var deleteFailures = new List<string>();
+                                    foreach (var filename in conflict.Value) {
+                                        deleteFailures.AddRange(
+                                            FileUtils.DeleteExistingFileOrDirectory(filename));
+                                    }
+                                    var deleteError = FileUtils.FormatError(
+                                        "Unable to delete old libraries", deleteFailures);
+                                    if (!String.IsNullOrEmpty(deleteError)) {
+                                        PlayServicesResolver.Log(deleteError,
+                                                                 level: LogLevel.Error);
+                                    } else {
+                                        deleted = true;
+                                    }
+                                }
+                                if (!deleted) leftConflicts.Add(warningMessage);
+                                promptToDeleteNextConflict();
+                            });
+                        // Continue iteration when the dialog is complete.
+                        break;
                     }
                 }
 
-                if (!String.IsNullOrEmpty(warningMessage)) {
-                    PlayServicesResolver.Log(
-                        warningMessage +
-                        "\n" +
-                        "Your application is unlikely to build in the current state.\n" +
-                        "\n" +
-                        "To resolve this problem you can try one of the following:\n" +
-                        "* Updating the dependencies managed by the Android Resolver\n" +
-                        "  to remove references to old libraries.  Be careful to not\n" +
-                        "  include conflicting versions of Google Play services.\n" +
-                        "* Contacting the plugin vendor(s) with conflicting\n" +
-                        "  dependencies and asking them to update their plugin.\n",
-                        level: LogLevel.Warning);
+                if (conflictEnumerationComplete) {
+                    reportConflictCount();
+                    foreach (var warningMessage in leftConflicts) {
+                        PlayServicesResolver.Log(
+                            warningMessage +
+                            "\n" +
+                            "Your application is unlikely to build in the current state.\n" +
+                            "\n" +
+                            "To resolve this problem you can try one of the following:\n" +
+                            "* Updating the dependencies managed by the Android Resolver\n" +
+                            "  to remove references to old libraries.  Be careful to not\n" +
+                            "  include conflicting versions of Google Play services.\n" +
+                            "* Contacting the plugin vendor(s) with conflicting\n" +
+                            "  dependencies and asking them to update their plugin.\n",
+                            level: LogLevel.Warning);
+                    }
+                    complete();
                 }
-            }
-            if (conflicts.Count > 0) {
-                PlayServicesResolver.analytics.Report(
-                    "/androidresolver/resolve/conflicts/cleanup",
-                    new KeyValuePair<string, string>[] {
-                        new KeyValuePair<string, string>("numFound", conflicts.Count.ToString()),
-                        new KeyValuePair<string, string>("numRemoved",
-                                                         cleanedUpConflicts.ToString()),
-                    },
-                    "Gradle Resolve: Cleaned Up Conflicting Libraries");
-            }
+            };
+            // Start prompting the user to delete conflicts.
+            promptToDeleteNextConflict();
         }
 
         /// <summary>
@@ -766,8 +810,7 @@ namespace GooglePlayServices
             RunOnMainThread.Run(() => {
                 DoResolutionUnsafe(destinationDirectory, closeWindowOnCompletion,
                                    () => {
-                                       FindAndResolveConflicts();
-                                       resolutionComplete();
+                                       FindAndResolveConflicts(resolutionComplete);
                                    });
             });
         }

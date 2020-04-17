@@ -136,7 +136,7 @@ namespace Google.VersionHandlerImpl.Tests {
                                                   SETTINGS_NAMESPACE, PLUGIN_NAME,
                                                   DATA_COLLECTION_DESCRIPTION, PRIVACY_POLICY);
             analytics.displayDialog = (title, message, defaultOption, option0, option1,
-                                       option2) => {
+                                       option2, complete, renderContent, renderButtons) => {
                 throw new Exception("Unexpected dialog displayed");
             };
             analytics.openUrl = (url) => {
@@ -186,7 +186,9 @@ namespace Google.VersionHandlerImpl.Tests {
         private Dialog.DisplayDelegate CreateDisplayDialogDelegate(
                 List<Dialog.Option> selectedOptions) {
             return (string title, string message, Dialog.Option defaultOption, string option0,
-                    string option1, string option2) => {
+                    string option1, string option2, Action<Dialog.Option> complete,
+                    Action<UnityEditor.EditorWindow> renderContent,
+                    Action<UnityEditor.EditorWindow> renderButtons) => {
                 Assert.That(title, Is.Not.Empty);
                 Assert.That(message, Is.Not.Empty);
                 Assert.That(option0, Is.Not.Empty);
@@ -194,7 +196,7 @@ namespace Google.VersionHandlerImpl.Tests {
                 Assert.That(option2, Is.Not.Empty);
                 var selectedOption = selectedOptions[0];
                 selectedOptions.RemoveAt(0);
-                return selectedOption;
+                if (complete != null) complete(selectedOption);
             };
         }
 

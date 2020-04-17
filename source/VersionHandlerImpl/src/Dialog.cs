@@ -61,9 +61,15 @@ internal class Dialog {
     /// <param name="option0">Text for the first option.</param>
     /// <param name="option1">Text for the second option or null to disable.</param>
     /// <param name="option2">Text for the third option or null to disable.</param>
-    /// <returns>The selected option.</returns>
-    public delegate Option DisplayDelegate(string title, string message, Option defaultOption,
-                                           string option0, string option1, string option2);
+    /// <param name="complete">Called with the selected option when
+    /// ExecutionEnvironment.InteractiveMode, otherwise receives the defaultOption.</param>
+    /// <param name="renderContent">Specify to optionally render content in the dialog.</param>
+    /// <param name="renderButtons">Specify to optionally render buttons in the dialog.</param>
+    public delegate void DisplayDelegate(string title, string message, Option defaultOption,
+                                         string option0, string option1, string option2,
+                                         Action<Option> complete,
+                                         Action<UnityEditor.EditorWindow> renderContent,
+                                         Action<UnityEditor.EditorWindow> renderButtons);
 
     /// <summary>
     /// Delegate that displays a dialog requesting consent to report analytics.
@@ -80,25 +86,32 @@ internal class Dialog {
     /// <param name="option1">Text for the second option.</param>
     /// <param name="option2">Text for the third option.</param>
     /// <param name="defaultOption">Option selected if interactivity is disabled.</param>
-    /// <returns>When ExecutionEnvironment.InteractiveMode, the selected option, the
-    /// defaultOption otherwise.</returns>
-    internal static Option DisplayDefault(string title, string message, Option defaultOption,
-                                          string option0, string option1, string option2) {
+    /// <param name="complete">Called with the selected option when
+    /// ExecutionEnvironment.InteractiveMode, otherwise receives the defaultOption.</param>
+    /// <param name="renderContent">Specify to optionally render content in the dialog.</param>
+    /// <param name="renderButtons">Specify to optionally render buttons in the dialog.</param>
+    internal static void DisplayDefault(string title, string message, Option defaultOption,
+                                        string option0, string option1, string option2,
+                                        Action<Option> complete,
+                                        Action<UnityEditor.EditorWindow> renderContent,
+                                        Action<UnityEditor.EditorWindow> renderButtons) {
+        if (complete == null) complete = (unusedOption) => {};
         if (ExecutionEnvironment.InteractiveMode) {
             if (String.IsNullOrEmpty(option1)) {
-                UnityEditor.EditorUtility.DisplayDialog(title, message, option0, cancel: "");
-                return Option.Selected0;
+                if (UnityEditor.EditorUtility.DisplayDialog(title, message, option0, cancel: "")) {
+                    complete(Option.Selected0);
+                }
             } else if (String.IsNullOrEmpty(option2)) {
-                return UnityEditor.EditorUtility.DisplayDialog(title, message, option0,
-                                                               cancel: option1) ?
-                    Option.Selected0 : Option.Selected1;
+                complete(UnityEditor.EditorUtility.DisplayDialog(title, message, option0,
+                                                                 cancel: option1) ?
+                         Option.Selected0 : Option.Selected1);
             } else {
-                return (Option)UnityEditor.EditorUtility.DisplayDialogComplex(title, message,
-                                                                              option0, option1,
-                                                                              option2);
+                complete((Option)UnityEditor.EditorUtility.DisplayDialogComplex(title, message,
+                                                                                option0, option1,
+                                                                                option2));
             }
         }
-        return defaultOption;
+        complete(defaultOption);
     }
 
     /// <summary>
@@ -110,11 +123,17 @@ internal class Dialog {
     /// <param name="option0">Text for the first option.</param>
     /// <param name="option1">Text for the second option.</param>
     /// <param name="option2">Text for the third option.</param>
-    /// <returns>When ExecutionEnvironment.InteractiveMode, the selected option, the defaultOption
-    /// otherwise.</returns>
-    public static Option Display(string title, string message, Option defaultOption,
-                                 string option0, string option1, string option2) {
-        return displayDialogMethod(title, message, defaultOption, option0, option1, option2);
+    /// <param name="complete">Called with the selected option when
+    /// ExecutionEnvironment.InteractiveMode, otherwise receives the defaultOption.</param>
+    /// <param name="renderContent">Specify to optionally render content in the dialog.</param>
+    /// <param name="renderButtons">Specify to optionally render buttons in the dialog.</param>
+    public static void Display(string title, string message, Option defaultOption,
+                               string option0, string option1, string option2,
+                               Action<Option> complete,
+                               Action<UnityEditor.EditorWindow> renderContent = null,
+                               Action<UnityEditor.EditorWindow> renderButtons = null) {
+        displayDialogMethod(title, message, defaultOption, option0, option1, option2, complete,
+                            renderContent, renderButtons);
     }
 
     /// <summary>
@@ -125,11 +144,16 @@ internal class Dialog {
     /// <param name="defaultOption">Option selected if interactivity is disabled.</param>
     /// <param name="option0">Text for the first option.</param>
     /// <param name="option1">Text for the second option.</param>
-    /// <returns>When ExecutionEnvironment.InteractiveMode, the selected option, the defaultOption
-    /// otherwise.</returns>
-    public static Option Display(string title, string message, Option defaultOption,
-                                 string option0, string option1) {
-        return displayDialogMethod(title, message, defaultOption, option0, option1, null);
+    /// <param name="complete">Called with the selected option when
+    /// ExecutionEnvironment.InteractiveMode, otherwise receives the defaultOption.</param>
+    /// <param name="renderContent">Specify to optionally render content in the dialog.</param>
+    /// <param name="renderButtons">Specify to optionally render buttons in the dialog.</param>
+    public static void Display(string title, string message, Option defaultOption,
+                               string option0, string option1, Action<Option> complete,
+                               Action<UnityEditor.EditorWindow> renderContent = null,
+                               Action<UnityEditor.EditorWindow> renderButtons = null) {
+        displayDialogMethod(title, message, defaultOption, option0, option1, null, complete,
+                            renderContent, renderButtons);
     }
 
     /// <summary>
@@ -140,11 +164,16 @@ internal class Dialog {
     /// <param name="defaultOption">Option selected if interactivity is disabled.</param>
     /// <param name="option0">Text for the first option.</param>
     /// <param name="option1">Text for the second option.</param>
-    /// <returns>When ExecutionEnvironment.InteractiveMode, the selected option, the defaultOption
-    /// otherwise.</returns>
-    public static Option Display(string title, string message, Option defaultOption,
-                                 string option0) {
-        return displayDialogMethod(title, message, defaultOption, option0, null, null);
+    /// <param name="complete">Called with the selected option when
+    /// ExecutionEnvironment.InteractiveMode, otherwise receives the defaultOption.</param>
+    /// <param name="renderContent">Specify to optionally render content in the dialog.</param>
+    /// <param name="renderButtons">Specify to optionally render buttons in the dialog.</param>
+    public static void Display(string title, string message, Option defaultOption,
+                               string option0, Action<Option> complete = null,
+                               Action<UnityEditor.EditorWindow> renderContent = null,
+                               Action<UnityEditor.EditorWindow> renderButtons = null) {
+        displayDialogMethod(title, message, defaultOption, option0, null, null, complete,
+                            renderContent, renderButtons);
     }
 }
 

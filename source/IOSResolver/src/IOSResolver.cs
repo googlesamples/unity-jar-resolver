@@ -700,23 +700,26 @@ public class IOSResolver : AssetPostprocessor {
                 CocoapodsIntegrationUpgradeDefault) == CocoapodsIntegrationMethod.None &&
             !ExecutionEnvironment.InBatchMode && !UpgradeToWorkspaceWarningDisabled) {
 
-            switch (Dialog.Display(
+            Dialog.Display(
                 "Warning: CocoaPods integration is disabled!",
                 "Would you like to enable CocoaPods integration with workspaces?\n\n" +
                 "Unity 5.6+ now supports loading workspaces generated from CocoaPods.\n" +
                 "If you enable this, and still use Unity less than 5.6, it will fallback " +
                 "to integrating CocoaPods with the .xcodeproj file.\n",
-                Dialog.Option.Selected0, "Yes", "Not Now", "Silence Warning")) {
-                case Dialog.Option.Selected0:  // Yes
-                    settings.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
-                                    (int)CocoapodsIntegrationMethod.Workspace);
-                    break;
-                case Dialog.Option.Selected1:  // Not now
-                    break;
-                case Dialog.Option.Selected2:  // Ignore
-                    UpgradeToWorkspaceWarningDisabled = true;
-                    break;
-            }
+                Dialog.Option.Selected0, "Yes", "Not Now", "Silence Warning",
+                (selectedOption) => {
+                    switch (selectedOption) {
+                        case Dialog.Option.Selected0:  // Yes
+                            settings.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
+                                            (int)CocoapodsIntegrationMethod.Workspace);
+                            break;
+                        case Dialog.Option.Selected1:  // Not now
+                            break;
+                        case Dialog.Option.Selected2:  // Ignore
+                            UpgradeToWorkspaceWarningDisabled = true;
+                            break;
+                    }
+                });
         }
     }
 
@@ -1176,41 +1179,39 @@ public class IOSResolver : AssetPostprocessor {
     /// Update the target SDK if it's required.
     /// </summary>
     /// <param name="runningBuild">Whether the build is being processed.</param>
-    /// <returns>true if the SDK was updated, false otherwise.</returns>
-    public static bool UpdateTargetSdk(bool runningBuild) {
+    public static void UpdateTargetSdk(bool runningBuild) {
         var minVersionAndPodNames = TargetSdkNeedsUpdate();
         if (minVersionAndPodNames.Value != null) {
             var minVersionString =
                 TargetSdkVersionToString(minVersionAndPodNames.Key);
-            var update = Dialog.Display(
+            Dialog.Display(
                 "Unsupported Target SDK",
-                "Target SDK selected in the iOS Player Settings (" +
-                TargetSdk + ") is not supported by the Cocoapods " +
-                "included in this project. " +
-                "The build will very likely fail. The minimum supported " +
-                "version is \"" + minVersionString + "\" " +
-                "required by pods (" +
-                String.Join(", ", minVersionAndPodNames.Value.ToArray()) +
-                ").\n" +
-                "Would you like to update the target SDK version?",
-                Dialog.Option.Selected1 /* No */, "Yes", "No");
-            analytics.Report("updatetargetsdk/" +
-                             (update == Dialog.Option.Selected0 ? "apply" : "cancel"),
-                             "Update Target SDK");
-            if (update == Dialog.Option.Selected0) {
-                TargetSdkVersion = minVersionAndPodNames.Key;
-                if (runningBuild) {
-                    string errorString = (
-                        "Target SDK has been updated from " + TargetSdk +
-                        " to " + minVersionString + ".  You must restart the " +
-                        "build for this change to take effect.");
-                    Dialog.Display("Target SDK updated.", errorString, Dialog.Option.Selected0,
-                                   "OK");
-                }
-                return true;
-            }
+                String.Format(
+                    "Target SDK selected in the iOS Player Settings ({0}) is not supported by " +
+                    "the Cocoapods included in this project. The build will very likely fail. " +
+                    "The minimum supported version is \"{1}\" required by pods ({2})\n" +
+                    "Would you like to update the target SDK version?",
+                    TargetSdk, minVersionString,
+                    String.Join(", ", minVersionAndPodNames.Value.ToArray())),
+                Dialog.Option.Selected1 /* No */, "Yes", "No",
+                (selectedOption) => {
+                    analytics.Report(
+                        "updatetargetsdk/" +
+                        (selectedOption == Dialog.Option.Selected0 ? "apply" : "cancel"),
+                        "Update Target SDK");
+                    if (selectedOption == Dialog.Option.Selected0) {
+                        TargetSdkVersion = minVersionAndPodNames.Key;
+                        if (runningBuild) {
+                            string errorString = String.Format(
+                                "Target SDK has been updated from {0} to {1}. " +
+                                "You must restart the build for this change to take effect.",
+                                TargetSdk, minVersionString);
+                            Dialog.Display("Target SDK updated.", errorString,
+                                           Dialog.Option.Selected0, "OK");
+                        }
+                    }
+                });
         }
-        return false;
     }
 
     /// <summary>
@@ -2262,7 +2263,7 @@ public class IOSResolver : AssetPostprocessor {
     public static void OnPostProcessInstallPods(BuildTarget buildTarget,
                                                 string pathToBuiltProject) {
         if (!InjectDependencies() || !PodfileGenerationEnabled) return;
-        if (UpdateTargetSdk(true)) return;
+        UpdateTargetSdk(true);
         if (!CocoapodsIntegrationEnabled || !cocoapodsToolsInstallPresent) {
             Log(String.Format(
                 "Cocoapod installation is disabled.\n" +

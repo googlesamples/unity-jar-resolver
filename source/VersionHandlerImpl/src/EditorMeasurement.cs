@@ -342,29 +342,45 @@ public class EditorMeasurement {
     /// <summary>
     /// Ask user to enable analytics.
     /// </summary>
-    public void PromptToEnable() {
-        bool showDialog = !ConsentRequested;
-        while (showDialog) {
-            switch (displayDialog(
-                EnableAnalytics, String.Format(
-                    RequestConsent,
-                    PluginName, String.IsNullOrEmpty(DataCollectionDescription) ? "" :
-                        String.Format("{0}\n\n", DataCollectionDescription), privacyPolicy),
-                Dialog.Option.Selected1, Yes, No, PrivacyPolicy)) {
-                case Dialog.Option.Selected0: // Yes
-                    Enabled = true;
-                    showDialog = false;
-                    break;
-                case Dialog.Option.Selected1: // No
-                    Enabled = false;
-                    showDialog = false;
-                    break;
-                case Dialog.Option.Selected2: // Privacy Policy
-                    openUrl(privacyPolicy);
-                    break;
+    /// <param name="complete">Called when the user has selected an option.</param>
+    public void PromptToEnable(Action complete = null) {
+        lock (typeof(EditorMeasurement)) {
+            if (complete == null) complete = () => {};
+            if (ConsentRequested) {
+                complete();
+            } else {
+                ConsentRequested = true;
+                displayDialog(
+                    EnableAnalytics,
+                    String.Format(RequestConsent,
+                                  PluginName,
+                                  String.IsNullOrEmpty(DataCollectionDescription) ? "" :
+                                  String.Format("{0}\n\n", DataCollectionDescription),
+                                  privacyPolicy),
+                    Dialog.Option.Selected1, Yes, No, PrivacyPolicy,
+                    (selectedOption) => {
+                        lock (typeof(EditorMeasurement)) {
+                            switch (selectedOption) {
+                                case Dialog.Option.Selected0: // Yes
+                                    Enabled = true;
+                                    complete();
+                                    break;
+                                case Dialog.Option.Selected1: // No
+                                    Enabled = false;
+                                    complete();
+                                    break;
+                                case Dialog.Option.Selected2: // Privacy Policy
+                                    openUrl(privacyPolicy);
+                                    // Display the dialog again so the user has the option of opting
+                                    // in or out.
+                                    ConsentRequested = false;
+                                    PromptToEnable(complete);
+                                    break;
+                            }
+                        }
+                    }, null, null);
             }
         }
-        ConsentRequested = true;
     }
 
     /// <summary>
@@ -443,52 +459,54 @@ public class EditorMeasurement {
     public void Report(string reportUrl, string reportName) {
         if (!GloballyEnabled) return;
 
-        PromptToEnable();
-        var uri = new Uri("http://ignore.host/" + reportUrl);
-        bool reported = false;
-        var path = String.Join("", uri.Segments);
-        var queryPrefix =
-            ConcatenateQueryStrings(
-                ConcatenateQueryStrings(uri.Query,
-                    ConcatenateQueryStrings(CommonQuery, BaseQuery)), "scope=");
-        var fragment = uri.Fragment;
-        if (!String.IsNullOrEmpty(BasePath)) path = BasePath + path;
-        if (!String.IsNullOrEmpty(BaseReportName)) reportName = BaseReportName + reportName;
-        // Strip all extraneous path separators.
-        while (path.Contains("//")) path = path.Replace("//", "/");
-        foreach (var cookie in
-                 new KeyValuePair<string, string>[] {
-                     new KeyValuePair<string, string>(Cookie, queryPrefix + "project"),
-                     new KeyValuePair<string, string>(SystemCookie, queryPrefix + "system")
-                 }) {
-            if (String.IsNullOrEmpty(cookie.Key)) continue;
-            // See https://developers.google.com/analytics/devguides/collection/protocol/v1
-            var status = PortableWebRequest.DefaultInstance.Post(
-                "http://www.google-analytics.com/collect", null,
-                new [] {
-                    // Version
-                    new KeyValuePair<string, string>("v", "1"),
-                    // Tracking ID.
-                    new KeyValuePair<string, string>("tid", trackingId),
-                    // Client ID.
-                    new KeyValuePair<string, string>("cid", cookie.Key),
-                    // Hit type.
-                    new KeyValuePair<string, string>("t", "pageview"),
-                    // "URL" / string to report.
-                    new KeyValuePair<string, string>("dl", path + "?" + cookie.Value + fragment),
-                    // Document title.
-                    new KeyValuePair<string, string>("dt", reportName),
-                    // Cache buster
-                    new KeyValuePair<string, string>("z", random.Next().ToString())
-                });
-            if (status != null) reported = true;
-        }
-        if (reported) {
-            logger.Log(String.Format("Reporting analytics data: {0}{1}{2} '{3}'", path,
-                                     String.IsNullOrEmpty(queryPrefix) ? "" : "?" + queryPrefix,
-                                     fragment, reportName),
-                       level: LogLevel.Verbose);
-        }
+        PromptToEnable(complete: () => {
+                var uri = new Uri("http://ignore.host/" + reportUrl);
+                bool reported = false;
+                var path = String.Join("", uri.Segments);
+                var queryPrefix =
+                    ConcatenateQueryStrings(
+                        ConcatenateQueryStrings(uri.Query,
+                            ConcatenateQueryStrings(CommonQuery, BaseQuery)), "scope=");
+                var fragment = uri.Fragment;
+                if (!String.IsNullOrEmpty(BasePath)) path = BasePath + path;
+                if (!String.IsNullOrEmpty(BaseReportName)) reportName = BaseReportName + reportName;
+                // Strip all extraneous path separators.
+                while (path.Contains("//")) path = path.Replace("//", "/");
+                foreach (var cookie in
+                         new KeyValuePair<string, string>[] {
+                             new KeyValuePair<string, string>(Cookie, queryPrefix + "project"),
+                             new KeyValuePair<string, string>(SystemCookie, queryPrefix + "system")
+                         }) {
+                    if (String.IsNullOrEmpty(cookie.Key)) continue;
+                    // See https://developers.google.com/analytics/devguides/collection/protocol/v1
+                    var status = PortableWebRequest.DefaultInstance.Post(
+                        "http://www.google-analytics.com/collect", null,
+                        new [] {
+                            // Version
+                            new KeyValuePair<string, string>("v", "1"),
+                            // Tracking ID.
+                            new KeyValuePair<string, string>("tid", trackingId),
+                            // Client ID.
+                            new KeyValuePair<string, string>("cid", cookie.Key),
+                            // Hit type.
+                            new KeyValuePair<string, string>("t", "pageview"),
+                            // "URL" / string to report.
+                            new KeyValuePair<string, string>(
+                                "dl", path + "?" + cookie.Value + fragment),
+                            // Document title.
+                            new KeyValuePair<string, string>("dt", reportName),
+                            // Cache buster
+                            new KeyValuePair<string, string>("z", random.Next().ToString())
+                        });
+                    if (status != null) reported = true;
+                }
+                if (reported) {
+                    logger.Log(String.Format("Reporting analytics data: {0}{1}{2} '{3}'", path,
+                                             String.IsNullOrEmpty(queryPrefix) ? "" : "?" +
+                                             queryPrefix, fragment, reportName),
+                               level: LogLevel.Verbose);
+                }
+            });
     }
 }
 
