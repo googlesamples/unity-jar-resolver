@@ -537,6 +537,10 @@ ASSET_METADATA_FILE_EXTENSION = ".meta"
 # Valid version for asset package in form of major.minor.patch(-preview)
 VALID_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(-preview)?$")
 
+# Documentation folder and filename for UPM package.
+UPM_DOCUMENTATION_DIRECTORY = "Documentation~"
+UPM_DOCUMENTATION_FILENAME = "index.md"
+
 # String and unicode classes used to check types with safe_dict_get_value()
 try:
   unicode("")  # See whether unicode class is available (Python < 3)
@@ -1008,20 +1012,28 @@ class GuidDatabase(object):
 
 
 def copy_and_set_rwx(source_path, target_path):
-  """Copy a file and set the target file to readable / writeable & executable.
+  """Copy a file/folder and set the target to readable / writeable & executable.
 
   Args:
     source_path: File to copy from.
     target_path: Path to copy to.
   """
   logging.debug("Copying %s --> %s", source_path, target_path)
-  target_dir = os.path.dirname(target_path)
-  if not os.path.exists(target_dir):
-    os.makedirs(target_dir)
-  shutil.copy(source_path, target_path)
-  os.chmod(target_path, (stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH |
-                         stat.S_IXOTH))
+  file_mode = stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH
 
+  if os.path.isfile(source_path):
+    target_dir = os.path.dirname(target_path)
+    if not os.path.exists(target_dir):
+      os.makedirs(target_dir)
+    shutil.copy(source_path, target_path)
+    os.chmod(target_path, file_mode)
+  elif os.path.isdir(source_path):
+    shutil.copytree(source_path, target_path)
+    for current_dir, directories, filenames in os.walk(target_path):
+      for directory in [os.path.join(current_dir, d) for d in directories]:
+        os.chmod(directory, file_mode)
+      for filename in [os.path.join(current_dir, f) for f in filenames]:
+        os.chmod(filename, file_mode)
 
 def version_handler_tag(islabel=True, field=None, value=None):
   """Generate a VersionHandler filename or label.
@@ -2719,6 +2731,44 @@ class PackageConfiguration(ConfigurationBlock):
             staging_dir, guid_database.get_guid(asset.filename_guid_lookup),
             timestamp)
         logging.info("- Processed %s --> %s", asset.filename, asset_file)
+
+      # Copy documents to "Documentation~" folder.
+      # See https://docs.unity3d.com/Manual/cus-layout.html
+      # All folders and files does not need meta file or the link on Unity
+      # Package Manager would fail.
+      source_doc = safe_dict_get_value(self._json, "documentation")
+      if source_doc:
+        # Try to find the source doc from assets directory
+        for assets_dir in assets_dirs:
+          source_doc_candidate = os.path.join(assets_dir, source_doc)
+          if os.path.exists(source_doc_candidate):
+            source_doc = source_doc_candidate
+        if os.path.isfile(source_doc):
+          # Copy file
+          target_doc = os.path.join(staging_dir, "package",
+                                    UPM_DOCUMENTATION_DIRECTORY,
+                                    UPM_DOCUMENTATION_FILENAME)
+          logging.info("- Copying doc file %s --> %s", source_doc, target_doc)
+          copy_and_set_rwx(source_doc, target_doc)
+        elif os.path.isdir(source_doc):
+          target_doc_dir = os.path.join(staging_dir, "package",
+                                        UPM_DOCUMENTATION_DIRECTORY)
+          # Check if index.md exists
+          if not os.path.exists(os.path.join(source_doc,
+                                             UPM_DOCUMENTATION_FILENAME)):
+            raise ProjectConfigurationError(
+                "Cannot find index.md under '%s' for package '%s'. Perhaps it "
+                "is not included in assets_dir or assets_zip?" % (
+                    source_doc, self.name))
+
+          logging.info("- Copying doc folder %s --> %s",
+                       source_doc, target_doc_dir)
+          copy_and_set_rwx(source_doc, target_doc_dir)
+        else:
+          raise ProjectConfigurationError(
+              "Cannot find documentation at '%s' for package '%s'. Perhaps the "
+              "file/folder is not included in assets_dir or assets_zip?" % (
+                  from_location, self.name))
 
       # Create the .tgz file.
       PackageConfiguration.create_archive(unity_package_file, staging_dir,
