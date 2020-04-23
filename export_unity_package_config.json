@@ -53,6 +53,7 @@
       "readme": "ExternalDependencyManager/Editor/README.md",
       "license": "ExternalDependencyManager/Editor/LICENSE",
       "changelog": "ExternalDependencyManager/Editor/CHANGELOG.md",
+      "documentation": "ExternalDependencyManager/Editor/README.md",
 
       "common_manifest" : {
         "name": "com.google.external-dependency-manager",

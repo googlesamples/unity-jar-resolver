@@ -2988,6 +2988,7 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
                 }],
                 "manifest_path": "PlayServicesResolver/Editor",
                 "readme": "PlayServicesResolver/Editor/README.md",
+                "documentation": "PlayServicesResolver/Doc",
                 "includes":
                     ["ios-resolver.unitypackage", "jar-resolver.unitypackage"],
                 "common_manifest": {
@@ -3069,6 +3070,8 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
           "Google.VersionHandlerImpl_v1.2.87.0.dll",
           "package/PlayServicesResolver/Editor/"
           "Google.VersionHandlerImpl_v1.2.87.0.dll.meta",
+          "package/Documentation~",
+          "package/Documentation~/index.md",
       ], unitypackage_file.getnames())
       unitypackage_file.extractall(self.staging_dir)
 
@@ -3080,6 +3083,14 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
               os.path.join(
                   self.staging_dir, "package/PlayServicesResolver/Editor/"
                   "Google.VersionHandler.dll")))
+
+      self.assertTrue(
+          filecmp.cmp(
+              os.path.join(
+                  self.assets_dir,
+                  "PlayServicesResolver/Doc/index.md"),
+              os.path.join(
+                  self.staging_dir, "package/Documentation~/index.md")))
 
       # Check package.json
       with open(os.path.join(self.staging_dir, "package/package.json"),
@@ -3109,6 +3120,76 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
         yaml_dict = serializer.load(metadata.read())
         self.assertEqual(expected_override_metadata,
                          yaml_dict["PluginImporter"]["platformData"])
+
+  def test_package_write_upm_documentation_as_file(self):
+    """Test write_upm() with documentation path as a file."""
+    project = export_unity_package.ProjectConfiguration(
+        {
+            "packages": [{
+                "name": "play-services-resolver.unitypackage",
+                "imports": [{
+                    "paths": [
+                        "PlayServicesResolver/Editor/Google.VersionHandler.dll",
+                    ]
+                }],
+                "manifest_path": "PlayServicesResolver/Editor",
+                # Use README.md as documentation.
+                "documentation": "PlayServicesResolver/Editor/README.md",
+                "common_manifest": {
+                    "name": "com.google.play-services-resolver",
+                },
+                "export_upm": 1
+            }]
+        }, set(), "1.0.0")
+    package = project.packages_by_name["play-services-resolver.unitypackage"]
+
+    upm_package = package.write_upm(
+        export_unity_package.GuidDatabase(
+            export_unity_package.DuplicateGuidsChecker(), {
+                "1.0.0": {
+                    "PlayServicesResolver/Editor/README.md":
+                        "baa27a4c0385454899a759d9852966b7",
+                    "PlayServicesResolver/Editor/"
+                    "play-services-resolver_version-1.0.0_manifest.txt":
+                        "353f6aace2cd42adb1343fc6a808f62e",
+                    "com.google.play-services-resolver/package.json":
+                        "782a38c5f19e4bb99e927976c8daa9ac",
+                    "com.google.play-services-resolver/PlayServicesResolver":
+                        "fa7daf703ad1430dad0cd8b764e5e6d2",
+                    "com.google.play-services-resolver/PlayServicesResolver/"
+                    "Editor":
+                        "2334cd7684164851a8a53db5bd5923ca",
+                }
+            }, "1.0.0"), [self.assets_dir], self.staging_dir, 0)
+
+    with tarfile.open(upm_package, "r:gz") as upm_package_file:
+      # Check included files.
+      self.assertCountEqual([
+          "package",
+          "package/package.json",
+          "package/package.json.meta",
+          "package/PlayServicesResolver",
+          "package/PlayServicesResolver.meta",
+          "package/PlayServicesResolver/Editor",
+          "package/PlayServicesResolver/Editor.meta",
+          "package/PlayServicesResolver/Editor/Google.VersionHandler.dll",
+          "package/PlayServicesResolver/Editor/Google.VersionHandler.dll.meta",
+          "package/PlayServicesResolver/Editor/"
+          "play-services-resolver_version-1.0.0_manifest.txt",
+          "package/PlayServicesResolver/Editor/"
+          "play-services-resolver_version-1.0.0_manifest.txt.meta",
+          "package/Documentation~",
+          "package/Documentation~/index.md",
+      ], upm_package_file.getnames())
+      upm_package_file.extractall(self.staging_dir)
+
+      self.assertTrue(
+          filecmp.cmp(
+              os.path.join(
+                  self.assets_dir,
+                  "PlayServicesResolver/Editor/README.md"),
+              os.path.join(
+                  self.staging_dir, "package/Documentation~/index.md")))
 
   def test_package_write_upm_missing_readme(self):
     """Test write_upm() with misconfigured readme path."""
@@ -3204,13 +3285,20 @@ class FileOperationsTest(absltest.TestCase):
     """Unpack resources to a temporary directory."""
     super(FileOperationsTest, self).setUp()
     self.assets_dir = os.path.join(TEST_DATA_PATH, "Assets")
+    self.temp_dir = os.path.join(FLAGS.test_tmpdir, "copy_temp")
+    os.makedirs(self.temp_dir)
+
+  def tearDown(self):
+    """Clean up the temporary directory."""
+    super(FileOperationsTest, self).tearDown()
+    shutil.rmtree(self.temp_dir)
 
   def test_copy_and_set_rwx(self):
     """Copy a file and set it to readable / writeable and executable."""
     source_path = os.path.join(
         self.assets_dir,
         "PlayServicesResolver/Editor/play-services-resolver_v1.2.87.0.txt")
-    target_path = os.path.join(FLAGS.test_tmpdir,
+    target_path = os.path.join(self.temp_dir,
                                "play-services-resolver_v1.2.87.0.txt")
     self.assertFalse(os.path.exists(target_path))
 
@@ -3227,7 +3315,7 @@ class FileOperationsTest(absltest.TestCase):
         self.assets_dir,
         "PlayServicesResolver/Editor/play-services-resolver_v1.2.87.0.txt")
     target_path = os.path.join(
-        FLAGS.test_tmpdir,
+        self.temp_dir,
         "a/nonexistent/directory/play-services-resolver_v1.2.87.0.txt")
     self.assertFalse(os.path.exists(target_path))
 
@@ -3261,6 +3349,29 @@ class FileOperationsTest(absltest.TestCase):
           copied_files)
     finally:
       export_unity_package.copy_and_set_rwx = original_copy_and_set_rwx
+
+  def test_copy_dir_to_dir(self):
+    """Test copying directory into a directory recursively."""
+    source_path = os.path.join(
+        self.assets_dir,
+        "PlayServicesResolver")
+    target_path = os.path.join(
+        FLAGS.test_tmpdir,
+        "a/nonexistent/directory")
+    self.assertFalse(os.path.exists(target_path))
+
+    export_unity_package.copy_and_set_rwx(source_path, target_path)
+    self.assertTrue(os.path.exists(target_path))
+    cmp_result = filecmp.dircmp(source_path, target_path)
+    self.assertFalse(cmp_result.left_only or cmp_result.right_only or
+                     cmp_result.diff_files)
+    self.assertEqual(
+        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
+        os.stat(os.path.join(target_path, "Editor")).st_mode & stat.S_IRWXU)
+    self.assertEqual(
+        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
+        (os.stat(os.path.join(target_path, "Editor.meta")).st_mode &
+            stat.S_IRWXU))
 
 
 class ReadJsonFileTest(absltest.TestCase):
