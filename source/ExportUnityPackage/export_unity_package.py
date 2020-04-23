@@ -2734,8 +2734,9 @@ class PackageConfiguration(ConfigurationBlock):
 
       # Copy documents to "Documentation~" folder.
       # See https://docs.unity3d.com/Manual/cus-layout.html
-      # All folders and files does not need meta file or the link on Unity
-      # Package Manager would fail.
+      # All documentation folders and files must not include a .meta file
+      # otherwise the documentation links in the Unity Package Manager window
+      # will not work
       source_doc = safe_dict_get_value(self._json, "documentation")
       if source_doc:
         # Try to find the source doc from assets directory
