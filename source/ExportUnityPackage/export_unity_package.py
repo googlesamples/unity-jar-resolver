@@ -1050,6 +1050,7 @@ def copy_and_set_rwx(source_path, target_path):
     os.chmod(target_path, file_mode)
   elif os.path.isdir(source_path):
     shutil.copytree(source_path, target_path)
+    os.chmod(target_path, file_mode)
     for current_dir, directories, filenames in os.walk(target_path):
       for directory in [os.path.join(current_dir, d) for d in directories]:
         os.chmod(directory, file_mode)
