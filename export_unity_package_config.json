@@ -31,11 +31,17 @@
           }
         },
         {
+          "sections": ["documentation"],
           "importer": "DefaultImporter",
           "paths": [
             "ExternalDependencyManager/Editor/README.md",
             "ExternalDependencyManager/Editor/CHANGELOG.md",
-            "ExternalDependencyManager/Editor/LICENSE",
+            "ExternalDependencyManager/Editor/LICENSE"
+          ]
+        },
+        {
+          "importer": "DefaultImporter",
+          "paths": [
             "ExternalDependencyManager/Editor/GoogleRegistries.xml",
             "ExternalDependencyManager/Editor/external-dependency-manager*_manifest.txt"
           ]

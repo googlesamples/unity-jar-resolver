@@ -1538,7 +1538,7 @@ Task buildPlugin = createExportUnityPackageTask(
   false, // Disable UPM export.
   project.ext.pluginVersion,
   project.ext.pluginExportFile.parentFile,
-  ["--enabled_sections", "unitypackage"])
+  ["--enabled_sections", "unitypackage documentation"])
 buildPlugin.with {
   outputs.files project.ext.pluginExportFile.absolutePath
 }

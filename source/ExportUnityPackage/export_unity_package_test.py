@@ -1928,54 +1928,6 @@ class AssetTest(absltest.TestCase):
           "  assetBundleName:\n"
           "  assetBundleVariant:\n", metadata.read())
 
-  def test_change_asset_path(self):
-    """Test Asset.change_asset_path() to change asset filename only."""
-    change_function = export_unity_package.Asset.change_asset_path
-
-    # Change a filename not in the list.
-    asset_list_to_change = copy.deepcopy(self.asset_list)
-    expect_list = [
-        export_unity_package.Asset("bar", "bar", self.default_metadata),
-        export_unity_package.Asset("foo/bar", "foo/bar", self.default_metadata),
-    ]
-    self.assertEqual(0, change_function(asset_list_to_change, "babe", "rad"))
-    self.assertEqual(expect_list, asset_list_to_change)
-
-    # Change a "bar" to "rab"
-    asset_list_to_change = copy.deepcopy(self.asset_list)
-    expect_list = [
-        export_unity_package.Asset("foo/bar", "foo/bar", self.default_metadata),
-        export_unity_package.Asset(
-            "rab", "bar", self.default_metadata, filename_guid_lookup="bar"),
-    ]
-    self.assertEqual(1, change_function(asset_list_to_change, "bar", "rab"))
-    self.assertListEqual(expect_list, asset_list_to_change)
-
-    # Change a "bar" to "bar/bar"
-    asset_list_to_change = copy.deepcopy(self.asset_list)
-    expect_list = [
-        export_unity_package.Asset("foo/bar", "foo/bar", self.default_metadata),
-        export_unity_package.Asset(
-            "bar/bar", "bar", self.default_metadata,
-            filename_guid_lookup="bar"),
-    ]
-    self.assertEqual(1, change_function(asset_list_to_change, "bar", "bar/bar"))
-    self.assertEqual(expect_list, asset_list_to_change)
-
-    # Change a "foo/bar" to "foo/rab"
-    asset_list_to_change = copy.deepcopy(self.asset_list)
-    expect_list = [
-        export_unity_package.Asset("bar", "bar", self.default_metadata),
-        export_unity_package.Asset(
-            "foo/rab",
-            "foo/bar",
-            self.default_metadata,
-            filename_guid_lookup="foo/bar"),
-    ]
-    self.assertEqual(1, change_function(
-        asset_list_to_change, "foo/bar", "foo/rab"))
-    self.assertEqual(expect_list, asset_list_to_change)
-
 
 class AssetConfigurationTest(absltest.TestCase):
   """Test the AssetConfiguration class."""
@@ -2969,9 +2921,6 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
             }, {
                 "name": "play-services-resolver.unitypackage",
                 "imports": [{
-                    "importer": "DefaultImporter",
-                    "paths": ["PlayServicesResolver/Editor/README.md",]
-                }, {
                     "paths": [
                         "PlayServicesResolver/Editor/Google.VersionHandler.dll",
                     ]
@@ -2988,6 +2937,8 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
                 }],
                 "manifest_path": "PlayServicesResolver/Editor",
                 "readme": "PlayServicesResolver/Editor/README.md",
+                "changelog": "PlayServicesResolver/Editor/CHANGELOG.md",
+                "license": "PlayServicesResolver/Editor/LICENSE",
                 "documentation": "PlayServicesResolver/Doc",
                 "includes":
                     ["ios-resolver.unitypackage", "jar-resolver.unitypackage"],
@@ -3016,8 +2967,12 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
         export_unity_package.GuidDatabase(
             export_unity_package.DuplicateGuidsChecker(), {
                 "1.0.0": {
-                    "PlayServicesResolver/Editor/README.md":
+                    "com.google.play-services-resolver/README.md":
                         "baa27a4c0385454899a759d9852966b7",
+                    "com.google.play-services-resolver/CHANGELOG.md":
+                        "000ce82791494e44b04c7a6f9a31151c",
+                    "com.google.play-services-resolver/LICENSE.md":
+                        "94717c1d977f445baed18e00605e3d7c",
                     "PlayServicesResolver/Editor/"
                     "play-services-resolver_version-1.0.0_manifest.txt":
                         "353f6aace2cd42adb1343fc6a808f62e",
@@ -3056,6 +3011,10 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
           "package/package.json.meta",
           "package/README.md",
           "package/README.md.meta",
+          "package/CHANGELOG.md",
+          "package/CHANGELOG.md.meta",
+          "package/LICENSE.md",
+          "package/LICENSE.md.meta",
           "package/PlayServicesResolver",
           "package/PlayServicesResolver.meta",
           "package/PlayServicesResolver/Editor",
@@ -3203,7 +3162,7 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
                     ]
                 }],
                 "manifest_path": "PlayServicesResolver/Editor",
-                "readme": "PlayServicesResolver/Editor/README.md",
+                "readme": "a/nonexist/path/README.md",
                 "common_manifest": {
                     "name": "com.google.play-services-resolver",
                 },
@@ -3373,6 +3332,22 @@ class FileOperationsTest(absltest.TestCase):
         (os.stat(os.path.join(target_path, "Editor.meta")).st_mode &
             stat.S_IRWXU))
 
+  def test_find_in_dirs(self):
+    """Test find_in_dirs."""
+    self.assertEqual(
+        export_unity_package.find_in_dirs(
+            "PlayServicesResolver", [self.assets_dir]),
+        os.path.join(self.assets_dir, "PlayServicesResolver"))
+    self.assertEqual(
+        export_unity_package.find_in_dirs(
+            "PlayServicesResolver/Editor.meta", [self.assets_dir]),
+        os.path.join(self.assets_dir, "PlayServicesResolver/Editor.meta"))
+    self.assertEqual(
+        export_unity_package.find_in_dirs("PlayServicesResolver", []), None)
+    self.assertEqual(
+        export_unity_package.find_in_dirs(
+            "a/nonexisting/file", [self.assets_dir]),
+        None)
 
 class ReadJsonFileTest(absltest.TestCase):
   """Test reading a JSON file."""

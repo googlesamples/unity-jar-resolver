@@ -156,7 +156,28 @@ The json file should have the following format:
             # ${package_name} is derived from the output filename and
             # ${version} is specified via the command line --plugins_version
             # argument.
-            "manifest_path": "Firebase/Editor/FirebaseAnalytics"
+            "manifest_path": "Firebase/Editor/FirebaseAnalytics",
+
+            # Path to the readme document. The file must be included through
+            # FLAGS.assets_dir, FLAGS.assets_zip or FLAG.asset_file, and is not
+            # required to be in "imports" section.
+            "readme": "path/to/a/Readme.md",
+
+            # Path to the changelog document. The file must be included through
+            # FLAGS.assets_dir, FLAGS.assets_zip or FLAG.asset_file, and is not
+            # required to be in "imports" section.
+            "changelog": "path/to/a/Changelog.md",
+
+            # Path to the license document. The file must be included through
+            # FLAGS.assets_dir, FLAGS.assets_zip or FLAG.asset_file, and is not
+            # required to be in "imports" section.
+            "license": "path/to/a/License.md",
+
+            # Path to the documents. The path can be a specific file or a folder
+            # containing index.md. The file/folder must be included through
+            # FLAGS.assets_dir, FLAGS.assets_zip or FLAG.asset_file, and is not
+            # required to be in "imports" section.
+            "documentaiton": "path/to/a/Document.md",
 
             # Common package information used to generate package manifest.
             # Required if "export_upm" is 1
@@ -1635,33 +1656,6 @@ class Asset(object):
     return sorted([asset for asset in assets],
                   key=lambda asset: asset.filename)
 
-  @staticmethod
-  def change_asset_path(assets, from_filename, to_filename):
-    """Given a list of assets, find and replace the filename to a new one.
-
-    Args:
-      assets: A list of assets.
-      from_filename: Original filename to search for.
-      to_filename: New filename.
-
-    Returns:
-      Number of assets changed.
-    """
-
-    asset_to_remove = [
-        asset for asset in assets if asset.filename == from_filename
-    ]
-    for asset in asset_to_remove:
-      assets.remove(asset)
-      assets.append(
-          Asset(
-              filename=to_filename,
-              filename_absolute=asset.filename_absolute,
-              importer_metadata=asset.importer_metadata_original,
-              filename_guid_lookup=asset.filename_guid_lookup,
-              is_folder=asset.is_folder))
-    return len(asset_to_remove)
-
 
 class ProjectConfigurationError(Exception):
   """Raised when there is an error parsing the project configuration."""
@@ -2693,12 +2687,24 @@ class PackageConfiguration(ConfigurationBlock):
                                        ("license", "LICENSE.md")):
         from_location = safe_dict_get_value(self._json, config_name)
         if from_location:
-          num_asset_changed = Asset.change_asset_path(
-              assets, from_location, to_location)
-          if num_asset_changed == 0:
+          abs_from_location = find_in_dirs(from_location, assets_dirs)
+          if abs_from_location:
+            # Create default metadata
+            metadata = copy.deepcopy(DEFAULT_METADATA_TEMPLATE)
+            labels = self.labels
+            Asset.add_labels_to_metadata(metadata, labels)
+
+            assets.append(Asset(
+                to_location,
+                abs_from_location,
+                metadata,
+                filename_guid_lookup=os.path.join(self.common_package_name,
+                                                  to_location),
+                is_folder=False))
+          else:
             raise ProjectConfigurationError(
-                "Cannot find '%s' at '%s' for package '%s'. Perhaps the file is"
-                " not imported or is configured in different section?" % (
+                "Cannot find '%s' at '%s' for package '%s'. Perhaps it "
+                "is not included in assets_dir or assets_zip?" % (
                     config_name, from_location, self.name))
 
       # Add all folder assets to generate .meta
@@ -2740,10 +2746,7 @@ class PackageConfiguration(ConfigurationBlock):
       source_doc = safe_dict_get_value(self._json, "documentation")
       if source_doc:
         # Try to find the source doc from assets directory
-        for assets_dir in assets_dirs:
-          source_doc_candidate = os.path.join(assets_dir, source_doc)
-          if os.path.exists(source_doc_candidate):
-            source_doc = source_doc_candidate
+        source_doc = find_in_dirs(source_doc, assets_dirs)
         if os.path.isfile(source_doc):
           # Copy file
           target_doc = os.path.join(staging_dir, "package",
@@ -3308,6 +3311,24 @@ def copy_files_to_dir(colon_separated_input_output_filenames,
     copy_and_set_rwx(input_filename, output_filename)
     copied_files.append(output_filename)
   return copied_files
+
+
+def find_in_dirs(filename, directories):
+  """Find the file under given directories.
+
+  Args:
+    filename: File/Folder name to find.
+    directories: List of directories to search for.
+
+  Returns:
+    If found, return the combined path with directory and filename.
+    Return None, otherwise.
+  """
+  for directory in directories:
+    candidate = os.path.join(directory, filename)
+    if os.path.exists(candidate):
+      return candidate
+  return None
 
 
 def main(unused_argv):
