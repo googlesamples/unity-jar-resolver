@@ -1,3 +1,7 @@
+# Version 1.2.153 - Apr 24, 2020
+* Android Resolver: Fixed an exception when repainting the Android resolution
+  window in Unity 2019.3.x.
+
 # Version 1.2.152 - Apr 17, 2020
 * Version Handler: Fixed exception when waiting for enabled editor DLLs to
   load.
