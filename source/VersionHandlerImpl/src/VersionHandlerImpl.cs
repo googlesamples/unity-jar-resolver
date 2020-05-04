@@ -2273,6 +2273,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
     internal const string PLUGIN_SUITE_NAME = "External Dependency Manager";
     // Privacy policy for analytics data usage.
     internal const string PRIVACY_POLICY = "https://policies.google.com/privacy";
+    // Product Url
+    internal const string DATA_USAGE_URL = "https://github.com/googlesamples/unity-jar-resolver/";
 
     // Analytics reporter.
     internal static EditorMeasurement analytics = new EditorMeasurement(
@@ -2281,7 +2283,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
         BasePath = "/versionhandler/",
         BaseQuery = String.Format("version={0}", VersionHandlerVersionNumber.Value.ToString()),
         BaseReportName = "Version Handler: ",
-        InstallSourceFilename = Assembly.GetAssembly(typeof(VersionHandlerImpl)).Location
+        InstallSourceFilename = Assembly.GetAssembly(typeof(VersionHandlerImpl)).Location,
+        DataUsageUrl = DATA_USAGE_URL
     };
 
     /// <summary>

@@ -106,14 +106,18 @@ public class EditorMeasurement {
     internal string DataCollectionDescription { get; private set; }
 
     // Strings for the consent request dialog.
-    internal static string EnableAnalytics = "Enable Analytics";
-    internal static string RequestConsent =
-        "Would you like to report {0} usage to the developers?\n\n" +
-        "This data can be used to improve this product.\n\n" +
-        "{1}" +
-        "For more information, see {2} by clicking show policy";
+    internal static string EnableAnalytics = "Enable Analytics for {0}";
+    internal static string RequestConsentMessage =
+        "Would you like to share usage info about the {0} plugin with Google?";
+    internal static string RequestConsentDataCollection =
+        "This data can be used to improve this product.";
+    internal static string RequestConsentLearnMore =
+        "To learn more about this product, click the “{0}” button.";
+    internal static string RequestConsentPrivacyPolicy =
+        "For more information, see {0} by clicking the “{1}” button.";
     internal static string Yes = "Yes";
     internal static string No = "No";
+    internal static string LearnMore = "Learn More";
     internal static string PrivacyPolicy = "Privacy Policy";
 
     // Global flag that controls whether this class is enabled and should report
@@ -177,7 +181,7 @@ public class EditorMeasurement {
     /// Delegate that displays a dialog requesting consent to report analytics.
     /// This is only exposed for testing purposes.
     /// </summary>
-    internal Dialog.DisplayDelegate displayDialog = Dialog.Display;
+    internal DialogWindow.DisplayDelegate displayDialog = DialogWindow.Display;
 
     /// <summary>
     /// Delegate that opens a URL in an external application.
@@ -235,6 +239,11 @@ public class EditorMeasurement {
     /// </summary>
     /// <note>This path must use the system directory separator.<note>
     public string InstallSourceFilename { get; set; }
+
+    /// <summary>
+    /// Url to page about the data usage for this measurement.
+    /// </summary>
+    public string DataUsageUrl { get; set; }
 
     /// <summary>
     /// Generate common query parameters.
@@ -342,44 +351,62 @@ public class EditorMeasurement {
     /// <summary>
     /// Ask user to enable analytics.
     /// </summary>
-    /// <param name="complete">Called when the user has selected an option.</param>
-    public void PromptToEnable(Action complete = null) {
-        lock (typeof(EditorMeasurement)) {
-            if (complete == null) complete = () => {};
-            if (ConsentRequested) {
-                complete();
-            } else {
-                ConsentRequested = true;
-                displayDialog(
-                    EnableAnalytics,
-                    String.Format(RequestConsent,
-                                  PluginName,
-                                  String.IsNullOrEmpty(DataCollectionDescription) ? "" :
-                                  String.Format("{0}\n\n", DataCollectionDescription),
-                                  privacyPolicy),
-                    Dialog.Option.Selected1, Yes, No, PrivacyPolicy,
-                    (selectedOption) => {
-                        lock (typeof(EditorMeasurement)) {
-                            switch (selectedOption) {
-                                case Dialog.Option.Selected0: // Yes
-                                    Enabled = true;
-                                    complete();
-                                    break;
-                                case Dialog.Option.Selected1: // No
-                                    Enabled = false;
-                                    complete();
-                                    break;
-                                case Dialog.Option.Selected2: // Privacy Policy
-                                    openUrl(privacyPolicy);
-                                    // Display the dialog again so the user has the option of opting
-                                    // in or out.
-                                    ConsentRequested = false;
-                                    PromptToEnable(complete);
-                                    break;
-                            }
+    public void PromptToEnable(Action complete) {
+        if (ConsentRequested) {
+            complete();
+        } else {
+            displayDialog(
+                String.Format(EnableAnalytics, PluginName),
+                String.Format(RequestConsentMessage, PluginName),
+                DialogWindow.Option.Selected1, Yes, No, "",
+                windowWidth: 500.0f,
+                complete: option => {
+                    switch (option) {
+                        case DialogWindow.Option.Selected0: // Yes
+                            Enabled = true;
+                            break;
+                        case DialogWindow.Option.Selected1: // No
+                            Enabled = false;
+                            break;
+                    }
+                    complete();
+                }, renderContent: dialog => {
+                    GUILayout.Label(RequestConsentDataCollection,
+                            DialogWindow.DefaultLabelStyle);
+                    EditorGUILayout.Space();
+
+                    if (!String.IsNullOrEmpty(DataCollectionDescription)) {
+                        GUILayout.Label(DataCollectionDescription,
+                                DialogWindow.DefaultLabelStyle);
+                        EditorGUILayout.Space();
+                    }
+
+                    if (!String.IsNullOrEmpty(DataUsageUrl)) {
+                        GUILayout.Label(String.Format(RequestConsentLearnMore, LearnMore),
+                                DialogWindow.DefaultLabelStyle);
+                        EditorGUILayout.Space();
+                        EditorGUILayout.BeginHorizontal();
+                        if (GUILayout.Button (LearnMore)) {
+                            OpenUrl(DataUsageUrl);
                         }
-                    }, null, null);
-            }
+                        EditorGUILayout.Space();
+                        EditorGUILayout.Space();
+                        EditorGUILayout.Space();
+                        EditorGUILayout.EndHorizontal();
+                        EditorGUILayout.Space();
+                        EditorGUILayout.Space();
+                    }
+
+                    GUILayout.Label(
+                        String.Format(RequestConsentPrivacyPolicy, privacyPolicy, PrivacyPolicy),
+                        DialogWindow.DefaultLabelStyle);
+                }, renderButtons: dialog => {
+                    if (GUILayout.Button(PrivacyPolicy)) {
+                        OpenUrl(privacyPolicy);
+                    }
+                    EditorGUILayout.Space();
+                });
+            ConsentRequested = true;
         }
     }
 
@@ -459,55 +486,56 @@ public class EditorMeasurement {
     public void Report(string reportUrl, string reportName) {
         if (!GloballyEnabled) return;
 
-        PromptToEnable(complete: () => {
-                var uri = new Uri("http://ignore.host/" + reportUrl);
-                bool reported = false;
-                var path = String.Join("", uri.Segments);
-                var queryPrefix =
-                    ConcatenateQueryStrings(
-                        ConcatenateQueryStrings(uri.Query,
-                            ConcatenateQueryStrings(CommonQuery, BaseQuery)), "scope=");
-                var fragment = uri.Fragment;
-                if (!String.IsNullOrEmpty(BasePath)) path = BasePath + path;
-                if (!String.IsNullOrEmpty(BaseReportName)) reportName = BaseReportName + reportName;
-                // Strip all extraneous path separators.
-                while (path.Contains("//")) path = path.Replace("//", "/");
-                foreach (var cookie in
-                         new KeyValuePair<string, string>[] {
-                             new KeyValuePair<string, string>(Cookie, queryPrefix + "project"),
-                             new KeyValuePair<string, string>(SystemCookie, queryPrefix + "system")
-                         }) {
-                    if (String.IsNullOrEmpty(cookie.Key)) continue;
-                    // See https://developers.google.com/analytics/devguides/collection/protocol/v1
-                    var status = PortableWebRequest.DefaultInstance.Post(
-                        "http://www.google-analytics.com/collect", null,
-                        new [] {
-                            // Version
-                            new KeyValuePair<string, string>("v", "1"),
-                            // Tracking ID.
-                            new KeyValuePair<string, string>("tid", trackingId),
-                            // Client ID.
-                            new KeyValuePair<string, string>("cid", cookie.Key),
-                            // Hit type.
-                            new KeyValuePair<string, string>("t", "pageview"),
-                            // "URL" / string to report.
-                            new KeyValuePair<string, string>(
-                                "dl", path + "?" + cookie.Value + fragment),
-                            // Document title.
-                            new KeyValuePair<string, string>("dt", reportName),
-                            // Cache buster
-                            new KeyValuePair<string, string>("z", random.Next().ToString())
-                        });
-                    if (status != null) reported = true;
-                }
-                if (reported) {
-                    logger.Log(String.Format("Reporting analytics data: {0}{1}{2} '{3}'", path,
-                                             String.IsNullOrEmpty(queryPrefix) ? "" : "?" +
-                                             queryPrefix, fragment, reportName),
-                               level: LogLevel.Verbose);
-                }
-            });
+        PromptToEnable(() => {
+            if (!Enabled) return;
+
+            var uri = new Uri("http://ignore.host/" + reportUrl);
+            bool reported = false;
+            var path = String.Join("", uri.Segments);
+            var queryPrefix =
+                ConcatenateQueryStrings(
+                    ConcatenateQueryStrings(uri.Query,
+                        ConcatenateQueryStrings(CommonQuery, BaseQuery)), "scope=");
+            var fragment = uri.Fragment;
+            if (!String.IsNullOrEmpty(BasePath)) path = BasePath + path;
+            if (!String.IsNullOrEmpty(BaseReportName)) reportName = BaseReportName + reportName;
+            // Strip all extraneous path separators.
+            while (path.Contains("//")) path = path.Replace("//", "/");
+            foreach (var cookie in
+                    new KeyValuePair<string, string>[] {
+                        new KeyValuePair<string, string>(Cookie, queryPrefix + "project"),
+                        new KeyValuePair<string, string>(SystemCookie, queryPrefix + "system")
+                    }) {
+                if (String.IsNullOrEmpty(cookie.Key)) continue;
+                // See https://developers.google.com/analytics/devguides/collection/protocol/v1
+                var status = PortableWebRequest.DefaultInstance.Post(
+                    "http://www.google-analytics.com/collect", null,
+                    new [] {
+                        // Version
+                        new KeyValuePair<string, string>("v", "1"),
+                        // Tracking ID.
+                        new KeyValuePair<string, string>("tid", trackingId),
+                        // Client ID.
+                        new KeyValuePair<string, string>("cid", cookie.Key),
+                        // Hit type.
+                        new KeyValuePair<string, string>("t", "pageview"),
+                        // "URL" / string to report.
+                        new KeyValuePair<string, string>("dl",
+                                path + "?" + cookie.Value + fragment),
+                        // Document title.
+                        new KeyValuePair<string, string>("dt", reportName),
+                        // Cache buster
+                        new KeyValuePair<string, string>("z", random.Next().ToString())
+                    });
+                if (status != null) reported = true;
+            }
+            if (reported) {
+                logger.Log(String.Format("Reporting analytics data: {0}{1}{2} '{3}'", path,
+                                        String.IsNullOrEmpty(queryPrefix) ? "" : "?" + queryPrefix,
+                                        fragment, reportName),
+                        level: LogLevel.Verbose);
+            }
+        });
     }
 }
-
 }

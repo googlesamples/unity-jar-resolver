@@ -756,7 +756,8 @@ namespace GooglePlayServices {
             BaseQuery = String.Format("version={0}", AndroidResolverVersionNumber.Value.ToString()),
             BaseReportName = "Android Resolver: ",
             InstallSourceFilename =
-                System.Reflection.Assembly.GetAssembly(typeof(PlayServicesResolver)).Location
+                System.Reflection.Assembly.GetAssembly(typeof(PlayServicesResolver)).Location,
+            DataUsageUrl = VersionHandlerImpl.DATA_USAGE_URL
         };
 
         /// <summary>

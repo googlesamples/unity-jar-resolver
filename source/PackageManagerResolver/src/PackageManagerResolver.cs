@@ -619,7 +619,8 @@ public class PackageManagerResolver : AssetPostprocessor {
         BaseQuery =
             String.Format("version={0}", PackageManagerResolverVersionNumber.Value.ToString()),
         BaseReportName = "Package Manager Resolver: ",
-        InstallSourceFilename = Assembly.GetAssembly(typeof(PackageManagerResolver)).Location
+        InstallSourceFilename = Assembly.GetAssembly(typeof(PackageManagerResolver)).Location,
+        DataUsageUrl = VersionHandlerImpl.DATA_USAGE_URL
     };
 
     /// <summary>
