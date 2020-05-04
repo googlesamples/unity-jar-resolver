@@ -25,6 +25,10 @@ using Google;
 public class Greeter {
     private string name;
 
+    public event Action instanceEvent;
+
+    static public event Action staticEvent;
+
     public Greeter(string name) {
         this.name = name;
     }
@@ -77,6 +81,18 @@ public class Greeter {
         return Greeter.GenericHelloWithCustomerNameAndPronoun(customerName,
                                                               pronoun: pronoun) + MyNameIs();
     }
+
+    public static void InvokeStaticEvent() {
+        if (staticEvent != null) {
+            staticEvent.Invoke();
+        }
+    }
+
+    public void InvokeInstanceEvent() {
+        if (instanceEvent != null) {
+            instanceEvent.Invoke();
+        }
+    }
 }
 
 [UnityEditor.InitializeOnLoad]
@@ -105,6 +121,7 @@ public class TestReflection {
                     TestInvokeInstanceMethodWithNoArgs,
                     TestInvokeInstanceMethodWithNamedArgDefault,
                     TestInvokeInstanceMethodWithNamedArg,
+                    TestInvokeStaticEventMethod,
                  }) {
             var testName = test.Method.Name;
             Exception exception = null;
@@ -256,5 +273,62 @@ public class TestReflection {
                               new Greeter("Sam"), "HelloWithCustomerNameAndPronoun",
                               new object[] { "Smith" },
                               new Dictionary<string, object> { { "pronoun", "Mrs" } }));
+    }
+
+    // Check if the delegate is properly added/removed from the given event using the function to
+    // test.
+    static bool CheckEvent(Func<Action, bool> funcToTest, Action invokeEvent,
+                           bool expectSuccess, bool expectInvoked) {
+
+        bool invoked = false;
+
+        Action actionToInvoke = () => {
+            invoked = true;
+        };
+
+        bool result = funcToTest(actionToInvoke);
+        if (result != expectSuccess){
+            throw new Exception(
+                    String.Format("Expect funcToTest returns '{0}', but actually returned '{1}'",
+                            expectSuccess, result));
+        }
+        invokeEvent();
+        if ( invoked != expectInvoked) {
+            throw new Exception(String.Format(
+                    "Expect event invoked: {0}, but actually event invoked: {1}",
+                            expectInvoked, invoked));
+        }
+
+        return true;
+    }
+
+    // Test adding/removing delegate to a static event.
+    static bool TestInvokeStaticEventMethod() {
+        CheckEvent( funcToTest: (action) =>
+                VersionHandler.InvokeStaticEventAddMethod(typeof(Greeter), "staticEvent", action),
+                invokeEvent: Greeter.InvokeStaticEvent,
+                expectSuccess: true,
+                expectInvoked: true);
+
+        CheckEvent( funcToTest: (action) =>
+                VersionHandler.InvokeStaticEventRemoveMethod(typeof(Greeter), "staticEvent",
+                        action),
+                invokeEvent: Greeter.InvokeStaticEvent,
+                expectSuccess: true,
+                expectInvoked: false);
+
+        CheckEvent( funcToTest: (action) =>
+                VersionHandler.InvokeStaticEventAddMethod(typeof(Greeter), "foo", action),
+                invokeEvent: Greeter.InvokeStaticEvent,
+                expectSuccess: false,
+                expectInvoked: false);
+
+        CheckEvent( funcToTest: (action) =>
+                VersionHandler.InvokeStaticEventRemoveMethod(typeof(Greeter), "foo", action),
+                invokeEvent: Greeter.InvokeStaticEvent,
+                expectSuccess: false,
+                expectInvoked: false);
+
+        return true;
     }
 }

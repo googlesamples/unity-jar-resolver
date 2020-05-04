@@ -26,7 +26,6 @@ namespace Google {
 /// The dialog will not block the editor. When multiple dialogs are triggered, they will be queued
 /// and only be shown one at a time based on the triggering order.
 /// </summary>
-[Serializable]
 public class DialogWindow : EditorWindow {
     /// <summary>
     /// Option selected by the dialog.
@@ -62,9 +61,7 @@ public class DialogWindow : EditorWindow {
     /// All the data to render the content of the dialog and react to the user interaction.
     /// All the context should be serialable/deserialable so that all the context can be reloaded
     /// after Unity hot reloads.
-    /// TODO: Make Action serializable.
     /// </summary>
-    [Serializable]
     private class DialogContext {
         // Title of the dialog.
         internal string Title;
@@ -176,11 +173,13 @@ public class DialogWindow : EditorWindow {
     static private GUIStyle defaultMessageStyle;
 
     // Context for this dialog window.
-    [SerializeField]
     private DialogContext dialogContext = new DialogContext();
 
     // The option selected by the user.
     private Option selectedOption = Option.SelectedNone;
+
+    // Whether this window is terminating due to Unity hot reload.
+    private bool terminating = false;
 
     /// <summary>
     /// Displays a non-blocking modal dialog with up to 3 options.
@@ -325,6 +324,19 @@ public class DialogWindow : EditorWindow {
     /// Render the dialog according to the context.
     /// </summary>
     void OnGUI() {
+        // Close the window if Option0String is empty.
+        // After Unity reload assemblies, the EditorWindow will remain open but all the content
+        // in the dialog will be cleared because dialogContext is not serializable. Therefore,
+        // close the dialog after assembly reload. Close in the next editor frame or it may
+        // generate error message like "OpenGL Context became invalid during rendering".
+        // This is for Unity 5.
+        if (String.IsNullOrEmpty(dialogContext.Option0String) && !terminating) {
+            terminating = true;
+            RunOnMainThread.Run(() => {
+                Close();
+            }, runNow: false);
+        }
+
         Rect rect = EditorGUILayout.BeginVertical();
 
         // Render the dialog message.
@@ -418,5 +430,26 @@ public class DialogWindow : EditorWindow {
         // Complete the current dialog and display the next one if there is any in the queue.
         dialogJobQueue.Complete();
     }
-}  // class DialogWindow
+
+    // Function called when the dialog window is enabled.
+    void OnEnable() {
+        VersionHandler.RegisterBeforeAssemblyReloadEvent(OnBeforeAssemblyReload);
+    }
+
+    // Function called when the dialog window is disabled.
+    void OnDisable() {
+        VersionHandler.UnregisterBeforeAssemblyReloadEvent(OnBeforeAssemblyReload);
+    }
+
+    // Function called before assemblies will be reloaded.
+    private void OnBeforeAssemblyReload() {
+        // Close the window before assembly will be reloaded.
+        // After Unity reload assemblies, the EditorWindow will remain open but all the content
+        // in the dialog will be cleared because all Action are not serialiable.  Therefore,
+        // close the dialog before assembly reload.
+        // Note that this only works from Unity 2017 since any version below does not have
+        // the event API.
+        Close();
+    }
+}  // class NonBlockingDialog
 }  // namespace Google

@@ -2423,6 +2423,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                                                   setCleanupFilesPending: false);
                             }, runNow: false);
                     }
+
+                    analytics.Report("enablemostrecentplugins", "Enable Most Recent Plugins");
                     NotifyUpdateCompleteMethods();
                 }
                 return true;
@@ -2824,7 +2826,6 @@ public class VersionHandlerImpl : AssetPostprocessor {
             ManifestReferences.FindAndReadManifests(allMetadataSet), allMetadataSet);
         if (metadataSet.EnableMostRecentPlugins(forceUpdate, obsoleteFiles.All)) {
             enabledEditorDlls.UnionWith(metadataSet.EnabledEditorDlls);
-            analytics.Report("enablemostrecentplugins", "Enable Most Recent Plugins");
             AssetDatabase.Refresh();
             Refreshing = true;
         }

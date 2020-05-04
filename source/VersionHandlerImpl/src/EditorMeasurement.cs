@@ -154,6 +154,9 @@ public class EditorMeasurement {
         }
     }
 
+    // Whether consent dialog has been displayed.
+    private bool ConsentRequesting = false;
+
     /// <summary>
     /// Project level cookie which enables reporting of unique projects.
     /// Empty string if analytics is disabled.
@@ -352,9 +355,10 @@ public class EditorMeasurement {
     /// Ask user to enable analytics.
     /// </summary>
     public void PromptToEnable(Action complete) {
-        if (ConsentRequested) {
+        if (ConsentRequesting || ConsentRequested) {
             complete();
         } else {
+            ConsentRequesting = true;
             displayDialog(
                 String.Format(EnableAnalytics, PluginName),
                 String.Format(RequestConsentMessage, PluginName),
@@ -369,6 +373,8 @@ public class EditorMeasurement {
                             Enabled = false;
                             break;
                     }
+                    ConsentRequesting = false;
+                    ConsentRequested = true;
                     complete();
                 }, renderContent: dialog => {
                     GUILayout.Label(RequestConsentDataCollection,
@@ -406,7 +412,6 @@ public class EditorMeasurement {
                     }
                     EditorGUILayout.Space();
                 });
-            ConsentRequested = true;
         }
     }
 

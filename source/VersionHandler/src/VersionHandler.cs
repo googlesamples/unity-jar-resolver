@@ -554,6 +554,87 @@ public class VersionHandler {
         }
         return foundMethod.Invoke(objectInstance, parameterValues);
     }
+
+    /// <summary>
+    /// Call a method on a static event.
+    /// </summary>
+    /// <param name="type">Class to call the method on.</param>
+    /// <param name="eventName">The name of the event.</param>
+    /// <param name="action">Action to add/remove from the event.</param>
+    /// <param name="getMethod">The func to get the method on the event.</param>
+    /// <returns>True if the method is called successfully.</returns>
+    private static bool InvokeStaticEventMethod(Type type, string eventName, Action action,
+                                                Func<EventInfo, MethodInfo> getMethod) {
+        EventInfo eventInfo = type.GetEvent(eventName);
+        if (eventInfo != null) {
+            MethodInfo method = getMethod(eventInfo);
+            Delegate d = Delegate.CreateDelegate(
+                    eventInfo.EventHandlerType, action.Target, action.Method);
+            System.Object[] args = { d };
+            if (method.IsStatic) {
+                method.Invoke(null, args);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Call adder method on a static event.
+    /// </summary>
+    /// <param name="type">Class to call the method on.</param>
+    /// <param name="eventName">The name of the event.</param>
+    /// <param name="action">Action to add from the event.</param>
+    /// <returns>True if the action is added successfully.</returns>
+    public static bool InvokeStaticEventAddMethod(Type type, string eventName, Action action) {
+        return InvokeStaticEventMethod(type, eventName, action,
+                                       eventInfo => eventInfo.GetAddMethod());
+    }
+
+    /// <summary>
+    /// Call remover method on a static event.
+    /// </summary>
+    /// <param name="type">Class to call the method on.</param>
+    /// <param name="eventName">The name of the event.</param>
+    /// <param name="action">Action to remove from the event.</param>
+    /// <returns>True if the action is removed successfully.</returns>
+    public static bool InvokeStaticEventRemoveMethod(Type type, string eventName, Action action) {
+        return InvokeStaticEventMethod(type, eventName, action,
+                                       eventInfo => eventInfo.GetRemoveMethod());
+    }
+
+    // Name of UnityEditor.AssemblyReloadEvents.beforeAssemblyReload event.
+    private const string BeforeAssemblyReloadEventName = "beforeAssemblyReload";
+
+    /// <summary>
+    /// Register for beforeAssemblyReload event.
+    /// Note that AssemblyReloadEvents is only availabe from Unity 2017.
+    /// </summary>
+    /// <param name="action">Action to register for.</param>
+    /// <returns>True if the action is registered successfully.</returns>
+    public static bool RegisterBeforeAssemblyReloadEvent(Action action) {
+        Type eventType = VersionHandler.FindClass("UnityEditor",
+                                                  "UnityEditor.AssemblyReloadEvents");
+        if (eventType != null) {
+            return InvokeStaticEventAddMethod(eventType, BeforeAssemblyReloadEventName, action);
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Unregister for beforeAssemblyReload event.
+    /// Note that AssemblyReloadEvents is only availabe from Unity 2017.
+    /// </summary>
+    /// <param name="action">Action to unregister for.</param>
+    /// <returns>True if the action is unregistered successfully.</returns>
+    public static bool UnregisterBeforeAssemblyReloadEvent(Action action) {
+        Type eventType = VersionHandler.FindClass("UnityEditor",
+                                                  "UnityEditor.AssemblyReloadEvents");
+        if (eventType != null) {
+            return InvokeStaticEventRemoveMethod(eventType, BeforeAssemblyReloadEventName, action);
+        }
+        return false;
+    }
 }
 
 }  // namespace Google
