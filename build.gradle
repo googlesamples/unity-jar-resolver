@@ -269,6 +269,8 @@ project.ext {
 
   // Location of the export_unity_package application.
   exportUnityPackageDir = new File(pluginSourceDir, "ExportUnityPackage")
+  // Location of the import_unity_package application.
+  importUnityPackageDir = new File(pluginSourceDir, "ImportUnityPackage")
 
   // Common arguments used to execute Unity in batch mode.
   unityBatchModeArguments = ["-batchmode", "-nographics"]
@@ -1356,6 +1358,14 @@ createPythonTask(
   "Test the gen_guids.py application",
   [],
   new File(project.ext.exportUnityPackageDir, "gen_guids_test.py"),
+  [],
+  ["absl-py"])
+
+createPythonTask(
+  "testImportUnityPackage",
+  "Test the import_unity_package.py application",
+  [],
+  new File(project.ext.importUnityPackageDir, "import_unity_package_test.py"),
   [],
   ["absl-py"])
 
