@@ -73,6 +73,19 @@ internal class PackageManifestModifier {
     public PackageManifestModifier() { Logger = new Google.Logger(); }
 
     /// <summary>
+    /// Construct an object based on another modifier.
+    /// </summary>
+    public PackageManifestModifier(PackageManifestModifier other) {
+        Logger = other.Logger;
+        try {
+            manifestDict = Json.Deserialize(other.GetManifestJson()) as Dictionary<string, object>;
+        } catch (Exception e) {
+            Logger.Log(String.Format("Failed to clone PackageManifestModifier. \nException:{1}",
+                MANIFEST_FILE_PATH, e.ToString()), LogLevel.Error);
+        }
+    }
+
+    /// <summary>
     /// Read manifest from the file and parse JSON string into a dictionary.
     /// </summary>
     /// <return>True if read and parsed successfully.</return>
@@ -290,8 +303,7 @@ internal class PackageManifestModifier {
             return false;
         }
         try {
-            string manifestText =
-                Json.Serialize(manifestDict, humanReadable: true, indentSpaces: 2);
+            string manifestText = GetManifestJson();
 
             if (!String.IsNullOrEmpty(manifestText)) {
                 File.WriteAllText(MANIFEST_FILE_PATH, manifestText);
@@ -304,6 +316,16 @@ internal class PackageManifestModifier {
             return false;
         }
         return true;
+    }
+
+    /// <summary>
+    /// Get the manifest json string.
+    /// </summary>
+    /// <return>Manifest json string.</return>
+    internal string GetManifestJson() {
+        return manifestDict != null ?
+                Json.Serialize(manifestDict, humanReadable: true, indentSpaces: 2) :
+                "";
     }
 }
 } // namespace Google

@@ -84,6 +84,11 @@ namespace Google {
         public RenderItemDelegate RenderItem;
 
         /// <summary>
+        /// Action to render additional contents after the listed items.
+        /// </summary>
+        public Action RenderAfterItems;
+
+        /// <summary>
         /// Action to render additional items in the button area of the window before the
         /// cancel and apply buttons.
         /// </summary>
@@ -241,6 +246,18 @@ namespace Google {
             }
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
+
+            if (RenderAfterItems != null) {
+                EditorGUILayout.BeginVertical(EditorStyles.textField);
+                EditorGUILayout.Space();
+                EditorGUILayout.EndVertical();
+
+                EditorGUILayout.BeginVertical();
+                RenderAfterItems();
+                EditorGUILayout.EndVertical();
+                EditorGUILayout.Space();
+            }
+
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("All")) SelectAll();
             if (GUILayout.Button("None")) SelectNone();

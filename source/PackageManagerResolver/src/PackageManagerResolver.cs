@@ -44,22 +44,22 @@ public class PackageManagerResolver : AssetPostprocessor {
     }
 
     private const string ADD_REGISTRIES_QUESTION =
-        "Add the selected Unity Package Manager registries to your project?";
+        "Add the selected Package Manager registries to your project?";
     private const string REMOVE_REGISTRIES_QUESTION =
-        "Remove the selected Unity Package Manager registries from your project?";
+        "Remove the selected Package Manager registries from your project?";
     private const string ADD_REGISTRIES_DESCRIPTION =
         "Adding a registry will allow you to install, upgrade and remove packages from the " +
-        "registry's server in the Unity Package Manager. By adding the selected registries, you " +
+        "registry's server in the Package Manager. By adding the selected registries, you " +
         "agree that your use of these registries are subject to their terms of service and you " +
         "acknowledge that data will be collected in accordance with each registry's privacy " +
         "policy.";
     private const string REMOVE_REGISTRIES_DESCRIPTION =
         "Removing a registry will prevent you from installing and upgrading packages from the " +
-        "registry's server in the Unity Package Manager. It will not remove packages from the " +
+        "registry's server in the Package Manager. It will not remove packages from the " +
         "registry's server that are already installed";
     private const string ADD_OR_REMOVE_REGISTRIES_QUESTION =
-        "Add the selected Unity Package Manager (UPM) registries to and remove the " +
-        "unselected UPM registries from your project?";
+        "Add the selected Package Manager registries to and remove the " +
+        "unselected registries from your project?";
     private const string MODIFY_MENU_ITEM_DESCRIPTION =
         "You can always add or remove registries at a later time using menu item:\n" +
         "'Assets > External Dependency Manager > Package Manager Resolver > " +
@@ -71,7 +71,17 @@ public class PackageManagerResolver : AssetPostprocessor {
     private static readonly string[] googleScopes = new [] { "com.google" };
 
     /// <summary>
-    /// Enables / disables external package registries for Unity Package Manager.
+    /// Scroll location of the manifest view on the left in the registry selection window.
+    /// </summary>
+    private static Vector2 scrollManifestViewLeft;
+
+    /// <summary>
+    /// Scroll location of the manifest view on the right in the registry selection window.
+    /// </summary>
+    private static Vector2 scrollManifestViewRight;
+
+    /// <summary>
+    /// Enables / disables external package registries for Package Manager.
     /// </summary>
     static PackageManagerResolver() {
         logger.Log("Loaded PackageManagerResolver", level: LogLevel.Verbose);
@@ -219,9 +229,11 @@ public class PackageManagerResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Apply registry changes to the projects manifest.
+    /// Apply registry changes to the modifier.
     /// </summary>
     /// <param name="manifestModifier">Object that modifies the project's manifest.</param>
+    /// <param name="registriesToAdd">Registries added to the modifier.</param>
+    /// <param name="registriesToRemove">Registries removed from the modifier.</param>
     /// <param name="availableRegistries">Registries that are available in the
     /// configuration.</param>
     /// <param name="manifestRegistries">Registries that are present in the manifest.</param>
@@ -233,21 +245,20 @@ public class PackageManagerResolver : AssetPostprocessor {
     /// <param name="invertSelection">If false, adds the selected registries and removes the
     /// unselected registries.  If true, removes the selected registries and adds the unselected
     /// registries.</param>
-    /// <param name="addedRegistries">If specified, is extended with the list of registries added
-    /// to the manifest.<param>
-    /// <returns>true if successful, false otherwise.</returns>
-    private static bool SyncRegistriesToManifest(
+    /// <returns>true if the manifest is modified.</returns>
+    private static bool SyncRegistriesToModifier(
             PackageManifestModifier manifestModifier,
+            out List<PackageManagerRegistry> registriesToAdd,
+            out List<PackageManagerRegistry> registriesToRemove,
             Dictionary<string, PackageManagerRegistry> availableRegistries,
             Dictionary<string, List<PackageManagerRegistry>> manifestRegistries,
             HashSet<string> selectedRegistryUrls,
             bool addRegistries = true,
             bool removeRegistries = true,
-            bool invertSelection = false,
-            List<PackageManagerRegistry> addedRegistries = null) {
-        // Build a list of registries to add to and remove from the manifest.
-        var registriesToAdd = new List<PackageManagerRegistry>();
-        var registriesToRemove = new List<PackageManagerRegistry>();
+            bool invertSelection = false) {
+        // Build a list of registries to add to and remove from the modifier.
+        registriesToAdd = new List<PackageManagerRegistry>();
+        registriesToRemove = new List<PackageManagerRegistry>();
 
         foreach (var availableRegistry in availableRegistries.Values) {
             var url = availableRegistry.Url;
@@ -276,6 +287,42 @@ public class PackageManagerResolver : AssetPostprocessor {
             manifestModifier.RemoveRegistries(registriesToRemove);
             manifestModified = true;
         }
+        return manifestModified;
+    }
+
+    /// <summary>
+    /// Apply registry changes to the projects manifest.
+    /// </summary>
+    /// <param name="manifestModifier">Object that modifies the project's manifest.</param>
+    /// <param name="availableRegistries">Registries that are available in the
+    /// configuration.</param>
+    /// <param name="manifestRegistries">Registries that are present in the manifest.</param>
+    /// <param name="selectedRegistryUrls">URLs of selected registries, these should be items in
+    /// availableRegistries.</param>
+    /// <param name="addRegistries">Whether to add selected registries to the manifest.</param>
+    /// <param name="removeRegistries">Whether to remove unselected registries from the
+    /// manifest.</param>
+    /// <param name="invertSelection">If false, adds the selected registries and removes the
+    /// unselected registries.  If true, removes the selected registries and adds the unselected
+    /// registries.</param>
+    /// <param name="addedRegistries">If specified, is extended with the list of registries added
+    /// to the manifest.<param>
+    /// <returns>true if successful, false otherwise.</returns>
+    private static bool SyncRegistriesToManifest(
+            PackageManifestModifier manifestModifier,
+            Dictionary<string, PackageManagerRegistry> availableRegistries,
+            Dictionary<string, List<PackageManagerRegistry>> manifestRegistries,
+            HashSet<string> selectedRegistryUrls,
+            bool addRegistries = true,
+            bool removeRegistries = true,
+            bool invertSelection = false,
+            List<PackageManagerRegistry> addedRegistries = null) {
+        List<PackageManagerRegistry> registriesToAdd;
+        List<PackageManagerRegistry> registriesToRemove;
+        bool manifestModified = SyncRegistriesToModifier(
+                manifestModifier, out registriesToAdd, out registriesToRemove,
+                availableRegistries, manifestRegistries, selectedRegistryUrls,
+                addRegistries, removeRegistries, invertSelection);
 
         bool successful = true;
         if (manifestModified) {
@@ -401,6 +448,22 @@ public class PackageManagerResolver : AssetPostprocessor {
             }
         };
 
+        // Get the manifest json string based on the current selection and mode.
+        Func<HashSet<string>, string> getManifestJsonAfterChange = (urlSelectionToApply) => {
+            PackageManifestModifier clonedModifier = new PackageManifestModifier(modifier);
+            List<PackageManagerRegistry> toAdd;
+            List<PackageManagerRegistry> toRemove;
+            SyncRegistriesToModifier(clonedModifier, out toAdd, out toRemove,
+                                     xmlRegistries, manifestRegistries,
+                                     urlSelectionToApply,
+                                     addRegistries: (mode == ManifestModificationMode.Add ||
+                                                     mode == ManifestModificationMode.Modify),
+                                     removeRegistries: (mode == ManifestModificationMode.Remove ||
+                                                        mode == ManifestModificationMode.Modify),
+                                     invertSelection: mode == ManifestModificationMode.Remove);
+            return clonedModifier.GetManifestJson();
+        };
+
         if (xmlRegistries.Count > 0) {
             if (promptBeforeAction) {
                 // Build a list of items to display.
@@ -454,6 +517,42 @@ public class PackageManagerResolver : AssetPostprocessor {
                             Application.OpenURL(privacyPolicy);
                         }
                     }
+                };
+                // Set the scroll position to the bottom since "scopedRegistry" section is most
+                // likely at the bottom of the file.
+                scrollManifestViewLeft = new Vector2(0.0f, float.PositiveInfinity);
+                scrollManifestViewRight = new Vector2(0.0f, float.PositiveInfinity);
+
+                // Render the change in manifest.json dynamically.
+                window.RenderAfterItems = () => {
+                    GUILayout.Label("Changes to Packages/manifest.json");
+                    EditorGUILayout.Space();
+
+                    EditorGUILayout.BeginHorizontal();
+
+                    EditorGUILayout.BeginVertical();
+                    GUILayout.Label("Before", EditorStyles.boldLabel);
+                    EditorGUILayout.Space();
+                    scrollManifestViewLeft =
+                            EditorGUILayout.BeginScrollView(scrollManifestViewLeft,
+                                    GUILayout.MaxWidth(window.position.width / 2.0f));
+                    EditorGUILayout.TextArea(modifier.GetManifestJson());
+                    EditorGUILayout.EndScrollView();
+                    EditorGUILayout.EndVertical();
+
+                    EditorGUILayout.Space();
+
+                    EditorGUILayout.BeginVertical();
+                    GUILayout.Label("After", EditorStyles.boldLabel);
+                    EditorGUILayout.Space();
+                    scrollManifestViewRight =
+                            EditorGUILayout.BeginScrollView(scrollManifestViewRight,
+                                    GUILayout.MaxWidth(window.position.width / 2.0f));
+                    EditorGUILayout.TextArea(getManifestJsonAfterChange(window.SelectedItems));
+                    EditorGUILayout.EndScrollView();
+                    EditorGUILayout.EndVertical();
+
+                    EditorGUILayout.EndHorizontal();
                 };
                 if (showDisableButton) {
                     window.RenderBeforeCancelApply = () => {

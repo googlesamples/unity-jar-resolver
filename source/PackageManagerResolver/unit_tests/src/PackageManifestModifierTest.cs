@@ -67,71 +67,26 @@ namespace Google.PackageManagerResolver.Tests {
             File.WriteAllText(PackageManifestModifier.MANIFEST_FILE_PATH, manifest);
         }
 
-        /// <summary>
-        /// Read a valid manifest.
-        /// </summary>
-        [Test]
-        public void TestReadManifestValid() {
-            WriteManifest("{\n" +
-                          "  \"scopedRegistries\": [\n" +
-                          "    {\n" +
-                          "      \"name\": \"A UPM Registry\",\n" +
-                          "      \"url\": \"https://unity.foobar.com\",\n" +
-                          "      \"scopes\": [\n" +
-                          "        \"foobar.unity.voxels\"\n" +
-                          "      ]\n" +
-                          "    }\n" +
-                          "  ]\n" +
-                          "}\n");
-            Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
-
-            var expected = new Dictionary<string, object>() {
-                {
-                    "scopedRegistries",
-                    new List<Dictionary<string, object>>() {
-                        new Dictionary<string, object>() {
-                            { "name", "A UPM Registry" },
-                            { "url", "https://unity.foobar.com" },
-                            {
-                                "scopes",
-                                new List<string>() { "foobar.unity.voxels" }
-                            }
-                        }
-                    }
-                }
-            };
-            CollectionAssert.AreEquivalent(modifier.manifestDict, expected);
-        }
-
-        /// <summary>
-        /// Try reading a manifest that doesn't exist.
-        /// </summary>
-        [Test]
-        public void TestReadManifestMissing() {
-            Assert.That(modifier.ReadManifest(), Is.EqualTo(false));
-        }
-
-        /// <summary>
-        /// Try reading a manifest with invalid JSON.
-        /// </summary>
-        [Test]
-        public void TestReadManifestInvalid() {
-            WriteManifest("This is not valid JSON");
-            Assert.That(modifier.ReadManifest(), Is.EqualTo(false));
-        }
-
-        /// <summary>
-        /// Try to retrieve registries from a modifier that hasn't read a manifest.
-        /// </summary>
-        [Test]
-        public void TestPackageManagerRegistriesWithNoManifestLoaded() {
-            Assert.That(modifier.PackageManagerRegistries.Count, Is.EqualTo(0));
-        }
+        const string MANIFEST_SIMPLE =
+            "{\n" +
+            "  \"dependencies\": {\n" +
+            "    \"com.bar.foo\": \"1.2.3\"\n" +
+            "  },\n" +
+            "  \"scopedRegistries\": [\n" +
+            "    {\n" +
+            "      \"name\": \"A UPM Registry\",\n" +
+            "      \"url\": \"https://unity.foobar.com\",\n" +
+            "      \"scopes\": [\n" +
+            "        \"foobar.unity.voxels\"\n" +
+            "      ]\n" +
+            "    }\n" +
+            "  ]\n" +
+            "}";
 
         /// <summary>
         /// Test manifest with a few different registries.
         /// </summary>
-        const string MANIFEST =
+        const string MANIFEST_MULTI_REGISTRIES =
             "{\n" +
             "  \"scopedRegistries\": [\n" +
             "    {\n" +
@@ -160,11 +115,85 @@ namespace Google.PackageManagerResolver.Tests {
             "}";
 
         /// <summary>
+        /// Read a valid manifest.
+        /// </summary>
+        [Test]
+        public void TestReadManifestValid() {
+            WriteManifest(MANIFEST_SIMPLE);
+            Assert.That(modifier.GetManifestJson(), Is.Empty);
+            Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
+            Assert.That(modifier.GetManifestJson(), Is.EqualTo(MANIFEST_SIMPLE));
+
+            var expected = new Dictionary<string, object>() {
+                {
+                    "dependencies",
+                    new Dictionary<string, object>() {
+                        {"com.bar.foo", "1.2.3"}
+                    }
+                },
+                {
+                    "scopedRegistries",
+                    new List<Dictionary<string, object>>() {
+                        new Dictionary<string, object>() {
+                            { "name", "A UPM Registry" },
+                            { "url", "https://unity.foobar.com" },
+                            {
+                                "scopes",
+                                new List<string>() { "foobar.unity.voxels" }
+                            }
+                        }
+                    }
+                }
+            };
+            CollectionAssert.AreEquivalent(modifier.manifestDict, expected);
+        }
+
+        /// <summary>
+        /// Copy constructor
+        /// </summary>
+        [Test]
+        public void TestCopyConstructor() {
+            WriteManifest(MANIFEST_SIMPLE);
+            Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
+
+            PackageManifestModifier copy = new PackageManifestModifier(modifier);
+
+            CollectionAssert.AreEquivalent(copy.manifestDict, modifier.manifestDict);
+            Assert.That(copy.GetManifestJson(), Is.EqualTo(MANIFEST_SIMPLE));
+            Assert.That(copy.GetManifestJson(), Is.EqualTo(modifier.GetManifestJson()));
+        }
+
+        /// <summary>
+        /// Try reading a manifest that doesn't exist.
+        /// </summary>
+        [Test]
+        public void TestReadManifestMissing() {
+            Assert.That(modifier.ReadManifest(), Is.EqualTo(false));
+        }
+
+        /// <summary>
+        /// Try reading a manifest with invalid JSON.
+        /// </summary>
+        [Test]
+        public void TestReadManifestInvalid() {
+            WriteManifest("This is not valid JSON");
+            Assert.That(modifier.ReadManifest(), Is.EqualTo(false));
+        }
+
+        /// <summary>
+        /// Try to retrieve registries from a modifier that hasn't read a manifest.
+        /// </summary>
+        [Test]
+        public void TestPackageManagerRegistriesWithNoManifestLoaded() {
+            Assert.That(modifier.PackageManagerRegistries.Count, Is.EqualTo(0));
+        }
+
+        /// <summary>
         /// Parse registries from a manifest.
         /// </summary>
         [Test]
         public void TestPackageManagerRegistries() {
-            WriteManifest(MANIFEST);
+            WriteManifest(MANIFEST_MULTI_REGISTRIES);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
 
             var registries = modifier.PackageManagerRegistries;
@@ -204,12 +233,12 @@ namespace Google.PackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestAddRegistriesEmptyAndWriteManifest() {
-            WriteManifest(MANIFEST);
+            WriteManifest(MANIFEST_MULTI_REGISTRIES);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
             Assert.That(modifier.AddRegistries(new List<PackageManagerRegistry>()),
                         Is.EqualTo(true));
             Assert.That(modifier.WriteManifest(), Is.EqualTo(true));
-            Assert.That(ReadManifest(), Is.EqualTo(MANIFEST));
+            Assert.That(ReadManifest(), Is.EqualTo(MANIFEST_MULTI_REGISTRIES));
         }
 
         /// <summary>
@@ -217,7 +246,7 @@ namespace Google.PackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestAddRegistriesAndWriteManifest() {
-            WriteManifest(MANIFEST);
+            WriteManifest(MANIFEST_MULTI_REGISTRIES);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
             Assert.That(
                 modifier.AddRegistries(new PackageManagerRegistry[] {
@@ -239,7 +268,7 @@ namespace Google.PackageManagerResolver.Tests {
                     }),
                 Is.EqualTo(true));
             Assert.That(modifier.WriteManifest(), Is.EqualTo(true));
-            Assert.That(ReadManifest(), Is.EqualTo(MANIFEST));
+            Assert.That(ReadManifest(), Is.EqualTo(MANIFEST_MULTI_REGISTRIES));
         }
 
         /// <summary>
@@ -256,12 +285,12 @@ namespace Google.PackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestRemoveRegistriesEmptyAndWriteManifest() {
-            WriteManifest(MANIFEST);
+            WriteManifest(MANIFEST_MULTI_REGISTRIES);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
             Assert.That(modifier.RemoveRegistries(new List<PackageManagerRegistry>()),
                         Is.EqualTo(true));
             Assert.That(modifier.WriteManifest(), Is.EqualTo(true));
-            Assert.That(ReadManifest(), Is.EqualTo(MANIFEST));
+            Assert.That(ReadManifest(), Is.EqualTo(MANIFEST_MULTI_REGISTRIES));
         }
 
         /// <summary>
@@ -269,7 +298,7 @@ namespace Google.PackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestRemoveRegistriesNonExistentAndWriteManifest() {
-            WriteManifest(MANIFEST);
+            WriteManifest(MANIFEST_MULTI_REGISTRIES);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
             Assert.That(
                modifier.RemoveRegistries(new PackageManagerRegistry[] {
@@ -281,7 +310,7 @@ namespace Google.PackageManagerResolver.Tests {
                    }),
                Is.EqualTo(false));
             Assert.That(modifier.WriteManifest(), Is.EqualTo(true));
-            Assert.That(ReadManifest(), Is.EqualTo(MANIFEST));
+            Assert.That(ReadManifest(), Is.EqualTo(MANIFEST_MULTI_REGISTRIES));
         }
 
         /// <summary>
@@ -289,7 +318,7 @@ namespace Google.PackageManagerResolver.Tests {
         /// </summary>
         [Test]
         public void TestRemoveRegistriesAndWriteManifest() {
-            WriteManifest(MANIFEST);
+            WriteManifest(MANIFEST_MULTI_REGISTRIES);
             Assert.That(modifier.ReadManifest(), Is.EqualTo(true));
             Assert.That(
                modifier.RemoveRegistries(new PackageManagerRegistry[] {
