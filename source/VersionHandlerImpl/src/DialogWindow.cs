@@ -121,7 +121,7 @@ public class DialogWindow : EditorWindow {
     /// is created and before it is displayed.</param>
     public delegate void DisplayDelegate(
         string title, string message, Option defaultOption,
-        string option0, string option1, string option2,
+        string option0, string option1 = null, string option2 = null,
         float windowWidth = DEFAULT_WINDOWS_WIDTH, Option windowCloseOption = Option.SelectedNone,
         Action<Option> complete = null,
         Action<DialogWindow> renderContent = null,
@@ -257,66 +257,12 @@ public class DialogWindow : EditorWindow {
     /// <param name="init">(Optional) Callback for additional initialization after the dialog
     /// is created and before it is displayed.</param>
     public static void Display(string title, string message, Option defaultOption,
-            string option0, string option1, string option2,
+            string option0, string option1 = null, string option2 = null,
             float windowWidth = DEFAULT_WINDOWS_WIDTH,
             Option windowCloseOption = Option.SelectedNone,
             Action<Option> complete = null, Action<DialogWindow> renderContent = null,
             Action<DialogWindow> renderButtons = null, Action<DialogWindow> init = null) {
         displayDialogMethod(title, message, defaultOption, option0, option1, option2, windowWidth,
-                windowCloseOption, complete, renderContent, renderButtons, init);
-    }
-
-    /// <summary>
-    /// Displays a non-blocking modal dialog with up to 2 options.
-    /// </summary>
-    /// <param name="title">Title of the dialog.</param>
-    /// <param name="message">Message to display in the dialog.</param>
-    /// <param name="defaultOption">Option selected if interactivity is disabled.</param>
-    /// <param name="option0">Text for the first option.</param>
-    /// <param name="option1">Text for the second option or null to disable.</param>
-    /// <param name="windowWidth">(Optional) Width of the dialog window.</param>
-    /// <param name="windowCloseOption">(Optional) Option selected if the dialog is closed.</param>
-    /// <param name="complete">(Optional) Callback to trigger once a selection is made.</param>
-    /// <param name="renderContent">(Optional) Callback to render additional content after
-    /// dialog message.</param>
-    /// <param name="renderButtons">(Optional) Callback to render additional content before option
-    /// buttons in the same row.</param>
-    /// <param name="init">(Optional) Callback for additional initialization after the dialog
-    /// is created and before it is displayed.</param>
-    public static void Display(string title, string message, Option defaultOption,
-            string option0, string option1,
-            float windowWidth = DEFAULT_WINDOWS_WIDTH,
-            Option windowCloseOption = Option.SelectedNone,
-            Action<Option> complete = null, Action<DialogWindow> renderContent = null,
-            Action<DialogWindow> renderButtons = null, Action<DialogWindow> init = null) {
-        displayDialogMethod(title, message, defaultOption, option0, option1, null, windowWidth,
-                windowCloseOption, complete, renderContent, renderButtons, init);
-    }
-
-    /// <summary>
-    /// Displays a non-blocking modal dialog with up to 1 options.
-    /// </summary>
-    /// <param name="title">Title of the dialog.</param>
-    /// <param name="message">Message to display in the dialog.</param>
-    /// <param name="defaultOption">Option selected if interactivity is disabled.</param>
-    /// <param name="option0">Text for the first option.</param>
-    /// <param name="option1">Text for the second option or null to disable.</param>
-    /// <param name="windowWidth">(Optional) Width of the dialog window.</param>
-    /// <param name="windowCloseOption">(Optional) Option selected if the dialog is closed.</param>
-    /// <param name="complete">(Optional) Callback to trigger once a selection is made.</param>
-    /// <param name="renderContent">(Optional) Callback to render additional content after
-    /// dialog message.</param>
-    /// <param name="renderButtons">(Optional) Callback to render additional content before option
-    /// buttons in the same row.</param>
-    /// <param name="init">(Optional) Callback for additional initialization after the dialog
-    /// is created and before it is displayed.</param>
-    public static void Display(string title, string message, Option defaultOption,
-            string option0,
-            float windowWidth = DEFAULT_WINDOWS_WIDTH,
-            Option windowCloseOption = Option.SelectedNone,
-            Action<Option> complete = null, Action<DialogWindow> renderContent = null,
-            Action<DialogWindow> renderButtons = null, Action<DialogWindow> init = null) {
-        displayDialogMethod(title, message, defaultOption, option0, null, null, windowWidth,
                 windowCloseOption, complete, renderContent, renderButtons, init);
     }
 

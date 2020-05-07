@@ -362,7 +362,7 @@ public class EditorMeasurement {
             displayDialog(
                 String.Format(EnableAnalytics, PluginName),
                 String.Format(RequestConsentMessage, PluginName),
-                DialogWindow.Option.Selected1, Yes, No, "",
+                DialogWindow.Option.Selected1, Yes, No,
                 windowWidth: 500.0f,
                 complete: option => {
                     switch (option) {

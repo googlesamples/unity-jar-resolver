@@ -136,7 +136,7 @@ namespace Google.VersionHandlerImpl.Tests {
                                                   SETTINGS_NAMESPACE, PLUGIN_NAME,
                                                   DATA_COLLECTION_DESCRIPTION, PRIVACY_POLICY);
             analytics.displayDialog = (title, message, defaultOption, option0, option1,
-                                       option2, windowWidth, windowCloseOption,
+                                       windowWidth, windowCloseOption,
                                        complete, renderContent, renderButtons, init) => {
                 throw new Exception("Unexpected dialog displayed");
             };
@@ -184,10 +184,10 @@ namespace Google.VersionHandlerImpl.Tests {
         /// </summary>
         /// <param name="selectedOption">0..2</param>
         /// <returns>Display dialog delegate.</returns>
-        private DialogWindow.DisplayDelegate CreateDisplayDialogDelegate(
+        private DialogWindow.Display2OptionsDelegate CreateDisplayDialogDelegate(
                 List<DialogWindow.Option> selectedOptions) {
             return (string title, string message, DialogWindow.Option defaultOption,
-                    string option0, string option1, string option2,
+                    string option0, string option1,
                     float windowWidth, DialogWindow.Option windowCloseOption,
                     Action<DialogWindow.Option> complete,
                     Action<DialogWindow> renderContent,
@@ -198,7 +198,6 @@ namespace Google.VersionHandlerImpl.Tests {
                 Assert.That(defaultOption, Is.EqualTo(DialogWindow.Option.Selected0));
                 Assert.That(option0, Is.Not.Empty);
                 Assert.That(option1, Is.Not.Empty);
-                Assert.That(option2, Is.Empty);
                 Assert.That(windowCloseOption, Is.EqualTo(DialogWindow.Option.Selected0));
                 Assert.That(complete, Is.Not.Null);
                 Assert.That(renderContent, Is.Not.Null);
