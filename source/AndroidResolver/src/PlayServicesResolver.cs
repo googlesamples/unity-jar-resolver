@@ -1724,7 +1724,7 @@ namespace GooglePlayServices {
             if (SettingsDialogObj.PromptBeforeAutoResolution &&
                 isAutoResolveJob &&
                 !ExecutionEnvironment.InBatchMode) {
-                Dialog.Display(
+                DialogWindow.Display(
                     "Enable Android Auto-resolution?",
                     "Android Resolver has detected a change " +
                     " and would to resolve conflicts and download Android dependencies." +
@@ -1736,15 +1736,15 @@ namespace GooglePlayServices {
                     "\n\nEnable auto-resolution again via " +
                     "\"Assets > External Dependency Manager " +
                     "> Android Resolver > Settings.",
-                    Dialog.Option.Selected0, "Enable", "Disable",
-                    (selectedOption) => {
+                    DialogWindow.Option.Selected0, "Enable", "Disable",
+                    complete: (selectedOption) => {
                         bool shouldResolve = true;
                         switch (selectedOption) {
-                            case Dialog.Option.Selected0: // Enable
+                            case DialogWindow.Option.Selected0: // Enable
                                 shouldResolve = true;
                                 SettingsDialogObj.PromptBeforeAutoResolution = false;
                                 break;
-                            case Dialog.Option.Selected1: // Disable
+                            case DialogWindow.Option.Selected1: // Disable
                                 SettingsDialogObj.EnableAutoResolution = false;
                                 SettingsDialogObj.PromptBeforeAutoResolution = false;
                                 shouldResolve = false;
@@ -1867,9 +1867,9 @@ namespace GooglePlayServices {
         /// Display a dialog explaining that the resolver is disabled in the current configuration.
         /// </summary>
         private static void NotAvailableDialog() {
-            Dialog.Display("Android Resolver.",
-                           "Resolver not enabled. Android platform must be selected.",
-                           Dialog.Option.Selected0, "OK");
+            DialogWindow.Display("Android Resolver.",
+                                 "Resolver not enabled. Android platform must be selected.",
+                                 DialogWindow.Option.Selected0, "OK");
 
         }
 
@@ -1903,12 +1903,12 @@ namespace GooglePlayServices {
             }
             ScheduleResolve(
                 forceResolution, false, (success) => {
-                    Dialog.Display(
+                    DialogWindow.Display(
                         "Android Dependencies",
                         String.Format("Resolution {0}", success ? "Succeeded" :
                                       "Failed!\n\nYour application will not run, see " +
                                       "the log for details."),
-                        Dialog.Option.Selected0, "OK");
+                        DialogWindow.Option.Selected0, "OK");
                 }, false);
         }
 
@@ -2434,7 +2434,7 @@ namespace GooglePlayServices {
                 if ((new Dependency.VersionComparer()).Compare(
                         MinimumAndroidGradlePluginVersionForJetifier, version) < 0) {
                     displayedEnableJetifierDialog = true;
-                    Dialog.Display(
+                    DialogWindow.Display(
                         titlePrefix + "Enable Jetifier?",
                         String.Format(
                             "Jetifier for Jetpack (AndroidX) libraries is only " +
@@ -2446,16 +2446,16 @@ namespace GooglePlayServices {
                             "It's possible to use the Jetifier on Android Resolver managed " +
                             "dependencies by disabling mainTemplate.gradle patching.",
                             MinimumAndroidGradlePluginVersionForJetifier, version),
-                        Dialog.Option.Selected1, "Disable Jetifier", "Ignore",
+                        DialogWindow.Option.Selected1, "Disable Jetifier", "Ignore",
                         "Disable mainTemplate.gradle patching",
-                        (selectedOption) => {
+                        complete: (selectedOption) => {
                             switch (selectedOption) {
-                                case Dialog.Option.Selected0:  // Disable Jetifier
+                                case DialogWindow.Option.Selected0:  // Disable Jetifier
                                     useJetifier = false;
                                     break;
-                                case Dialog.Option.Selected1:  // Ignore
+                                case DialogWindow.Option.Selected1:  // Ignore
                                     break;
-                                case Dialog.Option.Selected2:
+                                case DialogWindow.Option.Selected2:
                                     // Disable mainTemplate.gradle patching
                                     SettingsDialogObj.PatchMainTemplateGradle = false;
                                     break;
@@ -2492,7 +2492,7 @@ namespace GooglePlayServices {
             const int MinimumApiLevelForJetpack = 28;
             int apiLevel = UnityCompat.GetAndroidTargetSDKVersion();
             if (useJetifier && apiLevel < MinimumApiLevelForJetpack) {
-                Dialog.Display(
+                DialogWindow.Display(
                     titlePrefix + "Enable Jetpack?",
                     String.Format(
                         "Jetpack (AndroidX) libraries are only supported when targeting Android " +
@@ -2500,10 +2500,10 @@ namespace GooglePlayServices {
                         "Would you like to set the project's target API level to {0}?",
                         MinimumApiLevelForJetpack,
                         apiLevel > 0 ? apiLevel.ToString() : "auto (max. installed)"),
-                    Dialog.Option.Selected1, "Yes", "No", "Disable Jetifier",
-                    (selectedOption) => {
+                    DialogWindow.Option.Selected1, "Yes", "No", "Disable Jetifier",
+                    complete: (selectedOption) => {
                         switch (selectedOption) {
-                            case Dialog.Option.Selected0:  // Yes
+                            case DialogWindow.Option.Selected0:  // Yes
                                 bool setSdkVersion = UnityCompat.SetAndroidTargetSDKVersion(
                                     MinimumApiLevelForJetpack);
                                 if (!setSdkVersion) {
@@ -2527,11 +2527,11 @@ namespace GooglePlayServices {
                                 complete(useJetifier ? ApiLevelJetifierResult.EnableAndSave :
                                          ApiLevelJetifierResult.DisableAndSave);
                                 break;
-                            case Dialog.Option.Selected1:  // No
+                            case DialogWindow.Option.Selected1:  // No
                                 // Don't change the settings but report that AndroidX will not work.
                                 complete(ApiLevelJetifierResult.EnableAndDoNotSave);
                                 break;
-                            case Dialog.Option.Selected2:  // Disable Jetifier
+                            case DialogWindow.Option.Selected2:  // Disable Jetifier
                                 complete(ApiLevelJetifierResult.DisableAndSave);
                                 break;
                         }

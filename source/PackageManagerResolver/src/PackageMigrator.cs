@@ -978,7 +978,7 @@ internal class PackageMigrator {
     /// <param name="error">Error message to display.</param>
     private static void DisplayError(string error) {
         Logger.Log(error, level: LogLevel.Error);
-        Dialog.Display(WindowTitle, error, Dialog.Option.Selected0, "OK");
+        DialogWindow.Display(WindowTitle, error, DialogWindow.Option.Selected0, "OK");
     }
 
     /// <summary>

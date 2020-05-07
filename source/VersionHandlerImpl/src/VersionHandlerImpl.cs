@@ -2617,7 +2617,8 @@ public class VersionHandlerImpl : AssetPostprocessor {
     public static void UpdateNow() {
         LoadLogPreferences();
         UpdateVersionedAssets(true, () => {
-                Dialog.Display(PLUGIN_NAME, "Update complete.", Dialog.Option.Selected0, "OK");
+                DialogWindow.Display(PLUGIN_NAME, "Update complete.",
+                                     DialogWindow.Option.Selected0, "OK");
             });
     }
 

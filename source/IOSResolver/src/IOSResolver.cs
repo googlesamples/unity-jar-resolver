@@ -700,22 +700,22 @@ public class IOSResolver : AssetPostprocessor {
                 CocoapodsIntegrationUpgradeDefault) == CocoapodsIntegrationMethod.None &&
             !ExecutionEnvironment.InBatchMode && !UpgradeToWorkspaceWarningDisabled) {
 
-            Dialog.Display(
+            DialogWindow.Display(
                 "Warning: CocoaPods integration is disabled!",
                 "Would you like to enable CocoaPods integration with workspaces?\n\n" +
                 "Unity 5.6+ now supports loading workspaces generated from CocoaPods.\n" +
                 "If you enable this, and still use Unity less than 5.6, it will fallback " +
                 "to integrating CocoaPods with the .xcodeproj file.\n",
-                Dialog.Option.Selected0, "Yes", "Not Now", "Silence Warning",
-                (selectedOption) => {
+                DialogWindow.Option.Selected0, "Yes", "Not Now", "Silence Warning",
+                complete: (selectedOption) => {
                     switch (selectedOption) {
-                        case Dialog.Option.Selected0:  // Yes
+                        case DialogWindow.Option.Selected0:  // Yes
                             settings.SetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
                                             (int)CocoapodsIntegrationMethod.Workspace);
                             break;
-                        case Dialog.Option.Selected1:  // Not now
+                        case DialogWindow.Option.Selected1:  // Not now
                             break;
-                        case Dialog.Option.Selected2:  // Ignore
+                        case DialogWindow.Option.Selected2:  // Ignore
                             UpgradeToWorkspaceWarningDisabled = true;
                             break;
                     }
@@ -1018,7 +1018,9 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     internal static void LogToDialog(string message, bool verbose = false,
                              LogLevel level = LogLevel.Info) {
-        if (!verbose) Dialog.Display("iOS Resolver", message, Dialog.Option.Selected0, "OK");
+        if (!verbose) {
+            DialogWindow.Display("iOS Resolver", message, DialogWindow.Option.Selected0, "OK");
+        }
         Log(message, verbose: verbose, level: level);
     }
 
@@ -1185,7 +1187,7 @@ public class IOSResolver : AssetPostprocessor {
         if (minVersionAndPodNames.Value != null) {
             var minVersionString =
                 TargetSdkVersionToString(minVersionAndPodNames.Key);
-            Dialog.Display(
+            DialogWindow.Display(
                 "Unsupported Target SDK",
                 String.Format(
                     "Target SDK selected in the iOS Player Settings ({0}) is not supported by " +
@@ -1194,21 +1196,21 @@ public class IOSResolver : AssetPostprocessor {
                     "Would you like to update the target SDK version?",
                     TargetSdk, minVersionString,
                     String.Join(", ", minVersionAndPodNames.Value.ToArray())),
-                Dialog.Option.Selected1 /* No */, "Yes", "No",
-                (selectedOption) => {
+                DialogWindow.Option.Selected1 /* No */, "Yes", "No",
+                complete: (selectedOption) => {
                     analytics.Report(
                         "updatetargetsdk/" +
-                        (selectedOption == Dialog.Option.Selected0 ? "apply" : "cancel"),
+                        (selectedOption == DialogWindow.Option.Selected0 ? "apply" : "cancel"),
                         "Update Target SDK");
-                    if (selectedOption == Dialog.Option.Selected0) {
+                    if (selectedOption == DialogWindow.Option.Selected0) {
                         TargetSdkVersion = minVersionAndPodNames.Key;
                         if (runningBuild) {
                             string errorString = String.Format(
                                 "Target SDK has been updated from {0} to {1}. " +
                                 "You must restart the build for this change to take effect.",
                                 TargetSdk, minVersionString);
-                            Dialog.Display("Target SDK updated.", errorString,
-                                           Dialog.Option.Selected0, "OK");
+                            DialogWindow.Display("Target SDK updated.", errorString,
+                                                 DialogWindow.Option.Selected0, "OK");
                         }
                     }
                 });

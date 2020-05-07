@@ -53,7 +53,6 @@
     <Folder Include="Properties\" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="src\Dialog.cs" />
     <Compile Include="src\DialogWindow.cs" />
     <Compile Include="src\Logger.cs" />
     <Compile Include="src\ExecutionEnvironment.cs" />

@@ -142,12 +142,12 @@ namespace GooglePlayServices {
             if (!String.IsNullOrEmpty(javaHome)) {
                 toolPath = JavaHomeBinaryPath(javaTool);
                 if (String.IsNullOrEmpty(toolPath)) {
-                    Dialog.Display(
+                    DialogWindow.Display(
                         "Android Resolver",
                         String.Format("{0} environment references a directory ({1}) that does " +
                                       "not contain {2} which is required to process Android " +
                                       "libraries.", JAVA_HOME, javaHome, javaTool),
-                        Dialog.Option.Selected0, "OK");
+                        DialogWindow.Option.Selected0, "OK");
                     throw new ToolNotFoundException(
                         String.Format("{0} not found, {1} references incomplete Java distribution.",
                                       javaTool, javaHome));
@@ -156,14 +156,14 @@ namespace GooglePlayServices {
             } else {
                 toolPath = CommandLine.FindExecutable(javaTool);
                 if (!File.Exists(toolPath)) {
-                    Dialog.Display(
+                    DialogWindow.Display(
                         "Android Resolver",
                         String.Format("Unable to find {0} in the system path.  This tool is " +
                                       "required to process Android libraries.  Please configure " +
                                       "your JDK location under the " +
                                       "'Unity Preferences > External Tools' menu.",
                                       javaTool),
-                        Dialog.Option.Selected0, "OK");
+                        DialogWindow.Option.Selected0, "OK");
                     throw new ToolNotFoundException(javaTool + " not found.");
                 }
             }
