@@ -141,36 +141,18 @@ public class DialogWindow : EditorWindow {
     /// GUIStyle to render label with word-wrap.
     /// </summary>
     static public GUIStyle DefaultLabelStyle {
-        get {
-            if (defaultLabelStyle != null) {
-                return defaultLabelStyle;
-            } else {
-                defaultLabelStyle =  new GUIStyle(EditorStyles.label);
-                defaultLabelStyle.wordWrap = true;
-
-                return defaultLabelStyle;
-            }
-        }
+        get; private set;
     }
-    static private GUIStyle defaultLabelStyle;
+
+    /// <summary>
+    /// GUIStyle to render dialog title.
+    /// </summary>
+    static private GUIStyle DefaultTitleStyle;
 
     /// <summary>
     /// GUIStyle to render dialog message.
     /// </summary>
-    static private GUIStyle DefaultMessageStyle {
-        get {
-            if (defaultMessageStyle != null) {
-                return defaultMessageStyle;
-            } else {
-                defaultMessageStyle =  new GUIStyle(EditorStyles.largeLabel);
-                defaultMessageStyle.fontStyle = FontStyle.Bold;
-                defaultMessageStyle.wordWrap = true;
-
-                return defaultMessageStyle;
-            }
-        }
-    }
-    static private GUIStyle defaultMessageStyle;
+    static private GUIStyle DefaultMessageStyle;
 
     // Context for this dialog window.
     private DialogContext dialogContext = new DialogContext();
@@ -267,6 +249,28 @@ public class DialogWindow : EditorWindow {
     }
 
     /// <summary>
+    /// Initialize GUIStyles used by this dialog.
+    /// </summary>
+    void InitializeStyles() {
+        if (DefaultLabelStyle == null) {
+            DefaultLabelStyle = new GUIStyle(EditorStyles.label);
+            DefaultLabelStyle.wordWrap = true;
+        }
+
+        if (DefaultTitleStyle == null) {
+            DefaultTitleStyle = new GUIStyle(EditorStyles.largeLabel);
+            DefaultTitleStyle.fontStyle = FontStyle.Bold;
+            DefaultTitleStyle.wordWrap = true;
+        }
+
+        if (DefaultMessageStyle == null) {
+            DefaultMessageStyle = new GUIStyle(EditorStyles.boldLabel);
+            DefaultMessageStyle.wordWrap = true;
+        }
+
+    }
+
+    /// <summary>
     /// Render the dialog according to the context.
     /// </summary>
     void OnGUI() {
@@ -283,7 +287,14 @@ public class DialogWindow : EditorWindow {
             }, runNow: false);
         }
 
+        InitializeStyles();
+
         Rect rect = EditorGUILayout.BeginVertical();
+
+        if (!String.IsNullOrEmpty(dialogContext.Title)) {
+            GUILayout.Label(dialogContext.Title, EditorStyles.boldLabel);
+            EditorGUILayout.Space();
+        }
 
         // Render the dialog message.
         GUILayout.Label(dialogContext.Message, DefaultMessageStyle);
@@ -321,12 +332,11 @@ public class DialogWindow : EditorWindow {
     /// Get a list of pairs of the text and enum of each non-empty option.
     /// </summary>
     /// <return>A list of key-value pair where key is text and value is enum.</return>
-    private List<KeyValuePair<string, Option>> GetOptionMap() {
+    private List<KeyValuePair<string, Option>> GetOptionList() {
         List<KeyValuePair<string, Option>> options = new List<KeyValuePair<string, Option>>();
-        if (!String.IsNullOrEmpty (dialogContext.Option0String)) {
-            options.Add(new KeyValuePair<string, Option>(
-                    dialogContext.Option0String, Option.Selected0));
-        }
+
+        // Order the buttons similar to Unity dialog.
+        // [ Option 1 (Cancel) ] [ Option 2 (Alt) ] [ Option 0 (Ok) ]
         if (!String.IsNullOrEmpty (dialogContext.Option1String)) {
             options.Add(new KeyValuePair<string, Option>(
                     dialogContext.Option1String, Option.Selected1));
@@ -334,6 +344,10 @@ public class DialogWindow : EditorWindow {
         if (!String.IsNullOrEmpty (dialogContext.Option2String)) {
             options.Add(new KeyValuePair<string, Option>(
                     dialogContext.Option2String, Option.Selected2));
+        }
+        if (!String.IsNullOrEmpty (dialogContext.Option0String)) {
+            options.Add(new KeyValuePair<string, Option>(
+                    dialogContext.Option0String, Option.Selected0));
         }
         return options;
     }
@@ -345,8 +359,24 @@ public class DialogWindow : EditorWindow {
         Option selected = Option.SelectedNone;
 
         // Render options with non-empty text.
-        var options = GetOptionMap ();
+        var options = GetOptionList();
+
+        // Space the button similar to Unity dialog. Ex.
+        // | [ Option 1 (Cancel) ]                         [ Option 2 (Alt) ] [ Option 0 (Ok) ] |
+        // |                                            [ Option 1 (Cancel) ] [ Option 0 (Ok) ] |
+        // |                                                                  [ Option 0 (Ok) ] |
+        List<int> spacesBeforeButtons = new List<int>(options.Count == 3 ?
+                new int[3] { 0, 2, 0 } :
+                new int[3] { 2, 0, 0 } );
+
         for (int i = 0; i < options.Count; ++i) {
+            // Place spaces before the button.
+            if (i < spacesBeforeButtons.Count ) {
+                for (int j = 0; j < spacesBeforeButtons[i]; ++j) {
+                    EditorGUILayout.Space();
+                }
+            }
+
             var pair = options [i];
             if (GUILayout.Button(pair.Key)) {
                 selected = pair.Value;
