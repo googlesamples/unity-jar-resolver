@@ -263,9 +263,24 @@ namespace Google {
         /// </summary>
         /// <param name="title">Title to display on the window.</param>
         /// <returns>Reference to this class</returns>
+        [Obsolete("This method deprecated. Please use CreateMultiSelectWindow<T>() instead.")]
         public static MultiSelectWindow CreateMultiSelectWindow(string title) {
             MultiSelectWindow window = (MultiSelectWindow)EditorWindow.GetWindow(
                 typeof(MultiSelectWindow), true, title, true);
+            window.Initialize();
+            return window;
+        }
+
+        /// <summary>
+        /// Get the existing multi-select window or create a new one.
+        /// To create an unique MultiSelectWindow, pass a type derived from MultiSelectWindow
+        /// as the type parameter.
+        /// </summary>
+        /// <typeparam name="T">A type that inherits from the MultiSelectWindow.</typeparam>
+        /// <param name="title">Title to display on the window.</param>
+        /// <returns>Reference to this class</returns>
+        public static T CreateMultiSelectWindow<T>(string title) where T : MultiSelectWindow {
+            T window = (T)EditorWindow.GetWindow(typeof(T), true, title, true);
             window.Initialize();
             return window;
         }

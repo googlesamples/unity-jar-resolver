@@ -28,6 +28,11 @@ namespace Google {
 [InitializeOnLoad]
 public class VersionHandlerImpl : AssetPostprocessor {
     /// <summary>
+    /// A unique class to create the multi-select window to obsolete files.
+    /// </summary>
+    private class ObsoleteFilesWindow : MultiSelectWindow {}
+
+    /// <summary>
     /// Derives metadata from an asset filename.
     /// </summary>
     public class FileMetadata {
@@ -2859,7 +2864,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
 
         bool cleanupFilesPending = cleanupFiles.Count > 0;
         if (cleanupFilesPending && !Refreshing) {
-            var window = MultiSelectWindow.CreateMultiSelectWindow(PLUGIN_NAME);
+            var window = MultiSelectWindow.CreateMultiSelectWindow<ObsoleteFilesWindow>(PLUGIN_NAME);
             Action<string> logObsoleteFile = (filename) => {
                 Log("Leaving obsolete file: " + filename, verbose: true);
             };

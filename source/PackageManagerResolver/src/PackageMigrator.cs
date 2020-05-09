@@ -29,6 +29,10 @@ namespace Google {
 /// </summary>
 [InitializeOnLoad]
 internal class PackageMigrator {
+    /// <summary>
+    /// A unique class to create the multi-select window to migrate packages.
+    /// </summary>
+    private class PackageMigratorWindow : MultiSelectWindow {}
 
     /// <summary>
     /// Map of Version Handler determined package to Package Manager Package ID and version.
@@ -943,7 +947,7 @@ internal class PackageMigrator {
                               pkg.PackageManagerPackageId)));
         }
 
-        var window = MultiSelectWindow.CreateMultiSelectWindow(WindowTitle);
+        var window = MultiSelectWindow.CreateMultiSelectWindow<PackageMigratorWindow>(WindowTitle);
         window.minSize = new UnityEngine.Vector2(800, 400);
         window.SelectedItems = new HashSet<string>(packageMapsByPackageId.Keys);
         window.AvailableItems = items;

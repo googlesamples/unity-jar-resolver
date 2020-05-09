@@ -24,6 +24,10 @@ namespace Google {
 
 [InitializeOnLoad]
 public class PackageManagerResolver : AssetPostprocessor {
+    /// <summary>
+    /// A unique class to create the multi-select window to add registries.
+    /// </summary>
+    class PackageManagerResolverWindow : MultiSelectWindow {}
 
     /// <summary>
     /// Name of the plugin.
@@ -406,7 +410,9 @@ public class PackageManagerResolver : AssetPostprocessor {
                 }
 
                 // Optional when prompting is enabled or forced.
-                var window = MultiSelectWindow.CreateMultiSelectWindow(PLUGIN_NAME);
+                var window =
+                        MultiSelectWindow.CreateMultiSelectWindow<PackageManagerResolverWindow>(
+                                PLUGIN_NAME);
                 window.minSize = new Vector2(1024, 500);
                 window.AvailableItems = registryItems;
                 window.Sort(1);

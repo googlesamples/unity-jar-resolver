@@ -20,8 +20,13 @@ using System.IO;
 using UnityEditor;
 
 namespace Google {
+
+/// <summary>
+/// A unique class to create the multi-select window to uninstall packages managed by
+/// VersionHandler.
+/// </summary>
 [InitializeOnLoad]
-public class PackageUninstallWindow : EditorWindow {
+public class PackageUninstallWindow : MultiSelectWindow {
     // Hardcoded text for the window.
     private static string windowTitle = "Uninstall Managed Packages";
     private static string caption =
@@ -36,7 +41,7 @@ public class PackageUninstallWindow : EditorWindow {
     [MenuItem("Assets/External Dependency Manager/Version Handler/Uninstall Managed Packages")]
     public static void UninstallPackage() {
         // Display MultiSelectWindow
-        MultiSelectWindow window = MultiSelectWindow.CreateMultiSelectWindow(windowTitle);
+        var window =MultiSelectWindow.CreateMultiSelectWindow<PackageUninstallWindow>(windowTitle);
         window.AvailableItems = GetSelectionList();
         window.Sort(1);
         window.Caption = caption;
