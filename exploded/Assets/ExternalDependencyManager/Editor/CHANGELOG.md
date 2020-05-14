@@ -1,3 +1,11 @@
+# Version 1.2.154 - May 14, 2020
+* All: Make each MultiSelectWindow for different purposes to have its own
+  unique window.
+* All: Replace all dialog with DialogWindow which is implemented from
+  EditorWindow.
+* Package Manager Resolver: Clarify how manifest.json will be changed in Package
+  Manager Resolver window.
+
 # Version 1.2.153 - Apr 24, 2020
 * Android Resolver: Fixed an exception when repainting the Android resolution
   window in Unity 2019.3.x.

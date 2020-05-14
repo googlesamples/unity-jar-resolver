@@ -11,7 +11,7 @@ Unity plugin that requires:
      [AARs](https://developer.android.com/studio/projects/android-library.html)).
    * iOS [CocoaPods](https://cocoapods.org/).
    * Version management of transitive dependencies.
-   * Management of Unity Package Manager (UPM) Registries.
+   * Management of Package Manager (PM) Registries.
 
 Updated releases are available on
 [GitHub](https://github.com/googlesamples/unity-jar-resolver)
@@ -69,20 +69,20 @@ Using CocoaPods allows multiple plugins to utilize shared components without
 forcing developers to fix either duplicate or incompatible versions of
 libraries included through multiple Unity plugins in their project.
 
-## Unity Package Manager Registry Setup
+## Package Manager Registry Setup
 
-The [Unity Package Manager](https://docs.unity3d.com/Manual/Packages.html)
-(UPM) makes use of [NPM](https://www.npmjs.com/) registry servers for package
+The [Package Manager](https://docs.unity3d.com/Manual/Packages.html)
+(PM) makes use of [NPM](https://www.npmjs.com/) registry servers for package
 hosting and provides ways to discover, install, upgrade and uninstall packages.
 This makes it easier for developers to manage plugins within their projects.
 
 However, installing additional package registries requires a few manual steps
 that can potentially be error prone.  The *Package Manager Resolver*
 component of this plugin integrates with
-[UPM](https://docs.unity3d.com/Manual/Packages.html) to provide a way to
-auto-install UPM package registries when a `.unitypackage` is installed which
+[PM](https://docs.unity3d.com/Manual/Packages.html) to provide a way to
+auto-install PM package registries when a `.unitypackage` is installed which
 allows plugin maintainers to ship a `.unitypackage` that can provide access
-to their own UPM registry server to make it easier for developers to
+to their own PM registry server to make it easier for developers to
 manage their plugins.
 
 ## Unity Plugin Version Management
@@ -135,7 +135,7 @@ depends upon the `PluginImporter` UnityEditor API.
 The *Package Manager Resolver* component only works with
 Unity 2018.4 or above, when
 [scoped registry](https://docs.unity3d.com/Manual/upm-scoped.html)
-support was added to the Unity Package Manager.
+support was added to the Package Manager.
 
 # Getting Started
 
@@ -205,7 +205,7 @@ target in the Unity editor.
    2. Copy and rename the
       [SampleDependencies.xml](https://github.com/googlesamples/unity-jar-resolver/blob/master/sample/Assets/ExternalDependencyManager/Editor/SampleDependencies.xml)
       file into your plugin and add the dependencies your plugin requires.
-      
+
       The XML file just needs to be under an `Editor` directory and match the
       name `*Dependencies.xml`. For example,
       `MyPlugin/Editor/MyPluginDependencies.xml`.
@@ -405,7 +405,7 @@ Dependencies for iOS are added by referring to CocoaPods.
    2. Copy and rename the
       [SampleDependencies.xml](https://github.com/googlesamples/unity-jar-resolver/blob/master/sample/Assets/ExternalDependencyManager/Editor/SampleDependencies.xml)
       file into your plugin and add the dependencies your plugin requires.
-      
+
       The XML file just needs to be under an `Editor` directory and match the
       name `*Dependencies.xml`. For example,
       `MyPlugin/Editor/MyPluginDependencies.xml`.
@@ -459,10 +459,10 @@ private static void PostProcessBuild_iOS(BuildTarget target, string buildPath)
 # Package Manager Resolver Usage
 
 Adding registries to the
-[Unity Package Manager](https://docs.unity3d.com/Manual/Packages.html)
-(UPM) is a manual process. The Package Manager Resolver (PMR) component
-of this plugin makes it easy for plugin maintainers to distribute new UPM
-registry servers and easy for plugin users to manage UPM registry servers.
+[Package Manager](https://docs.unity3d.com/Manual/Packages.html)
+(PM) is a manual process. The Package Manager Resolver (PMR) component
+of this plugin makes it easy for plugin maintainers to distribute new PM
+registry servers and easy for plugin users to manage PM registry servers.
 
 ## Adding Registries
 
@@ -474,7 +474,7 @@ registry servers and easy for plugin users to manage UPM registry servers.
    2. Copy and rename the
       [SampleRegistries.xml](https://github.com/googlesamples/unity-jar-resolver/blob/master/sample/Assets/ExternalDependencyManager/Editor/sample/Assets/ExternalDependencyManager/Editor/SampleRegistries.xml)
       file into your plugin and add the registries your plugin requires.
-      
+
       The XML file just needs to be under an `Editor` directory and match the
       name `*Registries.xml` or labeled with `gumpr_registries`. For example,
       `MyPlugin/Editor/MyPluginRegistries.xml`.
@@ -510,10 +510,10 @@ XML configuration files via the following menu options:
 
 * `Assets > External Dependency Manager > Package Manager Resolver >
   Add Registries` will prompt the user with a window which allows them to
-  add registries discovered in the project to the Unity Package Manager.
+  add registries discovered in the project to the Package Manager.
 * `Assets > External Dependency Manager > Package Manager Resolver >
   Remove Registries` will prompt the user with a window which allows them to
-  remove registries discovered in the project from the Unity Package Manager.
+  remove registries discovered in the project from the Package Manager.
 * `Assets > External Dependency Manager > Package Manager Resolver >
   Modify Registries` will prompt the user with a window which allows them to
   add or remove registries discovered in the project.
@@ -521,13 +521,13 @@ XML configuration files via the following menu options:
 ## Migration
 
 PMR can migrate Version Handler packages installed in the `Assets` folder
-to UPM packages. This requires the plugins to implement the following:
+to PM packages. This requires the plugins to implement the following:
 
 * `.unitypackage` must include a Version Handler manifests that describes
    the components of the plugin. If the plugin has no dependencies
    the manifest would just include the files in the plugin.
-* The UPM package JSON provided by the registry must include a keyword
-  (in the `versions.VERSION.keyword` list) that maps the UPM package
+* The PM package JSON provided by the registry must include a keyword
+  (in the `versions.VERSION.keyword` list) that maps the PM package
   to a Version Handler package using the format
   `vh-name:VERSION_HANDLER_MANIFEST_NAME` where `VERSION_HANDLER_MANIFEST_NAME`
   is the name of the manifest defined in the `.unitypackage`.  For
@@ -539,10 +539,10 @@ Package Manager Resolver > Migrate Packages` menu option, PMR then
 will:
 
 * List all Version Handler manager packages in the project.
-* Search all available packages in the UPM registries and fetch keywords
+* Search all available packages in the PM registries and fetch keywords
   associated with each package parsing the Version Handler manifest names
   for each package.
-* Map each installed Version Handler package to a UPM package.
+* Map each installed Version Handler package to a PM package.
 * Prompt the user to migrate the discovered packages.
 * Perform package migration for all selected packages if the user clicks
   the `Apply` button.
@@ -554,13 +554,13 @@ Package Manager Resolver > Settings` menu option:
 
 * `Add package registries` when enabled, when the plugin loads or registry
   configuration files change, this will prompt the user to add registries
-  that are not present in the Unity Package Manager.
+  that are not present in the Package Manager.
 * `Prompt to add package registries` will cause a developer to be prompted
   with a window that will ask for confirmation before adding registries.
   When this is disabled registries are added silently to the project.
 * `Prompt to migrate packages` will cause a developer to be prompted
   with a window that will ask for confirmation before migrating packages
-  installed in the `Assets` directory to UPM packages.
+  installed in the `Assets` directory to PM packages.
 * `Enable Analytics Reporting` when enabled, reports the use of the plugin
   to the developers so they can make imrpovements.
 * `Verbose logging` when enabled prints debug information to the console
@@ -578,9 +578,9 @@ The Version Handler component of this plugin manages:
 
 Since the Version Handler needs to modify Unity asset metadata (`.meta` files),
 to enable / disable components, rename and delete asset files it does not
-work with Unity Package Manager installed packages. It's still possible to
-include EDM4U in Unity Package Manager packages, the Version Handler component
-simply won't do anything to UPM plugins in this case.
+work with Package Manager installed packages. It's still possible to
+include EDM4U in Package Manager packages, the Version Handler component
+simply won't do anything to PM plugins in this case.
 
 ## Using Version Handler Managed Plugins
 
