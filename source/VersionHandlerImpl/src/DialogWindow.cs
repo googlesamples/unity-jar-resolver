@@ -320,7 +320,7 @@ public class DialogWindow : EditorWindow {
         // Adjust the dialog window size according to the rendered content.
         // Rect returned by BeginVertical() can be zeroes for a couple of frames, therefore
         // ignoring resizing for those frames.
-        if (rect != Rect.zero) {
+        if (rect.width != 0.0f && rect.height != 0.0f) {
             // Additional space at the bottom of the window.
             const float FILLER_WINDOWS_HEIGHT = 15.0f;
             float windowHeight = rect.height + FILLER_WINDOWS_HEIGHT;
