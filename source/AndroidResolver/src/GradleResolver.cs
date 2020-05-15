@@ -709,7 +709,7 @@ namespace GooglePlayServices
             var conflictsEnumerator = conflicts.GetEnumerator();
 
             // Move to the next conflicting package and prompt the user to delete a package.
-            Action promptToDeleteNextConflict;
+            Action promptToDeleteNextConflict = null;
 
             promptToDeleteNextConflict = () => {
                 bool conflictEnumerationComplete = false;
