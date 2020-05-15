@@ -1,3 +1,8 @@
+# Version 1.2.155 - May 14, 2020
+* All: Fixed compiler error when build with Unity 5.4 or below due to the
+  usage of Rect.zero.
+* All: Ignore cases when checking command line arguments.
+
 # Version 1.2.154 - May 14, 2020
 * All: Make each MultiSelectWindow for different purposes to have its own
   unique window.
