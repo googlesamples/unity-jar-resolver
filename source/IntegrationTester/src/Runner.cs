@@ -248,7 +248,7 @@ namespace Google.IntegrationTester {
         /// </summary>
         /// <param name="passed">Whether the tests passed.</param>
         private static void Exit(bool passed) {
-            if (!Environment.CommandLine.Contains("-gvh_noexitontestcompletion")) {
+            if (!Environment.CommandLine.ToLower().Contains("-gvh_noexitontestcompletion")) {
                 UnityEditor.EditorApplication.Exit(passed ? 0 : 1);
             }
         }

@@ -2476,7 +2476,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// </summary>
     public static bool Enabled {
         get {
-            return !System.Environment.CommandLine.Contains("-gvh_disable") &&
+            return !System.Environment.CommandLine.ToLower().Contains("-gvh_disable") &&
                 settings.GetBool(PREFERENCE_ENABLED, defaultValue: true);
         }
         set { settings.SetBool(PREFERENCE_ENABLED, value); }

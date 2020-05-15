@@ -112,7 +112,7 @@ public class VersionHandler {
     /// </summary>
     static VersionHandler() {
         // Schedule the process if the version handler isn't disabled on the command line.
-        if (System.Environment.CommandLine.Contains("-gvh_disable")) {
+        if (System.Environment.CommandLine.ToLower().Contains("-gvh_disable")) {
             UnityEngine.Debug.Log(String.Format("{0} bootstrap disabled",
                                                 VERSION_HANDLER_ASSEMBLY_NAME));
         } else {

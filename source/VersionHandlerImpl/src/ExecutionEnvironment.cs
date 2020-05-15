@@ -29,14 +29,14 @@ internal class ExecutionEnvironment {
     /// Whether the editor was started in batch mode.
     /// </summary>
     public static bool InBatchMode {
-        get { return Environment.CommandLine.Contains("-batchmode"); }
+        get { return Environment.CommandLine.ToLower().Contains("-batchmode"); }
     }
 
     /// <summary>
     /// Whether the editor was started with a method to executed.
     /// </summary>
     public static bool ExecuteMethodEnabled {
-        get { return Environment.CommandLine.Contains("-executeMethod"); }
+        get { return Environment.CommandLine.ToLower().Contains("-executemethod"); }
     }
 
     /// <summary>
@@ -44,7 +44,7 @@ internal class ExecutionEnvironment {
     /// </summary>
     internal static bool InteractiveMode {
         get {
-            return !(Environment.CommandLine.Contains("-gvh_noninteractive") ||
+            return !(Environment.CommandLine.ToLower().Contains("-gvh_noninteractive") ||
                      ExecutionEnvironment.InBatchMode);
         }
     }

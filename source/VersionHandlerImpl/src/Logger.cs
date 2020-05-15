@@ -49,7 +49,7 @@ namespace Google {
         /// </summary>
         internal static bool DebugLoggingEnabled {
             get {
-                return Environment.CommandLine.Contains("-gvh_log_debug");
+                return Environment.CommandLine.ToLower().Contains("-gvh_log_debug");
             }
         }
 

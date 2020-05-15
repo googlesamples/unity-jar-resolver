@@ -943,7 +943,7 @@ public class IOSResolver : AssetPostprocessor {
             }
             // If Unity was launched from Unity Cloud Build the build pipeline does not
             // open the xcworkspace so we need to force project level integration of frameworks.
-            if (System.Environment.CommandLine.Contains("-bvrbuildtarget")) {
+            if (System.Environment.CommandLine.ToLower().Contains("-bvrbuildtarget")) {
                 return false;
             }
             return (VersionHandler.GetUnityVersionMajorMinor() >= 5.6f - epsilon);
