@@ -1999,12 +1999,20 @@ namespace GooglePlayServices {
                         new Dictionary<string, List<string>>();
                 foreach (var repoAndSources in GetRepos(dependencies: dependencies)) {
                     string repoUri;
-                    if (repoAndSources.Key.StartsWith(projectFileUri) && !exportEnabled) {
+                    if (repoAndSources.Key.StartsWith(projectFileUri)) {
                         var repoPath = repoAndSources.Key.Substring(projectFileUri.Length + 1);
                         repoPath = FileUtils.PosixPathSeparators(
                             FileUtils.ReplaceBaseAssetsOrPackagesFolder(
                                 repoPath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir));
-                        repoUri = String.Format("(unityProjectPath + \"/{0}\")", repoPath);
+
+                        // If "Export Gradle Project" setting is enabled, gradle project expects
+                        // absolute path.
+                        if (exportEnabled) {
+                            repoUri = String.Format("\"{0}\"",
+                                                    Path.Combine(projectFileUri, repoPath));
+                        } else {
+                            repoUri = String.Format("(unityProjectPath + \"/{0}\")", repoPath);
+                        }
                     } else {
                         repoUri = String.Format("\"{0}\"", repoAndSources.Key);
                     }
