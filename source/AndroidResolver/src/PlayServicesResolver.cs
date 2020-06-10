@@ -2278,9 +2278,12 @@ namespace GooglePlayServices {
                     sourceLocation, targetLocation),
                     level: LogLevel.Verbose);
 
-            if (!AssetDatabase.CopyAsset(sourceLocation, targetLocation)) {
-                return String.Format("Failed to copy {0} to {1}.",
-                        sourceLocation, targetLocation);
+            // Use File.Copy() instead of AssetDatabase.CopyAsset() to prevent copying meta data.
+            try {
+                File.Copy(sourceLocation, targetLocation);
+            } catch (Exception e) {
+                return String.Format("Failed to copy {0} to {1} due to {2}",
+                        sourceLocation, targetLocation, e.ToString());
             }
 
             var unlabeledAssets = new HashSet<string>();
