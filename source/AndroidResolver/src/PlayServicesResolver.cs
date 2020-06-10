@@ -2000,10 +2000,17 @@ namespace GooglePlayServices {
                 foreach (var repoAndSources in GetRepos(dependencies: dependencies)) {
                     string repoUri;
                     if (repoAndSources.Key.StartsWith(projectFileUri)) {
-                        var repoPath = repoAndSources.Key.Substring(projectFileUri.Length + 1);
-                        repoPath = FileUtils.PosixPathSeparators(
+                        var relativePath = repoAndSources.Key.Substring(projectFileUri.Length + 1);
+                        // Convert "Assets", "Packages/packageid", or
+                        // "Library/PackageCache/packageid@version" prefix to local maven repo
+                        // path.  Note that local maven repo path only exists if the original repo
+                        // path contains .srcaar.
+                        var repoPath = FileUtils.PosixPathSeparators(
                             FileUtils.ReplaceBaseAssetsOrPackagesFolder(
-                                repoPath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir));
+                                relativePath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir));
+                        if (!Directory.Exists(repoPath)) {
+                            repoPath = relativePath;
+                        }
 
                         // If "Export Gradle Project" setting is enabled, gradle project expects
                         // absolute path.

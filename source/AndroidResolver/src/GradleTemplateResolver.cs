@@ -95,6 +95,11 @@ namespace GooglePlayServices {
             // Copy each .srcaar file to .aar while configuring the plugin importer to ignore the
             // file.
             foreach (var aar in LocalMavenRepository.FindAarsInLocalRepos(dependencies)) {
+                // Only need to copy for .srcaar
+                if (Path.GetExtension(aar).CompareTo(".srcaar") != 0) {
+                    continue;
+                }
+
                 var aarPath = aar;
                 if (FileUtils.IsUnderPackageDirectory(aar)) {
                     var logicalPackagePath = FileUtils.GetPackageDirectory(aar,
