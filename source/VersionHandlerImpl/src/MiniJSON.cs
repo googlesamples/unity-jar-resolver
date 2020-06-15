@@ -400,7 +400,7 @@ namespace MiniJSON {
         /// <summary>
         /// Converts a IDictionary / IList object or a simple type (string, int, etc.) into a JSON string
         /// </summary>
-        /// <param name="json">A Dictionary&lt;string, object&gt; / List&lt;object&gt;</param>
+        /// <param name="obj">A Dictionary&lt;string, object&gt; / List&lt;object&gt;</param>
         /// <param name="humanReadable">Whether output as human readable format with spaces and
         /// indentations.</param>
         /// <param name="indentSpaces">Number of spaces for each level of indentation.</param>

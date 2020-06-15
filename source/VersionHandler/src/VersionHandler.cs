@@ -459,7 +459,7 @@ public class VersionHandler {
     /// </summary>
     /// <param name="objectInstance">Object to call a method on.</param>
     /// <param name="methodName">Name of the method to call.</param>
-    /// <param name="arg">Positional arguments of the method.</param>
+    /// <param name="args">Positional arguments of the method.</param>
     /// <param name="namedArgs">Named arguments of the method.</param>
     /// <returns>object returned by the method.</returns>
     public static object InvokeInstanceMethod(
@@ -475,7 +475,7 @@ public class VersionHandler {
     /// </summary>
     /// <param name="type">Class to call the method on.</param>
     /// <param name="methodName">Name of the method to call.</param>
-    /// <param name="arg">Positional arguments of the method.</param>
+    /// <param name="args">Positional arguments of the method.</param>
     /// <param name="namedArgs">Named arguments of the method.</param>
     /// <returns>object returned by the method.</returns>
     public static object InvokeStaticMethod(
@@ -491,7 +491,7 @@ public class VersionHandler {
     /// <param name="type">Class to call the method on.</param>
     /// <param name="objectInstance">Object to call a method on.</param>
     /// <param name="methodName">Name of the method to call.</param>
-    /// <param name="arg">Positional arguments of the method.</param>
+    /// <param name="args">Positional arguments of the method.</param>
     /// <param name="namedArgs">Named arguments of the method.</param>
     /// <returns>object returned by the method.</returns>
     public static object InvokeMethod(

@@ -240,7 +240,7 @@ public class EditorMeasurement {
     /// Set the installation source from the location of an assembly in the plugin relative to the
     /// project directory. If InstallSource is not null it takes precedence over this property.
     /// </summary>
-    /// <note>This path must use the system directory separator.<note>
+    /// <note>This path must use the system directory separator.</note>
     public string InstallSourceFilename { get; set; }
 
     /// <summary>
@@ -251,7 +251,7 @@ public class EditorMeasurement {
     /// <summary>
     /// Generate common query parameters.
     /// </summary>
-    /// <return>Query string with common parameters.</returns>
+    /// <returns>Query string with common parameters.</returns>
     internal string CommonQuery {
         get {
             var query = "";
@@ -285,7 +285,7 @@ public class EditorMeasurement {
     /// Construct an object to report usage of a plugin.
     /// </summary>
     /// <param name="projectSettings">Settings to store preferences.</param>
-    /// <param name="logger">Logger used to display reported events.</params>
+    /// <param name="logger">Logger used to display reported events.</param>
     /// <param name="analyticsTrackingId">ID used to report analytics data.</param>
     /// <param name="settingsNamespace">Prefix applied to settings stored by this instance.
     /// This should be a globally unique ID. To minimize the chances of collision developers should
@@ -426,7 +426,7 @@ public class EditorMeasurement {
     /// <summary>
     /// Generate an analytics "cookie" / UUID / GUID.
     /// </summary>
-    /// <returns>A cookie string.</return>
+    /// <returns>A cookie string.</returns>
     private static string GenerateCookie() {
         return Guid.NewGuid().ToString().Replace("-", "").ToLower();
     }
@@ -451,7 +451,7 @@ public class EditorMeasurement {
     /// <param name="baseQuery">URL path or query to append to. If this is null or empty
     /// the returned value will be the supplied query argument.</param>
     /// <param name="query">Query to append.</param>
-    /// <return>Path concatenated with the supplied query string.</param>
+    /// <returns>Path concatenated with the supplied query string.</returns>
     internal static string ConcatenateQueryStrings(string baseQuery, string query) {
         if (String.IsNullOrEmpty(query)) return baseQuery;
         if (String.IsNullOrEmpty(baseQuery)) return query;

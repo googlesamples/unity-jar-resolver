@@ -375,7 +375,7 @@ namespace GooglePlayServices
             /// a newline isn't present.
             /// </summary>
             /// <param name="handle">Handle of the stream to query.</param>
-            /// <returns>List of data for the requested stream.</return>
+            /// <returns>List of data for the requested stream.</returns>
             public List<StreamData> GetBufferedData(int handle)
             {
                 List<StreamData> handleData;
@@ -397,7 +397,6 @@ namespace GooglePlayServices
             /// <summary>
             /// Aggregate the specified list of StringBytes into a single structure.
             /// </summary>
-            /// <param name="handle">Stream handle.</param>
             /// <param name="dataStream">Data to aggregate.</param>
             public static StreamData Aggregate(List<StreamData> dataStream)
             {

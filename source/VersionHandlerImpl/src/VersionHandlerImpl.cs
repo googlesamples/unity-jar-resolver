@@ -386,7 +386,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// Whether it's possible to change the asset metadata.
         /// </summary>
         /// <returns>true if the asset metadata for this file is read-only,
-        /// false otherwise.</return>
+        /// false otherwise.</returns>
         public bool IsReadOnly {
             get {
                 return FileUtils.IsUnderPackageDirectory(filename);
@@ -414,7 +414,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// Parse metadata from the specified filename and store in this class.
         /// </summary>
         /// <param name="filenameToParse">Parse metadata from the specified filename.</param>
-        /// <retuns>Filename with metadata removed.</returns>
+        /// <returns>Filename with metadata removed.</returns>
         private string ParseMetadataFromFilename(string filenameToParse) {
             var filenameComponents = new FilenameComponents(filenameToParse);
             // Parse metadata from the filename.
@@ -863,7 +863,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// If the version string contains more than MAX_VERSION_COMPONENTS the
         /// remaining components are ignored.
         /// </summary>
-        /// <param name="version">Version string to parse.</param>
+        /// <param name="versionString">Version string to parse.</param>
         /// <returns>64-bit version number.</returns>
         public static long CalculateVersion(string versionString) {
             long versionNumber = 0;
@@ -886,7 +886,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <summary>
         /// Convert a numeric version back to a version string.
         /// </summary>
-        /// <param name="version">Numeric version number.</param>
+        /// <param name="versionNumber">Numeric version number.</param>
         /// <returns>Version string.</returns>
         public static string VersionNumberToString(long versionNumber) {
             List<string> components = new List<string>();
@@ -1002,7 +1002,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// recent versions.
         /// </summary>
         /// <returns>true if any plugin metadata was modified and requires an
-        /// AssetDatabase.Refresh(), false otherwise.</return>
+        /// AssetDatabase.Refresh(), false otherwise.</returns>
         public bool EnableMostRecentPlugins() {
             return EnableMostRecentPlugins(new HashSet<string>());
         }
@@ -1013,7 +1013,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// </summary>
         /// <param name="disableFiles">Set of files in the project that should be disabled.</param>
         /// <returns>true if any plugin metadata was modified and requires an
-        /// AssetDatabase.Refresh(), false otherwise.</return>
+        /// AssetDatabase.Refresh(), false otherwise.</returns>
         public bool EnableMostRecentPlugins(HashSet<string> disableFiles) {
             bool modified = false;
             int versionIndex = 0;
@@ -1531,7 +1531,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="forceUpdate">Whether the update was forced by the
         /// user.</param>
         /// <returns>true if any plugin metadata was modified and requires an
-        /// AssetDatabase.Refresh(), false otherwise.</return>
+        /// AssetDatabase.Refresh(), false otherwise.</returns>
         public bool EnableMostRecentPlugins(bool forceUpdate) {
             return EnableMostRecentPlugins(forceUpdate, new HashSet<string>());
         }
@@ -1545,7 +1545,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// user.</param>
         /// <param name="disableFiles">Set of files that should be disabled.</param>
         /// <returns>true if any plugin metadata was modified and requires an
-        /// AssetDatabase.Refresh(), false otherwise.</return>
+        /// AssetDatabase.Refresh(), false otherwise.</returns>
         public bool EnableMostRecentPlugins(bool forceUpdate,
                                             HashSet<string> disableFiles) {
             bool modified = false;
@@ -1635,7 +1635,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <summary>
         /// Parse metadata from a set of filenames.
         /// </summary>
-        /// <param name="assetFiles">Filenames to parse.</param>
+        /// <param name="filenames">Filenames to parse.</param>
         /// <returns>FileMetadataSet referencing metadata parsed from filenames
         /// ordered by version and bucketed by canonical filename.
         /// </returns>
@@ -1653,7 +1653,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// with metadata that selects the set of target platforms.
         /// </summary>
         /// <param name="metadataSet">Set to filter.</param>
-        /// <returns>Filtered MetadataSet.
+        /// <returns>Filtered MetadataSet.</returns>
         public static FileMetadataSet FindWithPendingUpdates(
                 FileMetadataSet metadataSet) {
             FileMetadataSet outMetadataSet = new FileMetadataSet();
@@ -1778,7 +1778,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// renamed it's updated with the new filenames.</param>
         /// <returns>Metadata of files in the package indexed by current filename.
         /// The FileMetadataByVersion will be null for files that aren't present in the
-        /// asset database.returns>
+        /// asset database.</returns>
         public Dictionary<string, KeyValuePair<FileMetadata, FileMetadataByVersion>>
                 ParseLegacyManifest(FileMetadata metadata, FileMetadataSet metadataSet) {
             var filesInManifest =
@@ -2090,9 +2090,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// <param name="manifestReferencesList">List of manifests to query
         /// for obsolete files.</param>
         /// <param name="metadataSet">Set of metadata to query for obsolete
-        /// files.<param>
-        /// <returns>ObsoleteFiles instance which references the discovered
-        /// obsolete files.</returns>
+        /// files.</param>
         public ObsoleteFiles(
                 List<ManifestReferences> manifestReferencesList,
                 FileMetadataSet metadataSet) {

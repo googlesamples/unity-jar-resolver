@@ -116,7 +116,6 @@ namespace Google.IntegrationTester {
         /// <summary>
         /// Add a single test case to the list to be executed.
         /// </summary>
-        /// <remarks>
         /// <param name="test">Test case to add to the list to execute.</param>
         public static void ScheduleTestCase(TestCase test) {
             testCases.Add(test);
@@ -139,7 +138,6 @@ namespace Google.IntegrationTester {
         /// <remarks>
         /// Finds and calls all initialization methods with the InitializerAttribute.
         /// </remarks>
-        /// <param name="unityVersion">Major & minor version of Unity.</param>
         private static void ConfigureTestCases() {
             unityVersion = Google.VersionHandler.GetUnityVersionMajorMinor();
 
@@ -332,8 +330,8 @@ namespace Google.IntegrationTester {
         }
 
         /// <summary>
-        // Log a test case result to the journal so that it isn't executed again if the app
-        // domain is reloaded.
+        /// Log a test case result to the journal so that it isn't executed again if the app
+        /// domain is reloaded.
         /// </summary>
         private static bool WriteTestCaseResult(TestCaseResult testCaseResult) {
             var existingTestCaseResults = ReadTestCaseResults();

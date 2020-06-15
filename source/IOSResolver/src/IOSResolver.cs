@@ -72,7 +72,7 @@ public class IOSResolver : AssetPostprocessor {
         /// Since order is important sources specified in this list
         /// are interleaved across each Pod added to the resolver.
         /// e.g Pod1.source[0], Pod2.source[0] ...
-        ////    Pod1.source[1], Pod2.source[1] etc.
+        ///     Pod1.source[1], Pod2.source[1] etc.
         ///
         /// See: https://guides.cocoapods.org/syntax/podfile.html#source
         /// </summary>
@@ -186,9 +186,9 @@ public class IOSResolver : AssetPostprocessor {
 
         /// <summary>
         /// Convert min target SDK to an integer in the form
-        // (major * 10) + minor.
+        /// (major * 10) + minor.
         /// </summary>
-        /// <return>Numeric minimum SDK revision required by this pod.</return>
+        /// <returns>Numeric minimum SDK revision required by this pod.</returns>
         public int MinTargetSdkToVersion() {
             string sdkString =
                 String.IsNullOrEmpty(minTargetSdk) ? "0.0" : minTargetSdk;
@@ -1330,7 +1330,7 @@ public class IOSResolver : AssetPostprocessor {
 
     /// <summary>
     /// Convert a target SDK string into a value of the form
-    // (major * 10) + minor.
+    /// (major * 10) + minor.
     /// </summary>
     /// <returns>Integer representation of the SDK.</returns>
     internal static int TargetSdkStringToVersion(string targetSdk) {
@@ -1366,7 +1366,7 @@ public class IOSResolver : AssetPostprocessor {
     /// <summary>
     /// Determine whether any pods need bitcode disabled.
     /// </summary>
-    /// <returns>List of pod names with bitcode disabled.</return>
+    /// <returns>List of pod names with bitcode disabled.</returns>
     private static List<string> FindPodsWithBitcodeDisabled() {
         var disabled = new List<string>();
         foreach (var pod in pods.Values) {
@@ -1839,7 +1839,7 @@ public class IOSResolver : AssetPostprocessor {
     /// this returns the string...
     ///
     /// source 'http://myrepo.com/Specs.git'
-    /// source 'http://anotherrepo.com/Specs.git'
+    /// source 'http://anotherrepo.com/Specs.git'</returns>
     private static string GeneratePodfileSourcesSection() {
         var interleavedSourcesLines = new List<string>();
         var processedSources = new HashSet<string>();
@@ -2064,7 +2064,7 @@ public class IOSResolver : AssetPostprocessor {
         /// Delegate method associated with the container.  This enables the
         /// following pattern:
         ///
-        /// var container = new DelegateContainer<CommandLine.CompletionHandler>();
+        /// var container = new DelegateContainer&lt;CommandLine.CompletionHandler>();
         /// container.Handler = (CommandLine.Result result) => { RunNext(container.Handler); };
         /// </summary>
         public T Handler { get; set; }

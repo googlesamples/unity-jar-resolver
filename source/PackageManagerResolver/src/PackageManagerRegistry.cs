@@ -80,7 +80,7 @@ namespace Google {
         /// <summary>
         /// Convert to a human readable string excluding the TermsOfService and CreatedBy fields.
         /// </summary>
-        /// <returns>String representation of this instance.</return>
+        /// <returns>String representation of this instance.</returns>
         public override string ToString() {
             return String.Format("name: {0}, url: {1}, scopes: {2}",
                                  Name, Url,

@@ -132,7 +132,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Find a Java tool.
         /// </summary>
-        /// <param name="toolName">Name of the tool to search for.</param>
+        /// <param name="javaTool">Name of the tool to search for.</param>
         /// <returns>Path to the tool if it's found, throws a ToolNotFoundException
         /// otherwise.</returns>
         private static string FindJavaTool(string javaTool)

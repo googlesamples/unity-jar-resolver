@@ -182,7 +182,7 @@ namespace Google.VersionHandlerImpl.Tests {
         /// <summary>
         /// Create a display dialog delegate.
         /// </summary>
-        /// <param name="selectedOption">0..2</param>
+        /// <param name="selectedOptions">0..2</param>
         /// <returns>Display dialog delegate.</returns>
         private DialogWindow.DisplayDelegate CreateDisplayDialogDelegate(
                 List<DialogWindow.Option> selectedOptions) {

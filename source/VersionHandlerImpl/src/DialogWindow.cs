@@ -331,7 +331,7 @@ public class DialogWindow : EditorWindow {
     /// <summary>
     /// Get a list of pairs of the text and enum of each non-empty option.
     /// </summary>
-    /// <return>A list of key-value pair where key is text and value is enum.</return>
+    /// <returns>A list of key-value pair where key is text and value is enum.</returns>
     private List<KeyValuePair<string, Option>> GetOptionList() {
         List<KeyValuePair<string, Option>> options = new List<KeyValuePair<string, Option>>();
 

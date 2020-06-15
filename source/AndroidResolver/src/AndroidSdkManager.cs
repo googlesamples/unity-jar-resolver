@@ -975,7 +975,7 @@ namespace GooglePlayServices {
         /// </summary>
         /// <param name="toolName">Name of the tool to search for.</param>
         /// <param name="sdkPath">SDK path to search for the tool.  If this is null or empty, the
-        // system path is searched instead.</param>
+        /// system path is searched instead.</param>
         /// <returns>String with the path to the tool if found, null otherwise.</returns>
         private static string FindAndroidSdkTool(string toolName, string sdkPath = null) {
             if (String.IsNullOrEmpty(sdkPath)) {

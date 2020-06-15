@@ -389,7 +389,7 @@ public class RunOnMainThread {
     /// Execute polling jobs, removing completed jobs from the list.
     /// This method must be called from the main thread.
     /// </summary>
-    /// <returns>Number of jobs remaining in the polling job list.<returns>
+    /// <returns>Number of jobs remaining in the polling job list.</returns>
     private static int ExecutePollingJobs() {
         int numberOfPollingJobs;
         bool completedJobs = false;

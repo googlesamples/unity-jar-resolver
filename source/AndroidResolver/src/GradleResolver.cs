@@ -139,7 +139,7 @@ namespace GooglePlayServices
         /// * Path relative to project folder, ex."Assets/Firebase/m2repository"
         /// </summary>
         /// <param name="repoPath">Repo path to convert.</param>
-        /// <param name="sourceLocation>XML or source file this path is referenced from. If this is
+        /// <param name="sourceLocation">XML or source file this path is referenced from. If this is
         /// null the calling method's source location is used when logging the source of this
         /// repo declaration.</param>
         /// <returns>URI to the repo.</returns>
@@ -1025,9 +1025,12 @@ namespace GooglePlayServices
         /// <summary>
         /// Processes the aars.
         /// </summary>
-        /// <remarks>Each aar copied is inspected and determined if it should be
+        /// <remarks>
+        /// <para>
+        /// Each aar copied is inspected and determined if it should be
         /// exploded into a directory or not. Unneeded exploded directories are
         /// removed.
+        /// </para>
         /// <para>
         /// Exploding is needed if the version of Unity is old, or if the artifact
         /// has been explicitly flagged for exploding.  This allows the subsequent
@@ -1035,6 +1038,7 @@ namespace GooglePlayServices
         /// supported by the current versions of the manifest merging process that
         /// Unity uses.
         /// </para>
+        /// </remarks>
         /// <param name="dir">The directory to process.</param>
         /// <param name="updatedFiles">Set of files that were recently updated and should be
         /// processed.</param>

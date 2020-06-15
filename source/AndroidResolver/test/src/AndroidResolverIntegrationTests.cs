@@ -672,6 +672,7 @@ public class AndroidResolverIntegrationTests {
     /// This filters all Unity .meta files from the resultant list.
     /// </summary>
     /// <param name="searchDir">Directory to search.</param>
+    /// <param name="filesToIgnore">Set of files to relative to the generatedAssetsDir.</param>
     /// <param name="relativeDir">Root path for relative filenames.  This should be any directory
     /// under the specified searchDir argument.  If this is null, searchDir is used.</param>
     /// <returns>Dictionary of file paths mapped to relative file paths.</returns>
