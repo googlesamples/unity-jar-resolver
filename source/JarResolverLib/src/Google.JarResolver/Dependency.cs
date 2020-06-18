@@ -75,6 +75,12 @@ namespace Google.JarResolver {
                         continue;
                     }
                     filterFrames = false;
+
+                    // From Unity 2019, System.Environment.StackTrace stops returning parentheses.
+                    // Remove the parentheses here to keep result consistent.
+                    if (frameString.EndsWith("()")) {
+                        frameString = frameString.Substring(0, frameString.Length - 2);
+                    }
                     usefulFrames.Add(frameString);
                 }
                 createdBy = String.Join("\n", usefulFrames.ToArray());

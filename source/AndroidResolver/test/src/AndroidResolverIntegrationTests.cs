@@ -66,6 +66,11 @@ public class AndroidResolverIntegrationTests {
     /// </summary>
     [IntegrationTester.Initializer]
     public static void ConfigureTestCases() {
+        // The default application name is different in different versions of Unity. Set the value
+        // in the beginning of the test to ensure all AndroidManifest.xml are using the same
+        // application name across different versions of Unity.
+        UnityCompat.SetApplicationId(UnityEditor.BuildTarget.Android, "com.Company.ProductName");
+
         // Set of files to ignore (relative to the Assets/Plugins/Android directory) in all tests
         // that do not use the Gradle template.
         var nonGradleTemplateFilesToIgnore = new HashSet<string>() {
@@ -202,31 +207,6 @@ public class AndroidResolverIntegrationTests {
                     }
                 },
                 new IntegrationTester.TestCase {
-                    Name = "ResolveForInternalBuildSystem",
-                    Method = (testCase, testCaseComplete) => {
-                        ClearAllDependencies();
-                        SetupDependencies();
-                        Resolve("Internal", false,
-                                AarsWithNativeLibrariesSupported ?
-                                    "ExpectedArtifacts/NoExport/InternalNativeAars" :
-                                    "ExpectedArtifacts/NoExport/InternalNativeAarsExploded",
-                                null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
-                    }
-                },
-                new IntegrationTester.TestCase {
-                    Name = "ResolveForInternalBuildSystemUsingJetifier",
-                    Method = (testCase, testCaseComplete) => {
-                        ClearAllDependencies();
-                        SetupDependencies();
-                        GooglePlayServices.SettingsDialog.UseJetifier = true;
-                        Resolve("Internal", false,
-                                AarsWithNativeLibrariesSupported ?
-                                    "ExpectedArtifacts/NoExport/InternalNativeAarsJetifier" :
-                                    "ExpectedArtifacts/NoExport/InternalNativeAarsExplodedJetifier",
-                                null, nonGradleTemplateFilesToIgnore, testCase, testCaseComplete);
-                    }
-                },
-                new IntegrationTester.TestCase {
                     Name = "ResolveForGradleBuildSystemAndExport",
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
@@ -308,6 +288,38 @@ public class AndroidResolverIntegrationTests {
                     }
                 },
             });
+
+        // Internal build system for Android is removed in Unity 2019, even
+        // UnityEditor.AndroidBuildSystem.Internal still exist.
+        if (IntegrationTester.Runner.UnityVersion < 2019.0f) {
+            IntegrationTester.Runner.ScheduleTestCases(new [] {
+                    new IntegrationTester.TestCase {
+                        Name = "ResolveForInternalBuildSystem",
+                        Method = (testCase, testCaseComplete) => {
+                            ClearAllDependencies();
+                            SetupDependencies();
+                            Resolve("Internal", false, AarsWithNativeLibrariesSupported ?
+                                    "ExpectedArtifacts/NoExport/InternalNativeAars" :
+                                    "ExpectedArtifacts/NoExport/InternalNativeAarsExploded",
+                                    null, nonGradleTemplateFilesToIgnore, testCase,
+                                    testCaseComplete);
+                        }
+                    },
+                    new IntegrationTester.TestCase {
+                        Name = "ResolveForInternalBuildSystemUsingJetifier",
+                        Method = (testCase, testCaseComplete) => {
+                            ClearAllDependencies();
+                            SetupDependencies();
+                            GooglePlayServices.SettingsDialog.UseJetifier = true;
+                            Resolve("Internal", false, AarsWithNativeLibrariesSupported ?
+                                    "ExpectedArtifacts/NoExport/InternalNativeAarsJetifier" :
+                                    "ExpectedArtifacts/NoExport/InternalNativeAarsExplodedJetifier",
+                                    null, nonGradleTemplateFilesToIgnore, testCase,
+                                    testCaseComplete);
+                        }
+                    },
+                });
+        }
 
         // Test resolution with Android ABI filtering.
         if (IntegrationTester.Runner.UnityVersion >= 2018.0f) {
@@ -455,7 +467,7 @@ public class AndroidResolverIntegrationTests {
                     "Assets/ExternalDependencyManager/Editor/TestDependencies.xml:10"),
                 new KeyValuePair<string, string>(
                     "com.google.firebase:firebase-common:16.0.0",
-                    "Google.AndroidResolverIntegrationTests.SetupDependencies()")
+                    "Google.AndroidResolverIntegrationTests.SetupDependencies")
             },
             PlayServicesResolver.GetPackageSpecs(),
             "Package Specs", testCaseResult);
