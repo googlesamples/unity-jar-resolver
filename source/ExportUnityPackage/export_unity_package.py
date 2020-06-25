@@ -3354,7 +3354,11 @@ def main(unused_argv):
     if FLAGS.output_zip:
       output_dir = tempfile.mkdtemp()
     elif not os.path.exists(output_dir):
-      os.makedirs(output_dir)
+      try:
+        os.makedirs(output_dir)
+      except FileExistsError:
+        # This can be racy with other build scripts.
+        pass
     elif not os.path.isdir(output_dir):
       logging.error("output_dir %s is not a directory", output_dir)
       return 1
