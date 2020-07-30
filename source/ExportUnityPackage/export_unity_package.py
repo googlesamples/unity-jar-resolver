@@ -541,13 +541,11 @@ LINUX_SHARED_LIBRARY_PREFIX = "lib"
 LINUX_SHARED_LIBRARY_EXTENSION = ".so"
 # Path relative to the "Assets" dir of native Linux plugin libraries.
 LINUX_SHARED_LIBRARY_PATH = re.compile(
-    r"^Plugins{sep}(x86|x86_64){sep}(.*{ext})".format(
-        sep=os.path.sep,
+    r"^Plugins/(x86|x86_64)/(.*{ext})".format(
         ext=LINUX_SHARED_LIBRARY_EXTENSION.replace(".", r"\.")))
 # Path components required for native desktop libraries.
 SHARED_LIBRARY_PATH = re.compile(
-    (r"(^|{sep})Plugins{sep}(x86|x86_64){sep}(.*{sep}|)[^{sep}]+"
-     r"\.(so|dll|bundle)$").format(sep=os.path.sep))
+    r"(^|/)Plugins/(x86|x86_64)/(.*/|)[^/]+\.(so|dll|bundle)$")
 # Prefix of the keywords to be added to UPM manifest to link to legacy manifest.
 UPM_KEYWORDS_MANIFEST_PREFIX = "vh-name:"
 # Everything in a Unity plugin - at the moment - lives under the Assets
@@ -569,6 +567,17 @@ try:
 except NameError:
   STR_OR_UNICODE = [str]
   unicode = str  # pylint: disable=redefined-builtin,invalid-name
+
+def posix_path(path):
+  """Convert path separators to POSIX style.
+
+  Args:
+    path: Path to convert.
+
+  Returns:
+    Path with POSIX separators, i.e / rather than \\.
+  """
+  return path.replace('\\', '/')
 
 
 class MissingGuidsError(Exception):
@@ -638,7 +647,7 @@ class DuplicateGuidsChecker(object):
       guid: GUID to add to this instance.
       path: Path associated with this GUID.
     """
-    self._paths_by_guid[guid].add(path)
+    self._paths_by_guid[guid].add(posix_path(path))
 
   def check_for_duplicates(self):
     """Check the set of GUIDs for duplicate paths.
@@ -960,7 +969,7 @@ class GuidDatabase(object):
       guid_map = safe_dict_get_value(guids_json, plugin_version,
                                      default_value={})
       for filename, guid in guid_map.items():
-        self.add_guid(filename, guid)
+        self.add_guid(posix_path(filename), guid)
 
       if plugin_version:
         # Aggregate guids for older versions of files.
@@ -983,6 +992,7 @@ class GuidDatabase(object):
       path: Path associated with the GUID.
       guid: GUID for the asset at the path.
     """
+    path = posix_path(path)
     self._guids_by_path[path] = guid
     self._duplicate_guids_checker.add_guid_and_path(guid, path)
 
@@ -1026,6 +1036,7 @@ class GuidDatabase(object):
     Raises:
       MissingGuidsError: If the GUID isn't found.
     """
+    path = posix_path(path)
     guid = self._guids_by_path.get(path)
     if not guid:
       raise MissingGuidsError([path])
@@ -1108,7 +1119,7 @@ def version_handler_filename(filename, field_value_list):
     components.extend([VERSION_HANDLER_FIELD_SEPARATOR,
                        VERSION_HANDLER_FIELD_SEPARATOR.join(fields)])
   components.append(extension)
-  return "".join(components)
+  return posix_path("".join(components))
 
 
 class Asset(object):
@@ -1167,7 +1178,7 @@ class Asset(object):
     Returns:
       Filename string.
     """
-    return self._filename
+    return posix_path(self._filename)
 
   @property
   def filename_absolute(self):
@@ -1176,7 +1187,7 @@ class Asset(object):
     Returns:
       Filename string.
     """
-    return self._filename_absolute
+    return posix_path(self._filename_absolute)
 
   @property
   def filename_guid_lookup(self):
@@ -1185,7 +1196,7 @@ class Asset(object):
     Returns:
       Filename string.
     """
-    return self._filename_guid_lookup
+    return posix_path(self._filename_guid_lookup)
 
   @property
   def is_folder(self):
@@ -1239,7 +1250,7 @@ class Asset(object):
     Returns:
       Modified importer_metadata.
     """
-    filename = os.path.normpath(filename)
+    filename = posix_path(os.path.normpath(filename))
     is_shared_library = SHARED_LIBRARY_PATH.search(filename)
     if not is_shared_library:
       return importer_metadata
@@ -1557,7 +1568,8 @@ class Asset(object):
     # project.
     with open(os.path.join(output_asset_dir, "pathname"), "wt") as (
         pathname_file):
-      pathname_file.write(os.path.join(ASSETS_DIRECTORY, self.filename))
+      pathname_file.write(posix_path(os.path.join(ASSETS_DIRECTORY,
+                                                  self.filename)))
     return output_asset_dir
 
   def write_upm(self, output_dir, guid, timestamp=-1):
@@ -2331,7 +2343,8 @@ class PackageConfiguration(ConfigurationBlock):
       os.makedirs(manifest_directory)
     with open(manifest_absolute_path, "wt") as manifest_file:
       manifest_file.write(
-          "%s\n" % "\n".join([os.path.join(ASSETS_DIRECTORY, asset.filename)
+          "%s\n" % "\n".join([posix_path(os.path.join(ASSETS_DIRECTORY,
+                                                      asset.filename))
                               for asset in Asset.sorted_by_filename(assets)]))
     # Retrieve a template manifest asset if it exists.
     manifest_asset = [asset for asset in assets
@@ -3295,7 +3308,7 @@ def copy_files_to_dir(colon_separated_input_output_filenames,
   copied_files = []
   for additional_file in colon_separated_input_output_filenames:
     additional_file_args = additional_file.split(":")
-    input_filename = additional_file_args[0]
+    input_filename = posix_path(additional_file_args[0])
 
     # Get the output filename.
     output_filename = input_filename
@@ -3306,11 +3319,11 @@ def copy_files_to_dir(colon_separated_input_output_filenames,
     # Remove the drive or root directory from the output filename.
     if os.path.normpath(output_filename).startswith(os.path.sep):
       output_filename = output_filename[len(os.path.sep):]
-    output_filename = os.path.join(output_dir, output_filename)
+    output_filename = posix_path(os.path.join(output_dir, output_filename))
 
     # Copy the file to the output directory.
     copy_and_set_rwx(input_filename, output_filename)
-    copied_files.append(output_filename)
+    copied_files.append(posix_path(output_filename))
   return copied_files
 
 

@@ -1289,9 +1289,10 @@ class PackageConfigurationTest(absltest.TestCase):
                        manifest_asset.filename)
       self.assertEqual("Foo/Bar/Test_version-1.2.3_manifest.txt",
                        manifest_asset.filename_guid_lookup)
-      manifest_absolute_path = os.path.join(
-          output_directory, "Foo/Bar/Test_version-1.2.3_manifest.txt")
-      self.assertEqual(manifest_absolute_path, manifest_asset.filename_absolute)
+      manifest_absolute_path = export_unity_package.posix_path(os.path.join(
+          output_directory, "Foo/Bar/Test_version-1.2.3_manifest.txt"))
+      self.assertEqual(manifest_absolute_path,
+                       manifest_asset.filename_absolute)
       self.assertFalse(manifest_asset.is_folder)
       self.assertEqual(self.expected_manifest_metadata,
                        manifest_asset.importer_metadata)
@@ -1355,7 +1356,8 @@ class PackageConfigurationTest(absltest.TestCase):
       self.assertEqual("package.json", manifest_asset.filename)
       self.assertEqual("com.company.test/package.json",
                        manifest_asset.filename_guid_lookup)
-      manifest_absolute_path = os.path.join(output_directory, "package.json")
+      manifest_absolute_path = export_unity_package.posix_path(
+          os.path.join(output_directory, "package.json"))
       self.assertEqual(manifest_absolute_path, manifest_asset.filename_absolute)
       self.assertFalse(manifest_asset.is_folder)
       self.assertEqual(self.expected_upm_manifest_metadata,
@@ -2240,11 +2242,11 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
         [os.path.join(self.assets_dir, "Firebase"),
          os.path.join(self.assets_dir, "PlayServicesResolver")])
     self.assertCountEqual(
-        [os.path.join(
-            self.assets_dir, "Firebase/Plugins/Firebase.Analytics.dll"),
-         os.path.join(
+        [export_unity_package.posix_path(os.path.join(
+            self.assets_dir, "Firebase/Plugins/Firebase.Analytics.dll")),
+         export_unity_package.posix_path(os.path.join(
              self.assets_dir,
-             "PlayServicesResolver/Editor/Google.VersionHandler.dll")],
+             "PlayServicesResolver/Editor/Google.VersionHandler.dll"))],
         [asset.filename_absolute for asset in found_assets])
 
   def test_find_assets_using_wildcard(self):
@@ -3245,6 +3247,10 @@ class FileOperationsTest(absltest.TestCase):
     super(FileOperationsTest, self).setUp()
     self.assets_dir = os.path.join(TEST_DATA_PATH, "Assets")
     self.temp_dir = os.path.join(FLAGS.test_tmpdir, "copy_temp")
+    self.expected_mode = stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+    if platform.system() == 'Windows':
+      # Windows doesn't support the executable mode so ignore it in tests.
+      self.expected_mode = self.expected_mode & ~stat.S_IXUSR
     os.makedirs(self.temp_dir)
 
   def tearDown(self):
@@ -3264,9 +3270,8 @@ class FileOperationsTest(absltest.TestCase):
     export_unity_package.copy_and_set_rwx(source_path, target_path)
     self.assertTrue(os.path.exists(target_path))
     self.assertTrue(filecmp.cmp(source_path, target_path))
-    self.assertEqual(
-        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
-        os.stat(target_path).st_mode & stat.S_IRWXU)
+    self.assertEqual(self.expected_mode,
+                     os.stat(target_path).st_mode & stat.S_IRWXU)
 
   def test_copy_and_set_rwx_new_dir(self):
     """Copy a file into a non-existent directory."""
@@ -3281,9 +3286,8 @@ class FileOperationsTest(absltest.TestCase):
     export_unity_package.copy_and_set_rwx(source_path, target_path)
     self.assertTrue(os.path.exists(target_path))
     self.assertTrue(filecmp.cmp(source_path, target_path))
-    self.assertEqual(
-        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
-        os.stat(target_path).st_mode & stat.S_IRWXU)
+    self.assertEqual(self.expected_mode,
+                     os.stat(target_path).st_mode & stat.S_IRWXU)
 
   def test_copy_files_to_dir(self):
     """Test copying files into a directory using a variety of target paths."""
@@ -3324,11 +3328,12 @@ class FileOperationsTest(absltest.TestCase):
     cmp_result = filecmp.dircmp(source_path, target_path)
     self.assertFalse(cmp_result.left_only or cmp_result.right_only or
                      cmp_result.diff_files)
+    # NOTE: Folders have the executable bit set on Windows.
     self.assertEqual(
         stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
         os.stat(os.path.join(target_path, "Editor")).st_mode & stat.S_IRWXU)
     self.assertEqual(
-        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
+        self.expected_mode,
         (os.stat(os.path.join(target_path, "Editor.meta")).st_mode &
             stat.S_IRWXU))
 
