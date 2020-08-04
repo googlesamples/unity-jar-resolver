@@ -658,38 +658,19 @@ public class IOSResolver : AssetPostprocessor {
         // so we install the DLL loader first then try using the Xcode module.
         RemapXcodeExtension();
 
-        // Cache the flag to prevent string comparison in every frame during
-        // PollOnUpdateUntilComplete()
-        bool isExecuteMethodEnabled =  ExecutionEnvironment.ExecuteMethodEnabled;
-
-        // Delay initialization until the build target is iOS and the editor is not in play mode.
-        RunOnMainThread.PollOnUpdateUntilComplete(() => {
-            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS ||
-                EditorApplication.isPlayingOrWillChangePlaymode) {
-                // If Unity is launched with -executeMethod, in some Unity versions, editor
-                // update will never be called. As a result, PollOnUpdateUntilComplete() will
-                // attempt to call this poll function repeating on current thread until it returns
-                // true.  Therefore, return true immediately and stop the polling in executeMethod
-                // mode.
-                return isExecuteMethodEnabled;
-            }
-            Initialize();
-            return true;
-        });
+        // Delay initialization until the build target is iOS and the editor is not in play
+        // mode.
+        EditorInitializer.InitializeOnMainThread(condition: () => {
+            return EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
+                    !EditorApplication.isPlayingOrWillChangePlaymode;
+        }, initializer: Initialize, name: "IOSResolver", logger: logger);
     }
-
-    /// <summary>
-    /// Whether iOSResolver have been initialized.
-    /// </summary>
-    private static bool isInitialized = false;
 
     /// <summary>
     /// Initialize the module. This should be called on the main thread only if
     /// current active build target is iOS and not in play mode.
     /// </summary>
-    private static void Initialize() {
-        if (isInitialized) return;
-
+    private static bool Initialize() {
         if ( EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS ) {
             throw new Exception("IOSResolver.Initialize() is called when active build target " +
                     "is not iOS. This should never happen.  If it does, please report to the " +
@@ -757,9 +738,8 @@ public class IOSResolver : AssetPostprocessor {
                     }
                 });
         }
-        isInitialized = true;
 
-        Log("IOSResolver Initialized", verbose: true);
+        return true;
     }
 
     /// <summary>

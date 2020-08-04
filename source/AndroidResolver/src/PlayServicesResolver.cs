@@ -901,40 +901,20 @@ namespace GooglePlayServices {
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver() {
-            // Cache the flag to prevent string comparison in every frame during
-            // PollOnUpdateUntilComplete()
-            bool isExecuteMethodEnabled =  ExecutionEnvironment.ExecuteMethodEnabled;
-
-            // Delay initialization until the build target is iOS and the editor is not in play
+            // Delay initialization until the build target is Android and the editor is not in play
             // mode.
-            RunOnMainThread.PollOnUpdateUntilComplete(() => {
-                if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android ||
-                    EditorApplication.isPlayingOrWillChangePlaymode) {
-                    // If Unity is launched with -executeMethod, in some Unity versions, editor
-                    // update will never be called. As a result, PollOnUpdateUntilComplete() will
-                    // attempt to call this poll function repeating on current thread until it
-                    // returns true.  Therefore, return true immediately and stop the polling in
-                    // executeMethod mode.
-                    return isExecuteMethodEnabled;
-                }
-                Initialize();
-                return true;
-            });
+            EditorInitializer.InitializeOnMainThread(condition: () => {
+                return EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android &&
+                        !EditorApplication.isPlayingOrWillChangePlaymode;
+            }, initializer: Initialize, name: "PlayServicesResolver", logger: logger);
 
         }
-
-        /// <summary>
-        /// Whether Android Resolver have been initialized.
-        /// </summary>
-        private static bool isInitialized = false;
 
         /// <summary>
         /// Initialize the module. This should be called on the main thread only if
         /// current active build target is Android and not in play mode.
         /// </summary>
-        private static void Initialize() {
-            if (isInitialized) return;
-
+        private static bool Initialize() {
             if ( EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android ) {
                 throw new Exception("PlayServiceResolver.Initialize() is called when active " +
                         "build target is not Android. This should never happen. If it does, " +
@@ -967,8 +947,7 @@ namespace GooglePlayServices {
 
             if (SettingsDialogObj.EnableAutoResolution) LinkAutoResolution();
 
-            isInitialized = true;
-            Log("Android Resolver Initialized", level: LogLevel.Verbose);
+            return true;
         }
 
         // Unregister events to monitor build system changes for the Android Resolver and other

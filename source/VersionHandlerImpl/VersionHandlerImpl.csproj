@@ -56,6 +56,7 @@
     <Compile Include="src\DialogWindow.cs" />
     <Compile Include="src\Logger.cs" />
     <Compile Include="src\ExecutionEnvironment.cs" />
+    <Compile Include="src\EditorInitializer.cs" />
     <Compile Include="src\EditorMeasurement.cs" />
     <Compile Include="src\FileUtils.cs" />
     <Compile Include="src\MultiSelectWindow.cs" />
