@@ -901,18 +901,57 @@ namespace GooglePlayServices {
         /// Initializes the <see cref="GooglePlayServices.PlayServicesResolver"/> class.
         /// </summary>
         static PlayServicesResolver() {
-            // Create the resolver.
-            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) {
-                gradleResolver = new GradleResolver();
-                // Monitor Android dependency XML files to perform auto-resolution.
-                AddAutoResolutionFilePatterns(xmlDependencies.fileRegularExpressions);
+            // Cache the flag to prevent string comparison in every frame during
+            // PollOnUpdateUntilComplete()
+            bool isExecuteMethodEnabled =  ExecutionEnvironment.ExecuteMethodEnabled;
 
-                svcSupport = PlayServicesSupport.CreateInstance(
-                    "PlayServicesResolver",
-                    AndroidSdkRoot,
-                    "ProjectSettings",
-                    logMessageWithLevel: LogDelegate);
+            // Delay initialization until the build target is iOS and the editor is not in play
+            // mode.
+            RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android ||
+                    EditorApplication.isPlayingOrWillChangePlaymode) {
+                    // If Unity is launched with -executeMethod, in some Unity versions, editor
+                    // update will never be called. As a result, PollOnUpdateUntilComplete() will
+                    // attempt to call this poll function repeating on current thread until it
+                    // returns true.  Therefore, return true immediately and stop the polling in
+                    // executeMethod mode.
+                    return isExecuteMethodEnabled;
+                }
+                Initialize();
+                return true;
+            });
+
+        }
+
+        /// <summary>
+        /// Whether Android Resolver have been initialized.
+        /// </summary>
+        private static bool isInitialized = false;
+
+        /// <summary>
+        /// Initialize the module. This should be called on the main thread only if
+        /// current active build target is Android and not in play mode.
+        /// </summary>
+        private static void Initialize() {
+            if (isInitialized) return;
+
+            if ( EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android ) {
+                throw new Exception("PlayServiceResolver.Initialize() is called when active " +
+                        "build target is not Android. This should never happen. If it does, " +
+                        "please report to the developer.");
             }
+
+            // Create the resolver.
+            gradleResolver = new GradleResolver();
+            // Monitor Android dependency XML files to perform auto-resolution.
+            AddAutoResolutionFilePatterns(xmlDependencies.fileRegularExpressions);
+
+            svcSupport = PlayServicesSupport.CreateInstance(
+                "PlayServicesResolver",
+                AndroidSdkRoot,
+                "ProjectSettings",
+                logMessageWithLevel: LogDelegate);
+
             RunOnMainThread.OnUpdate -= PollBundleId;
             RunOnMainThread.OnUpdate += PollBundleId;
 
@@ -920,16 +959,16 @@ namespace GooglePlayServices {
             OnSettingsChanged();
 
             // Setup events for auto resolution.
-            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) {
-                BundleIdChanged += ResolveOnBundleIdChanged;
-                AndroidBuildSystemChanged += ResolveOnBuildSystemChanged;
-                AndroidAbisChanged += ResolveOnAndroidAbisChanged;
-                AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
-                Reresolve();
+            BundleIdChanged += ResolveOnBundleIdChanged;
+            AndroidBuildSystemChanged += ResolveOnBuildSystemChanged;
+            AndroidAbisChanged += ResolveOnAndroidAbisChanged;
+            AndroidSdkRootChanged += ResolveOnAndroidSdkRootChange;
+            Reresolve();
 
-                if (SettingsDialogObj.EnableAutoResolution) LinkAutoResolution();
-            }
+            if (SettingsDialogObj.EnableAutoResolution) LinkAutoResolution();
 
+            isInitialized = true;
+            Log("Android Resolver Initialized", level: LogLevel.Verbose);
         }
 
         // Unregister events to monitor build system changes for the Android Resolver and other

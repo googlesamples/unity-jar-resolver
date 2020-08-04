@@ -651,11 +651,51 @@ public class IOSResolver : AssetPostprocessor {
     static IOSResolver() {
         // Load log preferences.
         VerboseLoggingEnabled = VerboseLoggingEnabled;
+
         // NOTE: We can't reference the UnityEditor.iOS.Xcode module in this
         // method as the Mono runtime in Unity 4 and below requires all
         // dependencies of a method are loaded before the method is executed
         // so we install the DLL loader first then try using the Xcode module.
         RemapXcodeExtension();
+
+        // Cache the flag to prevent string comparison in every frame during
+        // PollOnUpdateUntilComplete()
+        bool isExecuteMethodEnabled =  ExecutionEnvironment.ExecuteMethodEnabled;
+
+        // Delay initialization until the build target is iOS and the editor is not in play mode.
+        RunOnMainThread.PollOnUpdateUntilComplete(() => {
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS ||
+                EditorApplication.isPlayingOrWillChangePlaymode) {
+                // If Unity is launched with -executeMethod, in some Unity versions, editor
+                // update will never be called. As a result, PollOnUpdateUntilComplete() will
+                // attempt to call this poll function repeating on current thread until it returns
+                // true.  Therefore, return true immediately and stop the polling in executeMethod
+                // mode.
+                return isExecuteMethodEnabled;
+            }
+            Initialize();
+            return true;
+        });
+    }
+
+    /// <summary>
+    /// Whether iOSResolver have been initialized.
+    /// </summary>
+    private static bool isInitialized = false;
+
+    /// <summary>
+    /// Initialize the module. This should be called on the main thread only if
+    /// current active build target is iOS and not in play mode.
+    /// </summary>
+    private static void Initialize() {
+        if (isInitialized) return;
+
+        if ( EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS ) {
+            throw new Exception("IOSResolver.Initialize() is called when active build target " +
+                    "is not iOS. This should never happen.  If it does, please report to the " +
+                    "developer.");
+        }
+
         // NOTE: It's not possible to catch exceptions a missing reference
         // to the UnityEditor.iOS.Xcode assembly in this method as the runtime
         // will attempt to load the assembly before the method is executed so
@@ -663,42 +703,38 @@ public class IOSResolver : AssetPostprocessor {
         try {
             InitializeTargetName();
         } catch (Exception exception) {
-            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
-                Log("Failed: " + exception.ToString(), level: LogLevel.Error);
-                if (exception is FileNotFoundException ||
-                    exception is TypeInitializationException ||
-                    exception is TargetInvocationException) {
-                    // It's likely we failed to load the iOS Xcode extension.
-                    Debug.LogWarning(
-                        "Failed to load the " +
-                        "UnityEditor.iOS.Extensions.Xcode dll.  " +
-                        "Is iOS support installed?");
-                } else {
-                    throw exception;
-                }
+            Log("Failed: " + exception.ToString(), level: LogLevel.Error);
+            if (exception is FileNotFoundException ||
+                exception is TypeInitializationException ||
+                exception is TargetInvocationException) {
+                // It's likely we failed to load the iOS Xcode extension.
+                Debug.LogWarning(
+                    "Failed to load the " +
+                    "UnityEditor.iOS.Extensions.Xcode dll.  " +
+                    "Is iOS support installed?");
+            } else {
+                throw exception;
             }
         }
 
         // If Cocoapod tool auto-installation is enabled try installing on the first update of
         // the editor when the editor environment has been initialized.
-        if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
-            AutoPodToolInstallInEditorEnabled && CocoapodsIntegrationEnabled &&
+        if (AutoPodToolInstallInEditorEnabled && CocoapodsIntegrationEnabled &&
             !ExecutionEnvironment.InBatchMode) {
-            RunOnMainThread.Run(() => { AutoInstallCocoapods(); }, runNow: false);
+            AutoInstallCocoapods();
         }
         // Install / remove target SDK property poller.
         SetEnablePollTargetSdk(PodfileGenerationEnabled);
         // Load XML dependencies on the next editor update.
         if (PodfileGenerationEnabled) {
-            RunOnMainThread.Run(RefreshXmlDependencies, runNow: false);
+            RefreshXmlDependencies();
         }
 
         // Prompt the user to use workspaces if they aren't at least using project level
         // integration.
-        if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
-            (CocoapodsIntegrationMethod)settings.GetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
+        if ((CocoapodsIntegrationMethod)settings.GetInt(PREFERENCE_COCOAPODS_INTEGRATION_METHOD,
                 CocoapodsIntegrationUpgradeDefault) == CocoapodsIntegrationMethod.None &&
-            !ExecutionEnvironment.InBatchMode && !UpgradeToWorkspaceWarningDisabled) {
+                !ExecutionEnvironment.InBatchMode && !UpgradeToWorkspaceWarningDisabled) {
 
             DialogWindow.Display(
                 "Warning: CocoaPods integration is disabled!",
@@ -721,6 +757,9 @@ public class IOSResolver : AssetPostprocessor {
                     }
                 });
         }
+        isInitialized = true;
+
+        Log("IOSResolver Initialized", verbose: true);
     }
 
     /// <summary>
