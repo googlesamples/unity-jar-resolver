@@ -1,3 +1,11 @@
+# Version 1.2.157 - Aug 6, 2020
+* Android Resolver: Delay initialization until active build target is Android
+  and the editor is not in play mode.
+* iOS Resolver: Delay initialization until active build target is iOS
+  and the editor is not in play mode.
+* Export Unity Package: Workaround directory creation racy if multiple export
+  operations are spawned at the same time.
+
 # Version 1.2.156 - June 10, 2020
 * All: Described EDM4U analytics data usage in readme.
 * Android Resolver: Fixed that the generated local repo assets contains
