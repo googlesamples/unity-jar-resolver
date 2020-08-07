@@ -102,16 +102,25 @@ namespace GooglePlayServices {
 
                 var aarPath = aar;
                 if (FileUtils.IsUnderPackageDirectory(aar)) {
-                    var logicalPackagePath = FileUtils.GetPackageDirectory(aar,
-                            FileUtils.PackageDirectoryType.AssetDatabasePath);
+                    // Physical paths work better for copy operations than
+                    // logical Unity paths.
+                    var physicalPackagePath = FileUtils.GetPackageDirectory(aar,
+                            FileUtils.PackageDirectoryType.PhysicalPath);
                     aarPath = FileUtils.ReplaceBaseAssetsOrPackagesFolder(
-                        aar, logicalPackagePath);
+                        aar, physicalPackagePath);
                 }
                 var dir = FileUtils.ReplaceBaseAssetsOrPackagesFolder(
                         Path.GetDirectoryName(aar),
                         GooglePlayServices.SettingsDialog.LocalMavenRepoDir);
                 var filename = Path.GetFileNameWithoutExtension(aarPath);
                 var targetFilename = Path.Combine(dir, filename + ".aar");
+
+                // Avoid situations where we can have a mix of file path
+                // separators based on platform.
+                aarPath = FileUtils.NormalizePathSeparators(aarPath);
+                targetFilename = FileUtils.NormalizePathSeparators(
+                    targetFilename);
+
                 bool configuredAar = File.Exists(targetFilename);
                 if (!configuredAar) {
                     var error = PlayServicesResolver.CopyAssetAndLabel(
