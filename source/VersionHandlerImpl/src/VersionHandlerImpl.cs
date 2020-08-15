@@ -3098,7 +3098,16 @@ public class VersionHandlerImpl : AssetPostprocessor {
                 lastKnownBuildTarget = newBuildTarget;
                 HandleBuildTargetChanged(newBuildTarget);
             }
-            if (Enabled && RenameToDisableFilesEnabled && !ExecutionEnvironment.InBatchMode) {
+
+            // Disable callback queue in non-interactive (batch) mode and when
+            // -executeMethod is specified on the command line.
+            // In batch mode, everything is executed in a single thread. So there
+            // is no way for VersionHandler to gain control after its initially called.
+            // -executeMethod doesn't trigger a reliable EditorApplication.update
+            // event which can cause the queue to grow unbounded, possibly freezing Unity.
+            if (Enabled && RenameToDisableFilesEnabled &&
+                !ExecutionEnvironment.InBatchMode &&
+                !ExecutionEnvironment.ExecuteMethodEnabled) {
                 RunOnMainThread.Schedule(CheckBuildTarget, POLL_INTERVAL_MILLISECONDS);
             }
         }
