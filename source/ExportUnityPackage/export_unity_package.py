@@ -2539,31 +2539,36 @@ class PackageConfiguration(ConfigurationBlock):
         finally:
           shutil.rmtree(os.path.dirname(list_filename))
       else:
-        with gzip.GzipFile(
-            archive_filename, "wb",
-            mtime=(timestamp if timestamp >= 0 else None)) as gzip_file:
-          with tarfile.open(mode="w|", fileobj=gzip_file,
-                            format=tarfile.USTAR_FORMAT, dereference=True,
-                            errorlevel=2) as tar_file:
-            def reproducible_tarinfo(tarinfo):
-              """Patch TarInfo so that it generates a reproducible archive.
+        with open(archive_filename, "wb") as gzipped_tar_file:
+          with gzip.GzipFile(
+              # The filename in the archive must end with .tar or .tar.gz for
+              # Unity to open it on Windows.
+              os.path.splitext(archive_filename)[0] + ".tar.gz",
+              fileobj=gzipped_tar_file, mode="wb",
+              mtime=(timestamp if timestamp >= 0 else None)) as gzip_file:
+            with tarfile.open(mode="w|", fileobj=gzip_file,
+                              format=tarfile.USTAR_FORMAT, dereference=True,
+                              errorlevel=2) as tar_file:
+              def reproducible_tarinfo(tarinfo):
+                """Patch TarInfo so that it generates a reproducible archive.
 
-              Args:
-                tarinfo: TarInfo to modify.
+                Args:
+                  tarinfo: TarInfo to modify.
 
-              Returns:
-                Modified tarinfo.
-              """
-              tarinfo.mtime = timestamp if timestamp >= 0 else tarinfo.mtime
-              tarinfo.uid = 0
-              tarinfo.gid = 0
-              tarinfo.uname = FLAGS.owner
-              tarinfo.gname = FLAGS.group
-              return tarinfo
+                Returns:
+                  Modified tarinfo.
+                """
+                tarinfo.mtime = timestamp if timestamp >= 0 else tarinfo.mtime
+                tarinfo.uid = 0
+                tarinfo.gid = 0
+                tarinfo.uname = FLAGS.owner
+                tarinfo.gname = FLAGS.group
+                return tarinfo
 
-            for filename in input_filenames:
-              tar_file.add(filename, recursive=False,
-                           filter=reproducible_tarinfo)
+              for filename in input_filenames:
+                tar_file.add(filename, recursive=False,
+                             filter=reproducible_tarinfo)
+
     finally:
       os.chdir(cwd)
 
