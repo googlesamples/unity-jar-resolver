@@ -1,3 +1,11 @@
+# Version 1.2.158 - Sep 3, 2020
+* Version Handler: Fixed editor freeze when `-executeMethod` is used in
+  non-batch mode.
+* Android Resolver: Normalized file paths when generating local Maven repo
+  since the path may contains a mix of forward and backward slash on Windows.
+* Export Unity Package: Fixed generation of .unitypackage with tarfile on
+  Windows.
+
 # Version 1.2.157 - Aug 6, 2020
 * Android Resolver: Delay initialization until active build target is Android
   and the editor is not in play mode.
