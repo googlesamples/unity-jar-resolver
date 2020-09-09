@@ -133,7 +133,7 @@ namespace Google {
         /// <param name="buildScript">Path to the Gradle build script to use.</param>
         /// <param name="projectProperties">Project properties to use when running the script.
         /// </param>
-        /// <param name="arguments>Other arguments to pass to Gradle.</param>
+        /// <param name="arguments">Other arguments to pass to Gradle.</param>
         /// <param name="logger">Logger to report errors to.</param>
         /// <param name="executeCommand">Closure which takes the tool path to execute
         /// (gradle wrapper) and a string of arguments returning true if successful,

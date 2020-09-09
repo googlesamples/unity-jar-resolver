@@ -56,7 +56,9 @@ internal static class PackageManagerClient {
         /// Convert a collection of objects to a field separated string.
         /// </summary>
         /// <param name="objects">Collection of objects to convert to a list of strings.</param>
-        /// <returns>Comma separated string.</returns>.
+        /// <param name="separator">The string to use as a separator.</param>
+        /// <returns>A string that consists of members of <paramref name="objects"/> delimited
+        /// by <paramref name="separator"/> string.</returns>.
         protected static string ObjectCollectionToString<T>(IEnumerable<T> objects,
                                                             string separator) {
             var components = new List<string>();
@@ -968,7 +970,7 @@ internal static class PackageManagerClient {
         /// Construct the instance.
         /// </summary>
         /// <param name="items">Items to iterate through.</param>
-        /// <param name="progress">Reports progress as iteration proceeds.</param>
+        /// <param name="progressReporter">Reports progress as iteration proceeds.</param>
         public EnumeratorProgressReporter(ICollection<string> items,
                                    Action<float, string> progressReporter) {
             itemCount = items.Count;
@@ -1081,6 +1083,7 @@ internal static class PackageManagerClient {
         /// Install a set of packages using the package manager.
         /// </summary>
         /// <param name="packageIdsOrNames">Package IDs or names to search for.</param>
+        /// <param name="complete">Called when the operation is complete.</param>
         /// <param name="progress">Reports progress through the search.</param>
         public PackageInstaller(ICollection<string> packageIdsOrNames,
                                 Action<Dictionary<string, InstallResult>> complete,
@@ -1163,6 +1166,7 @@ internal static class PackageManagerClient {
         /// Search for a set of packages in the package manager.
         /// </summary>
         /// <param name="packageIdsOrNames">Package IDs or names to search for.</param>
+        /// <param name="complete">Called when the operation is complete.</param>
         /// <param name="progress">Reports progress through the search.</param>
         public PackageSearcher(ICollection<string> packageIdsOrNames,
                                Action<Dictionary<string, SearchResult>> complete,
@@ -1245,6 +1249,7 @@ internal static class PackageManagerClient {
     /// Add packages to the project.
     /// </summary>
     /// <param name="packageIdsOrNames">IDs or names of the packages to add.</param>
+    /// <param name="complete">Called when the operation is complete.</param>
     /// <param name="progress">Reports progress through the installation.</param>
     public static void AddPackages(ICollection<string> packageIdsOrNames,
                                    Action<Dictionary<string, InstallResult>> complete,

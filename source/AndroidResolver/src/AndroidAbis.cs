@@ -143,7 +143,7 @@ internal class AndroidAbis {
     /// <summary>
     /// Create a set of ABIs from a comma separated set of ABI strings.
     /// </summary>
-    /// <param name="abisSet">Set of ABI strings.</param>
+    /// <param name="abiString">Comma separated set of ABI strings.</param>
     public AndroidAbis(string abiString) {
         if (String.IsNullOrEmpty(abiString)) {
             abis = new HashSet<string>(Supported);
@@ -190,7 +190,7 @@ internal class AndroidAbis {
     /// Get the supported set of Android ABIs for the current Unity version.
     /// The dictionary maps the official Android ABI name (i.e the directory name looked up by the
     /// operating system) to the UnityEditor.AndroidTargetDevice (Unity 5.x & 2017.x) or
-    // UnityEditor.AndroidArchitecture enumeration value name.
+    /// UnityEditor.AndroidArchitecture enumeration value name.
     /// </summary>
     private static Dictionary<string, string> SupportedAbiToAbiEnumValue {
         get { return PropertyConfiguration.Instance.SupportedAbiToAbiEnumValue; }
@@ -221,10 +221,10 @@ internal class AndroidAbis {
     /// </summary>
     /// <param name="enumValueObject">Enum object to convert.</param>
     private static ulong EnumValueObjectToULong(object enumValueObject) {
-        /// Flags enum values can't be cast directly to an integral type, however it is possible to
-        /// print the value as an integer string so convert to a string and then parse as an int.
-        /// Enums are considered unsigned by the formatter, so if an enum is defined as -1 it will
-        /// be formatted as UInt32.MaxValue, i.e. 4294967295.
+        // Flags enum values can't be cast directly to an integral type, however it is possible to
+        // print the value as an integer string so convert to a string and then parse as an int.
+        // Enums are considered unsigned by the formatter, so if an enum is defined as -1 it will
+        // be formatted as UInt32.MaxValue, i.e. 4294967295.
         return UInt64.Parse(String.Format("{0:D}", enumValueObject));
     }
 
@@ -240,7 +240,7 @@ internal class AndroidAbis {
     /// <summary>
     /// Get / set the target device ABI (Unity >= 5.0.x)
     /// Unity >= 2017.4 supports armeabi-v7a, arm64-v8a, x86 & fat (i.e armeabi-v7a, arm64, x86)
-    /// Unity >= 5.0.x & <= 2017.3 only support armeabi-v7a, x86 & fat (i.e armeabi-v7a & x86)
+    /// Unity >= 5.0.x & &lt;= 2017.3 only support armeabi-v7a, x86 & fat (i.e armeabi-v7a & x86)
     /// </summary>
     public static AndroidAbis Current {
         set {

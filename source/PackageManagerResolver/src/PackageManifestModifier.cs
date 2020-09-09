@@ -88,7 +88,7 @@ internal class PackageManifestModifier {
     /// <summary>
     /// Read manifest from the file and parse JSON string into a dictionary.
     /// </summary>
-    /// <return>True if read and parsed successfully.</return>
+    /// <returns>True if read and parsed successfully.</returns>
     internal bool ReadManifest() {
         string manifestText;
         try {
@@ -218,7 +218,7 @@ internal class PackageManifestModifier {
     /// <summary>
     /// Add a scoped registries.
     /// </summary>
-    /// <param name="registries">Registries to add to the manifest.</para>
+    /// <param name="registries">Registries to add to the manifest.</param>
     /// <returns>true if the registries are added to the manifest, false otherwise.</returns>
     internal bool AddRegistries(IEnumerable<PackageManagerRegistry> registries) {
         List<object> scopedRegistries;
@@ -249,7 +249,7 @@ internal class PackageManifestModifier {
     /// <summary>
     /// Remove all scoped registries in the given list.
     /// </summary>
-    /// <para, name="registries">A list of scoped registry to be removed</para>
+    /// <param name="registries">A list of scoped registry to be removed</param>
     /// <param name="displayWarning">Whether to display a warning if specified registries were not
     /// found.</param>
     /// <returns>true if the registries could be removed, false otherwise.</returns>
@@ -295,7 +295,7 @@ internal class PackageManifestModifier {
     /// <summary>
     /// Write the dictionary to manifest file.
     /// </summary>
-    /// <return>True if serialized and wrote successfully.</return>
+    /// <returns>True if serialized and wrote successfully.</returns>
     internal bool WriteManifest() {
         if (manifestDict == null) {
             Logger.Log(String.Format("No manifest to write to '{0}'", MANIFEST_FILE_PATH),
@@ -321,7 +321,7 @@ internal class PackageManifestModifier {
     /// <summary>
     /// Get the manifest json string.
     /// </summary>
-    /// <return>Manifest json string.</return>
+    /// <returns>Manifest json string.</returns>
     internal string GetManifestJson() {
         return manifestDict != null ?
                 Json.Serialize(manifestDict, humanReadable: true, indentSpaces: 2) :

@@ -38,9 +38,20 @@ public class PackageManagerResolver : AssetPostprocessor {
     /// The operation to perform when modifying the manifest.
     /// </summary>
     internal enum ManifestModificationMode {
-        Add, /// Add package registries that are not in the manifest.
-        Remove, /// Remove package registries from the manifest that are in the loaded config.
-        Modify, /// Display and add / remove all package registries from the manifest.
+        /// <summary>
+        /// Add package registries that are not in the manifest.
+        /// </summary>
+        Add,
+
+        /// <summary>
+        /// Remove package registries from the manifest that are in the loaded config.
+        /// </summary>
+        Remove,
+
+        /// <summary>
+        /// Display and add / remove all package registries from the manifest.
+        /// </summary>
+        Modify,
     }
 
     private const string ADD_REGISTRIES_QUESTION =
@@ -306,7 +317,7 @@ public class PackageManagerResolver : AssetPostprocessor {
     /// unselected registries.  If true, removes the selected registries and adds the unselected
     /// registries.</param>
     /// <param name="addedRegistries">If specified, is extended with the list of registries added
-    /// to the manifest.<param>
+    /// to the manifest.</param>
     /// <returns>true if successful, false otherwise.</returns>
     private static bool SyncRegistriesToManifest(
             PackageManifestModifier manifestModifier,

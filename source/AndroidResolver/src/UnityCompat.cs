@@ -399,7 +399,7 @@ public class UnityCompat {
     /// </summary>
     /// Unfortunately the Unity API does not provide a way to get the current BuildTargetGroup from
     /// the currently active BuildTarget.
-    /// <param name="target">BuildTarget to convert.</param>
+    /// <param name="buildTarget">BuildTarget to convert.</param>
     /// <returns>BuildTargetGroup enum value.</returns>
     private static BuildTargetGroup ConvertBuildTargetToBuildTargetGroup(BuildTarget buildTarget) {
         var buildTargetToGroup = new Dictionary<string, string>() {

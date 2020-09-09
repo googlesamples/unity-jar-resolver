@@ -190,7 +190,7 @@ internal class PackageMigrator {
         /// Read a set of PackageMap instances from a file.
         /// </summary>
         /// <returns>List of package maps.</returns>
-        /// <exception cref="IOException>Thrown if an error occurs while reading the
+        /// <exception cref="IOException">Thrown if an error occurs while reading the
         /// file.</exception>
         public static ICollection<PackageMap> ReadFromFile() {
             var packageMaps = new List<PackageMap>();
@@ -247,7 +247,7 @@ internal class PackageMigrator {
         /// <summary>
         /// Generate a collection sorted by Version Handler package name.
         /// </summary>
-        /// <returns>Sorted list of package maps.</returns.
+        /// <returns>Sorted list of package maps.</returns>
         private static ICollection<PackageMap> SortedPackageMap(
                 IEnumerable<PackageMap> packages) {
             var sorted = new SortedDictionary<string, PackageMap>();
@@ -262,8 +262,8 @@ internal class PackageMigrator {
         /// <summary>
         /// Write a set of PackageMap instances to a file.
         /// </summary>
-        /// <param name="packageMaps">Package maps to write to a file.<param>
-        /// <exception cref="IOException>Thrown if an error occurs while writing the
+        /// <param name="packageMaps">Package maps to write to a file.</param>
+        /// <exception cref="IOException">Thrown if an error occurs while writing the
         /// file.</exception>
         public static void WriteToFile(ICollection<PackageMap> packageMaps) {
             try {
@@ -406,6 +406,7 @@ internal class PackageMigrator {
         /// </summary>
         /// <param name="refresh">Whether to refresh the cache or data in memory.</param>
         /// <param name="complete">Called when packages have been cached by this class.</param>
+        /// <param name="progressDelegate">Called as the operation progresses.</param>
         public static void CacheAvailablePackageInfo(
                 bool refresh, Action<PackageManagerClient.Error> complete,
                 FindPackagesProgressDelegate progressDelegate) {
@@ -579,7 +580,7 @@ internal class PackageMigrator {
         /// <summary>
         /// Calculate migration progress through the specified list.
         /// </summary>
-        /// <param name="packageMaps">List of packages to migrated.</param>
+        /// <param name="packages">List of packages to migrated.</param>
         /// <returns>A value between 0 (no progress) and 1 (complete).</returns>
         public static float CalculateProgress(ICollection<PackageMap> packages) {
             int total = packages.Count;
@@ -879,7 +880,6 @@ internal class PackageMigrator {
     /// </summary>
     /// <param name="complete">Called when migration is complete with an error message if
     /// it fails.</param>
-    /// <param name="packageMaps">Set of packages to migrate.</param>
     public static void TryMigration(Action<string> complete) {
         if (!Available) {
             complete(NotAvailableMessage);

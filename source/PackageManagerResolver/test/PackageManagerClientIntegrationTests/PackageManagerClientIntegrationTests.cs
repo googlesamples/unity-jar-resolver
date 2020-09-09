@@ -270,7 +270,7 @@ public static class PackageManagerClientTests {
     /// </summary>
     /// <param name="error">Error to check.</param>
     /// <param name="packageName">Name of the changed package.</param>
-    /// <param name="expectedPackageName">Expected installed / removed package name.<param>
+    /// <param name="expectedPackageName">Expected installed / removed package name.</param>
     /// <param name="testCaseResult">TestCaseResult to add an error message to if the result
     /// indicates a failure or doesn't match the expected package name.</param>
     /// <returns>String description of the result.</returns>

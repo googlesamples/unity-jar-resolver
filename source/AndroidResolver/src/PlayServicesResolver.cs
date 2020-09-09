@@ -261,7 +261,7 @@ namespace GooglePlayServices {
             /// <summary>
             /// Convert a dictionary to a sorted comma separated string.
             /// </summary>
-            /// <returns>Comma separated string in the form key=value.<returns>
+            /// <returns>Comma separated string in the form key=value.</returns>
             private static string DictionaryToString(Dictionary<string, string> dict) {
                 var components = new List<string>();
                 foreach (var key in SortSet(dict.Keys)) {
@@ -319,7 +319,7 @@ namespace GooglePlayServices {
             /// <param name="delayTimeInSeconds">Time to wait before signalling that the value
             /// has changed.</param>
             /// <param name="checkIntervalInSeconds">Time to check the value of the property for
-            /// changes.<param>
+            /// changes.</param>
             public PropertyPoller(string propertyName,
                                   int delayTimeInSeconds = 3,
                                   int checkIntervalInSeconds = 1) {
@@ -628,7 +628,7 @@ namespace GooglePlayServices {
         /// </summary>
         private struct AndroidBuildSystemSettings {
             /// <summary>
-            // Whether the Gradle build is enabled.
+            /// Whether the Gradle build is enabled.
             /// </summary>
             public bool GradleBuildEnabled { get; private set; }
 
@@ -638,7 +638,7 @@ namespace GooglePlayServices {
             public bool GradleTemplateEnabled { get; private set; }
 
             /// <summary>
-            // Whether project export is enabled.
+            /// Whether project export is enabled.
             /// </summary>
             public bool ProjectExportEnabled { get; private set; }
 
@@ -656,7 +656,7 @@ namespace GooglePlayServices {
             }
 
             /// <summary>
-            // Compare with another AndroidBuildSystemSettings.
+            /// Compare with another AndroidBuildSystemSettings.
             /// </summary>
             /// <param name="obj">Object to compare with.</param>
             /// <returns>true if the object is the same as this, false otherwise.</returns>
@@ -1217,7 +1217,7 @@ namespace GooglePlayServices {
         /// * foo.com.my.app.service --> foo.com.my.app.service (unchanged)
         /// </param>
         /// <param name="path">Path of this node in the hierarchy of nodes. For example:
-        /// given node is "<c>" in "<a><b><c>" this should be "a/b/c".  If this
+        /// given node is "&lt;c>" in "&lt;a>&lt;b>&lt;c>" this should be "a/b/c".  If this
         /// value is null the name of the current node is used.</param>
         /// <returns>true if any replacements are applied, false otherwise.</returns>
         private static bool ReplaceVariablesInXmlElementTree(

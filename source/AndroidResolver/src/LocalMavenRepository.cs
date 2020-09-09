@@ -82,7 +82,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Get a path without a filename extension.
         /// </summary>
-        /// <param name="filename">Path to a file.</param>
+        /// <param name="path">Path to a file.</param>
         /// <returns>Path (including directory) without a filename extension.</returns>
         internal static string PathWithoutExtension(string path) {
             return Path.Combine(Path.GetDirectoryName(path),

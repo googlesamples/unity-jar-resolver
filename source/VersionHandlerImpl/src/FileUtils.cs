@@ -234,9 +234,9 @@ namespace Google {
         /// Find a path under the specified directory.
         /// </summary>
         /// <param name="directory">Directory to search.</param>
-        /// <param name="pathToFind">Path to find.<param>
+        /// <param name="pathToFind">Path to find.</param>
         /// <returns>The shortest path to the specified directory if found, null
-        /// ptherwise.</returns>
+        /// otherwise.</returns>
         public static string FindPathUnderDirectory(string directory, string pathToFind) {
             directory = NormalizePathSeparators(directory);
             if (directory.EndsWith(Path.DirectorySeparatorChar.ToString())) {
@@ -539,8 +539,8 @@ namespace Google {
         /// </summary>
         /// <param name = "filenames">Files to be removed/</param>
         /// <param name = "logger">Logger to log results.</param>
-        /// <return>True if all files are removed.  False if failed to remove any file or
-        /// if any file is missing.</return>
+        /// <returns>True if all files are removed.  False if failed to remove any file or
+        /// if any file is missing.</returns>
         public static RemoveAssetsResult RemoveAssets(IEnumerable<string> filenames,
                                                       Logger logger = null) {
             var result = new RemoveAssetsResult();

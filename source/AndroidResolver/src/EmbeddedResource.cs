@@ -132,7 +132,7 @@ namespace Google {
         /// directories if they're required.
         /// </summary>
         /// <param name="assembly">Assembly to extract resources from.</param>
-        /// <param name="resourceNameToTargetPath">Each Key is the resource to extract and each
+        /// <param name="resourceNameToTargetPaths">Each Key is the resource to extract and each
         /// Value is the path to extract to. If the resource name (Key) is null or empty, this
         /// method will attempt to extract a resource matching the filename component of the path.
         /// </param>
