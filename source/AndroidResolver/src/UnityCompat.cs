@@ -60,9 +60,7 @@ public class UnityCompat {
         string enumName = null;
         try {
             enumName = Enum.GetName(typeof(AndroidSdkVersions), enumValue);
-        }
-        catch (ArgumentException)
-        {
+        } catch (ArgumentException) {
             //Fall back on auto if the enum value is not parsable
             return -1;
         }
