@@ -31,6 +31,23 @@ namespace GooglePlayServices {
     internal class GradleTemplateResolver {
 
         /// <summary>
+        /// Path of the Gradle properties file.
+        /// Available only from Unity version 2019.3 onwards
+        /// </summary>
+        public static string GradlePropertiesTemplatePath =
+            Path.Combine(SettingsDialog.AndroidPluginsDir, "gradleTemplate.properties");
+
+        /// <summary>
+        /// Line that indicates the start of the injected properties block in properties template.
+        /// </summary>
+        private const string PropertiesStartLine = "# Android Resolver Properties Start";
+
+        /// <summary>
+        /// Line that indicates the end of the injected properties block in properties template.
+        /// </summary>
+        private const string PropertiesEndLine = "# Android Resolver Properties End";
+
+        /// <summary>
         /// Path of the Gradle template file.
         /// </summary>
         public static string GradleTemplatePath =
@@ -51,6 +68,13 @@ namespace GooglePlayServices {
         /// </summary>
         private const string ReposInjectionLine =
             @".*apply plugin: 'com\.android\.(application|library)'.*";
+
+        /// <summary>
+        /// Token that indicates where gradle properties should initially be injected.
+        /// If this isn't present in the properties template, properties will not be
+        /// injected or they'll be removed.
+        /// </summary>
+        private const string PropertiesInjectionLine = @"ADDITIONAL_PROPERTIES";
 
         /// <summary>
         /// Line that indicates the start of the injected dependencies block in the template.
@@ -262,6 +286,149 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Patch file contents by injecting custom data.
+        /// </summary>
+        /// <param name="filePath">Path to file to modify</param>
+        /// <param name="fileDescription">Used in logs for describing the file</param>
+        /// <param name="analyticsReportName">Name used in analytics logs</param>
+        /// <param name="analyticsReportUrlToken">Token used in forming analytics path</param>
+        /// <param name="injectors">Array of text injectors</param>
+        /// <param name="resolutionMeasurementProperties">used in analytics reporting</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        private static bool PatchFile(string filePath,
+                                      string fileDescription,
+                                      string analyticsReportName,
+                                      string analyticsReportUrlToken,
+                                      TextFileLineInjector[] injectors,
+                                      ICollection<KeyValuePair<string, string>>
+                                        resolutionMeasurementParameters) {
+            IEnumerable<string> lines;
+            try {
+                lines = File.ReadAllLines(filePath);
+            } catch (Exception ex) {
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/" + analyticsReportUrlToken + "/failed/templateunreadable",
+                       analyticsReportName + " Resolve: Failed Template Unreadable");
+                PlayServicesResolver.Log(
+                    String.Format("Unable to patch {0} ({1})", fileDescription, ex.ToString()),
+                    level: LogLevel.Error);
+                return false;
+            }
+
+            // Lines that will be written to the output file.
+            var outputLines = new List<string>();
+            foreach (var line in lines) {
+                var currentOutputLines = new List<string>();
+                foreach (var injector in injectors) {
+                    bool injectionApplied = false;
+                    currentOutputLines = injector.ProcessLine(line, out injectionApplied);
+                    if (injectionApplied || currentOutputLines.Count == 0) break;
+                }
+                outputLines.AddRange(currentOutputLines);
+            }
+
+            var inputText = String.Join("\n", (new List<string>(lines)).ToArray()) + "\n";
+            var outputText = String.Join("\n", outputLines.ToArray()) + "\n";
+
+            if (inputText == outputText) {
+                PlayServicesResolver.Log(String.Format("No changes to {0}", fileDescription),
+                                         level: LogLevel.Verbose);
+                return true;
+            }
+            return WriteToFile(filePath, fileDescription, outputText,
+                               analyticsReportName, analyticsReportUrlToken,
+                               resolutionMeasurementParameters);
+        }
+
+        /// <summary>
+        /// Write new contents to a file on disk
+        /// </summary>
+        /// <param name="filePath">Path to file to modify</param>
+        /// <param name="fileDescription">Used in logs for describing the file</param>
+        /// <param name="outputText">Updated contents to write to the file</param>
+        /// <param name="analyticsReportName">Name used in analytics logs</param>
+        /// <param name="analyticsReportUrlToken">Token used in forming analytics path</param>
+        /// <param name="resolutionMeasurementProperties">used in analytics reporting</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        private static bool WriteToFile(string filePath,
+                                       string fileDescription,
+                                       string outputText,
+                                       string analyticsReportName,
+                                       string analyticsReportUrlToken,
+                                       ICollection<KeyValuePair<string, string>>
+                                        resolutionMeasurementParameters) {
+            if (!FileUtils.CheckoutFile(filePath, PlayServicesResolver.logger)) {
+                PlayServicesResolver.Log(
+                    String.Format("Failed to checkout '{0}', unable to patch the file.",
+                                  filePath), level: LogLevel.Error);
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/" + analyticsReportUrlToken + "/failed/checkout",
+                        analyticsReportName + " Resolve: Failed to checkout");
+                return false;
+            }
+            PlayServicesResolver.Log(
+                String.Format("Writing updated {0}", fileDescription),
+                level: LogLevel.Verbose);
+            try {
+                File.WriteAllText(filePath, outputText);
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/"+analyticsReportUrlToken+"/success",
+                        resolutionMeasurementParameters,
+                       analyticsReportName + " Resolve Success");
+            } catch (Exception ex) {
+                PlayServicesResolver.analytics.Report(
+                       "/resolve/"+analyticsReportUrlToken+"/failed/write",
+                       analyticsReportName + " Resolve: Failed to write");
+                PlayServicesResolver.Log(
+                    String.Format("Unable to patch {0} ({1})", fileDescription,
+                                  ex.ToString()), level: LogLevel.Error);
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Inject properties in the gradle properties template file.
+        /// Because of a change in structure of android projects built with
+        /// Unity 2019.3 and above, the correct way to enable jetifier and
+        /// Android X is by updating the gradle properties template.
+        /// </summary>
+        /// <returns>true if successful, false otherwise.</returns>
+        public static bool InjectProperties(){
+            var resolutionMeasurementParameters =
+                PlayServicesResolver.GetResolutionMeasurementParameters(null);
+            PlayServicesResolver.analytics.Report(
+                    "/resolve/gradleproperties", resolutionMeasurementParameters,
+                    "Gradle Properties Resolve");
+            var propertiesLines = new List<string>();
+            // Lines to add Custom Gradle properties template to enable
+            // jetifier and androidx
+            propertiesLines.AddRange(new [] {
+                    "android.useAndroidX=true",
+                    "android.enableJetifier=true",
+            });
+            var propertiesFileDescription = String.Format(
+                "gradle properties template" + GradlePropertiesTemplatePath);
+            TextFileLineInjector[] propertiesInjectors = new [] {
+                new TextFileLineInjector(PropertiesInjectionLine,
+                                        PropertiesStartLine, PropertiesEndLine,
+                                        propertiesLines,
+                                        "Properties",
+                                        propertiesFileDescription)
+            };
+            if (!PatchFile(GradlePropertiesTemplatePath, propertiesFileDescription,
+                        "Gradle Properties", "gradleproperties",
+                        propertiesInjectors,
+                        resolutionMeasurementParameters)) {
+                PlayServicesResolver.Log(
+                    String.Format("Unable to patch " + propertiesFileDescription),
+                    level: LogLevel.Error);
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
         /// Inject / update dependencies in the gradle template file.
         /// </summary>
         /// <param name="dependencies">Dependencies to inject.</param>
@@ -328,14 +495,18 @@ namespace GooglePlayServices {
             var repoLines = new List<string>();
             // Optionally enable the jetifier.
             if (SettingsDialog.UseJetifier && dependencies.Count > 0) {
-                repoLines.AddRange(new [] {
-                        "([rootProject] + (rootProject.subprojects as List)).each {",
-                        "    ext {",
-                        "        it.setProperty(\"android.useAndroidX\", true)",
-                        "        it.setProperty(\"android.enableJetifier\", true)",
-                        "    }",
-                        "}"
-                    });
+                // For Unity versions lower than 2019.3 add jetifier and AndroidX
+                // properties to custom main gradle template
+                if (VersionHandler.GetUnityVersionMajorMinor() < 2019.3f) {
+                    repoLines.AddRange(new [] {
+                            "([rootProject] + (rootProject.subprojects as List)).each {",
+                            "    ext {",
+                            "        it.setProperty(\"android.useAndroidX\", true)",
+                            "        it.setProperty(\"android.enableJetifier\", true)",
+                            "    }",
+                            "}"
+                        });
+                }
             }
             repoLines.AddRange(PlayServicesResolver.GradleMavenReposLines(dependencies));
 
@@ -352,51 +523,9 @@ namespace GooglePlayServices {
                                          PlayServicesResolver.PackagingOptionsLines(dependencies),
                                          "Packaging Options", fileDescription),
             };
-            // Lines that will be written to the output file.
-            var outputLines = new List<string>();
-            foreach (var line in lines) {
-                var currentOutputLines = new List<string>();
-                foreach (var injector in injectors) {
-                    bool injectionApplied = false;
-                    currentOutputLines = injector.ProcessLine(line, out injectionApplied);
-                    if (injectionApplied || currentOutputLines.Count == 0) break;
-                }
-                outputLines.AddRange(currentOutputLines);
-            }
-            var inputText = String.Join("\n", (new List<string>(lines)).ToArray()) + "\n";
-            var outputText = String.Join("\n", outputLines.ToArray()) + "\n";
-            if (inputText == outputText) {
-                PlayServicesResolver.Log(String.Format("No changes to {0}", fileDescription),
-                                         level: LogLevel.Verbose);
-                return true;
-            }
-            if (!FileUtils.CheckoutFile(GradleTemplatePath, PlayServicesResolver.logger)) {
-                PlayServicesResolver.Log(
-                    String.Format("Failed to checkout '{0}', unable to patch the file.",
-                                  GradleTemplatePath), level: LogLevel.Error);
-                PlayServicesResolver.analytics.Report(
-                       "/resolve/gradletemplate/failed/checkout",
-                       "Gradle Template Resolve: Failed to checkout");
-                return false;
-            }
-            PlayServicesResolver.Log(
-                String.Format("Writing updated {0}", fileDescription),
-                level: LogLevel.Verbose);
-            try {
-                File.WriteAllText(GradleTemplatePath, outputText);
-                PlayServicesResolver.analytics.Report(
-                       "/resolve/gradletemplate/success", resolutionMeasurementParameters,
-                       "Gradle Template Resolve Success");
-            } catch (Exception ex) {
-                PlayServicesResolver.analytics.Report(
-                       "/resolve/gradletemplate/failed/write",
-                       "Gradle Template Resolve: Failed to write");
-                PlayServicesResolver.Log(
-                    String.Format("Unable to patch {0} ({1})", fileDescription,
-                                  ex.ToString()), level: LogLevel.Error);
-                return false;
-            }
-            return true;
+            return PatchFile(GradleTemplatePath, fileDescription,
+                             "Gradle Template", "gradletemplate",
+                             injectors, resolutionMeasurementParameters);
         }
     }
 }

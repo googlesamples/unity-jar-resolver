@@ -498,6 +498,15 @@ namespace GooglePlayServices {
             }
         }
 
+        /// <summary>
+        /// Whether the Gradle Properties template is enabled. (Unity 2019.3 and above)
+        /// </summary>
+        public static bool GradlePropertiesTemplateEnabled {
+            get {
+                return GradleBuildEnabled &&
+                 File.Exists(GradleTemplateResolver.GradlePropertiesTemplatePath);
+            }
+        }
 
         // Backing store for GradleVersion property.
         private static string gradleVersion = null;
@@ -638,7 +647,12 @@ namespace GooglePlayServices {
             public bool GradleTemplateEnabled { get; private set; }
 
             /// <summary>
-            /// Whether project export is enabled.
+            /// Whether the Gradle properties template is enabled.
+            /// </summary>
+            public bool GradlePropertiesTemplateEnabled { get; private set; }
+
+            /// <summary>
+            // Whether project export is enabled.
             /// </summary>
             public bool ProjectExportEnabled { get; private set; }
 
@@ -650,6 +664,7 @@ namespace GooglePlayServices {
                     return new AndroidBuildSystemSettings {
                         GradleBuildEnabled = PlayServicesResolver.GradleBuildEnabled,
                         GradleTemplateEnabled = PlayServicesResolver.GradleTemplateEnabled,
+                        GradlePropertiesTemplateEnabled = PlayServicesResolver.GradlePropertiesTemplateEnabled,
                         ProjectExportEnabled = PlayServicesResolver.ProjectExportEnabled
                     };
                 }
@@ -664,6 +679,7 @@ namespace GooglePlayServices {
                 var other = (AndroidBuildSystemSettings)obj;
                 return other.GradleBuildEnabled == GradleBuildEnabled &&
                     other.GradleTemplateEnabled == GradleTemplateEnabled &&
+                    other.GradlePropertiesTemplateEnabled == GradlePropertiesTemplateEnabled &&
                     other.ProjectExportEnabled == ProjectExportEnabled;
             }
 
@@ -673,7 +689,8 @@ namespace GooglePlayServices {
             /// <returns>Hash of this object.</returns>
             public override int GetHashCode() {
                 return GradleBuildEnabled.GetHashCode() ^ GradleTemplateEnabled.GetHashCode() ^
-                    ProjectExportEnabled.GetHashCode();
+                       GradlePropertiesTemplateEnabled.GetHashCode() ^
+                       ProjectExportEnabled.GetHashCode();
             }
 
 
@@ -683,9 +700,9 @@ namespace GooglePlayServices {
             /// <returns>String representation.</returns>
             public override string ToString() {
                 return String.Format("[GradleBuildEnabled={0} GradleTemplateEnabled={1} " +
-                                     "ProjectExportEnabled={2}]",
+                                     "GradlePropertiesTemplateEnabled={2} ProjectExportEnabled={2}]",
                                      GradleBuildEnabled, GradleTemplateEnabled,
-                                     ProjectExportEnabled);
+                                     GradlePropertiesTemplateEnabled, ProjectExportEnabled);
             }
         }
 
@@ -719,6 +736,22 @@ namespace GooglePlayServices {
             /// Whether a custom Gradle template was enabled the last time this event was fired.
             /// </summary>
             public bool PreviousGradleTemplateEnabled { get; set; }
+
+            /// <summary>
+            /// Project export was selected when this event was fired.
+            /// </summary>
+
+            /// <summary>
+            /// Whether a custom Gradle Properties template is enabled.
+            /// This will only be true if GradleBuildEnabled is also true.
+            /// </summary>
+            public bool GradlePropertiesTemplateEnabled { get; set; }
+
+            /// <summary>
+            /// Whether a custom Gradle Properties Template
+            /// was enabled the last time this event was fired.
+            /// </summary>
+            public bool PreviousGradlePropertiesTemplateEnabled { get; set; }
 
             /// <summary>
             /// Project export was selected when this event was fired.
@@ -1398,6 +1431,8 @@ namespace GooglePlayServices {
                                 PreviousGradleBuildEnabled = previousValue.GradleBuildEnabled,
                                 GradleTemplateEnabled = currentValue.GradleTemplateEnabled,
                                 PreviousGradleTemplateEnabled = previousValue.GradleTemplateEnabled,
+                                GradlePropertiesTemplateEnabled = currentValue.GradlePropertiesTemplateEnabled,
+                                PreviousGradlePropertiesTemplateEnabled = previousValue.GradlePropertiesTemplateEnabled,
                                 ProjectExportEnabled = currentValue.ProjectExportEnabled,
                                 PreviousProjectExportEnabled = previousValue.ProjectExportEnabled,
                             });
@@ -1848,7 +1883,7 @@ namespace GooglePlayServices {
                     PlayServicesResolver.analytics.Report("/resolve/failed", resolutionParameters,
                                                           "Resolve Failed");
                     Log(String.Format("Resolution Failed.\n\n{0}", error),
-                        level: LogLevel.Verbose);
+                        level: LogLevel.Error);
                 }
                 if (resolutionComplete != null) {
                     RunOnMainThread.Run(() => { resolutionComplete(succeeded); });
@@ -1862,11 +1897,46 @@ namespace GooglePlayServices {
                 DeleteResolvedLibrariesFromGradleTemplate();
             }
 
+            Func<bool> patchGradleProperties = () => {
+                // For Unity 2019.3 and above, warn the user if jetifier is enabled
+                // and custom gradle properties template is not enabled in build settings.
+                if (GradleBuildEnabled &&
+                    Google.VersionHandler.GetUnityVersionMajorMinor() >= 2019.3f &&
+                    SettingsDialogObj.UseJetifier &&
+                    SettingsDialogObj.PatchPropertiesTemplateGradle &&
+                    !GradlePropertiesTemplateEnabled) {
+                        lastError = String.Format(
+                            "Resolution failed because EDM4u could not enable Jetifier " +
+                            "in Unity {0} without Custom Gradle Properties Template. " +
+                            "Please enable 'Custom Gradle Properties Template' found under " +
+                            "'Player Settings > Settings for Android -> Publishing Settings' menu. " +
+                            "Due to changes in Gradle project generated by Unity 2019.3 and "+
+                            "above, our recommended way of enabling Jetifier is by injecting "+
+                            "properties to Assets/Plugins/Android/gradleTemplate.properties.",
+                            Google.VersionHandler.GetUnityVersionMajorMinor()
+                        );
+                        return false;
+                }
+
+                // If there is a custom gradle properties template file and jetifier
+                // is enabled, inject the required properties in that file.
+                // This is the recommended way of doing things in Unity 2019.3 and above
+                // because the structure of gradle projects built by Unity has changed.
+                if (GradlePropertiesTemplateEnabled &&
+                    SettingsDialogObj.UseJetifier &&
+                    SettingsDialogObj.PatchPropertiesTemplateGradle) {
+                    return GradleTemplateResolver.InjectProperties();
+                }
+                return true;
+            };
+
             if (GradleTemplateEnabled &&
                 SettingsDialogObj.PatchMainTemplateGradle) {
+                lastError = "";
                 RunOnMainThread.Run(() => {
                         finishResolution(GradleTemplateResolver.InjectDependencies(
-                            PlayServicesSupport.GetAllDependencies().Values), "");
+                            PlayServicesSupport.GetAllDependencies().Values) &&
+                            patchGradleProperties(), lastError);
                     });
             } else {
                 lastError = "";
@@ -1875,7 +1945,8 @@ namespace GooglePlayServices {
                     closeWindowOnCompletion,
                     () => {
                         RunOnMainThread.Run(() => {
-                                finishResolution(String.IsNullOrEmpty(lastError), lastError);
+                                finishResolution(String.IsNullOrEmpty(lastError) &&
+                                patchGradleProperties(), lastError);
                             });
                     });
             }

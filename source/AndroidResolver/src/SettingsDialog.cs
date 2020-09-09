@@ -38,6 +38,7 @@ namespace GooglePlayServices {
             internal bool explodeAars;
             internal bool patchAndroidManifest;
             internal bool patchMainTemplateGradle;
+            internal bool patchPropertiesTemplateGradle;
             internal string localMavenRepoDir;
             internal bool useJetifier;
             internal bool verboseLogging;
@@ -58,6 +59,7 @@ namespace GooglePlayServices {
                 explodeAars = SettingsDialog.ExplodeAars;
                 patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
                 patchMainTemplateGradle = SettingsDialog.PatchMainTemplateGradle;
+                patchPropertiesTemplateGradle = SettingsDialog.PatchPropertiesTemplateGradle;
                 localMavenRepoDir = SettingsDialog.LocalMavenRepoDir;
                 useJetifier = SettingsDialog.UseJetifier;
                 verboseLogging = SettingsDialog.VerboseLogging;
@@ -79,6 +81,7 @@ namespace GooglePlayServices {
                 SettingsDialog.ExplodeAars = explodeAars;
                 SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
                 SettingsDialog.PatchMainTemplateGradle = patchMainTemplateGradle;
+                SettingsDialog.PatchPropertiesTemplateGradle = patchPropertiesTemplateGradle;
                 SettingsDialog.LocalMavenRepoDir = localMavenRepoDir;
                 SettingsDialog.UseJetifier = useJetifier;
                 SettingsDialog.VerboseLogging = verboseLogging;
@@ -97,6 +100,7 @@ namespace GooglePlayServices {
         private const string ExplodeAarsKey = Namespace + "ExplodeAars";
         private const string PatchAndroidManifestKey = Namespace + "PatchAndroidManifest";
         private const string PatchMainTemplateGradleKey = Namespace + "PatchMainTemplateGradle";
+        private const string PatchPropertiesTemplateGradleKey = Namespace + "PatchPropertiesTemplateGradle";
         private const string LocalMavenRepoDirKey = Namespace + "LocalMavenRepoDir";
         private const string UseJetifierKey = Namespace + "UseJetifier";
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
@@ -115,6 +119,7 @@ namespace GooglePlayServices {
             ExplodeAarsKey,
             PatchAndroidManifestKey,
             PatchMainTemplateGradleKey,
+            PatchPropertiesTemplateGradleKey,
             LocalMavenRepoDirKey,
             UseJetifierKey,
             VerboseLoggingKey,
@@ -233,6 +238,11 @@ namespace GooglePlayServices {
         internal static bool PatchMainTemplateGradle {
             set { projectSettings.SetBool(PatchMainTemplateGradleKey, value); }
             get { return projectSettings.GetBool(PatchMainTemplateGradleKey, true); }
+        }
+
+        internal static bool PatchPropertiesTemplateGradle {
+            set { projectSettings.SetBool(PatchPropertiesTemplateGradleKey, value); }
+            get { return projectSettings.GetBool(PatchPropertiesTemplateGradleKey, true); }
         }
 
         internal static string LocalMavenRepoDir {
@@ -509,6 +519,18 @@ namespace GooglePlayServices {
                     "builds when mixing legacy Android support libraries and Jetpack libraries.");
             }
 
+            if (settings.useJetifier) {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Patch gradleTemplate.properties", EditorStyles.boldLabel);
+                settings.patchPropertiesTemplateGradle = EditorGUILayout.Toggle(settings.patchPropertiesTemplateGradle);
+                GUILayout.EndHorizontal();
+                GUILayout.Label(
+                    "For Unity 2019.3 and above, it is recommended to enable Jetifier " +
+                    "and AndroidX via gradleTemplate.properties. Please enable " +
+                    "Custom Gradle Properties Template' found under 'Player Settings > " +
+                    "Settings for Android > Publishing Settings' menu item. " +
+                    "This has no effect in older versions of Unity.");
+            }
             settings.analyticsSettings.RenderGui();
 
             GUILayout.BeginHorizontal();
