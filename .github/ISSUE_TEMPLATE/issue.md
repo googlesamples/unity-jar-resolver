@@ -17,10 +17,10 @@ Once you've read this section and determined that your issue is appropriate for 
 
   * Unity editor version: _____
   * External Dependency Manager version: _____
-  * Source you installed EDM4U (from .unitypackage or Unity Package Manager): _____
-  * Features in External Dependency Manager in use (Android Resolver, iOS Resolver, VersionHandler, etc.): _____
-  * Plugins SDK in use (Firebase, Admob, Facebook, etc.): _____
-  * Platform you are using the Unity editor on (Mac, Windows, or Linux): _____
+  * Source you installed EDM4U: _____ (.unitypackage or Unity Package Manager)
+  * Features in External Dependency Manager in use: _____ (Android Resolver, iOS Resolver, VersionHandler, etc.)
+  * Plugins SDK in use: _____ (Firebase, Admob, Facebook, etc.)
+  * Platform you are using the Unity editor on: _____ (Mac, Windows, or Linux)
 
 ### [REQUIRED] Please describe the issue here:
 (Please list the full steps to reproduce the issue. Include device logs, Unity logs, and stack traces if available.)
