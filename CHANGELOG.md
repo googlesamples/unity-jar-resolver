@@ -1,3 +1,13 @@
+# Version 1.2.159 - Sep 11, 2020
+* Android Resolver - Fixed #322 where the Unity editor will lose its target SDK
+  setting between Unity restarts if `>28` is selected in 2019.  This is due to
+  Unity AndroidSdkVersions enum does not contain values above 28.
+* Android Resolver - Fixed #360 where building Android app with Untiy 2019.3+
+  may fail due to Jetifier and AndroidX not enabled properly in generated
+  Gradle project. This fix requires the user to enable
+  `Custom Gradle Properties Template` found under
+  `Player Settings > Settings for Android > Publishing Settings`.
+
 # Version 1.2.158 - Sep 3, 2020
 * Version Handler: Fixed editor freeze when `-executeMethod` is used in
   non-batch mode.
