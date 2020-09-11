@@ -55,11 +55,20 @@ public class UnityCompat {
     }
 
     // Parses a UnityEditor.AndroidSDKVersion enum for a value.
-    private static int VersionFromAndroidSDKVersionsEnum(string enumName, string fallbackPrefKey,
+    private static int VersionFromAndroidSDKVersionsEnum(object enumValue, string fallbackPrefKey,
                                                          int fallbackValue) {
-        // If the enum property has no name it's not possible to parse the version so fallback to
-        // auto-selection.
-        if (String.IsNullOrEmpty(enumName)) return -1;
+        string enumName = null;
+        try {
+            enumName = Enum.GetName(typeof(AndroidSdkVersions), enumValue);
+        } catch (ArgumentException) {
+            //Fall back on auto if the enum value is not parsable
+            return -1;
+        }
+        
+        // If the enumName is empty then enumValue was not represented in the enum, 
+        // most likely because Unity has not yet added the new version,
+        // fall back on the raw enumValue
+        if (String.IsNullOrEmpty(enumName)) return (int)enumValue;
 
         if (enumName.StartsWith(UNITY_ANDROID_VERSION_ENUM_PREFIX)) {
             enumName = enumName.Substring(UNITY_ANDROID_VERSION_ENUM_PREFIX.Length);
@@ -91,7 +100,7 @@ public class UnityCompat {
     /// <returns>the sdk value (ie. 24 for Android 7.0 Nouget)</returns>
     public static int GetAndroidMinSDKVersion() {
         int minSdkVersion = VersionFromAndroidSDKVersionsEnum(
-            PlayerSettings.Android.minSdkVersion.ToString(),
+            (object)PlayerSettings.Android.minSdkVersion,
             ANDROID_MIN_SDK_FALLBACK_KEY, MinSDKVersionFallback);
         if (minSdkVersion == -1)
             return MinSDKVersionFallback;
@@ -121,7 +130,7 @@ public class UnityCompat {
         var property = typeof(UnityEditor.PlayerSettings.Android).GetProperty("targetSdkVersion");
         int apiLevel = property == null ? -1 :
             VersionFromAndroidSDKVersionsEnum(
-                 Enum.GetName(property.PropertyType, property.GetValue(null, null)),
+                 property.GetValue(null, null),
                  ANDROID_PLATFORM_FALLBACK_KEY, AndroidPlatformVersionFallback);
         if (apiLevel >= 0) return apiLevel;
         return FindNewestInstalledAndroidSDKVersion();
