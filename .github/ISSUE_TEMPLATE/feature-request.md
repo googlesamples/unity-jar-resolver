@@ -3,7 +3,7 @@ name: "➕ Feature request"
 about: If you have a feature request for the External Dependency Manager for Unity,
   file it here.
 title: "[FR] "
-labels: 'type: feature request'
+labels: 'new, type: feature request'
 assignees: ''
 
 ---
