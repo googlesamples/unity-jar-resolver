@@ -1,7 +1,6 @@
 ---
 name: "❓ General question"
-about: Describe this issuPlease use this template to ask general question with the
-  External Dependency Manager for Unity (EDM4U)e template's purpose here.
+about: Please use this template to ask general question with the External Dependency Manager for Unity (EDM4U)
 title: "[Question] "
 labels: 'type: question'
 assignees: ''
