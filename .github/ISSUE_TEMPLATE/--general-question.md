@@ -9,7 +9,7 @@ assignees: ''
 
 <!-- DO NOT DELETE
 validate_template=true
-template_path=.github/ISSUE_TEMPLATE/question.md
+template_path=.github/ISSUE_TEMPLATE/--general-question.md
 -->
 
 ### [READ] For Firebase Unity SDK question, please report to [Firebase Unity Sample](https://github.com/firebase/quickstart-unity/issues/new/choose)
