@@ -383,8 +383,22 @@ namespace GooglePlayServices {
 
         /// <summary>
         /// Resolver that uses Gradle to download libraries and embed them within a Unity project.
+        /// Lazy initialize it only when current build target is Android.
         /// </summary>
-        private static GradleResolver gradleResolver;
+        private static GradleResolver GradleResolverInstance {
+            get {
+                if (gradleResolverInstance == null &&
+                        EditorUserBuildSettings.activeBuildTarget == BuildTarget.Android) {
+                    gradleResolverInstance = new GradleResolver();
+                }
+                return gradleResolverInstance;
+            }
+        }
+
+        /// <summary>
+        /// Instance of GradleResolver.
+        /// </summary>
+        private static GradleResolver gradleResolverInstance = null;
 
         /// <summary>
         /// Resoluton job.
@@ -954,8 +968,6 @@ namespace GooglePlayServices {
                         "please report to the developer.");
             }
 
-            // Create the resolver.
-            gradleResolver = new GradleResolver();
             // Monitor Android dependency XML files to perform auto-resolution.
             AddAutoResolutionFilePatterns(xmlDependencies.fileRegularExpressions);
 
@@ -1091,7 +1103,7 @@ namespace GooglePlayServices {
                                                    string[] deletedAssets,
                                                    string[] movedAssets,
                                                    string[] movedFromAssetPaths) {
-            if (gradleResolver != null) {
+            if (GradleResolverInstance != null) {
                 // If the manifest changed, try patching it.
                 var manifestPath = FileUtils.NormalizePathSeparators(
                     SettingsDialogObj.AndroidManifestPath);
@@ -1150,7 +1162,7 @@ namespace GooglePlayServices {
             if (UnityEngine.Application.isPlaying) return;
             // If the Android resolver isn't enabled or automatic resolution is disabled,
             // do nothing.
-            if (gradleResolver == null || !SettingsDialogObj.AutoResolveOnBuild) {
+            if (GradleResolverInstance == null || !SettingsDialogObj.AutoResolveOnBuild) {
                 return;
             }
             // If post-processing has already been executed since this module was loaded, don't
@@ -1231,7 +1243,7 @@ namespace GooglePlayServices {
         /// Auto-resolve if any packages need to be resolved.
         /// </summary>
         private static void Reresolve() {
-            if (AutomaticResolutionEnabled && gradleResolver != null) {
+            if (AutomaticResolutionEnabled && GradleResolverInstance != null) {
                 ScheduleAutoResolve();
             }
         }
@@ -1940,15 +1952,23 @@ namespace GooglePlayServices {
                     });
             } else {
                 lastError = "";
-                gradleResolver.DoResolution(
-                    SettingsDialogObj.PackageDir,
-                    closeWindowOnCompletion,
-                    () => {
-                        RunOnMainThread.Run(() => {
-                                finishResolution(String.IsNullOrEmpty(lastError) &&
-                                patchGradleProperties(), lastError);
-                            });
+                if (GradleResolverInstance != null) {
+                    GradleResolverInstance.DoResolution(
+                        SettingsDialogObj.PackageDir,
+                        closeWindowOnCompletion,
+                        () => {
+                            RunOnMainThread.Run(() => {
+                                    finishResolution(String.IsNullOrEmpty(lastError) &&
+                                    patchGradleProperties(), lastError);
+                                });
+                        });
+                } else {
+                    // Fail the resolution if gradleResolver is not initialized.
+                    RunOnMainThread.Run(() => {
+                        finishResolution(false, "GradleResolver is not created. Is your " +
+                                "current build target set to Android?");
                     });
+                }
             }
         }
 
@@ -1986,7 +2006,7 @@ namespace GooglePlayServices {
         /// Interactive resolution of dependencies.
         /// </summary>
         private static void ExecuteMenuResolve(bool forceResolution) {
-            if (gradleResolver == null) {
+            if (GradleResolverInstance == null) {
                 NotAvailableDialog();
                 return;
             }
@@ -2428,7 +2448,7 @@ namespace GooglePlayServices {
         internal static void OnSettingsChanged() {
             PlayServicesSupport.verboseLogging = SettingsDialogObj.VerboseLogging;
             logger.Verbose = SettingsDialogObj.VerboseLogging;
-            if (gradleResolver != null) {
+            if (GradleResolverInstance != null) {
                 PatchAndroidManifest(GetAndroidApplicationId(), null);
                 Reresolve();
             }
