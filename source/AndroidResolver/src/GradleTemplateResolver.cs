@@ -54,6 +54,12 @@ namespace GooglePlayServices {
             Path.Combine(SettingsDialog.AndroidPluginsDir, "mainTemplate.gradle");
 
         /// <summary>
+        /// Path of the launcher Gradle template file.
+        /// </summary>
+        private static readonly string LauncherGradleTemplatePath =
+            Path.Combine(SettingsDialog.AndroidPluginsDir, "launcherTemplate.gradle");
+
+        /// <summary>
         /// Line that indicates the start of the injected repos block in the template.
         /// </summary>
         private const string ReposStartLine = "// Android Resolver Repos Start";
@@ -67,7 +73,7 @@ namespace GooglePlayServices {
         /// Line that indicates where to initially inject repos in the default template.
         /// </summary>
         private const string ReposInjectionLine =
-            @".*apply plugin: 'com\.android\.(application|library)'.*";
+            @".*apply\s+plugin:\s*'com\.android\.(application|library)'.*";
 
         /// <summary>
         /// Token that indicates where gradle properties should initially be injected.
@@ -107,6 +113,12 @@ namespace GooglePlayServices {
         /// Token that indicates where exclusions should be injected.
         /// </summary>
         private const string PackagingOptionsToken = @"android +{";
+
+        /// <summary>
+        /// Cached regular expression object for searching Gradle plugin type.
+        /// </summary>
+        private static readonly Regex ReposInjectionLineRegex = new Regex(ReposInjectionLine,
+            RegexOptions.Compiled);
 
         /// <summary>
         /// Copy srcaar files to aar files that are excluded from Unity's build process.
@@ -443,6 +455,7 @@ namespace GooglePlayServices {
             }
 
             var fileDescription = String.Format("gradle template {0}", GradleTemplatePath);
+            var launcherFileDescription = String.Format("launcher gradle template {0}", LauncherGradleTemplatePath);
             PlayServicesResolver.Log(String.Format("Reading {0}", fileDescription),
                                      level: LogLevel.Verbose);
             IEnumerable<string> lines;
@@ -456,6 +469,23 @@ namespace GooglePlayServices {
                     String.Format("Unable to patch {0} ({1})", fileDescription, ex.ToString()),
                     level: LogLevel.Error);
                 return false;
+            }
+
+            PlayServicesResolver.Log(String.Format("Searching for {0} in {1}", ReposInjectionLine,
+                    fileDescription),
+                level: LogLevel.Verbose);
+            // Determine whether main Gradle template is library or application.
+            bool gradleTemplateIsLibrary = false;
+            foreach (var line in lines) {
+                var match = ReposInjectionLineRegex.Match(line);
+                if (match.Success) {
+                    gradleTemplateIsLibrary = string.Equals(match.Groups[1].Value, "library",
+                                                            StringComparison.InvariantCultureIgnoreCase);
+
+                    PlayServicesResolver.Log(String.Format("Gradle template is '{0}'", match.Groups[1].Value),
+                        level: LogLevel.Verbose);
+                    break;
+                }
             }
 
             PlayServicesResolver.Log(String.Format("Searching for {0} in {1}", DependenciesToken,
@@ -510,22 +540,59 @@ namespace GooglePlayServices {
             }
             repoLines.AddRange(PlayServicesResolver.GradleMavenReposLines(dependencies));
 
-            TextFileLineInjector[] injectors = new [] {
-                new TextFileLineInjector(ReposInjectionLine, ReposStartLine, ReposEndLine,
-                                         repoLines, "Repos", fileDescription),
-                new TextFileLineInjector(DependenciesToken, DependenciesStartLine,
-                                         DependenciesEndLine,
-                                         PlayServicesResolver.GradleDependenciesLines(
-                                             dependencies, includeDependenciesBlock: false),
-                                         "Dependencies", fileDescription),
-                new TextFileLineInjector(PackagingOptionsToken, PackagingOptionsStartLine,
-                                         PackagingOptionsEndLine,
-                                         PlayServicesResolver.PackagingOptionsLines(dependencies),
-                                         "Packaging Options", fileDescription),
-            };
-            return PatchFile(GradleTemplatePath, fileDescription,
-                             "Gradle Template", "gradletemplate",
-                             injectors, resolutionMeasurementParameters);
+            TextFileLineInjector[] injectors;
+            TextFileLineInjector[] launcherInjectors;
+            if (gradleTemplateIsLibrary) {
+                // In Unity 2019.3+ Jetifier code and Maven repositories must be injected in launcher Gradle template.
+                injectors = new[] {
+                    // This first injector will remove repositories injected to main Gradle template.
+                    new TextFileLineInjector(ReposInjectionLine, ReposStartLine, ReposEndLine,
+                        new string[] {}, "Repos", fileDescription),
+                    new TextFileLineInjector(DependenciesToken, DependenciesStartLine,
+                        DependenciesEndLine,
+                        PlayServicesResolver.GradleDependenciesLines(
+                            dependencies, includeDependenciesBlock: false),
+                        "Dependencies", fileDescription),
+                    new TextFileLineInjector(PackagingOptionsToken, PackagingOptionsStartLine,
+                        PackagingOptionsEndLine,
+                        PlayServicesResolver.PackagingOptionsLines(dependencies),
+                        "Packaging Options", fileDescription),
+                };
+
+                launcherInjectors = new[] {
+                    new TextFileLineInjector(ReposInjectionLine, ReposStartLine, ReposEndLine,
+                        repoLines, "Repos", launcherFileDescription),
+                };
+            } else {
+                injectors = new[] {
+                    new TextFileLineInjector(ReposInjectionLine, ReposStartLine, ReposEndLine,
+                        repoLines, "Repos", fileDescription),
+                    new TextFileLineInjector(DependenciesToken, DependenciesStartLine,
+                        DependenciesEndLine,
+                        PlayServicesResolver.GradleDependenciesLines(
+                            dependencies, includeDependenciesBlock: false),
+                        "Dependencies", fileDescription),
+                    new TextFileLineInjector(PackagingOptionsToken, PackagingOptionsStartLine,
+                        PackagingOptionsEndLine,
+                        PlayServicesResolver.PackagingOptionsLines(dependencies),
+                        "Packaging Options", fileDescription),
+                };
+
+                launcherInjectors = new TextFileLineInjector[] { };
+            }
+
+            bool patchResult = PatchFile(GradleTemplatePath, fileDescription,
+                "Gradle Template", "gradletemplate",
+                injectors, resolutionMeasurementParameters);
+
+            if (patchResult)
+            {
+                patchResult = PatchFile(LauncherGradleTemplatePath, launcherFileDescription,
+                    "Gradle Launcher Template", "gradletemplate",
+                    launcherInjectors, resolutionMeasurementParameters);
+            }
+
+            return patchResult;
         }
     }
 }
