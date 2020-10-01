@@ -1,7 +1,11 @@
 ---
-name: 🐞 Bug report
-about: Please use this template to report issues with the External Dependency Manager for Unity (EDM4U)
+name: "\U0001F41E Bug report"
+about: Please use this template to report issues with the External Dependency Manager
+  for Unity (EDM4U)
+title: "[BUG]"
 labels: new
+assignees: ''
+
 ---
 
 <!-- DO NOT DELETE

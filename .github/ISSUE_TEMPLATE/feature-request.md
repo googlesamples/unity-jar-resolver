@@ -1,7 +1,11 @@
 ---
-name: ➕ Feature request
-about: If you have a feature request for the External Dependency Manager for Unity, file it here.
-labels: 'type: feature request'
+name: "➕ Feature request"
+about: If you have a feature request for the External Dependency Manager for Unity,
+  file it here.
+title: "[FR] "
+labels: 'new, type: feature request'
+assignees: ''
+
 ---
 
 <!-- DO NOT DELETE
