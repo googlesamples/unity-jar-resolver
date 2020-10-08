@@ -1153,6 +1153,18 @@ namespace GooglePlayServices {
         private static int scenesProcessed = 0;
 
         /// <summary>
+        /// Reset static variable after every successful build.
+        /// </summary>
+        [UnityEditor.Callbacks.PostProcessBuildAttribute(0)]
+        private static void OnPostProcessBuild(UnityEditor.BuildTarget target, string path) {
+            // Since certain versions of Unity do not reload the module, we want
+            // to reset this variable in order to allow an attempt to resolve in OnPostProcessScene().
+            // Caveat: Unity calls this only after a successful build. We should really be calling
+            // this after every build (successful or not).
+            scenesProcessed = 0;
+        }
+
+        /// <summary>
         /// If auto-resolution is enabled, run resolution synchronously before building the
         /// application.
         /// </summary>
@@ -1171,6 +1183,8 @@ namespace GooglePlayServices {
             if (scenesProcessed > 1) return;
             Log("Starting auto-resolution before scene build...", level: LogLevel.Verbose);
             bool success = ResolveSync(false, true);
+            // If resolve fails, we want to try the resolve next time around.
+            if(!success) scenesProcessed--;
             Log(String.Format("Android resolution {0}.", success ? "succeeded" : "failed"),
                     level: LogLevel.Verbose);
         }
@@ -2475,6 +2489,7 @@ namespace GooglePlayServices {
                 {"bundleId", GetAndroidApplicationId()},
                 {"gradleBuildEnabled", buildSystemSettings.GradleBuildEnabled.ToString()},
                 {"gradleTemplateEnabled", buildSystemSettings.GradleTemplateEnabled.ToString()},
+                {"gradlePropertiesTemplateEnabled", buildSystemSettings.GradlePropertiesTemplateEnabled.ToString()},
                 {"projectExportEnabled", buildSystemSettings.ProjectExportEnabled.ToString()},
                 {"androidAbis", androidAbis.ToString()},
             };
