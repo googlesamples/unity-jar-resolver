@@ -1,3 +1,7 @@
+# Version 1.2.161 - Oct 12, 2020
+* Android Resolver - Fixed the issue that Android Resolver does not resolve
+  again before build in Unity 2020 if it failed to resolve previously.
+
 # Version 1.2.160 - Sep 30, 2020
 * Android Resolver - Fixed a regression that gradleResolver can be null until
   Initialize() is called.
