@@ -1,3 +1,8 @@
+# Version 1.2.162 - Nov 19, 2020
+* Version Handler - Improved #413 by preventing Version Handler from running
+  from static constructor when it is disabled.
+* Package Manager Resolver - Remove GPR
+
 # Version 1.2.161 - Oct 12, 2020
 * Android Resolver - Fixed the issue that Android Resolver does not resolve
   again before build in Unity 2020 if it failed to resolve previously.
