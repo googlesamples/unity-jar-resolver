@@ -2307,6 +2307,11 @@ public class VersionHandlerImpl : AssetPostprocessor {
     }
 
     static void UpdateVersionedAssetsOnUpdate() {
+        // Skips update if this module is disabled.
+        if (!Enabled) {
+            return;
+        }
+        
         UpdateVersionedAssets();
         NotifyWhenCompliationComplete(false);
         UpdateAssetsWithBuildTargets(EditorUserBuildSettings.activeBuildTarget);
