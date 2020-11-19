@@ -42,7 +42,6 @@
         {
           "importer": "DefaultImporter",
           "paths": [
-            "ExternalDependencyManager/Editor/GoogleRegistries.xml",
             "ExternalDependencyManager/Editor/external-dependency-manager*_manifest.txt"
           ]
         },

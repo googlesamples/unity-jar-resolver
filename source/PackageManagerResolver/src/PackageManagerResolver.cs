@@ -77,11 +77,6 @@ public class PackageManagerResolver : AssetPostprocessor {
         "Modify Registries'.";
 
     /// <summary>
-    /// Registry scopes provided by the Game Package Registry by Google.
-    /// </summary>
-    private static readonly string[] googleScopes = new [] { "com.google" };
-
-    /// <summary>
     /// Scroll location of the manifest view on the left in the registry selection window.
     /// </summary>
     private static Vector2 scrollManifestViewLeft;
@@ -100,7 +95,6 @@ public class PackageManagerResolver : AssetPostprocessor {
         RunOnMainThread.Run(() => {
                 // Load log preferences.
                 VerboseLoggingEnabled = VerboseLoggingEnabled;
-                CheckRegistries();
             }, runNow: false);
     }
 
@@ -124,14 +118,6 @@ public class PackageManagerResolver : AssetPostprocessor {
              typeof(PackageManagerResolverSettingsDialog), true, PLUGIN_NAME + " Settings");
          window.Initialize();
          window.Show();
-    }
-
-    /// <summary>
-    /// Alias for the settings dialog.
-    /// </summary>
-    [MenuItem("Window/Google/Game Package Registry/Settings")]
-    public static void ShowSettingsAlias() {
-        ShowSettings();
     }
 
     /// <summary>
@@ -206,26 +192,6 @@ public class PackageManagerResolver : AssetPostprocessor {
     public static void ModifyRegistries() {
         UpdateManifest(ManifestModificationMode.Modify, promptBeforeAction: true,
                        showDisableButton: false);
-    }
-
-    /// <summary>
-    /// Alias that simplifies adding the Game Package Registry by Google to the project.
-    /// manifest.
-    /// </summary>
-    [MenuItem("Window/Google/Game Package Registry/Add To Project")]
-    public static void AddGamePackageManagerRegistries() {
-        UpdateManifest(ManifestModificationMode.Add, promptBeforeAction: true,
-                       showDisableButton: false, scopePrefixFilter: googleScopes);
-    }
-
-    /// <summary>
-    /// Alias that simplifies removing the Game Package Registry by Google to the project.
-    /// manifest.
-    /// </summary>
-    [MenuItem("Window/Google/Game Package Registry/Remove From Project")]
-    public static void RemoveGamePackageManagerRegistries() {
-        UpdateManifest(ManifestModificationMode.Remove, promptBeforeAction: false,
-                       showDisableButton: false, scopePrefixFilter: googleScopes);
     }
 
     /// <summary>
@@ -398,6 +364,11 @@ public class PackageManagerResolver : AssetPostprocessor {
         }
 
         var xmlRegistries = ReadRegistriesFromXml();
+
+        if (xmlRegistries.Count == 0) {
+            logger.Log("No registry found from any Registries.xml files", level: LogLevel.Warning);
+        }
+
         // Filter registries using the scope prefixes.
         if (scopePrefixFilter != null) {
             foreach (var registry in new List<PackageManagerRegistry>(xmlRegistries.Values)) {
