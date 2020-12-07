@@ -20,6 +20,8 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Net;
+using System.Text;
+using System.Web;
 
 using UnityEngine;
 
@@ -60,6 +62,19 @@ public interface IPortableWebRequest {
     /// <param name="formFields">Form fields to URL encode and send.</param>
     /// <returns>Web request if successfully started, null otherwise.</returns>
     IPortableWebRequestStatus Post(string url, IDictionary<string, string> headers,
+                                   IEnumerable<KeyValuePair<string, string>> formFields);
+
+    /// <summary>
+    /// Post to a URL.
+    /// </summary>
+    /// <param name="path">URL path to send data to.</param>
+    /// <param name="queryParams">Query parameters to be appended to the URL.</param>
+    /// <param name="headers">Headers to use when performing the request.</param>
+    /// <param name="formFields">Form fields to URL encode and send.</param>
+    /// <returns>Web request if successfully started, null otherwise.</returns>
+    IPortableWebRequestStatus Post(string path,
+                                   IEnumerable<KeyValuePair<string, string>> queryParams,
+                                   IDictionary<string, string> headers,
                                    IEnumerable<KeyValuePair<string, string>> formFields);
 
     /// <summary>
@@ -519,6 +534,29 @@ public class PortableWebRequest : IPortableWebRequest {
                        level: LogLevel.Verbose);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Post to a URL.
+    /// </summary>
+    /// <param name="path">URL path to send data to.</param>
+    /// <param name="queryParams">Query parameters to be appended to the URL.</param>
+    /// <param name="headers">Headers to use when performing the request.</param>
+    /// <param name="formFields">Form fields to URL encode and send.</param>
+    /// <returns>Web request if successfully started, null otherwise.</returns>
+    public IPortableWebRequestStatus Post(string path,
+                                   IEnumerable<KeyValuePair<string, string>> queryParams,
+                                   IDictionary<string, string> headers,
+                                   IEnumerable<KeyValuePair<string, string>> formFields) {
+        var url = new StringBuilder(256);
+        foreach (var param in queryParams) {
+            url.AppendFormat("{0}{1}={2}",
+                                url.Length == 0 ? "?" : "&",
+                                HttpUtility.UrlEncode(param.Key),
+                                HttpUtility.UrlEncode(param.Value));
+        }
+        url.Insert(0, path);
+        return Post(url.ToString(), headers, formFields);
     }
 
     /// <summary>

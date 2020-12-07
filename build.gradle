@@ -35,7 +35,7 @@ project.ext {
      (OperatingSystem.MAC_OSX):
      ["/Applications/Unity/Unity.app/Contents/MacOS/Unity"] +
      (new FileNameFinder()).getFileNames(
-       "/", "Applications/UnityHub/*/Unity.app/Contents/MacOS/Unity"),
+       "/", "Applications/Unity/Hub/Editor/*/Unity.app/Contents/MacOS/Unity"),
      (OperatingSystem.WINDOWS):
      ["\\Program Files\\Unity\\Editor\\Unity.exe"] +
      (new FileNameFinder()).getFileNames(

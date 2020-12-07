@@ -514,8 +514,8 @@ public class EditorMeasurement {
                 if (String.IsNullOrEmpty(cookie.Key)) continue;
                 // See https://developers.google.com/analytics/devguides/collection/protocol/v1
                 var status = PortableWebRequest.DefaultInstance.Post(
-                    "http://www.google-analytics.com/collect", null,
-                    new [] {
+                    "http://www.google-analytics.com/collect",
+                    new[] {
                         // Version
                         new KeyValuePair<string, string>("v", "1"),
                         // Tracking ID.
@@ -525,13 +525,14 @@ public class EditorMeasurement {
                         // Hit type.
                         new KeyValuePair<string, string>("t", "pageview"),
                         // "URL" / string to report.
-                        new KeyValuePair<string, string>("dl",
-                                path + "?" + cookie.Value + fragment),
+                        new KeyValuePair<string, string>(
+                            "dl", path + "?" + cookie.Value + fragment),
                         // Document title.
                         new KeyValuePair<string, string>("dt", reportName),
                         // Cache buster
                         new KeyValuePair<string, string>("z", random.Next().ToString())
-                    });
+                    },
+                    null, null);
                 if (status != null) reported = true;
             }
             if (reported) {

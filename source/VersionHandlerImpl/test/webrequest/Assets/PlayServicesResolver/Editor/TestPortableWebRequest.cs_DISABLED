@@ -16,7 +16,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections;
 using System.Net;
 using Google;
 
@@ -33,6 +32,8 @@ public class TestPortableWebRequest {
     private static bool postSucceeded = false;
     // Whether the post operation with no headers succeeded.
     private static bool postNoHeadersSucceeded = false;
+    // Whether the post operation with no form fields succeeded.
+    private static bool postNoFormFieldsSucceeded = false;
 
     /// <summary>
     /// Register a method to call when the Version Handler has enabled all plugins in the project.
@@ -187,6 +188,43 @@ public class TestPortableWebRequest {
                     postSucceeded &= CheckEqual(result, expected);
                     UnityEngine.Debug.Log(String.Format("Post complete succeeded={0}\n{1}",
                                                         postSucceeded, result));
+                }
+                return complete;
+            }, synchronous: true);
+
+        UnityEngine.Debug.Log("Running post test with no form fields...");
+        var postNoFormFieldsStatus = webRequest.Post(
+            "http://localhost:8000/post?foo1=bar1&foo2=bar2",
+            new[] {
+                new KeyValuePair<string, string>("foo1", "bar1"),
+                new KeyValuePair<string, string>("foo2", "bar2")
+            },
+            new Dictionary<string, string> {
+                { "Echo-Foo", "Bar" },
+                { "Echo-Bish", "Bosh" }
+            },
+            null);
+        RunOnMainThread.PollOnUpdateUntilComplete(() => {
+                var complete = postNoFormFieldsStatus.Complete;
+                if (complete) {
+                    postNoFormFieldsSucceeded = CheckEqual(postNoFormFieldsStatus.Status,
+                                                           HttpStatusCode.OK);
+                    postNoFormFieldsSucceeded &= CheckEqual(
+                        DictionaryToString("echo-", true, postNoFormFieldsStatus.Headers),
+                        "echo-bish=Bosh\n" +
+                        "echo-foo=Bar");
+                    var result = System.Text.Encoding.Default.GetString(
+                        postNoFormFieldsStatus.Result);
+                    var expected =
+                        "{\"data\": \"Hello from a test server\", " +
+                        "\"form\": {}, " +
+                        "\"headers\": {\"Echo-Bish\": \"Bosh\", \"Echo-Foo\": \"Bar\"}, " +
+                        "\"path\": \"/post\", " +
+                        "\"query\": {\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}";
+                    postNoFormFieldsSucceeded &= CheckEqual(result, expected);
+                    UnityEngine.Debug.Log(String.Format(
+                        "Post with no firm fields succeeded={0}\n{1}",
+                        postNoFormFieldsSucceeded, result));
                 }
                 return complete;
             }, synchronous: true);

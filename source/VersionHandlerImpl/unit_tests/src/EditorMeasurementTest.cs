@@ -20,6 +20,8 @@ namespace Google.VersionHandlerImpl.Tests {
     using System.Collections.Generic;
     using System.Net;
     using System.IO;
+    using System.Text;
+    using System.Web;
 
     using Google;
 
@@ -83,15 +85,41 @@ namespace Google.VersionHandlerImpl.Tests {
                     string url, IDictionary<string, string> headers,
                     IEnumerable<KeyValuePair<string, string>> formFields) {
                 var formLines = new List<string>();
-                foreach (var kv in formFields) {
-                    var value = kv.Value;
-                    // Change the random cache buster to 0.
-                    if (kv.Key == "z") value = "0";
-                    formLines.Add(String.Format("{0}={1}", kv.Key, value));
+                if (formFields != null) {
+                    foreach (var kv in formFields) {
+                        var value = kv.Value;
+                        // Change the random cache buster to 0.
+                        if (kv.Key == "z") value = "0";
+                        formLines.Add(String.Format("{0}={1}", kv.Key, value));
+                    }
                 }
+
                 PostedUrlAndForms.Add(
                     new KeyValuePair<string, string>(url, String.Join("\n", formLines.ToArray())));
                 return new RequestStatus();
+            }
+
+            /// <summary>
+            /// Start a post request that is immediately completed.
+            /// </summary>
+            public IPortableWebRequestStatus Post(
+                    string path, IEnumerable<KeyValuePair<string, string>> queryParams,
+                    IDictionary<string, string> headers,
+                    IEnumerable<KeyValuePair<string, string>> formFields)
+            {
+                var url = new StringBuilder(256);
+                foreach (var param in queryParams) {
+                    var value = param.Value;
+                    // Change the random cache buster to 0.
+                    if (param.Key == "z") value = "0";
+
+                    url.AppendFormat("{0}{1}={2}",
+                                     url.Length == 0 ? "?" : "&",
+                                     HttpUtility.UrlEncode(param.Key),
+                                     HttpUtility.UrlEncode(value));
+                }
+                url.Insert(0, path);
+                return Post(url.ToString(), headers, formFields);
             }
 
             public IPortableWebRequestStatus Get(string url, IDictionary<string, string> headers) {
@@ -338,15 +366,19 @@ namespace Google.VersionHandlerImpl.Tests {
         private KeyValuePair<string, string> CreateMeasurementEvent(
                 string reportUrl, string reportName, string cookie) {
             return new KeyValuePair<string, string>(
-                "http://www.google-analytics.com/collect",
-                String.Format("v=1\n" +
-                              "tid={0}\n" +
-                              "cid={1}\n" +
-                              "t=pageview\n" +
-                              "dl={2}\n" +
-                              "dt={3}\n" +
-                              "z=0",
-                              GA_TRACKING_ID, cookie, reportUrl, reportName));
+                String.Format("http://www.google-analytics.com/collect" +
+                              "?v=1" +
+                              "&tid={0}" +
+                              "&cid={1}" +
+                              "&t=pageview" +
+                              "&dl={2}" +
+                              "&dt={3}" +
+                              "&z=0",
+                              HttpUtility.UrlEncode(GA_TRACKING_ID),
+                              HttpUtility.UrlEncode(cookie),
+                              HttpUtility.UrlEncode(reportUrl),
+                              HttpUtility.UrlEncode(reportName)),
+                "" /* empty form fields */);
         }
 
         /// <summary>
