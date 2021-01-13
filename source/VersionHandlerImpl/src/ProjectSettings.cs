@@ -817,9 +817,14 @@ namespace Google {
                     return;
                 }
                 try {
-                    using (var writer = new XmlTextWriter(new StreamWriter(PROJECT_SETTINGS_FILE)) {
-                            Formatting = Formatting.Indented,
-                        }) {
+                    using (var writer =
+                           XmlWriter.Create(PROJECT_SETTINGS_FILE,
+                                            new XmlWriterSettings {
+                                                Indent = true,
+                                                IndentChars = "  ",
+                                                NewLineChars = "\n",
+                                                NewLineHandling = NewLineHandling.Replace
+                                            })) {
                         writer.WriteStartElement("projectSettings");
                         foreach (var key in projectSettings.Keys) {
                             var value = projectSettings.GetString(key);
