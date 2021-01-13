@@ -8,6 +8,8 @@
         <repository>Assets/Firebase/m2repository</repository>
       </repositories>
     </androidPackage>
+    <!-- Java package specified with a classifier. -->
+    <androidPackage spec="org.test.psr:classifier:1.0.1:foo@aar"/>
     <!-- Global repository. -->
     <repositories>
       <repository>file:///my/nonexistant/test/repo</repository>

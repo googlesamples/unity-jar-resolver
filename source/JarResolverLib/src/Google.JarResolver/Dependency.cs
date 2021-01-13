@@ -49,13 +49,15 @@ namespace Google.JarResolver {
         /// <param name="group">Group ID</param>
         /// <param name="artifact">Artifact ID</param>
         /// <param name="version">Version constraint.</param>
+        /// <param name="classifier">Artifact classifier.</param>
         /// <param name="packageIds">Android SDK package identifiers required for this
         /// artifact.</param>
         /// <param name="repositories">List of additional repository directories to search for
         /// this artifact.</param>
         /// <param name="createdBy">Human readable string that describes where this dependency
         /// originated.</param>
-        public Dependency(string group, string artifact, string version, string[] packageIds=null,
+        public Dependency(string group, string artifact, string version,
+                          string classifier = null, string[] packageIds=null,
                           string[] repositories=null, string createdBy=null) {
             // If the dependency was added programmatically, strip out stack frames from inside the
             // library since the developer is likely interested in where in their code the
@@ -88,6 +90,7 @@ namespace Google.JarResolver {
             Group = group;
             Artifact = artifact;
             Version = version;
+            Classifier = classifier;
             PackageIds = packageIds;
             Repositories = repositories;
             CreatedBy = createdBy;
@@ -101,6 +104,7 @@ namespace Google.JarResolver {
             Group = dependency.Group;
             Artifact = dependency.Artifact;
             Version = dependency.Version;
+            Classifier = dependency.Classifier;
             if (dependency.PackageIds != null) {
                 PackageIds = (string[])dependency.PackageIds.Clone();
             }
@@ -134,6 +138,14 @@ namespace Google.JarResolver {
         public string Version { get; set; }
 
         /// <summary>
+        /// Gets the classifier.
+        /// </summary>
+        /// <value>The classifier.</value>
+        public string Classifier { get; set; }
+
+        /// <summary>
+
+        /// <summary>
         /// Array of Android SDK identifiers for packages that are required for this
         /// artifact.
         /// </summary>
@@ -158,7 +170,11 @@ namespace Google.JarResolver {
         /// group, artifact and version constraint.
         /// </summary>
         /// <value>The key.</value>
-        public string Key { get { return Group + ":" + Artifact + ":" + Version; } }
+        public string Key { get {
+            string key = Group + ":" + Artifact + ":" + Version;
+            if (!String.IsNullOrEmpty(Classifier))
+                key += ":" + Classifier;
+            return key; } }
 
         /// <summary>
         /// Returns a <see cref="System.String"/> that represents

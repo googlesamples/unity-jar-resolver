@@ -246,7 +246,8 @@ namespace Google.JarResolver
                 }
             }
             if (packageNames.Count > 0) packageIds = packageNames.ToArray();
-            return new Dependency(dep.Group, dep.Artifact, dep.Version, packageIds: packageIds,
+            return new Dependency(dep.Group, dep.Artifact, dep.Version,
+                                  classifier: dep.Classifier, packageIds: packageIds,
                                   repositories: dep.Repositories);
         }
 
@@ -275,17 +276,20 @@ namespace Google.JarResolver
         /// <param name="group">Group - the Group Id of the artifact</param>
         /// <param name="artifact">Artifact - Artifact Id</param>
         /// <param name="version">Version - the version constraint</param>
+        /// <param name="classifier">Classifier - the artifact classifer.</param>
         /// <param name="packageIds">Optional list of Android SDK package identifiers.</param>
         /// <param name="repositories">List of additional repository directories to search for
         /// this artifact.</param>
         /// <param name="createdBy">Human readable string that describes where this dependency
         /// originated.</param>
         public void DependOn(string group, string artifact, string version,
-                             string[] packageIds = null, string[] repositories = null,
-                             string createdBy = null) {
+                             string classifier = null, string[] packageIds = null,
+                             string[] repositories = null, string createdBy = null) {
             Log("DependOn - group: " + group +
                 " artifact: " + artifact +
                 " version: " + version +
+                " classifier: " +
+                (classifier!= null ? classifier : "null") +
                 " packageIds: " +
                 (packageIds != null ? String.Join(", ", packageIds) : "null") +
                 " repositories: " +
@@ -296,7 +300,8 @@ namespace Google.JarResolver
             var depRepoList = new List<string>(repositories);
             depRepoList.AddRange(repositoryPaths);
             var dep = AddCommonPackageIds(new Dependency(
-                group, artifact, version, packageIds: packageIds,
+                group, artifact, version, classifier: classifier,
+                packageIds: packageIds,
                 repositories: UniqueList(depRepoList).ToArray(),
                 createdBy: createdBy));
             clientDependenciesMap[dep.Key] = dep;
