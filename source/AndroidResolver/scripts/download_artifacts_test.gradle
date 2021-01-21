@@ -418,6 +418,21 @@ createTestTask(
   ["Copied artifacts:\n" +
    "com.android.support.support-annotations-23.0.1.magic"])
 
+ createTestTask(
+  "testDownloadAvailableWithClassifier",
+  "Downloads artifacts with one of them having a classifier in the name.",
+  "org.test.psr:classifier:1.0.1:foo@aar;" +
+  "com.android.support:support-annotations:26.1.0;",
+  ["org.test.psr.classifier-1.0.1-foo.aar":
+   "org/test/psr/classifier/1.0.1/" +
+   "org.test.psr.classifier-1.0.1-foo.aar",
+   "com.android.support.support-annotations-26.1.0.jar":
+   "com/android/support/support-annotations/26.1.0/" +
+   "support-annotations-26.1.0.jar"],
+  ["Copied artifacts:\n" +
+   "com.android.support.support-annotations-26.1.0.jar\n" +
+   "org.test.psr.classifier-1.0.1-foo.aar"])
+
 createTestTask(
   "testDownloadAvailableTwice",
   "Downloads a single artifact and it's dependencies from maven.",

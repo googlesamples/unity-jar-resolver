@@ -439,6 +439,8 @@ public class PackageSpecifier implements Comparable {
   public String artifact = ""
   // Version expression of a maven package.
   public String versionExpression = ""
+  // Classifier of the artifact.
+  public String classifier = ""
   // Type of the artifact.
   public String artifactType = ""
 
@@ -446,24 +448,39 @@ public class PackageSpecifier implements Comparable {
    * Extract the components of a package specifier string.
    *
    * @param packageSpecifier Package specification.
-   *   Package specification should match agroup:apackage:version@artifacttype
-   *   e.g a.b.c:d.e:1.2.3@aar
+   *   Package specification should match one of the following formats,
+   *   - agroup:apackage:version@artifacttype
+   *     e.g a.b.c:d.e:1.2.3@aar
+   *   - agroup:apackage:version:classifier@artifacttype
+   *     e.g a.b.c:d.e:1.2.3:f@aar
    *
-   * @returns [group, artifact, version, artifactType] list with the components
+   * @returns [group, artifact, version, artifactType, classifier] list with the components
    * of the package spec.  If a component is not present the entry in the list
    * is null.
    */
   public static PackageSpecifier fromString(String packageSpecifierString) {
     List<String> components = packageSpecifierString ?
       packageSpecifierString.split(/[:@]/) : []
+    if (components.size() == 5) {
+      // Special case to handle group:artifact:version:classifier@artifactType,
+      // We want to maintain the components list as,
+      // [group, artifact, version, artifactType, classifier]
+      // because classifiers are a rare case and more often than not, the parser
+      // will find artifactType in the second to last position.
+      // Hence, if there are 5 components, swap the last two to make sure
+      // artifactType is second to last.
+      components.swap(3,4)
+    }
     // Fill the list of components with null elements.
-    components += ([""] * Math.min(4, (4 - components.size())))
+    components += ([""] * Math.min(5, (5 - components.size())))
+
     return new PackageSpecifier(
       group: components[0],
       artifact: components[1],
       versionExpression: components[2] ? (VersionRange.fromExpression(
                                             components[2])).expression : "",
-      artifactType: components[3])
+      artifactType: components[3],
+      classifier: components[4])
   }
 
   /*
@@ -508,6 +525,7 @@ public class PackageSpecifier implements Comparable {
     return resolvedArtifact.with {
       PackageSpecifier pkg = fromModuleVersionIdentifier(moduleVersion.id)
       pkg.artifactType = type
+      pkg.classifier = classifier
       return pkg
     }
   }
@@ -613,7 +631,11 @@ public class PackageSpecifier implements Comparable {
         components.add(artifact)
         if (versionExpression) {
           if (artifactType) {
-            components.add(versionExpression + "@" + artifactType)
+            if (classifier) {
+              components.add(versionExpression + ':' + classifier + "@" + artifactType)
+            } else {
+              components.add(versionExpression + "@" + artifactType)
+            }
           } else {
             components.add(versionExpression)
           }
@@ -664,6 +686,9 @@ public class PackageSpecifier implements Comparable {
     }
     if (versionExpression) {
       hypenSeparatedComponents += [versionExpression]
+    }
+    if (classifier) {
+      hypenSeparatedComponents += [classifier]
     }
     String filename = hypenSeparatedComponents.join("-")
     if (artifactType) {
@@ -1345,6 +1370,7 @@ Tuple2<Boolean, Set<PackageSpecifier>> loosenVersionContraintsForConflicts(
       new PackageSpecifier(
         group: pkg.group,
         artifact: pkg.artifact,
+        classifier: pkg.classifier,
         versionExpression: (
           isConflicting ?
             pkg.versionRange.matchType == VersionExpressionMatchType.RANGE ?

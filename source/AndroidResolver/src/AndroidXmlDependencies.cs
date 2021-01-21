@@ -58,6 +58,7 @@ namespace GooglePlayServices {
             string group = null;
             string artifact = null;
             string versionSpec = null;
+            string classifier = null;
             List<string> repositories = null;
             logger.Log(
                 String.Format("Reading Android dependency XML file {0}", filename),
@@ -79,12 +80,15 @@ namespace GooglePlayServices {
                             group = null;
                             artifact = null;
                             versionSpec = null;
+                            classifier = null;
                             repositories = new List<string>();
                             // Parse a package specification in the form:
                             // group:artifact:version_spec
+                            // (or)
+                            // group:artifact:version_spec:classifier
                             var spec = reader.GetAttribute("spec") ?? "";
                             var specComponents = spec.Split(new [] { ':' });
-                            if (specComponents.Length != 3) {
+                            if (specComponents.Length != 3 && specComponents.Length != 4) {
                                 logger.Log(
                                     String.Format(
                                         "Ignoring invalid package specification '{0}' " +
@@ -96,11 +100,15 @@ namespace GooglePlayServices {
                             group = specComponents[0];
                             artifact = specComponents[1];
                             versionSpec = specComponents[2];
+                            if (specComponents.Length == 4)
+                                classifier = specComponents[3];
+
                             return true;
                         } else if (!(String.IsNullOrEmpty(group) ||
                                      String.IsNullOrEmpty(artifact) ||
-                                     String.IsNullOrEmpty(versionSpec))) {
-                            svcSupport.DependOn(group, artifact, versionSpec,
+                                     String.IsNullOrEmpty(versionSpec)
+                                     )) {
+                            svcSupport.DependOn(group, artifact, versionSpec, classifier: classifier,
                                                 packageIds: androidSdkPackageIds.ToArray(),
                                                 repositories: repositories.ToArray(),
                                                 createdBy: String.Format("{0}:{1}", filename,

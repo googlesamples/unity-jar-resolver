@@ -467,7 +467,10 @@ public class AndroidResolverIntegrationTests {
                     "Assets/ExternalDependencyManager/Editor/TestDependencies.xml:10"),
                 new KeyValuePair<string, string>(
                     "com.google.firebase:firebase-common:16.0.0",
-                    "Google.AndroidResolverIntegrationTests.SetupDependencies")
+                    "Google.AndroidResolverIntegrationTests.SetupDependencies"),
+                new KeyValuePair<string, string>(
+                    "org.test.psr:classifier:1.0.1:foo@aar",
+                    "Assets/ExternalDependencyManager/Editor/TestDependencies.xml:12"),
             },
             PlayServicesResolver.GetPackageSpecs(),
             "Package Specs", testCaseResult);
@@ -476,10 +479,10 @@ public class AndroidResolverIntegrationTests {
             new List<KeyValuePair<string, string>>() {
                 new KeyValuePair<string, string>(
                     "file:///my/nonexistant/test/repo",
-                    "Assets/ExternalDependencyManager/Editor/TestDependencies.xml:15"),
+                    "Assets/ExternalDependencyManager/Editor/TestDependencies.xml:17"),
                 new KeyValuePair<string, string>(
                     "file:///" + Path.GetFullPath("project_relative_path/repo").Replace("\\", "/"),
-                    "Assets/ExternalDependencyManager/Editor/TestDependencies.xml:15"),
+                    "Assets/ExternalDependencyManager/Editor/TestDependencies.xml:17"),
                 new KeyValuePair<string, string>(
                     "file:///" + Path.GetFullPath(
                        "Assets/Firebase/m2repository").Replace("\\", "/"),
