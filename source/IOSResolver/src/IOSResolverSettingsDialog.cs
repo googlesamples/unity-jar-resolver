@@ -36,6 +36,9 @@ public class IOSResolverSettingsDialog : EditorWindow
         internal bool autoPodToolInstallInEditorEnabled;
         internal bool verboseLoggingEnabled;
         internal int cocoapodsIntegrationMenuIndex;
+        internal bool podfileAddUseFrameworks;
+        internal bool podfileStaticLinkFrameworks;
+        internal bool podfileAlwaysAddMainTarget;
         internal bool useProjectSettings;
         internal EditorMeasurement.Settings analyticsSettings;
 
@@ -49,6 +52,9 @@ public class IOSResolverSettingsDialog : EditorWindow
             verboseLoggingEnabled = IOSResolver.VerboseLoggingEnabled;
             cocoapodsIntegrationMenuIndex = FindIndexFromCocoapodsIntegrationMethod(
                 IOSResolver.CocoapodsIntegrationMethodPref);
+            podfileAddUseFrameworks = IOSResolver.PodfileAddUseFrameworks;
+            podfileStaticLinkFrameworks = IOSResolver.PodfileStaticLinkFrameworks;
+            podfileAlwaysAddMainTarget = IOSResolver.PodfileAlwaysAddMainTarget;
             useProjectSettings = IOSResolver.UseProjectSettings;
             analyticsSettings = new EditorMeasurement.Settings(IOSResolver.analytics);
         }
@@ -63,6 +69,9 @@ public class IOSResolverSettingsDialog : EditorWindow
             IOSResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
             IOSResolver.CocoapodsIntegrationMethodPref =
                 integrationMapping[cocoapodsIntegrationMenuIndex];
+            IOSResolver.PodfileAddUseFrameworks = podfileAddUseFrameworks;
+            IOSResolver.PodfileStaticLinkFrameworks = podfileStaticLinkFrameworks;
+            IOSResolver.PodfileAlwaysAddMainTarget = podfileAlwaysAddMainTarget;
             IOSResolver.UseProjectSettings = useProjectSettings;
             analyticsSettings.Save();
         }
@@ -95,7 +104,7 @@ public class IOSResolverSettingsDialog : EditorWindow
     }
 
     public void Initialize() {
-        minSize = new Vector2(400, 400);
+        minSize = new Vector2(400, 650);
         position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
     }
@@ -175,6 +184,48 @@ public class IOSResolverSettingsDialog : EditorWindow
                 "Assets > External Dependency Manager > iOS Resolver > Install Cocoapods");
         }
 
+        if (settings.podfileGenerationEnabled) {
+            GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(1));
+            GUILayout.Label("Podfile Configurations", EditorStyles.largeLabel);
+            EditorGUILayout.Separator();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Add use_frameworks! to Podfile", EditorStyles.boldLabel);
+            settings.podfileAddUseFrameworks =
+                EditorGUILayout.Toggle(settings.podfileAddUseFrameworks);
+            GUILayout.EndHorizontal();
+
+            GUILayout.Label("Add the following line to Podfile. Required if any third-party " +
+                            "Unity packages depends on Swift frameworks.");
+            if (settings.podfileStaticLinkFrameworks) {
+                GUILayout.Label("  use_frameworks! :linkage => :static");
+            } else {
+                GUILayout.Label("  use_frameworks!");
+            }
+
+            if (settings.podfileAddUseFrameworks) {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Link frameworks statically", EditorStyles.boldLabel);
+                settings.podfileStaticLinkFrameworks =
+                    EditorGUILayout.Toggle(settings.podfileStaticLinkFrameworks);
+                GUILayout.EndHorizontal();
+            }
+
+            if (IOSResolver.MultipleXcodeTargetsSupported) {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Always add the main target to Podfile", EditorStyles.boldLabel);
+                settings.podfileAlwaysAddMainTarget =
+                    EditorGUILayout.Toggle(settings.podfileAlwaysAddMainTarget);
+                GUILayout.EndHorizontal();
+
+                GUILayout.Label("Add the following lines to Podfile.");
+                GUILayout.Label("  target 'Unity-iPhone' do\n" +
+                                "  end");
+            }
+
+            GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(1));
+        }
+
         settings.analyticsSettings.RenderGui();
 
         GUILayout.BeginHorizontal();
@@ -223,6 +274,15 @@ public class IOSResolverSettingsDialog : EditorWindow
                     new KeyValuePair<string, string>(
                         "cocoapodsIntegrationMethod",
                         IOSResolver.CocoapodsIntegrationMethodPref.ToString()),
+                    new KeyValuePair<string, string>(
+                        "podfileAddUseFrameworks",
+                        IOSResolver.PodfileAddUseFrameworks.ToString()),
+                    new KeyValuePair<string, string>(
+                        "podfileStaticLinkFrameworks",
+                        IOSResolver.PodfileStaticLinkFrameworks.ToString()),
+                    new KeyValuePair<string, string>(
+                        "podfileAlwaysAddMainTarget",
+                        IOSResolver.PodfileAlwaysAddMainTarget.ToString()),
                 },
                 "Settings Save");
             settings.Save();

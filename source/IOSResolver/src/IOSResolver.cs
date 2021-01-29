@@ -455,6 +455,15 @@ public class IOSResolver : AssetPostprocessor {
     // Whether to skip pod install when using workspace integration.
     private const string PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION =
         PREFERENCE_NAMESPACE + "SkipPodInstallWhenUsingWorkspaceIntegration";
+    // Whether to add "use_frameworks!" in the Podfile.
+    private const string PREFERENCE_PODFILE_ADD_USE_FRAMEWORKS =
+        PREFERENCE_NAMESPACE + "PodfileAddUseFrameworks";
+    // Whether to statically link framework in the Podfile.
+    private const string PREFERENCE_PODFILE_STATIC_LINK_FRAMEWORKS =
+        PREFERENCE_NAMESPACE + "PodfileStaticLinkFrameworks";
+    // Whether to add an main target to Podfile for Unity 2019.3+.
+    private const string PREFERENCE_PODFILE_ALWAYS_ADD_MAIN_TARGET =
+        PREFERENCE_NAMESPACE + "PodfileAlwaysAddMainTarget";
     // List of preference keys, used to restore default settings.
     private static string[] PREFERENCE_KEYS = new [] {
         PREFERENCE_COCOAPODS_INSTALL_ENABLED,
@@ -464,7 +473,10 @@ public class IOSResolver : AssetPostprocessor {
         PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED,
         PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR,
         PREFERENCE_WARN_UPGRADE_WORKSPACE,
-        PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION
+        PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION,
+        PREFERENCE_PODFILE_ADD_USE_FRAMEWORKS,
+        PREFERENCE_PODFILE_STATIC_LINK_FRAMEWORKS,
+        PREFERENCE_PODFILE_ALWAYS_ADD_MAIN_TARGET
     };
 
     // Whether the xcode extension was successfully loaded.
@@ -765,7 +777,7 @@ public class IOSResolver : AssetPostprocessor {
     /// version of Unity supports multiple Xcode build targets, for example if Unity supports use
     /// as a library or framework.
     /// </summary>
-    private static bool MultipleXcodeTargetsSupported {
+    internal static bool MultipleXcodeTargetsSupported {
         get {
             return typeof(UnityEditor.iOS.Xcode.PBXProject).GetMethod(
                 "GetUnityMainTargetGuid", Type.EmptyTypes) != null;
@@ -927,6 +939,52 @@ public class IOSResolver : AssetPostprocessor {
                                       defaultValue: false); }
         set { settings.SetBool(PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION,
                                value); }
+    }
+
+    /// <summary>
+    /// Whether to add "use_frameworks!" in the Podfile. True by default.
+    /// If true, iOS Resolver adds the following line to Podfile.
+    ///
+    ///   use_frameworks!
+    /// </summary>
+    public static bool PodfileAddUseFrameworks {
+        get { return settings.GetBool(PREFERENCE_PODFILE_ADD_USE_FRAMEWORKS,
+                                    defaultValue: true); }
+        set {
+            settings.SetBool(PREFERENCE_PODFILE_ADD_USE_FRAMEWORKS, value);
+        }
+    }
+
+    /// <summary>
+    /// Whether to statically link framework in the Podfile. False by default.
+    /// If true and PodfileAddUseFrameworks is true, iOS Resolver adds the following line to Podfile.
+    ///
+    ///   use_frameworks! :linkage => :static
+    /// </summary>
+    public static bool PodfileStaticLinkFrameworks {
+        get { return settings.GetBool(PREFERENCE_PODFILE_STATIC_LINK_FRAMEWORKS,
+                                    defaultValue: false); }
+        set {
+            settings.SetBool(PREFERENCE_PODFILE_STATIC_LINK_FRAMEWORKS, value);
+        }
+    }
+
+    /// <summary>
+    /// Whether to add the main target to Podfile for Unity 2019.3+. True by default.
+    /// If true, iOS Resolver will add the following lines to Podfile, on top of 'UnityFramework'
+    /// target.
+    ///
+    ///   target 'Unity-iPhone' do
+    ///   end
+    ///
+    /// This target will empty by default.
+    /// </summary>
+    public static bool PodfileAlwaysAddMainTarget {
+        get { return settings.GetBool(PREFERENCE_PODFILE_ALWAYS_ADD_MAIN_TARGET,
+                                    defaultValue: true); }
+        set {
+            settings.SetBool(PREFERENCE_PODFILE_ALWAYS_ADD_MAIN_TARGET, value);
+        }
     }
 
     /// <summary>
@@ -1938,6 +1996,16 @@ public class IOSResolver : AssetPostprocessor {
                     file.WriteLine(String.Format("  {0}", pod.PodFilePodLine));
                 }
                 file.WriteLine("end");
+            }
+
+            if (MultipleXcodeTargetsSupported && PodfileAlwaysAddMainTarget) {
+                file.WriteLine(String.Format("target '{0}' do", "Unity-iPhone"));
+                file.WriteLine("end");
+            }
+            if (PodfileAddUseFrameworks) {
+                file.WriteLine( PodfileStaticLinkFrameworks ?
+                        "use_frameworks! :linkage => :static" :
+                        "use_frameworks!");
             }
         }
 
