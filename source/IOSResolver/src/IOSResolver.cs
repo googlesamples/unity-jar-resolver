@@ -1683,6 +1683,22 @@ public class IOSResolver : AssetPostprocessor {
     /// <param name="xcodeProject">UnityEditor.iOS.Xcode.PBXProject project to query.</param>
     /// <returns>List of target GUIDs.</returns>
     public static IEnumerable<string> GetXcodeTargetGuids(object xcodeProject) {
+        return GetXcodeTargetGuids(xcodeProject, includeAllTargets: false);
+    }
+
+    /// <summary>
+    /// Get Xcode target GUIDs using a method that works across all Unity versions.
+    /// </summary>
+    /// <param name="xcodeProject">UnityEditor.iOS.Xcode.PBXProject project to query.</param>
+    /// <param name="includeAllTargets">If true, if multiple xcode project targets is supported, ex.
+    /// Unity 2019.3+, returns both guids of 'UnityFramework' and the main target 'Unity-iPhone`.
+    /// Otherwise, only return the guid of the target which contains Unity libraries. For Unity
+    /// 2019.2 or below, it is the guid of `Unity-iPhone`; for Unity 2019.3+, it is the guid of
+    /// `UnityFramework`.
+    /// </param>
+    /// <returns>List of target GUIDs.</returns>
+    public static IEnumerable<string> GetXcodeTargetGuids(object xcodeProject,
+                                                          bool includeAllTargets) {
         var project = (UnityEditor.iOS.Xcode.PBXProject)xcodeProject;
         var targets = new List<string>();
         if (MultipleXcodeTargetsSupported) {
@@ -1690,8 +1706,11 @@ public class IOSResolver : AssetPostprocessor {
             // is requested so we need to use instance methods to fetch the GUIDs of each target.
             // NOTE: The test target is not exposed.
             try {
-                foreach (var guidMethod in
-                         new[] { "GetUnityFrameworkTargetGuid" }) {
+                var guidMethods = new List<string>() {"GetUnityFrameworkTargetGuid"};
+                if (includeAllTargets) {
+                    guidMethods.Add("GetUnityMainTargetGuid");
+                }
+                 foreach (var guidMethod in guidMethods) {
                     targets.Add((string)VersionHandler.InvokeInstanceMethod(project, guidMethod,
                                                                             null));
                 }
