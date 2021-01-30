@@ -328,7 +328,7 @@ public class IOSResolver : AssetPostprocessor {
                             }
                             versionSpec = reader.GetAttribute("version");
                             var bitcodeEnabledString =
-                                (reader.GetAttribute("bitcode") ?? "").ToLower();
+                                (reader.GetAttribute("bitcodeEnabled") ?? "").ToLower();
                             bitcodeEnabled |= trueStrings.Contains(bitcodeEnabledString);
                             bitcodeEnabled &= !falseStrings.Contains(bitcodeEnabledString);
                             minTargetSdk = reader.GetAttribute("minTargetSdk");
