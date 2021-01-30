@@ -67,6 +67,9 @@
            generated Xcode project.  This is "true" by default.
          * "minTargetSdk" (optional)
            The minimum iOS SDK required by this Cocoapod.
+         * "addToAllTargets" (optional)
+           Whether to add this pod to all targets when multiple target is
+           supported. This is "false" by default.
          * "configurations" (optional)
            Podfile formatted list of configurations to include this pod in.
          * "modular_headers" (optional)
@@ -77,7 +80,7 @@
            Subspecs to include for the pod.
      -->
     <iosPod name="Google-Mobile-Ads-SDK" path="../google-mobile-ads-sdk" version="~> 7.0" bitcodeEnabled="true"
-            minTargetSdk="6.0">
+            minTargetSdk="6.0" addToAllTargets="false">
       <!-- Set of source URIs to search for this Cocoapod spec.
            By default Cocoapods will attempt to fetch the pod specs from:
            * $HOME/.cocoapods/repos

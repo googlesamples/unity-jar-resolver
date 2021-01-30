@@ -39,6 +39,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         internal bool podfileAddUseFrameworks;
         internal bool podfileStaticLinkFrameworks;
         internal bool podfileAlwaysAddMainTarget;
+        internal bool podfileAllowPodsInMultipleTargets;
         internal bool useProjectSettings;
         internal EditorMeasurement.Settings analyticsSettings;
 
@@ -55,6 +56,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             podfileAddUseFrameworks = IOSResolver.PodfileAddUseFrameworks;
             podfileStaticLinkFrameworks = IOSResolver.PodfileStaticLinkFrameworks;
             podfileAlwaysAddMainTarget = IOSResolver.PodfileAlwaysAddMainTarget;
+            podfileAllowPodsInMultipleTargets = IOSResolver.PodfileAllowPodsInMultipleTargets;
             useProjectSettings = IOSResolver.UseProjectSettings;
             analyticsSettings = new EditorMeasurement.Settings(IOSResolver.analytics);
         }
@@ -72,6 +74,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             IOSResolver.PodfileAddUseFrameworks = podfileAddUseFrameworks;
             IOSResolver.PodfileStaticLinkFrameworks = podfileStaticLinkFrameworks;
             IOSResolver.PodfileAlwaysAddMainTarget = podfileAlwaysAddMainTarget;
+            IOSResolver.PodfileAllowPodsInMultipleTargets = podfileAllowPodsInMultipleTargets;
             IOSResolver.UseProjectSettings = useProjectSettings;
             analyticsSettings.Save();
         }
@@ -104,7 +107,7 @@ public class IOSResolverSettingsDialog : EditorWindow
     }
 
     public void Initialize() {
-        minSize = new Vector2(400, 650);
+        minSize = new Vector2(400, 700);
         position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
     }
@@ -221,6 +224,18 @@ public class IOSResolverSettingsDialog : EditorWindow
                 GUILayout.Label("Add the following lines to Podfile.");
                 GUILayout.Label("  target 'Unity-iPhone' do\n" +
                                 "  end");
+
+                if (settings.podfileAlwaysAddMainTarget) {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("Allow the same pod to be in multiple targets",
+                        EditorStyles.boldLabel);
+                    settings.podfileAllowPodsInMultipleTargets =
+                        EditorGUILayout.Toggle(settings.podfileAllowPodsInMultipleTargets);
+                    GUILayout.EndHorizontal();
+
+                    GUILayout.Label("Allow to add the same pod to multiple targets, if specified in " +
+                                    "Dependencies.xml with 'addToAllTargets' attribute.");
+                }
             }
 
             GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(1));
@@ -283,6 +298,9 @@ public class IOSResolverSettingsDialog : EditorWindow
                     new KeyValuePair<string, string>(
                         "podfileAlwaysAddMainTarget",
                         IOSResolver.PodfileAlwaysAddMainTarget.ToString()),
+                    new KeyValuePair<string, string>(
+                        "podfileAllowPodsInMultipleTargets",
+                        IOSResolver.PodfileAllowPodsInMultipleTargets.ToString()),
                 },
                 "Settings Save");
             settings.Save();

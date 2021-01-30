@@ -87,6 +87,11 @@ public class IOSResolver : AssetPostprocessor {
         public string minTargetSdk = null;
 
         /// <summary>
+        /// Whether to add this pod to all targets when multiple
+        /// </summary>
+        public bool addToAllTargets = false;
+
+        /// <summary>
         /// Tag that indicates where this was created.
         /// </summary>
         public string createdBy = System.Environment.StackTrace;
@@ -162,6 +167,8 @@ public class IOSResolver : AssetPostprocessor {
         /// bitcode.</param>
         /// <param name="minTargetSdk">Minimum target SDK revision required by
         /// this pod.</param>
+        /// <param name="addToAllTargets">Whether to add this pod to all targets when multiple
+        /// target is supported.</param>
         /// <param name="sources">List of sources to search for all pods.
         /// Each source is a URL that is injected in the source section of a Podfile
         /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
@@ -169,7 +176,8 @@ public class IOSResolver : AssetPostprocessor {
         /// <param name="propertiesByName">Dictionary of additional properties for the pod
         /// reference.</param>
         public Pod(string name, string version, bool bitcodeEnabled, string minTargetSdk,
-                   IEnumerable<string> sources, Dictionary<string, string> propertiesByName) {
+                   bool addToAllTargets, IEnumerable<string> sources,
+                   Dictionary<string, string> propertiesByName) {
             this.name = name;
             this.version = version;
             if (propertiesByName != null) {
@@ -177,6 +185,7 @@ public class IOSResolver : AssetPostprocessor {
             }
             this.bitcodeEnabled = bitcodeEnabled;
             this.minTargetSdk = minTargetSdk;
+            this.addToAllTargets = addToAllTargets;
             if (sources != null) {
                 var allSources = new List<string>(sources);
                 allSources.AddRange(this.sources);
@@ -305,6 +314,7 @@ public class IOSResolver : AssetPostprocessor {
             string versionSpec = null;
             bool bitcodeEnabled = true;
             string minTargetSdk = null;
+            bool addToAllTargets = false;
             var propertiesByName = new Dictionary<string, string>();
             if (!XmlUtilities.ParseXmlTextFileElements(
                 filename, logger,
@@ -331,7 +341,12 @@ public class IOSResolver : AssetPostprocessor {
                                 (reader.GetAttribute("bitcodeEnabled") ?? "").ToLower();
                             bitcodeEnabled |= trueStrings.Contains(bitcodeEnabledString);
                             bitcodeEnabled &= !falseStrings.Contains(bitcodeEnabledString);
+                            var addToAllTargetsString =
+                                (reader.GetAttribute("addToAllTargets") ?? "").ToLower();
+                            addToAllTargets |= trueStrings.Contains(addToAllTargetsString);
+                            addToAllTargets &= !falseStrings.Contains(addToAllTargetsString);
                             minTargetSdk = reader.GetAttribute("minTargetSdk");
+
                             sources = new List<string>();
                             if (podName == null) {
                                 logger.Log(
@@ -344,6 +359,7 @@ public class IOSResolver : AssetPostprocessor {
                             AddPodInternal(podName, preformattedVersion: versionSpec,
                                            bitcodeEnabled: bitcodeEnabled,
                                            minTargetSdk: minTargetSdk,
+                                           addToAllTargets: addToAllTargets,
                                            sources: sources,
                                            overwriteExistingPod: false,
                                            createdBy: String.Format("{0}:{1}",
@@ -464,6 +480,10 @@ public class IOSResolver : AssetPostprocessor {
     // Whether to add an main target to Podfile for Unity 2019.3+.
     private const string PREFERENCE_PODFILE_ALWAYS_ADD_MAIN_TARGET =
         PREFERENCE_NAMESPACE + "PodfileAlwaysAddMainTarget";
+    // Whether to allow the same pods to be in multiple targets, if specified in Dependecies.xml.
+    private const string PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS =
+        PREFERENCE_NAMESPACE + "PodfileAllowPodsInMultipleTargets";
+
     // List of preference keys, used to restore default settings.
     private static string[] PREFERENCE_KEYS = new [] {
         PREFERENCE_COCOAPODS_INSTALL_ENABLED,
@@ -476,7 +496,8 @@ public class IOSResolver : AssetPostprocessor {
         PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION,
         PREFERENCE_PODFILE_ADD_USE_FRAMEWORKS,
         PREFERENCE_PODFILE_STATIC_LINK_FRAMEWORKS,
-        PREFERENCE_PODFILE_ALWAYS_ADD_MAIN_TARGET
+        PREFERENCE_PODFILE_ALWAYS_ADD_MAIN_TARGET,
+        PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS
     };
 
     // Whether the xcode extension was successfully loaded.
@@ -545,6 +566,9 @@ public class IOSResolver : AssetPostprocessor {
 
     // Parses a source URL from a Podfile.
     private static Regex PODFILE_SOURCE_REGEX = new Regex(@"^\s*source\s+'([^']*)'");
+
+    // Parses comments from a Podfile
+    private static Regex PODFILE_COMMENT_REGEX = new Regex(@"^\s*\#");
 
     // Parses dependencies from XML dependency files.
     private static IOSXmlDependencies xmlDependencies = new IOSXmlDependencies();
@@ -988,6 +1012,18 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Whether to allow the same pods to be in multiple targets, if specified in Dependecies.xml.
+    /// </summary>
+    public static bool PodfileAllowPodsInMultipleTargets {
+        get { return settings.GetBool(PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS,
+                                    defaultValue: true); }
+        set {
+            settings.SetBool(PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS, value);
+        }
+    }
+
+
+    /// <summary>
     /// Whether to use project level settings.
     /// </summary>
     public static bool UseProjectSettings {
@@ -1166,7 +1202,38 @@ public class IOSResolver : AssetPostprocessor {
         AddPodInternal(podName,
                        preformattedVersion: PodVersionExpressionFromVersionDep(version),
                        bitcodeEnabled: bitcodeEnabled, minTargetSdk: minTargetSdk,
-                       sources: sources);
+                       addToAllTargets: false, sources: sources);
+    }
+
+    /// <summary>
+    /// Tells the app what pod dependencies are needed.
+    /// This is called from a deps file in each API to aggregate all of the
+    /// dependencies to automate the Podfile generation.
+    /// </summary>
+    /// <param name="podName">pod path, for example "Google-Mobile-Ads-SDK" to
+    /// be included</param>
+    /// <param name="version">Version specification.
+    /// See PodVersionExpressionFromVersionDep for how the version string is processed.</param>
+    /// <param name="bitcodeEnabled">Whether the pod was compiled with bitcode
+    /// enabled.  If this is set to false on a pod, the entire project will
+    /// be configured with bitcode disabled.</param>
+    /// <param name="minTargetSdk">Minimum SDK revision required by this
+    /// pod.</param>
+    /// <param name="addToAllTargets">Whether to add this pod to all targets when multiple
+    /// target is supported.</param>
+    /// <param name="sources">List of sources to search for all pods.
+    /// Each source is a URL that is injected in the source section of a Podfile
+    /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
+    /// a source.</param>
+    public static void AddPod(string podName, string version = null,
+                              bool bitcodeEnabled = true,
+                              string minTargetSdk = null,
+                              bool addToAllTargets = false,
+                              IEnumerable<string> sources = null) {
+        AddPodInternal(podName,
+                       preformattedVersion: PodVersionExpressionFromVersionDep(version),
+                       bitcodeEnabled: bitcodeEnabled, minTargetSdk: minTargetSdk,
+                       addToAllTargets: addToAllTargets, sources: sources);
     }
 
     /// <summary>
@@ -1182,6 +1249,8 @@ public class IOSResolver : AssetPostprocessor {
     /// be configured with bitcode disabled.</param>
     /// <param name="minTargetSdk">Minimum SDK revision required by this
     /// pod.</param>
+    /// <param name="addToAllTargets">Whether to add this pod to all targets when multiple
+    /// target is supported.</param>
     /// <param name="sources">List of sources to search for all pods.
     /// Each source is a URL that is injected in the source section of a Podfile
     /// See https://guides.cocoapods.org/syntax/podfile.html#source for the description of
@@ -1195,22 +1264,24 @@ public class IOSResolver : AssetPostprocessor {
                                        string preformattedVersion = null,
                                        bool bitcodeEnabled = true,
                                        string minTargetSdk = null,
+                                       bool addToAllTargets = false,
                                        IEnumerable<string> sources = null,
                                        bool overwriteExistingPod = true,
                                        string createdBy = null,
                                        bool fromXmlFile = false,
                                        Dictionary<string, string> propertiesByName = null) {
         var pod = new Pod(podName, preformattedVersion, bitcodeEnabled, minTargetSdk,
-                          sources, propertiesByName);
+                          addToAllTargets, sources, propertiesByName);
         pod.createdBy = createdBy ?? pod.createdBy;
         pod.fromXmlFile = fromXmlFile;
 
         Log(String.Format(
-            "AddPod - name: {0} version: {1} bitcode: {2} sdk: {3} sources: {4}, " +
-            "properties: {5}\n" +
-            "createdBy: {6}\n\n",
+            "AddPod - name: {0} version: {1} bitcode: {2} sdk: {3} alltarget: {4} " +
+            "sources: {5} properties: {6}\n" +
+            "createdBy: {7}\n\n",
             podName, preformattedVersion ?? "null", bitcodeEnabled.ToString(),
             minTargetSdk ?? "null",
+            addToAllTargets.ToString(),
             sources != null ? String.Join(", ", (new List<string>(sources)).ToArray()) : "(null)",
             Pod.PropertyDictionaryToString(pod.propertiesByName),
             createdBy ?? pod.createdBy),
@@ -1874,11 +1945,15 @@ public class IOSResolver : AssetPostprocessor {
         var sources = new List<string>();
         while ((line = unityPodfile.ReadLine()) != null) {
             line = line.Trim();
+            if (PODFILE_COMMENT_REGEX.IsMatch(line)) {
+                continue;
+            }
             var sourceLineMatch = PODFILE_SOURCE_REGEX.Match(line);
             if (sourceLineMatch.Groups.Count > 1) {
                 sources.Add(sourceLineMatch.Groups[1].Value);
                 continue;
             }
+            // TODO: Properly support multiple targets.
             if (line.StartsWith("target 'Unity-iPhone' do")) {
                 capturingPodsDepth++;
                 continue;
@@ -2000,6 +2075,20 @@ public class IOSResolver : AssetPostprocessor {
 
             if (MultipleXcodeTargetsSupported && PodfileAlwaysAddMainTarget) {
                 file.WriteLine(String.Format("target '{0}' do", "Unity-iPhone"));
+                bool allowPodsInMultipleTargets = PodfileAllowPodsInMultipleTargets;
+                int podAdded = 0;
+                foreach(var pod in pods.Values) {
+                    if (pod.addToAllTargets) {
+                        file.WriteLine(String.Format("  {0}{1}",
+                                allowPodsInMultipleTargets ? "" : "# ",
+                                pod.PodFilePodLine));
+                        podAdded++;
+                    }
+                }
+                if (!allowPodsInMultipleTargets && podAdded > 0) {
+                    file.WriteLine(String.Format(
+                        "  # Commented due to iOS Resolver settings."));
+                }
                 file.WriteLine("end");
             }
             if (PodfileAddUseFrameworks) {
