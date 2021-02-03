@@ -222,8 +222,8 @@ public class IOSResolverSettingsDialog : EditorWindow
                 GUILayout.EndHorizontal();
 
                 GUILayout.Label("Add the following lines to Podfile.");
-                GUILayout.Label("  target 'Unity-iPhone' do\n" +
-                                "  end");
+                GUILayout.Label(String.Format("  target '{0}' do\n" +
+                                              "  end", IOSResolver.XcodeMainTargetName));
 
                 if (settings.podfileAlwaysAddMainTarget) {
                     GUILayout.BeginHorizontal();
