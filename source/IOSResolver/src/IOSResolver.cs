@@ -832,6 +832,18 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Name of the Xcode target which contains Unity libraries.
+    /// From Unity 2019.3+, Unity includes all its libraries and native libraries under Assets
+    /// folder to 'UnityFramework' instead of 'Unity-iPhone'.
+    /// </summary>
+    public static string XcodeTargetWithUnityLibraries {
+        get {
+            return MultipleXcodeTargetsSupported ?
+                    XcodeUnityFrameworkTargetName : XcodeMainTargetName;
+        }
+    }
+
+    /// <summary>
     /// Initialize the TARGET_NAME property.
     /// This will be "Unity-iPhone" in versions of Unity (2019.3+) that added support for using
     /// Unity as a library or framework.
@@ -1975,7 +1987,8 @@ public class IOSResolver : AssetPostprocessor {
                 continue;
             }
             // TODO: Properly support multiple targets.
-            if (line.StartsWith(String.Format("target '{0}' do", XcodeMainTargetName))) {
+            if (line.StartsWith(String.Format("target '{0}' do",
+                    XcodeTargetWithUnityLibraries))) {
                 capturingPodsDepth++;
                 continue;
             }
