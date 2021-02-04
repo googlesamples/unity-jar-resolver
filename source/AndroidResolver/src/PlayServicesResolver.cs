@@ -2141,8 +2141,9 @@ namespace GooglePlayServices {
                         // If "Export Gradle Project" setting is enabled, gradle project expects
                         // absolute path.
                         if (exportEnabled) {
-                            repoUri = String.Format("\"{0}\"",
-                                                    Path.Combine(projectFileUri, repoPath));
+                            // build.gradle expects file:/// URI so file separator will be "/" in anycase
+                            // and we must NOT use Path.Combine here because it will use "\" for win platforms
+                            repoUri = String.Format("\"{0}/{1}\"", projectFileUri, repoPath);
                         } else {
                             repoUri = String.Format("(unityProjectPath + \"/{0}\")", repoPath);
                         }
