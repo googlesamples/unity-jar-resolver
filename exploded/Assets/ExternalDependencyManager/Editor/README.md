@@ -432,7 +432,7 @@ For example, to add the AdMob pod, version 7.0 or greater with bitcode enabled:
 <dependencies>
   <iosPods>
     <iosPod name="Google-Mobile-Ads-SDK" version="~> 7.0" bitcodeEnabled="true"
-            minTargetSdk="6.0" />
+            minTargetSdk="6.0" addToAllTargets="false" />
   </iosPods>
 </dependencies>
 ```

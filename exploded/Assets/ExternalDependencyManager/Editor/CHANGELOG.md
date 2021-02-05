@@ -1,3 +1,15 @@
+# Version 1.2.164 - Feb 4, 2021
+## New Features
+* Android Resolver - Added support for Android packages with classifier in their
+  namespaces.
+* iOS Resolver - Added new settings in iOS Resolver to configure generated
+  Podfile.
+* iOS Resolver - Added a new attribute `addToAllTargets` in Dependencies.xml.
+
+## Bug Fixes
+* iOS Resolver - Fixed XML parsing for `bitcodeEnabled` attribute in
+  Dependencies.xml.
+
 # Version 1.2.163 - Dec 15, 2020
 ## Bug Fixes
 * Version Handler - Fixed measurement reporting
