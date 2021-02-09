@@ -1508,7 +1508,7 @@ class Asset(object):
     # so filter them from the metadata.
     if not output_metadata.get("labels") and "labels" in output_metadata:
       del output_metadata["labels"]
-    with open(filename, "wt") as metadata_file:
+    with open(filename, "wt", encoding='utf-8') as metadata_file:
       metadata_file.write(YamlSerializer().dump(output_metadata))
 
   def write(self, output_dir, guid, timestamp=-1):
@@ -1566,8 +1566,8 @@ class Asset(object):
     # Create the "pathname" file.
     # export_filename is the path of the file when it's imported into a Unity
     # project.
-    with open(os.path.join(output_asset_dir, "pathname"), "wt") as (
-        pathname_file):
+    with open(os.path.join(output_asset_dir, "pathname"), "wt",
+        encoding='utf-8') as (pathname_file):
       pathname_file.write(posix_path(os.path.join(ASSETS_DIRECTORY,
                                                   self.filename)))
     return output_asset_dir
@@ -1893,7 +1893,8 @@ class AssetConfiguration(ConfigurationBlock):
       asset_metadata = copy.deepcopy(importer_metadata)
       if os.path.exists(asset_metadata_filename):
         existing_asset_metadata = collections.OrderedDict()
-        with open(asset_metadata_filename, "rt") as asset_metadata_file:
+        with open(asset_metadata_filename, "rt", encoding='utf-8') as (
+            asset_metadata_file):
           existing_asset_metadata = YamlSerializer().load(
               asset_metadata_file.read())
         if existing_asset_metadata:
@@ -2341,7 +2342,7 @@ class PackageConfiguration(ConfigurationBlock):
     manifest_directory = os.path.dirname(manifest_absolute_path)
     if not os.path.exists(manifest_directory):
       os.makedirs(manifest_directory)
-    with open(manifest_absolute_path, "wt") as manifest_file:
+    with open(manifest_absolute_path, "wt", encoding='utf-8') as manifest_file:
       manifest_file.write(
           "%s\n" % "\n".join([posix_path(os.path.join(ASSETS_DIRECTORY,
                                                       asset.filename))
@@ -2433,7 +2434,7 @@ class PackageConfiguration(ConfigurationBlock):
            "\n%s") % (self.name, "\n".join(missing_deps)))
     package_manifest["dependencies"] = dependencies
 
-    with open(manifest_absolute_path, "wt") as manifest_file:
+    with open(manifest_absolute_path, "wt", encoding='utf-8') as manifest_file:
       json.dump(package_manifest, manifest_file, indent=2)
 
     return Asset(
@@ -2510,7 +2511,7 @@ class PackageConfiguration(ConfigurationBlock):
         try:
           # Create a list of input files to workaround command line length
           # limits.
-          with open(list_filename, "wt") as list_file:
+          with open(list_filename, "wt", encoding='utf-8') as list_file:
             list_file.write("%s\n" % "\n".join(input_filenames))
 
           tar_args = ["tar"]
@@ -3238,7 +3239,7 @@ def read_json_file_into_ordered_dict(json_filename):
     ValueError: If there is a parse error while reading the file.
   """
   json_dict = None
-  with open(json_filename, "rt") as json_file:
+  with open(json_filename, "rt", encoding='utf-8') as json_file:
     try:
       json_dict = json.loads(json_file.read(),
                              object_pairs_hook=collections.OrderedDict)
