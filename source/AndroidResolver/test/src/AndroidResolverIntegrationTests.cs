@@ -57,9 +57,22 @@ public class AndroidResolverIntegrationTests {
         "Assets/Plugins/Android/mainTemplateLibraryDISABLED.gradle";
 
     /// <summary>
+    /// Disabled Gradle properties template file.
+    /// </summary>
+    private const string GRADLE_TEMPLATE_PROPERTIES_DISABLED =
+        "Assets/Plugins/Android/gradleTemplateDISABLED.properties";
+
+    /// <summary>
+    /// <summary>
     /// Enabled Gradle template file.
     /// </summary>
     private const string GRADLE_TEMPLATE_ENABLED = "Assets/Plugins/Android/mainTemplate.gradle";
+
+    /// <summary>
+    /// <summary>
+    /// Enabled Gradle template properties file.
+    /// </summary>
+    private const string GRADLE_TEMPLATE_PROPERTIES_ENABLED = "Assets/Plugins/Android/gradleTemplate.properties";
 
     /// <summary>
     /// Configure tests to run.
@@ -75,7 +88,8 @@ public class AndroidResolverIntegrationTests {
         // that do not use the Gradle template.
         var nonGradleTemplateFilesToIgnore = new HashSet<string>() {
             Path.GetFileName(GRADLE_TEMPLATE_DISABLED),
-            Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
+            Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
+            Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
         };
 
         UnityEngine.Debug.Log("Setting up test cases for execution.");
@@ -110,7 +124,8 @@ public class AndroidResolverIntegrationTests {
                                 "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
                                 "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
                             filesToIgnore: new HashSet<string> {
-                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
+                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
+                                Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
                             });
                     }
                 },
@@ -120,17 +135,28 @@ public class AndroidResolverIntegrationTests {
                         ClearAllDependencies();
                         SetupDependencies();
                         GooglePlayServices.SettingsDialog.UseJetifier = true;
+                        var expectedAssetsDir = "ExpectedArtifacts/NoExport/GradleTemplateJetifier";
+                        string gradleTemplateProperties = null;
+                        // For Unity >= 2019.3f, Jetifier is enabled for the build
+                        // via gradle properties.
+                        if (GradleTemplatePropertiesSupported) {
+                            expectedAssetsDir = "ExpectedArtifacts/NoExport/GradleTemplatePropertiesJetifier";
+                            gradleTemplateProperties = GRADLE_TEMPLATE_PROPERTIES_DISABLED;
+                        }
 
                         ResolveWithGradleTemplate(
                             GRADLE_TEMPLATE_DISABLED,
-                            "ExpectedArtifacts/NoExport/GradleTemplateJetifier",
+                            expectedAssetsDir,
                             testCase, testCaseComplete,
                             otherExpectedFiles: new [] {
                                 "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
                                 "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
                             filesToIgnore: new HashSet<string> {
-                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
-                            });
+                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
+                                Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)},
+                            deleteGradleTemplateProperties: true,
+                            gradleTemplateProperties: gradleTemplateProperties
+                            );
                     }
                 },
                 new IntegrationTester.TestCase {
@@ -147,7 +173,8 @@ public class AndroidResolverIntegrationTests {
                                 "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
                                 "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
                             filesToIgnore: new HashSet<string> {
-                                Path.GetFileName(GRADLE_TEMPLATE_DISABLED)
+                                Path.GetFileName(GRADLE_TEMPLATE_DISABLED),
+                                Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
                             });
                     }
                 },
@@ -180,7 +207,8 @@ public class AndroidResolverIntegrationTests {
                                     testCaseComplete(testCaseResult);
                                 },
                                 filesToIgnore: new HashSet<string> {
-                                    Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
+                                    Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
+                                    Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED),
                                 });
                         } finally {
                             enableDependencies();
@@ -267,7 +295,8 @@ public class AndroidResolverIntegrationTests {
                         ClearAllDependencies();
                         SetupDependencies();
                         var filesToIgnore = new HashSet<string> {
-                            Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
+                            Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
+                            Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
                         };
 
                         ResolveWithGradleTemplate(
@@ -347,6 +376,13 @@ public class AndroidResolverIntegrationTests {
                     }
                 });
         }
+    }
+
+    /// <summary>
+    /// Whether Gradle Template properties are supported by the current version of Unity.
+    /// </summary>
+    private static bool GradleTemplatePropertiesSupported {
+        get { return IntegrationTester.Runner.UnityVersion >= 2019.3f; }
     }
 
     /// <summary>
@@ -435,6 +471,7 @@ public class AndroidResolverIntegrationTests {
     private static void ClearAllDependencies() {
         UnityEngine.Debug.Log("Clear all loaded dependencies");
         GooglePlayServices.SettingsDialog.UseJetifier = false;
+        GooglePlayServices.SettingsDialog.PatchPropertiesTemplateGradle = false;
 
         PlayServicesSupport.ResetDependencies();
         UpdateAdditionalDependenciesFile(false);
@@ -641,19 +678,26 @@ public class AndroidResolverIntegrationTests {
     /// <param name="deleteGradleTemplate">Whether to delete the gradle template before
     /// testCaseComplete is called.</param>
     /// <param name="filesToIgnore">Set of files to relative to the generatedAssetsDir.</param>
+    /// <param name="gradleTemplateProperties">Gradle template properties to use.</param>
+    /// <param name="deleteGradleTemplateProperties">Whether to delete the gradle template
+    /// properties before testCaseComplete is called.</param>
     private static void ResolveWithGradleTemplate(
             string gradleTemplate,
             string expectedAssetsDir,
             IntegrationTester.TestCase testCase,
             Action<IntegrationTester.TestCaseResult> testCaseComplete,
             IEnumerable<string> otherExpectedFiles = null,
+            bool deleteGradleTemplateProperties = false,
+            ICollection<string> filesToIgnore = null,
             bool deleteGradleTemplate = true,
-            ICollection<string> filesToIgnore = null) {
+            string gradleTemplateProperties = null) {
         var cleanUpFiles = new List<string>();
         if (deleteGradleTemplate) cleanUpFiles.Add(GRADLE_TEMPLATE_ENABLED);
+        if (deleteGradleTemplateProperties) cleanUpFiles.Add(GRADLE_TEMPLATE_PROPERTIES_ENABLED);
         if (otherExpectedFiles != null) cleanUpFiles.AddRange(otherExpectedFiles);
         Action cleanUpTestCase = () => {
             GooglePlayServices.SettingsDialog.PatchMainTemplateGradle = false;
+            GooglePlayServices.SettingsDialog.PatchPropertiesTemplateGradle = false;
             foreach (var filename in cleanUpFiles) {
                 if (File.Exists(filename)) File.Delete(filename);
             }
@@ -661,6 +705,10 @@ public class AndroidResolverIntegrationTests {
         try {
             GooglePlayServices.SettingsDialog.PatchMainTemplateGradle = true;
             File.Copy(gradleTemplate, GRADLE_TEMPLATE_ENABLED);
+            if (gradleTemplateProperties != null) {
+                GooglePlayServices.SettingsDialog.PatchPropertiesTemplateGradle = true;
+                File.Copy(gradleTemplateProperties, GRADLE_TEMPLATE_PROPERTIES_ENABLED);
+            }
             Resolve("Gradle", false, expectedAssetsDir, null, filesToIgnore, testCase,
                     (IntegrationTester.TestCaseResult testCaseResult) => {
                         if (otherExpectedFiles != null) {
@@ -818,7 +866,7 @@ public class AndroidResolverIntegrationTests {
                     string expectedContentsAsString = "(binary)";
                     string resolvedContentsAsString = expectedContentsAsString;
                     string resolvedExtension = Path.GetExtension(resolvedFile).ToLower();
-                    foreach (var extension in new[] { ".xml", ".txt", ".gradle" }) {
+                    foreach (var extension in new[] { ".xml", ".txt", ".gradle", ".properties" }) {
                         if (resolvedExtension == extension) {
                             displayContents = true;
                             break;
