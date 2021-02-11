@@ -842,7 +842,9 @@ namespace GooglePlayServices {
                 // Unity 2019.3 added AndroidExternalToolsSettings which contains the Android SDK
                 // path so try to use that first.
                 var androidSdkRootPath = UnityCompat.AndroidExternalToolsSettingsSdkRootPath;
-                if (!String.IsNullOrEmpty(androidSdkRootPath)) sdkPath = androidSdkRootPath;
+                if (!String.IsNullOrEmpty(androidSdkRootPath)) {
+                    if (Directory.Exists(androidSdkRootPath)) sdkPath = androidSdkRootPath;
+                }
 
                 // Unity 2019.x added installation of the Android SDK in the AndroidPlayer directory
                 // so fallback to searching for it there.
