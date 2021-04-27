@@ -162,15 +162,16 @@ public class TestPortableWebRequest {
             }, synchronous: true);
 
         UnityEngine.Debug.Log("Running post test...");
-        var postStatus = webRequest.Post("http://localhost:8000/post",
-                                         new Dictionary<string, string> {
-                                             { "Echo-Foo", "Bar" },
-                                             { "Echo-Bish", "Bosh" }
-                                         },
-                                         new[] {
-                                             new KeyValuePair<string, string>("foo1", "bar1"),
-                                             new KeyValuePair<string, string>("foo2", "bar2")
-                                         });
+        var postStatus = webRequest.Post(
+            "http://localhost:8000/post?queryfoo1=querybar1&queryfoo2=querybar2",
+            headers: new Dictionary<string, string> {
+                { "Echo-Foo", "Bar" },
+                { "Echo-Bish", "Bosh" }
+            },
+            formFields: new[] {
+                new KeyValuePair<string, string>("foo1", "bar1"),
+                new KeyValuePair<string, string>("foo2", "bar2")
+            });
         RunOnMainThread.PollOnUpdateUntilComplete(() => {
                 var complete = postStatus.Complete;
                 if (complete) {
@@ -184,7 +185,9 @@ public class TestPortableWebRequest {
                         "{\"data\": \"Hello from a test server\", " +
                         "\"form\": {\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}, " +
                         "\"headers\": {\"Echo-Bish\": \"Bosh\", \"Echo-Foo\": \"Bar\"}, " +
-                        "\"path\": \"/post\", \"query\": {}}";
+                        "\"path\": \"/post?queryfoo1=querybar1&queryfoo2=querybar2\", " +
+                        "\"query\": {\"queryfoo1\": [\"querybar1\"], " +
+                        "\"queryfoo2\": [\"querybar2\"]}}";
                     postSucceeded &= CheckEqual(result, expected);
                     UnityEngine.Debug.Log(String.Format("Post complete succeeded={0}\n{1}",
                                                         postSucceeded, result));
@@ -194,16 +197,18 @@ public class TestPortableWebRequest {
 
         UnityEngine.Debug.Log("Running post test with no form fields...");
         var postNoFormFieldsStatus = webRequest.Post(
-            "http://localhost:8000/post?foo1=bar1&foo2=bar2",
-            new[] {
+            "http://localhost:8000/post",
+            queryParams: new[] {
                 new KeyValuePair<string, string>("foo1", "bar1"),
-                new KeyValuePair<string, string>("foo2", "bar2")
+                new KeyValuePair<string, string>("foo2", "bar2"),
+                new KeyValuePair<string, string>("foo with/special+char",
+                                                 "bar with/special+char")
             },
-            new Dictionary<string, string> {
+            headers: new Dictionary<string, string> {
                 { "Echo-Foo", "Bar" },
                 { "Echo-Bish", "Bosh" }
             },
-            null);
+            formFields: null);
         RunOnMainThread.PollOnUpdateUntilComplete(() => {
                 var complete = postNoFormFieldsStatus.Complete;
                 if (complete) {
@@ -217,10 +222,10 @@ public class TestPortableWebRequest {
                         postNoFormFieldsStatus.Result);
                     var expected =
                         "{\"data\": \"Hello from a test server\", " +
-                        "\"form\": {}, " +
                         "\"headers\": {\"Echo-Bish\": \"Bosh\", \"Echo-Foo\": \"Bar\"}, " +
-                        "\"path\": \"/post\", " +
-                        "\"query\": {\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}";
+                        "\"path\": \"/post?foo1=bar1&foo2=bar2&foo%20with%2Fspecial%2Bchar=bar%20with%2Fspecial%2Bchar\", " +
+                        "\"query\": {\"foo with/special+char\": [\"bar with/special+char\"], " +
+                        "\"foo1\": [\"bar1\"], \"foo2\": [\"bar2\"]}}";
                     postNoFormFieldsSucceeded &= CheckEqual(result, expected);
                     UnityEngine.Debug.Log(String.Format(
                         "Post with no firm fields succeeded={0}\n{1}",
@@ -232,8 +237,8 @@ public class TestPortableWebRequest {
         UnityEngine.Debug.Log("Running post test with no headers...");
         var postNoHeadersStatus = webRequest.Post(
             "http://localhost:8000/post/with/no/headers",
-            null,
-            new[] {
+            headers: null,
+            formFields: new[] {
                 new KeyValuePair<string, string>("foo1", "bar1"),
                 new KeyValuePair<string, string>("foo2", "bar2")
             });

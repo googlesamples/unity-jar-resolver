@@ -115,8 +115,8 @@ namespace Google.VersionHandlerImpl.Tests {
 
                     url.AppendFormat("{0}{1}={2}",
                                      url.Length == 0 ? "?" : "&",
-                                     HttpUtility.UrlEncode(param.Key),
-                                     HttpUtility.UrlEncode(value));
+                                     Uri.EscapeDataString(param.Key).Trim(),
+                                     Uri.EscapeDataString(value).Trim());
                 }
                 url.Insert(0, path);
                 return Post(url.ToString(), headers, formFields);
@@ -374,10 +374,10 @@ namespace Google.VersionHandlerImpl.Tests {
                               "&dl={2}" +
                               "&dt={3}" +
                               "&z=0",
-                              HttpUtility.UrlEncode(GA_TRACKING_ID),
-                              HttpUtility.UrlEncode(cookie),
-                              HttpUtility.UrlEncode(reportUrl),
-                              HttpUtility.UrlEncode(reportName)),
+                              Uri.EscapeDataString(GA_TRACKING_ID).Trim(),
+                              Uri.EscapeDataString(cookie).Trim(),
+                              Uri.EscapeDataString(reportUrl).Trim(),
+                              Uri.EscapeDataString(reportName).Trim()),
                 "" /* empty form fields */);
         }
 

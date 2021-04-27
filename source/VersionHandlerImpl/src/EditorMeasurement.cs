@@ -493,53 +493,60 @@ public class EditorMeasurement {
 
         PromptToEnable(() => {
             if (!Enabled) return;
-
-            var uri = new Uri("http://ignore.host/" + reportUrl);
-            bool reported = false;
-            var path = String.Join("", uri.Segments);
-            var queryPrefix =
-                ConcatenateQueryStrings(
-                    ConcatenateQueryStrings(uri.Query,
-                        ConcatenateQueryStrings(CommonQuery, BaseQuery)), "scope=");
-            var fragment = uri.Fragment;
-            if (!String.IsNullOrEmpty(BasePath)) path = BasePath + path;
-            if (!String.IsNullOrEmpty(BaseReportName)) reportName = BaseReportName + reportName;
-            // Strip all extraneous path separators.
-            while (path.Contains("//")) path = path.Replace("//", "/");
-            foreach (var cookie in
-                    new KeyValuePair<string, string>[] {
-                        new KeyValuePair<string, string>(Cookie, queryPrefix + "project"),
-                        new KeyValuePair<string, string>(SystemCookie, queryPrefix + "system")
-                    }) {
-                if (String.IsNullOrEmpty(cookie.Key)) continue;
-                // See https://developers.google.com/analytics/devguides/collection/protocol/v1
-                var status = PortableWebRequest.DefaultInstance.Post(
-                    "http://www.google-analytics.com/collect",
-                    new[] {
-                        // Version
-                        new KeyValuePair<string, string>("v", "1"),
-                        // Tracking ID.
-                        new KeyValuePair<string, string>("tid", trackingId),
-                        // Client ID.
-                        new KeyValuePair<string, string>("cid", cookie.Key),
-                        // Hit type.
-                        new KeyValuePair<string, string>("t", "pageview"),
-                        // "URL" / string to report.
-                        new KeyValuePair<string, string>(
-                            "dl", path + "?" + cookie.Value + fragment),
-                        // Document title.
-                        new KeyValuePair<string, string>("dt", reportName),
-                        // Cache buster
-                        new KeyValuePair<string, string>("z", random.Next().ToString())
-                    },
-                    null, null);
-                if (status != null) reported = true;
-            }
-            if (reported) {
-                logger.Log(String.Format("Reporting analytics data: {0}{1}{2} '{3}'", path,
-                                        String.IsNullOrEmpty(queryPrefix) ? "" : "?" + queryPrefix,
-                                        fragment, reportName),
-                        level: LogLevel.Verbose);
+            try {
+                var uri = new Uri("http://ignore.host/" + reportUrl);
+                bool reported = false;
+                var path = String.Join("", uri.Segments);
+                var queryPrefix =
+                    ConcatenateQueryStrings(
+                        ConcatenateQueryStrings(uri.Query,
+                            ConcatenateQueryStrings(CommonQuery, BaseQuery)), "scope=");
+                var fragment = uri.Fragment;
+                if (!String.IsNullOrEmpty(BasePath)) path = BasePath + path;
+                if (!String.IsNullOrEmpty(BaseReportName)) reportName = BaseReportName + reportName;
+                // Strip all extraneous path separators.
+                while (path.Contains("//")) path = path.Replace("//", "/");
+                foreach (var cookie in
+                        new KeyValuePair<string, string>[] {
+                            new KeyValuePair<string, string>(Cookie, queryPrefix + "project"),
+                            new KeyValuePair<string, string>(SystemCookie, queryPrefix + "system")
+                        }) {
+                    if (String.IsNullOrEmpty(cookie.Key)) continue;
+                    // See https://developers.google.com/analytics/devguides/collection/protocol/v1
+                    var status = PortableWebRequest.DefaultInstance.Post(
+                        "http://www.google-analytics.com/collect",
+                        new[] {
+                            // Version
+                            new KeyValuePair<string, string>("v", "1"),
+                            // Tracking ID.
+                            new KeyValuePair<string, string>("tid", trackingId),
+                            // Client ID.
+                            new KeyValuePair<string, string>("cid", cookie.Key),
+                            // Hit type.
+                            new KeyValuePair<string, string>("t", "pageview"),
+                            // "URL" / string to report.
+                            new KeyValuePair<string, string>(
+                                "dl", path + "?" + cookie.Value + fragment),
+                            // Document title.
+                            new KeyValuePair<string, string>("dt", reportName),
+                            // Cache buster
+                            new KeyValuePair<string, string>("z", random.Next().ToString())
+                        },
+                        null, null);
+                    if (status != null) reported = true;
+                }
+                if (reported) {
+                    logger.Log(String.Format("Reporting analytics data: {0}{1}{2} '{3}'", path,
+                                            String.IsNullOrEmpty(queryPrefix) ? "" : "?" + queryPrefix,
+                                            fragment, reportName),
+                            level: LogLevel.Verbose);
+                }
+            } catch (Exception e) {
+                // Make sure no exception thrown during analytics reporting will be raised to
+                // the main thread and interupt the process.
+                logger.Log(String.Format(
+                    "Failed to reporting analytics data due to exception: {0}", e),
+                    level: LogLevel.Verbose);
             }
         });
     }

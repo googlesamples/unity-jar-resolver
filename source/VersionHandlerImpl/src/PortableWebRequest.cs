@@ -552,8 +552,8 @@ public class PortableWebRequest : IPortableWebRequest {
         foreach (var param in queryParams) {
             url.AppendFormat("{0}{1}={2}",
                                 url.Length == 0 ? "?" : "&",
-                                HttpUtility.UrlEncode(param.Key),
-                                HttpUtility.UrlEncode(param.Value));
+                                Uri.EscapeDataString(param.Key).Trim(),
+                                Uri.EscapeDataString(param.Value).Trim());
         }
         url.Insert(0, path);
         return Post(url.ToString(), headers, formFields);
