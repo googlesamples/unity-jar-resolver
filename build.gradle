@@ -296,7 +296,7 @@ project.ext {
 envs {
   bootstrapDirectory = project.ext.pythonBootstrapDir
   envsDirectory = new File(project.ext.buildDir, "python_envs")
-  python "python", "3.7.4"
+  python "python", "3.9.3"
 }
 
 /*
