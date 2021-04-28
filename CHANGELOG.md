@@ -1,3 +1,12 @@
+# Version 1.2.165 - Apr 28, 2021
+## Bug Fixes
+* Version Handler - Fixed #431 by replacing the use of `HttpUtility.UrlEncode()`
+  which causes NullReferenceException in certain version of Unity.
+* Android Resolver - Check that androidSdkRootPath directory exists before using
+  as sdkPath.
+* Android Resolver - Fixed Android Resolver integration tests with Unity
+  2019.3+.
+
 # Version 1.2.164 - Feb 4, 2021
 ## New Features
 * Android Resolver - Added support for Android packages with classifier in their
