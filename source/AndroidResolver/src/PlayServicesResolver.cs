@@ -522,6 +522,16 @@ namespace GooglePlayServices {
             }
         }
 
+        /// <summary>
+        /// Whether the Gradle template should use the relative or absolute path to the local repository.
+        /// Only relevant when <see cref="GradleProjectExportEnabled"/> is also enabled.
+        /// </summary>
+        public static bool UseRelativeRepoPath {
+            get {
+               return SettingsDialogObj.UseRelativeRepoPath;
+            }
+        }
+
         // Backing store for GradleVersion property.
         private static string gradleVersion = null;
         // Extracts a version number from a gradle distribution jar file.
@@ -2106,6 +2116,7 @@ namespace GooglePlayServices {
             var lines = new List<string>();
             if (dependencies.Count > 0) {
                 var exportEnabled = GradleProjectExportEnabled;
+                var useRelativeRepoPath = UseRelativeRepoPath;
                 var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
                 var projectFileUri = GradleResolver.RepoPathToUri(projectPath);
                 lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
@@ -2140,9 +2151,9 @@ namespace GooglePlayServices {
                             repoPath = relativePath;
                         }
 
-                        // If "Export Gradle Project" setting is enabled, gradle project expects
-                        // absolute path.
-                        if (exportEnabled) {
+                        // If "Export Gradle Project" setting is enabled, use absolute path
+                        // unless user has actively opted to use relative path
+                        if (exportEnabled && !useRelativeRepoPath) {
                             repoUri = String.Format("\"{0}\"",
                                                     Path.Combine(projectFileUri, repoPath));
                         } else {
@@ -2486,6 +2497,7 @@ namespace GooglePlayServices {
                 {"explodeAars", SettingsDialogObj.ExplodeAars.ToString()},
                 {"patchAndroidManifest", SettingsDialogObj.PatchAndroidManifest.ToString()},
                 {"patchMainTemplateGradle", SettingsDialogObj.PatchMainTemplateGradle.ToString()},
+                {"useRelativeRepoPath", SettingsDialogObj.UseRelativeRepoPath.ToString()},
                 {"localMavenRepoDir", SettingsDialogObj.LocalMavenRepoDir.ToString()},
                 {"useJetifier", SettingsDialogObj.UseJetifier.ToString()},
                 {"bundleId", GetAndroidApplicationId()},

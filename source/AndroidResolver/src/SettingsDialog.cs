@@ -38,6 +38,7 @@ namespace GooglePlayServices {
             internal bool explodeAars;
             internal bool patchAndroidManifest;
             internal bool patchMainTemplateGradle;
+            internal bool useRelativeRepoPath;
             internal bool patchPropertiesTemplateGradle;
             internal string localMavenRepoDir;
             internal bool useJetifier;
@@ -59,6 +60,7 @@ namespace GooglePlayServices {
                 explodeAars = SettingsDialog.ExplodeAars;
                 patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
                 patchMainTemplateGradle = SettingsDialog.PatchMainTemplateGradle;
+                useRelativeRepoPath = SettingsDialog.UseRelativeRepoPath;
                 patchPropertiesTemplateGradle = SettingsDialog.PatchPropertiesTemplateGradle;
                 localMavenRepoDir = SettingsDialog.LocalMavenRepoDir;
                 useJetifier = SettingsDialog.UseJetifier;
@@ -81,6 +83,7 @@ namespace GooglePlayServices {
                 SettingsDialog.ExplodeAars = explodeAars;
                 SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
                 SettingsDialog.PatchMainTemplateGradle = patchMainTemplateGradle;
+                SettingsDialog.UseRelativeRepoPath = useRelativeRepoPath;
                 SettingsDialog.PatchPropertiesTemplateGradle = patchPropertiesTemplateGradle;
                 SettingsDialog.LocalMavenRepoDir = localMavenRepoDir;
                 SettingsDialog.UseJetifier = useJetifier;
@@ -100,6 +103,7 @@ namespace GooglePlayServices {
         private const string ExplodeAarsKey = Namespace + "ExplodeAars";
         private const string PatchAndroidManifestKey = Namespace + "PatchAndroidManifest";
         private const string PatchMainTemplateGradleKey = Namespace + "PatchMainTemplateGradle";
+        private const string UseRelativeRepoPathKey = Namespace + "UseRelativeRepoPath";
         private const string PatchPropertiesTemplateGradleKey = Namespace + "PatchPropertiesTemplateGradle";
         private const string LocalMavenRepoDirKey = Namespace + "LocalMavenRepoDir";
         private const string UseJetifierKey = Namespace + "UseJetifier";
@@ -119,6 +123,7 @@ namespace GooglePlayServices {
             ExplodeAarsKey,
             PatchAndroidManifestKey,
             PatchMainTemplateGradleKey,
+            UseRelativeRepoPathKey,
             PatchPropertiesTemplateGradleKey,
             LocalMavenRepoDirKey,
             UseJetifierKey,
@@ -238,6 +243,11 @@ namespace GooglePlayServices {
         internal static bool PatchMainTemplateGradle {
             set { projectSettings.SetBool(PatchMainTemplateGradleKey, value); }
             get { return projectSettings.GetBool(PatchMainTemplateGradleKey, true); }
+        }
+
+        internal static bool UseRelativeRepoPath {
+            set { projectSettings.SetBool(UseRelativeRepoPathKey, value); }
+            get { return projectSettings.GetBool(UseRelativeRepoPathKey, false); }
         }
 
         internal static bool PatchPropertiesTemplateGradle {
@@ -500,6 +510,27 @@ namespace GooglePlayServices {
                 settings.localMavenRepoDir = FileUtils.PosixPathSeparators(
                         ValidateLocalMavenRepoDir(EditorGUILayout.TextField(
                                 settings.localMavenRepoDir)));
+            }
+
+            if (settings.patchMainTemplateGradle) {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Use relative repository path", EditorStyles.boldLabel);
+                settings.useRelativeRepoPath =
+                    EditorGUILayout.Toggle(settings.useRelativeRepoPath);
+                GUILayout.EndHorizontal();
+
+                if (settings.useRelativeRepoPath) {
+                    GUILayout.Label(
+                        "The mainTemplate.gradle file will be patched with a relative path to " +
+                        "the Local Maven Repository. This can be used to limit file changes when " +
+                        "the template is versioned, but the exported project will not work if relocated " +
+                        "after building.");
+                } else {
+                    GUILayout.Label(
+                        "The mainTemplate.gradle file will be patched with an absolute path to " +
+                        "the Local Maven Repository. This ensures that the exported project can be " +
+                        "relocated anywhere after building.");
+                }
             }
 
             GUILayout.BeginHorizontal();
