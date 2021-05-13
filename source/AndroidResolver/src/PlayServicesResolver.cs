@@ -2155,7 +2155,8 @@ namespace GooglePlayServices {
                         // unless user has actively opted to use relative path
                         if (exportEnabled && !useRelativeRepoPath) {
                             repoUri = String.Format("\"{0}\"",
-                                                    Path.Combine(projectFileUri, repoPath));
+                                                    FileUtils.PosixPathSeparators(
+                                                      Path.Combine(projectFileUri, repoPath)));
                         } else {
                             repoUri = String.Format("(unityProjectPath + \"/{0}\")", repoPath);
                         }
