@@ -193,7 +193,7 @@ namespace Google.JarResolver {
         private static bool IsGreater(string version1, string version2) {
             version1 = version1.EndsWith("+") ?
                 version1.Substring(0, version1.Length - 1) : version1;
-            version2 = version1.EndsWith("+") ?
+            version2 = version2.EndsWith("+") ?
                 version2.Substring(0, version2.Length - 1) : version2;
             string[] version1Components = version1.Split('.');
             string[] version2Components = version2.Split('.');
