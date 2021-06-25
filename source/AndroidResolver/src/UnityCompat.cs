@@ -444,7 +444,7 @@ public class UnityCompat {
     /// <returns>Application identifier if it can be retrieved, null otherwise.</returns>
     private static string GetUnity56AndAboveApplicationIdentifier(BuildTarget buildTarget) {
         var getApplicationIdentifierMethod =
-            typeof(UnityEditor.PlayerSettings).GetMethod("GetApplicationIdentifier");
+            typeof(UnityEditor.PlayerSettings).GetMethod("GetApplicationIdentifier", new[]{typeof(BuildTargetGroup)});
         if (getApplicationIdentifierMethod == null) return null;
         var buildTargetGroup = ConvertBuildTargetToBuildTargetGroup(buildTarget);
         if (buildTargetGroup == BuildTargetGroup.Unknown) return null;
