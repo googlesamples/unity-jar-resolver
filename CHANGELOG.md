@@ -1,3 +1,10 @@
+# Version 1.2.166 - Jun 30, 2021
+* All - Fixed #440 and fixed #447 by specifying the parameter type while calling
+  `GetApplicationIdentifier()` Unity API using reflection, due to a new
+  overloaded method introduced in Unity 2021.2.
+* Android Resolver - Fixed #442 by patching `Dependency.IsGreater()` when the
+  version strings end '+'.
+
 # Version 1.2.165 - Apr 28, 2021
 ## Bug Fixes
 * Version Handler - Fixed #431 by replacing the use of `HttpUtility.UrlEncode()`
