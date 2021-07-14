@@ -245,6 +245,7 @@ namespace GooglePlayServices {
             get { return projectSettings.GetBool(PatchMainTemplateGradleKey, true); }
         }
 
+        // TODO: Please add integration test for this flag.
         internal static bool UseRelativeRepoPath {
             set { projectSettings.SetBool(UseRelativeRepoPathKey, value); }
             get { return projectSettings.GetBool(UseRelativeRepoPathKey, false); }
