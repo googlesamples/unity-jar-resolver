@@ -522,9 +522,9 @@ namespace GooglePlayServices {
                 if (settings.useRelativeRepoPath) {
                     GUILayout.Label(
                         "The mainTemplate.gradle file will be patched with a relative path to " +
-                        "the Local Maven Repository. This can be used to limit file changes when " +
-                        "the template is versioned, but the exported project will not work if relocated " +
-                        "after building.");
+                        "the Local Maven Repository for an exported Android project. This can be used " +
+                        "to limit file changes when the template is versioned, but the exported " +
+                        "project will not work if relocated after building.");
                 } else {
                     GUILayout.Label(
                         "The mainTemplate.gradle file will be patched with an absolute path to " +
