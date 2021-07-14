@@ -125,11 +125,15 @@ public class IOSResolver : AssetPostprocessor {
         /// <summary>
         /// Get the path of a pod without quotes.  If the path isn't present, returns an empty
         /// string.
+        /// This also support podspec parameters. It will prefer podspec parameter over path 
+        /// if present.
         /// </summary>
         public string LocalPath {
             get {
                 string path;
-                if (!propertiesByName.TryGetValue("path", out path)) return "";
+                if (!propertiesByName.TryGetValue("podspec", out path)){
+                    if (!propertiesByName.TryGetValue("path", out path)) return "";
+                } 
                 if (path.StartsWith("'") && path.EndsWith("'")) {
                     path = path.Substring(1, path.Length - 2);
                 }
@@ -276,7 +280,8 @@ public class IOSResolver : AssetPostprocessor {
             "modular_headers",
             "source",
             "subspecs",
-            "path"
+            "path",
+            "podspec"
         };
 
         public IOSXmlDependencies() {
@@ -295,6 +300,7 @@ public class IOSResolver : AssetPostprocessor {
         ///   <iosPods>
         ///     <iosPod name="name"
         ///             path="pathToLocal"
+        ///             podspec="pathToLocalPodSpecJSON"
         ///             version="versionSpec"
         ///             bitcodeEnabled="enabled"
         ///             minTargetSdk="sdk">
