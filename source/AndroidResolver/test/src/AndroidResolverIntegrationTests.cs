@@ -45,6 +45,12 @@ public class AndroidResolverIntegrationTests {
     private const string ADDITIONAL_DEPENDENCIES_FILENAME = "TestAdditionalDependencies";
 
     /// <summary>
+    /// The name of the file, without extension, that will serve as a template for dynamically
+    /// adding additional dependencies with a duplicate package with a different version.
+    /// </summary>
+    private const string ADDITIONAL_DUPLICATE_DEPENDENCIES_FILENAME = "TestAdditionalDuplicateDependencies";
+
+    /// <summary>
     /// Disabled application Gradle template file.
     /// </summary>
     private const string GRADLE_TEMPLATE_DISABLED =
@@ -119,6 +125,29 @@ public class AndroidResolverIntegrationTests {
                         ResolveWithGradleTemplate(
                             GRADLE_TEMPLATE_DISABLED,
                             "ExpectedArtifacts/NoExport/GradleTemplate",
+                            testCase, testCaseComplete,
+                            otherExpectedFiles: new [] {
+                                "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
+                                "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
+                            filesToIgnore: new HashSet<string> {
+                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
+                                Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
+                            });
+                    }
+                },
+                new IntegrationTester.TestCase {
+                    Name = "ResolveForGradleBuildSystemWithDuplicatePackages",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies();
+                        // Add 2 additional dependency files (each file contains a single package
+                        // but with different versions).
+                        UpdateAdditionalDependenciesFile(true, ADDITIONAL_DEPENDENCIES_FILENAME);
+                        UpdateAdditionalDependenciesFile(true, ADDITIONAL_DUPLICATE_DEPENDENCIES_FILENAME);
+
+                        ResolveWithGradleTemplate(
+                            GRADLE_TEMPLATE_DISABLED,
+                            "ExpectedArtifacts/NoExport/GradleTemplateDuplicatePackages",
                             testCase, testCaseComplete,
                             otherExpectedFiles: new [] {
                                 "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
@@ -474,7 +503,8 @@ public class AndroidResolverIntegrationTests {
         GooglePlayServices.SettingsDialog.PatchPropertiesTemplateGradle = false;
 
         PlayServicesSupport.ResetDependencies();
-        UpdateAdditionalDependenciesFile(false);
+        UpdateAdditionalDependenciesFile(false, ADDITIONAL_DEPENDENCIES_FILENAME);
+        UpdateAdditionalDependenciesFile(false, ADDITIONAL_DUPLICATE_DEPENDENCIES_FILENAME);
     }
 
     /// <summary>
@@ -565,14 +595,18 @@ public class AndroidResolverIntegrationTests {
     /// </summary>
     /// <param name="addDependencyFile">If true, will copy the template file to an XML file if it
     /// doesn't exist. If false, delete the XML file if it exists.</param>
-    private static void UpdateAdditionalDependenciesFile(bool addDependencyFile) {
+    /// <param name="filename">Name of the template file (without extension) to
+    /// create an XML from. </param>
+    private static void UpdateAdditionalDependenciesFile(
+            bool addDependencyFile,
+            string filename=ADDITIONAL_DEPENDENCIES_FILENAME) {
         string currentDirectory = Directory.GetCurrentDirectory();
         string editorPath = Path.Combine(currentDirectory,
                                          "Assets/ExternalDependencyManager/Editor/");
 
-        string templateFilePath = Path.Combine(editorPath, ADDITIONAL_DEPENDENCIES_FILENAME +
+        string templateFilePath = Path.Combine(editorPath, filename+
             ".template");
-        string xmlFilePath = Path.Combine(editorPath, ADDITIONAL_DEPENDENCIES_FILENAME + ".xml");
+        string xmlFilePath = Path.Combine(editorPath, filename+ ".xml");
         if (addDependencyFile && !File.Exists(xmlFilePath)) {
             if (!File.Exists(templateFilePath)) {
                 UnityEngine.Debug.LogError("Could not find file: " + templateFilePath);

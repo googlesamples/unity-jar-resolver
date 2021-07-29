@@ -18,6 +18,7 @@ namespace GooglePlayServices {
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Xml;
@@ -2191,15 +2192,45 @@ namespace GooglePlayServices {
                 // https://docs.gradle.org/3.4/release-notes.html#the-java-library-plugin
                 // https://developer.android.com/studio/releases/gradle-plugin#3-0-0
                 var version = GradleVersion;
+                var versionComparer = new Dependency.VersionComparer();
                 var includeStatement =
                     !String.IsNullOrEmpty(version) &&
-                    (new Dependency.VersionComparer()).Compare("3.4", version) >= 0 ?
+                    versionComparer.Compare("3.4", version) >= 0 ?
                     "implementation" : "compile";
                 if (includeDependenciesBlock) lines.Add("dependencies {");
-                foreach (var packageSpecAndSources in GetPackageSpecs(dependencies: dependencies)) {
-                    lines.Add(String.Format(
-                        "    {0} '{1}' // {2}", includeStatement, packageSpecAndSources.Key,
-                        packageSpecAndSources.Value));
+                // Build a map of dependencies with the max version of that dependency.
+                // If different packages have different versions of the same dependency,
+                // we want to activate only the highest version but still include the
+                // other versions as commented out dependency lines.
+                var dependenciesMaxVersions = new Dictionary<string, string>();
+                foreach( var dependency in dependencies) {
+                    if(!dependenciesMaxVersions.ContainsKey(dependency.VersionlessKey))
+                        dependenciesMaxVersions[dependency.VersionlessKey] = dependency.Version;
+                    else {
+                        var compareWithVersion = dependenciesMaxVersions[dependency.VersionlessKey];
+                        if(versionComparer.Compare(dependency.Version, compareWithVersion) < 0)
+                            dependenciesMaxVersions[dependency.VersionlessKey] = dependency.Version;
+                    }
+                }
+                List<Dependency> dependenciesList = dependencies.OrderBy(Dependency=>Dependency.Key).ToList();
+                foreach( var dependency in dependenciesList) {
+                    // Passing the entire list to GetPackageSpecs returns results
+                    // in an arbitrary order because it takes an IEnumerable.
+                    // Hence we cannot pass the entire list as is. We pass an element
+                    // at a time to ensure the correspondence with results.
+                    List<Dependency> singleItemList = new List<Dependency>();
+                    singleItemList.Add(dependency);
+                    var packageSpecAndSources = GetPackageSpecs(singleItemList)[0];
+                    string line = "    ";
+                    // If this is not the highest version of this dependency, add a line
+                    // but comment it out by adding leading slashes.
+                    if(dependenciesMaxVersions[dependency.VersionlessKey] != dependency.Version)
+                        line += "// ";
+
+                    line += String.Format(
+                            "{0} '{1}' // {2}", includeStatement, packageSpecAndSources.Key,
+                            packageSpecAndSources.Value, dependency.Version);
+                    lines.Add(line);
                 }
                 if (includeDependenciesBlock) lines.Add("}");
             }
