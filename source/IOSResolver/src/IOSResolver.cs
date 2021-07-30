@@ -319,7 +319,7 @@ public class IOSResolver : AssetPostprocessor {
         ///   <iosPods>
         ///     <iosPod name="name"
         ///             path="pathToLocal"
-        ///             podspecPath="pathToLocalPodSpecJSON"
+        ///             podspecPath="pathToPodSpec"
         ///             version="versionSpec"
         ///             bitcodeEnabled="enabled"
         ///             minTargetSdk="sdk">
