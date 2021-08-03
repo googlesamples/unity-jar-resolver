@@ -2234,8 +2234,15 @@ namespace GooglePlayServices {
                     string line = "    ";
                     // If this is not the highest version of this dependency, add a line
                     // but comment it out by adding leading slashes.
-                    if(dependenciesMaxVersions[packageVersionlessKey] != packageVersion)
+                    if(dependenciesMaxVersions[packageVersionlessKey] != packageVersion) {
+                        PlayServicesResolver.Log(
+                            String.Format(
+                                "Ignoring duplicate package {0} with older version.",
+                                 packageSpecString),
+                                 level: LogLevel.Info
+                            );
                         line += "// ";
+                    }
 
                     line += String.Format(
                             "{0} '{1}' // {2}", includeStatement, packageSpecString,
