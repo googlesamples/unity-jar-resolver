@@ -1,5 +1,8 @@
 <dependencies>
   <androidPackages>
+    <!-- Duplicate entry for package with a different version. -->
     <androidPackage spec="com.google.android.gms:play-services-base:12.0.1" />
+    <!-- Duplicate entry for package with the exact same version. -->
+    <androidPackage spec="com.android.support:support-annotations:26.1.0"/>
   </androidPackages>
 </dependencies>
