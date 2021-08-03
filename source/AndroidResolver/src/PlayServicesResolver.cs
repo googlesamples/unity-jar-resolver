@@ -2091,6 +2091,17 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Get the list of Android package specs referenced by the project and the sources they're
+        /// loaded from along with their corresponding dependency versions.
+        /// </summary>
+        /// <returns>Dictionary of the form {<packageSpec>: [sourceString, dependencyVersion]}.</returns>
+        public static IList<KeyValuePair<string, List<string>>> GetPackageSpecsWithVersions(
+                IEnumerable<Dependency> dependencies = null) {
+            return new List<KeyValuePair<string, List<string>>>(new SortedList<string, List<string>>(
+            GradleResolver.DependenciesToPackageSpecsWithVersions(GetOrReadDependencies(dependencies))));
+        }
+
+        /// <summary>
         /// Get the list of Maven repo URIs required for Android libraries in this project.
         /// </summary>
         /// <returns>List of repo, source pairs.</returns>
@@ -2203,33 +2214,32 @@ namespace GooglePlayServices {
                 // we want to activate only the highest version but still include the
                 // other versions as commented out dependency lines.
                 var dependenciesMaxVersions = new Dictionary<string, string>();
+                string dependencyMaxVersion;
                 foreach( var dependency in dependencies) {
-                    if(!dependenciesMaxVersions.ContainsKey(dependency.VersionlessKey))
-                        dependenciesMaxVersions[dependency.VersionlessKey] = dependency.Version;
-                    else {
-                        var compareWithVersion = dependenciesMaxVersions[dependency.VersionlessKey];
-                        if(versionComparer.Compare(dependency.Version, compareWithVersion) < 0)
+                    if (dependenciesMaxVersions.TryGetValue(dependency.VersionlessKey, out dependencyMaxVersion)){
+                        if(versionComparer.Compare(dependency.Version, dependencyMaxVersion) < 0) {
                             dependenciesMaxVersions[dependency.VersionlessKey] = dependency.Version;
+                        }
+                    }
+                    else {
+                        dependenciesMaxVersions[dependency.VersionlessKey] = dependency.Version;
                     }
                 }
-                List<Dependency> dependenciesList = dependencies.OrderBy(Dependency=>Dependency.Key).ToList();
-                foreach( var dependency in dependenciesList) {
-                    // Passing the entire list to GetPackageSpecs returns results
-                    // in an arbitrary order because it takes an IEnumerable.
-                    // Hence we cannot pass the entire list as is. We pass an element
-                    // at a time to ensure the correspondence with results.
-                    List<Dependency> singleItemList = new List<Dependency>();
-                    singleItemList.Add(dependency);
-                    var packageSpecAndSources = GetPackageSpecs(singleItemList)[0];
+                foreach (var packageSpecAndSourcesWithVersions in GetPackageSpecsWithVersions(dependencies: dependencies)){
+                    var packageSpecString = packageSpecAndSourcesWithVersions.Key;
+                    var packageSourcesString = packageSpecAndSourcesWithVersions.Value[0];
+                    var packageVersionlessKey = packageSpecAndSourcesWithVersions.Value[1];
+                    var packageVersion = packageSpecAndSourcesWithVersions.Value[2];
+
                     string line = "    ";
                     // If this is not the highest version of this dependency, add a line
                     // but comment it out by adding leading slashes.
-                    if(dependenciesMaxVersions[dependency.VersionlessKey] != dependency.Version)
+                    if(dependenciesMaxVersions[packageVersionlessKey] != packageVersion)
                         line += "// ";
 
                     line += String.Format(
-                            "{0} '{1}' // {2}", includeStatement, packageSpecAndSources.Key,
-                            packageSpecAndSources.Value, dependency.Version);
+                            "{0} '{1}' // {2}", includeStatement, packageSpecString,
+                            packageSourcesString);
                     lines.Add(line);
                 }
                 if (includeDependenciesBlock) lines.Add("}");
