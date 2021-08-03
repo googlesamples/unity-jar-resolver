@@ -49,6 +49,7 @@ dependencies {
     compile 'com.android.support:support-annotations:26.1.0' // Assets/ExternalDependencyManager/Editor/TestDependencies.xml:4
     // compile 'com.google.android.gms:play-services-base:12.0.1' // Assets/ExternalDependencyManager/Editor/TestAdditionalDuplicateDependencies.xml:4
     compile 'com.google.android.gms:play-services-base:15.0.1' // Assets/ExternalDependencyManager/Editor/TestAdditionalDependencies.xml:3
+    // compile 'com.google.firebase:firebase-app-unity:5.+' // Assets/ExternalDependencyManager/Editor/TestAdditionalDuplicateDependencies.xml:6
     compile 'com.google.firebase:firebase-app-unity:5.1.1' // Assets/ExternalDependencyManager/Editor/TestDependencies.xml:10
     compile 'com.google.firebase:firebase-common:16.0.0' // Google.AndroidResolverIntegrationTests.SetupDependencies
     compile 'org.test.psr:classifier:1.0.1:foo@aar' // Assets/ExternalDependencyManager/Editor/TestDependencies.xml:12
