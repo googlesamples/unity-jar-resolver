@@ -106,6 +106,15 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Get package spec from a dependency.
+        /// </summary>
+        /// <param name="dependency">Dependency instance to query for package spec.</param>
+        internal static string DependencyToPackageSpec(Dependency dependency) {
+            return dependency.Version.ToUpper() == "LATEST" ?
+                dependency.VersionlessKey + ":+" : dependency.Key;
+        }
+
+        /// <summary>
         /// From a list of dependencies generate a list of Maven / Gradle / Ivy package spec
         /// strings.
         /// </summary>
@@ -116,8 +125,7 @@ namespace GooglePlayServices
             var sourcesByPackageSpec = new Dictionary<string, string>();
             foreach (var dependency in dependencies) {
                 // Convert the legacy "LATEST" version spec to a Gradle version spec.
-                var packageSpec = dependency.Version.ToUpper() == "LATEST" ?
-                    dependency.VersionlessKey + ":+" : dependency.Key;
+                var packageSpec = DependencyToPackageSpec(dependency);
                 var source = CommandLine.SplitLines(dependency.CreatedBy)[0];
                 string sources;
                 if (sourcesByPackageSpec.TryGetValue(packageSpec, out sources)) {

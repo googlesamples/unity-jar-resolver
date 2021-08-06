@@ -2191,15 +2191,56 @@ namespace GooglePlayServices {
                 // https://docs.gradle.org/3.4/release-notes.html#the-java-library-plugin
                 // https://developer.android.com/studio/releases/gradle-plugin#3-0-0
                 var version = GradleVersion;
+                var versionComparer = new Dependency.VersionComparer();
                 var includeStatement =
                     !String.IsNullOrEmpty(version) &&
-                    (new Dependency.VersionComparer()).Compare("3.4", version) >= 0 ?
+                    versionComparer.Compare("3.4", version) >= 0 ?
                     "implementation" : "compile";
                 if (includeDependenciesBlock) lines.Add("dependencies {");
+                // Build a map of dependencies with the max version of that dependency.
+                // If different packages have different versions of the same dependency,
+                // we want to activate only the highest version but still include the
+                // other versions as commented out dependency lines.
+                var dependenciesMaxVersions = new Dictionary<string, Dependency>();
+                // Maintain a set of packages which we want to comment out.
+                HashSet<string> packageSpecStringsToComment = new HashSet<string>();
+                foreach( var dependency in dependencies) {
+                    Dependency dependencyMaxVersion;
+                    if (dependenciesMaxVersions.TryGetValue(dependency.VersionlessKey, out dependencyMaxVersion)){
+                        if(versionComparer.Compare(dependency.Version, dependencyMaxVersion.Version) < 0) {
+                            dependenciesMaxVersions[dependency.VersionlessKey] = dependency;
+                            // We found a new larger version. Comment out older one
+                            // Build a single item list since `GetPackageSpecs`
+                            // accepts an IEnumerable type.
+                            var packageSpecString = GradleResolver.DependencyToPackageSpec(dependencyMaxVersion);
+                            packageSpecStringsToComment.Add(packageSpecString);
+                        }
+                        else {
+                            // Dependency version is smaller than current max.
+                            var packageSpecString = GradleResolver.DependencyToPackageSpec(dependency);
+                            packageSpecStringsToComment.Add(packageSpecString);
+                        }
+                    }
+                    else {
+                        // First time encountering this dependency.
+                        dependenciesMaxVersions[dependency.VersionlessKey] = dependency;
+                    }
+                }
                 foreach (var packageSpecAndSources in GetPackageSpecs(dependencies: dependencies)) {
-                    lines.Add(String.Format(
-                        "    {0} '{1}' // {2}", includeStatement, packageSpecAndSources.Key,
-                        packageSpecAndSources.Value));
+                    string line = "    ";
+                    if (packageSpecStringsToComment.Contains(packageSpecAndSources.Key)) {
+                        PlayServicesResolver.Log(
+                            String.Format(
+                                "Ignoring duplicate package {0} with older version.",
+                                 packageSpecAndSources.Key),
+                                 level: LogLevel.Info
+                            );
+                        line += "// ";
+                    }
+                    line += String.Format(
+                            "{0} '{1}' // {2}", includeStatement, packageSpecAndSources.Key,
+                            packageSpecAndSources.Value);
+                    lines.Add(line);
                 }
                 if (includeDependenciesBlock) lines.Add("}");
             }

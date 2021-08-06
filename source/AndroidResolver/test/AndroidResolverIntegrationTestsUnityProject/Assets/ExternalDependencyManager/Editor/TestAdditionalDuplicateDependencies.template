@@ -1,0 +1,13 @@
+<dependencies>
+  <androidPackages>
+    <!-- Duplicate entry for package with a different version (higher). -->
+    <androidPackage spec="com.google.android.gms:play-services-base:18.0.1" />
+    <!-- Duplicate entry for package with a different version (lower). -->
+    <androidPackage spec="com.google.android.gms:play-services-base:12.0.1" />
+    <!-- Duplicate entry for package with a different version (wildcard). -->
+    <androidPackage spec="com.google.firebase:firebase-app-unity:5.+"/>
+    <!-- Duplicate entry for package with the exact same version. -->
+    <androidPackage spec="com.android.support:support-annotations:26.1.0"/>
+  </androidPackages>
+</dependencies>
+
