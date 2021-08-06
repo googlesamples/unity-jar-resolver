@@ -2203,10 +2203,10 @@ namespace GooglePlayServices {
                 // we want to activate only the highest version but still include the
                 // other versions as commented out dependency lines.
                 var dependenciesMaxVersions = new Dictionary<string, Dependency>();
-                Dependency dependencyMaxVersion;
                 // Maintain a set of packages which we want to comment out.
                 HashSet<string> packageSpecStringsToComment = new HashSet<string>();
                 foreach( var dependency in dependencies) {
+                    Dependency dependencyMaxVersion;
                     if (dependenciesMaxVersions.TryGetValue(dependency.VersionlessKey, out dependencyMaxVersion)){
                         if(versionComparer.Compare(dependency.Version, dependencyMaxVersion.Version) < 0) {
                             dependenciesMaxVersions[dependency.VersionlessKey] = dependency;
