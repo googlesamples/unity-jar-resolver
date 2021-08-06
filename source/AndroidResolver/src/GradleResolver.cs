@@ -106,6 +106,15 @@ namespace GooglePlayServices
         }
 
         /// <summary>
+        /// Get package spec from a dependency.
+        /// </summary>
+        /// <param name="dependency">Dependency instance to query for package spec.</param>
+        internal static string DependencyToPackageSpec(Dependency dependency) {
+            return dependency.Version.ToUpper() == "LATEST" ?
+                dependency.VersionlessKey + ":+" : dependency.Key;
+        }
+
+        /// <summary>
         /// From a list of dependencies generate a list of Maven / Gradle / Ivy package spec
         /// strings.
         /// </summary>
@@ -116,8 +125,7 @@ namespace GooglePlayServices
             var sourcesByPackageSpec = new Dictionary<string, string>();
             foreach (var dependency in dependencies) {
                 // Convert the legacy "LATEST" version spec to a Gradle version spec.
-                var packageSpec = dependency.Version.ToUpper() == "LATEST" ?
-                    dependency.VersionlessKey + ":+" : dependency.Key;
+                var packageSpec = DependencyToPackageSpec(dependency);
                 var source = CommandLine.SplitLines(dependency.CreatedBy)[0];
                 string sources;
                 if (sourcesByPackageSpec.TryGetValue(packageSpec, out sources)) {
@@ -128,54 +136,6 @@ namespace GooglePlayServices
                 sourcesByPackageSpec[packageSpec] = sources;
             }
             return sourcesByPackageSpec;
-        }
-
-        /// <summary>
-        /// From a list of dependencies generate a list of Maven / Gradle / Ivy package spec
-        /// strings along with their corresponding dependency versions.
-        /// </summary>
-        /// <param name="dependencies">Dependency instances to query for package specs.</param>
-        /// <returns>Dictionary where the key is a package spec string and value is a
-        /// 3 item list of sources string, dependency version less string,
-        /// and a dependency version string. </returns>
-        internal static Dictionary<string, List<string>> DependenciesToPackageSpecsWithVersions(
-                IEnumerable<Dependency> dependencies) {
-            // To keep it simple to iterate and process, create 3 separate
-            // dictionaries to record required metadata about a package spec
-            // (version and versionless key).
-            var sourcesByPackageSpec = new Dictionary<string, string>();
-            var versionsByPackageSpec = new Dictionary<string, string>();
-            var versionlessKeysByPackageSpec = new Dictionary<string, string>();
-            foreach (var dependency in dependencies) {
-                // Convert the legacy "LATEST" version spec to a Gradle version spec.
-                var packageSpec = dependency.Version.ToUpper() == "LATEST" ?
-                    dependency.VersionlessKey + ":+" : dependency.Key;
-                var source = CommandLine.SplitLines(dependency.CreatedBy)[0];
-                string sources;
-                if (sourcesByPackageSpec.TryGetValue(packageSpec, out sources)) {
-                    sources = sources + ", " + source;
-                } else {
-                    sources = source;
-                }
-                sourcesByPackageSpec[packageSpec] = sources;
-                versionsByPackageSpec[packageSpec] = dependency.Version;
-                versionlessKeysByPackageSpec[packageSpec] = dependency.VersionlessKey;
-            }
-            // Create a new dictionary which combines the data from sources and
-            // versions dictionaries. Key is packageSpec string and value is a
-            // three-item list of strings of sources, version less string
-            // and dependency version.
-            // NOTE: tuples are a more elegant way of doing this but they work
-            // only in .NET frameworks >= 4.0.
-            var mergedByPackageSpec = new Dictionary<string, List<string>>();
-            foreach(var item in sourcesByPackageSpec) {
-                mergedByPackageSpec[item.Key] = new List<string>{
-                    sourcesByPackageSpec[item.Key],
-                    versionlessKeysByPackageSpec[item.Key],
-                    versionsByPackageSpec[item.Key]
-                };
-            }
-            return mergedByPackageSpec;
         }
 
         /// <summary>

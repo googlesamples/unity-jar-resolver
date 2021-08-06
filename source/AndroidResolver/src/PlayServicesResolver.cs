@@ -2091,17 +2091,6 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
-        /// Get the list of Android package specs referenced by the project and the sources they're
-        /// loaded from along with their corresponding dependency versions.
-        /// </summary>
-        /// <returns>Dictionary of the form {<packageSpec>: [sourceString, dependencyVersion]}.</returns>
-        public static IList<KeyValuePair<string, List<string>>> GetPackageSpecsWithVersions(
-                IEnumerable<Dependency> dependencies = null) {
-            return new List<KeyValuePair<string, List<string>>>(new SortedList<string, List<string>>(
-            GradleResolver.DependenciesToPackageSpecsWithVersions(GetOrReadDependencies(dependencies))));
-        }
-
-        /// <summary>
         /// Get the list of Maven repo URIs required for Android libraries in this project.
         /// </summary>
         /// <returns>List of repo, source pairs.</returns>
@@ -2213,40 +2202,45 @@ namespace GooglePlayServices {
                 // If different packages have different versions of the same dependency,
                 // we want to activate only the highest version but still include the
                 // other versions as commented out dependency lines.
-                var dependenciesMaxVersions = new Dictionary<string, string>();
-                string dependencyMaxVersion;
+                var dependenciesMaxVersions = new Dictionary<string, Dependency>();
+                Dependency dependencyMaxVersion;
+                // Maintain a set of packages which we want to comment out.
+                HashSet<string> packageSpecStringsToComment = new HashSet<string>();
                 foreach( var dependency in dependencies) {
                     if (dependenciesMaxVersions.TryGetValue(dependency.VersionlessKey, out dependencyMaxVersion)){
-                        if(versionComparer.Compare(dependency.Version, dependencyMaxVersion) < 0) {
-                            dependenciesMaxVersions[dependency.VersionlessKey] = dependency.Version;
+                        if(versionComparer.Compare(dependency.Version, dependencyMaxVersion.Version) < 0) {
+                            dependenciesMaxVersions[dependency.VersionlessKey] = dependency;
+                            // We found a new larger version. Comment out older one
+                            // Build a single item list since `GetPackageSpecs`
+                            // accepts an IEnumerable type.
+                            var packageSpecString = GradleResolver.DependencyToPackageSpec(dependencyMaxVersion);
+                            packageSpecStringsToComment.Add(packageSpecString);
+                        }
+                        else {
+                            // Dependency version is smaller than current max.
+                            var packageSpecString = GradleResolver.DependencyToPackageSpec(dependency);
+                            packageSpecStringsToComment.Add(packageSpecString);
                         }
                     }
                     else {
-                        dependenciesMaxVersions[dependency.VersionlessKey] = dependency.Version;
+                        // First time encountering this dependency.
+                        dependenciesMaxVersions[dependency.VersionlessKey] = dependency;
                     }
                 }
-                foreach (var packageSpecAndSourcesWithVersions in GetPackageSpecsWithVersions(dependencies: dependencies)){
-                    var packageSpecString = packageSpecAndSourcesWithVersions.Key;
-                    var packageSourcesString = packageSpecAndSourcesWithVersions.Value[0];
-                    var packageVersionlessKey = packageSpecAndSourcesWithVersions.Value[1];
-                    var packageVersion = packageSpecAndSourcesWithVersions.Value[2];
-
+                foreach (var packageSpecAndSources in GetPackageSpecs(dependencies: dependencies)) {
                     string line = "    ";
-                    // If this is not the highest version of this dependency, add a line
-                    // but comment it out by adding leading slashes.
-                    if(dependenciesMaxVersions[packageVersionlessKey] != packageVersion) {
+                    if (packageSpecStringsToComment.Contains(packageSpecAndSources.Key)) {
                         PlayServicesResolver.Log(
                             String.Format(
                                 "Ignoring duplicate package {0} with older version.",
-                                 packageSpecString),
+                                 packageSpecAndSources.Key),
                                  level: LogLevel.Info
                             );
                         line += "// ";
                     }
-
                     line += String.Format(
-                            "{0} '{1}' // {2}", includeStatement, packageSpecString,
-                            packageSourcesString);
+                            "{0} '{1}' // {2}", includeStatement, packageSpecAndSources.Key,
+                            packageSpecAndSources.Value);
                     lines.Add(line);
                 }
                 if (includeDependenciesBlock) lines.Add("}");
