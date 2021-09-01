@@ -34,7 +34,7 @@ internal class AndroidAbis {
         public enum Mode {
             FatOnly, // Only supports fat (armeabi-v7a & x86) builds.
             OneOfArmX86Fat, // Supports one of armeabi-v7a, x86 or fat builds.
-            AnyOfArmX86Arm64, // Supports any combination of armeabi-v7a, x86 or arm64 builds.
+            AnyOfArmX86Arm64, // Supports any combination of armeabi-v7a, x86, x86_64 or arm64 builds.
         }
 
         /// <summary>
@@ -74,7 +74,8 @@ internal class AndroidAbis {
                 foreach (var abi in new Dictionary<string, string>() {
                              {"armeabi-v7a", "ARMv7"},
                              {"arm64-v8a", "ARM64"},
-                             {"x86", "X86"}
+                             {"x86", "X86"},
+                             {"x86_64", "X86_64"}
                          }) {
                     try {
                         EnumValueStringToULong(EnumType, abi.Value);
