@@ -240,6 +240,7 @@ internal class AndroidAbis {
 
     /// <summary>
     /// Get / set the target device ABI (Unity >= 5.0.x)
+    /// Unity >= 2019.4 supports armeabi-v7a, arm64-v8a, x86, x86_64 & fat (i.e armeabi-v7a, arm64, x86, x86_64)
     /// Unity >= 2017.4 supports armeabi-v7a, arm64-v8a, x86 & fat (i.e armeabi-v7a, arm64, x86)
     /// Unity >= 5.0.x & &lt;= 2017.3 only support armeabi-v7a, x86 & fat (i.e armeabi-v7a & x86)
     /// </summary>
