@@ -1,10 +1,13 @@
 {
     "1.2.137": {
+        "com.google.external-dependency-manager/CHANGELOG.md": "dd6a29a412594aadb37d9698db325eca",
         "com.google.external-dependency-manager/ExternalDependencyManager": "46f5870ddbde4a6091f50656dcd5573e",
         "com.google.external-dependency-manager/ExternalDependencyManager/Editor": "1f23cd25474841f6ad7555705b4807e9",
-        "com.google.external-dependency-manager/package.json": "9bed450d5c03481d87e61b61431cf00a",
-        "com.google.external-dependency-manager/CHANGELOG.md": "dd6a29a412594aadb37d9698db325eca",
         "com.google.external-dependency-manager/LICENSE.md": "f61a1c8e753b496bb696e77d7eedfb95",
-        "com.google.external-dependency-manager/README.md": "cbbebcaa6ecb4b9582dce440a386de75"
+        "com.google.external-dependency-manager/README.md": "cbbebcaa6ecb4b9582dce440a386de75",
+        "com.google.external-dependency-manager/package.json": "9bed450d5c03481d87e61b61431cf00a"
+    },
+    "1.2.166": {
+        "com.google.external-dependency-manager/ExternalDependencyManager/Editor/1.2.166": "9dfec94683154487ab08de0c50179674"
     }
 }
