@@ -15,10 +15,10 @@
           "platforms": [],
           "labels": ["gvhp_targets-editor"],
           "paths": [
-            "ExternalDependencyManager/Editor/Google.IOSResolver_*.*",
-            "ExternalDependencyManager/Editor/Google.JarResolver_*.*",
-            "ExternalDependencyManager/Editor/Google.VersionHandlerImpl_*.*",
-            "ExternalDependencyManager/Editor/Google.PackageManagerResolver_*.*"
+            "ExternalDependencyManager/Editor/*/Google.IOSResolver.*",
+            "ExternalDependencyManager/Editor/*/Google.JarResolver.*",
+            "ExternalDependencyManager/Editor/*/Google.VersionHandlerImpl.*",
+            "ExternalDependencyManager/Editor/*/Google.PackageManagerResolver.*"
           ],
           "override_metadata_upm": {
             "PluginImporter": {

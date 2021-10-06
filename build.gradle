@@ -290,6 +290,8 @@ project.ext {
   pipExe = new File(pythonBinDir, "pip3")
   // Python packages required by export_unity_package.py
   exportUnityPackageRequirements = ["absl-py", "PyYAML"]
+  // Python packages required by gen_guids.py
+  genGuidRequirements = ["absl-py"]
 }
 
 // Configure com.jetbrains.python.envs to bootstrap a Python install.
@@ -485,11 +487,13 @@ List<String> splitFilenameExtension(File fileObj) {
  * @param fileObj File to add version to.
  * @param fullVersionPrefix if true uses the "_version-" otherwise uses "_v-".
  * @param postfix Optional string to add before the extensioon.
+ * @param useVersionDir If true, place the file to be under a folder named after
+ *        the version number, instead of changing the filename.
  *
  * @returns File which includes an encoded version.
  */
 File versionedAssetFile(File fileObj, Boolean fullVersionPrefix,
-                        String postfix) {
+                        String postfix, Boolean useVersionDir) {
   String basename
   String extension
   (basename, extension) = splitFilenameExtension(fileObj)
@@ -497,12 +501,17 @@ File versionedAssetFile(File fileObj, Boolean fullVersionPrefix,
   // ${dllname}_version-${version}.dll
   String targetName = basename
   String version = project.ext.pluginVersion
+  File dllDir = fileObj.parent != null ? new File(fileObj.parent) :
+        new File()
   if (!(version == null || version.isEmpty())) {
-    targetName += (fullVersionPrefix ? "_version-" : "_v") + version
+    if (useVersionDir) {
+      dllDir = new File(dllDir, version)
+    } else {
+      targetName += (fullVersionPrefix ? "_version-" : "_v") + version
+    }
   }
   String filename = targetName + postfix + extension
-  return fileObj.parent != null ? new File(fileObj.parent, filename) :
-    new File(filename)
+  return new File(dllDir, filename)
 }
 
 /*
@@ -636,7 +645,8 @@ File copyAssetMetadataFile(File sourceFile, File targetFile) {
       def guidMatch = (line =~ /^(guid:)\s+(.*)/)
       def versionLabelMatch = (line =~ versionRegEx)
       def exportPathMatch = (line =~ exportPathRegEx)
-      if (guidMatch.matches() && sourceFile.name != targetFile.name) {
+      if (guidMatch.matches() && (sourceFile.name != targetFile.name ||
+            sourceFile.parent != targetFile.parent ) ) {
         // Update the metadata's GUID.
         // If a file is renamed we want to make sure Unity imports it as a new
         // asset with the new filename.
@@ -821,7 +831,7 @@ Task createBuildPluginDllTask(String componentName,
       return [
         unversionedFile.path,
         versionDll ?
-          versionedAssetFile(unversionedOutputFile, false, "") :
+          versionedAssetFile(unversionedOutputFile, false, "", true) :
           unversionedOutputFile]
     }
 
@@ -1320,6 +1330,30 @@ Task createExportUnityPackageTask(String taskName,
   return exportUnityPackageTask
 }
 
+Task createGenGuidTask(String taskName,
+                       String description,
+                       File guidsFile,
+                       String pluginVersion,
+                       Iterable<String> guidPath) {
+  File genGuidScript = new File(project.ext.exportUnityPackageDir,
+                               "gen_guids.py")
+  Task genGuidTask = createPythonTask(
+    taskName,
+    description,
+    [],
+    genGuidScript,
+    ["--version", pluginVersion,
+     "--guids_file", guidsFile] +
+    guidPath,
+    genGuidRequirements)
+  genGuidTask.with {
+    inputs.files ([guidsFile] +
+                  [genGuidScript])
+  }
+  return genGuidTask
+}
+
+
 Task testResolverLibTests = createNUnitTask(
   "testResolverLibTests",
   "Runs the tests for the deprecated Jar Resolver library",
@@ -1487,9 +1521,15 @@ task generatePluginManifest(dependsOn: [preparePluginStagingAreaDir,
                       project.ext.pluginEditorDllDir.path),
              unversionedManifestName + project.ext.unityMetadataExtension)
   File manifestFile = versionedAssetFile(
-    new File(outputDir, unversionedManifestName), true, "_manifest")
+    new File(outputDir, unversionedManifestName),
+    true,
+    "_manifest",
+    false)
   File manifestMetadataFile = versionedAssetFile(
-    new File(outputDir, manifestMetadataTemplateFile.name), true, "_manifest")
+    new File(outputDir, manifestMetadataTemplateFile.name),
+    true,
+    "_manifest",
+    false)
 
   description "Generate a manifest for the files in the plug-in."
   inputs.files files(manifestMetadataTemplateFile)
@@ -1549,10 +1589,24 @@ buildPlugin.with {
   outputs.files project.ext.pluginExportFile.absolutePath
 }
 
+// Guid paths for UPM package.
+File upmPluginPackageDir = new File("com.google.external-dependency-manager",
+    "ExternalDependencyManager")
+File upmPluginEditorDir = new File(upmPluginPackageDir, "Editor")
+File upmPluginDllDir = new File(upmPluginEditorDir, project.ext.pluginVersion)
+
+Task genGuidUpm = createGenGuidTask(
+  "genGuidUpm",
+  "Generate GUID for .tgz packaging.",
+  new File(project.ext.scriptDirectory, "export_unity_package_guids.json"),
+  project.ext.pluginVersion,
+  [upmPluginDllDir.path]
+)
+
 Task buildUpmPlugin = createExportUnityPackageTask(
   "buildUpmPlugin",
-  "Package the .unitypackage with export_unity_package.py.",
-  [generatePluginManifest],
+  "Package the .tgz with export_unity_package.py.",
+  [generatePluginManifest, genGuidUpm],
   new File(project.ext.scriptDirectory, "export_unity_package_config.json"),
   new File(project.ext.scriptDirectory, "export_unity_package_guids.json"),
   new File(project.ext.pluginStagingAreaDir, "Assets"),
