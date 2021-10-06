@@ -515,13 +515,17 @@ File versionedAssetFile(File fileObj, Boolean fullVersionPrefix,
 }
 
 /*
- * Remove the version component from a filename.
+ * Remove the version component from a path. (Both its filename and its parent
+ * folder)
  *
  * @param fileObj File to remove version from.
  *
  * @returns File with removed version string.
  */
 File unversionedAssetFile(File fileObj) {
+  // Remove the version postfix. Ex.
+  // "ExternalDependencyManager/Editor/Google.IOSResolver_v1.2.166.dll" ->
+  // "ExternalDependencyManager/Editor/Google.IOSResolver.dll"
   String basename
   String extension
   (basename, extension) = splitFilenameExtension(fileObj)
@@ -537,8 +541,20 @@ File unversionedAssetFile(File fileObj) {
     }
   }
   String filename = basename + extension
-  return fileObj.parent != null ?
-    new File(fileObj.parent, filename) : new File(filename)
+
+  // Remove the version folder as well. Ex.
+  // "ExternalDependencyManager/Editor/1.2.166/Google.IOSResolver.dll" ->
+  // "ExternalDependencyManager/Editor/Google.IOSResolver.dll"
+  def versionFolderRegEx = /^[0-9]+\.[0-9]+\.[0-9]+$/
+  File parent = fileObj.parent != null ? new File(fileObj.parent) : null
+  if (parent != null) {
+      String parentFolder = parent.name
+      def folderMatch = parentFolder =~ versionFolderRegEx
+      if (folderMatch.matches()) {
+          parent = parent.parent != null ? new File(parent.parent) : null
+      }
+  }
+  return parent != null ? new File(parent, filename) : new File(filename)
 }
 
 /*
