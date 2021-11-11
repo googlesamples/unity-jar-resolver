@@ -991,7 +991,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         /// Add metadata to the set.
         /// </summary>
         public void Add(FileMetadata metadata) {
-            System.Diagnostics.Debug.Assert(
+            Debug.Assert(
                 filenameCanonical == null ||
                 metadata.filenameCanonical.Equals(filenameCanonical));
             metadataByVersion[metadata.CalculateVersion()] = metadata;
@@ -2311,7 +2311,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         if (!Enabled) {
             return;
         }
-        
+
         UpdateVersionedAssets();
         NotifyWhenCompliationComplete(false);
         UpdateAssetsWithBuildTargets(EditorUserBuildSettings.activeBuildTarget);
