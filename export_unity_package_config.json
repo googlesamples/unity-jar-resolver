@@ -22,11 +22,15 @@
           ],
           "override_metadata_upm": {
             "PluginImporter": {
-              "platformData": {
-                "Editor": {
-                  "enabled": 1
+              "platformData": [ {
+                  "first" : {
+                      "Editor": "Editor"
+                  },
+                  "second": {
+                      "enabled": 1
+                  }
                 }
-              }
+              ]
             }
           }
         },
