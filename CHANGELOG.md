@@ -1,3 +1,8 @@
+# Version 1.2.168 - Dec 9, 2021
+* All - Fixes #472 by removing the use of `System.Diagnostics.Debug.Assert`
+* All - Fixed #477 by properly enabling EDM4U libraries for Unity 2021.2+ when
+  the package is installed through `.tgz`
+
 # Version 1.2.167 - Oct 6, 2021
 * All - Moved versioned `.dll` in EDM4U to a versioned folder and remove their
   version postfix in their filename. For instance, `IOSResolver.dll` will be
