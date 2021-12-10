@@ -22,6 +22,8 @@ Assets/ExternalDependencyManager/Editor/Google.VersionHandlerImpl_v1.2.144.dll
 Assets/ExternalDependencyManager/Editor/Google.VersionHandlerImpl_v1.2.144.dll.mdb
 Assets/ExternalDependencyManager/Editor/Google.VersionHandlerImpl_v1.2.144.dll.mdb.meta
 Assets/ExternalDependencyManager/Editor/Google.VersionHandlerImpl_v1.2.144.dll.meta
+Assets/ExternalDependencyManager/Editor/GoogleRegistries.xml
+Assets/ExternalDependencyManager/Editor/GoogleRegistries.xml.meta
 Assets/ExternalDependencyManager/Editor/LICENSE
 Assets/ExternalDependencyManager/Editor/LICENSE.meta
 Assets/ExternalDependencyManager/Editor/README.md
