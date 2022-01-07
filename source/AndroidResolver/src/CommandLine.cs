@@ -541,7 +541,7 @@ namespace GooglePlayServices
                 string toolPath, string arguments, string workingDirectory = null,
                 Dictionary<string, string> envVars = null,
                 IOHandler ioHandler = null, bool useShellExecution = false,
-                bool stdoutRedirectionInShellMode = true) {
+                bool stdoutRedirectionInShellMode = true, bool setLangInShellMode = false) {
             bool consoleConfigurationWarning = false;
             Encoding inputEncoding = Console.InputEncoding;
             Encoding outputEncoding = Console.OutputEncoding;
@@ -591,6 +591,7 @@ namespace GooglePlayServices
                 string shellArgPrefix;
                 string shellArgPostfix;
                 string escapedToolPath = toolPath;
+                string additionalCommands = "";
                 if (UnityEngine.RuntimePlatform.WindowsEditor == UnityEngine.Application.platform) {
                     shellCmd = "cmd.exe";
                     shellArgPrefix = "/c \"";
@@ -600,9 +601,13 @@ namespace GooglePlayServices
                     shellArgPrefix = "-l -c '";
                     shellArgPostfix = "'";
                     escapedToolPath = toolPath.Replace("'", "'\\''");
+                    if (UnityEngine.RuntimePlatform.OSXEditor == UnityEngine.Application.platform
+                            && envVars != null && envVars.ContainsKey("LANG") && setLangInShellMode) {
+                        additionalCommands = String.Format("export {0}={1}; ", "LANG", envVars["LANG"]);
+                    }
                 }
-                arguments = String.Format("{0}\"{1}\" {2} 1> {3} 2> {4}{5}", shellArgPrefix,
-                                          escapedToolPath, arguments, stdoutFileName,
+                arguments = String.Format("{0}{1}\"{2}\" {3} 1> {4} 2> {5}{6}", shellArgPrefix,
+                                          additionalCommands, escapedToolPath, arguments, stdoutFileName,
                                           stderrFileName, shellArgPostfix);
                 toolPath = shellCmd;
             }

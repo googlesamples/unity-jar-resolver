@@ -33,6 +33,7 @@ public class IOSResolverSettingsDialog : EditorWindow
     private class Settings {
         internal bool podfileGenerationEnabled;
         internal bool podToolExecutionViaShellEnabled;
+        internal bool podToolShellExecutionSetLang;
         internal bool autoPodToolInstallInEditorEnabled;
         internal bool verboseLoggingEnabled;
         internal int cocoapodsIntegrationMenuIndex;
@@ -49,6 +50,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         internal Settings() {
             podfileGenerationEnabled = IOSResolver.PodfileGenerationEnabled;
             podToolExecutionViaShellEnabled = IOSResolver.PodToolExecutionViaShellEnabled;
+            podToolShellExecutionSetLang = IOSResolver.PodToolShellExecutionSetLang;
             autoPodToolInstallInEditorEnabled = IOSResolver.AutoPodToolInstallInEditorEnabled;
             verboseLoggingEnabled = IOSResolver.VerboseLoggingEnabled;
             cocoapodsIntegrationMenuIndex = FindIndexFromCocoapodsIntegrationMethod(
@@ -67,6 +69,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         internal void Save() {
             IOSResolver.PodfileGenerationEnabled = podfileGenerationEnabled;
             IOSResolver.PodToolExecutionViaShellEnabled = podToolExecutionViaShellEnabled;
+            IOSResolver.PodToolShellExecutionSetLang = podToolShellExecutionSetLang;
             IOSResolver.AutoPodToolInstallInEditorEnabled = autoPodToolInstallInEditorEnabled;
             IOSResolver.VerboseLoggingEnabled = verboseLoggingEnabled;
             IOSResolver.CocoapodsIntegrationMethodPref =
@@ -107,7 +110,7 @@ public class IOSResolverSettingsDialog : EditorWindow
     }
 
     public void Initialize() {
-        minSize = new Vector2(400, 700);
+        minSize = new Vector2(400, 715);
         position = new Rect(UnityEngine.Screen.width / 3, UnityEngine.Screen.height / 3,
                             minSize.x, minSize.y);
     }
@@ -168,9 +171,16 @@ public class IOSResolverSettingsDialog : EditorWindow
         settings.podToolExecutionViaShellEnabled =
             EditorGUILayout.Toggle(settings.podToolExecutionViaShellEnabled);
         GUILayout.EndHorizontal();
+        GUILayout.Label("Shell execution is useful when configuration in the shell " +
+                        "environment (e.g ~/.profile) is required to execute Cocoapods tools.");
+
         if (settings.podToolExecutionViaShellEnabled) {
-            GUILayout.Label("Shell execution is useful when configuration in the shell " +
-                            "environment (e.g ~/.profile) is required to execute Cocoapods tools.");
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Set LANG When Using Shell to Execute Cocoapod Tool", EditorStyles.boldLabel);
+            settings.podToolShellExecutionSetLang =
+                EditorGUILayout.Toggle(settings.podToolShellExecutionSetLang);
+            GUILayout.EndHorizontal();
+            GUILayout.Label("Useful for versions of cocoapods that depend on the value of LANG.");
         }
 
         GUILayout.BeginHorizontal();
@@ -280,6 +290,9 @@ public class IOSResolverSettingsDialog : EditorWindow
                     new KeyValuePair<string, string>(
                         "podToolExecutionViaShellEnabled",
                         IOSResolver.PodToolExecutionViaShellEnabled.ToString()),
+                    new KeyValuePair<string, string>(
+                        "podToolShellExecutionSetLang",
+                        IOSResolver.PodToolShellExecutionSetLang.ToString()),
                     new KeyValuePair<string, string>(
                         "autoPodToolInstallInEditorEnabled",
                         IOSResolver.AutoPodToolInstallInEditorEnabled.ToString()),
