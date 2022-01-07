@@ -462,6 +462,9 @@ public class IOSResolver : AssetPostprocessor {
     // Whether execution of the pod tool is performed via the shell.
     private const string PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED =
         PREFERENCE_NAMESPACE + "PodToolExecutionViaShellEnabled";
+    // Whether environment variables should be set when execution is performed via the shell.
+    private const string PREFERENCE_POD_TOOL_SHELL_EXECUTION_SET_LANG =
+        PREFERENCE_NAMESPACE + "PodToolShellExecutionSetLang";
     // Whether to try to install Cocoapods tools when iOS is selected as the target platform.
     private const string PREFERENCE_AUTO_POD_TOOL_INSTALL_IN_EDITOR =
         PREFERENCE_NAMESPACE + "AutoPodToolInstallInEditor";
@@ -955,8 +958,17 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static bool PodToolExecutionViaShellEnabled {
         get { return settings.GetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED,
-                                      defaultValue: false); }
+                                      defaultValue: true); }
         set { settings.SetBool(PREFERENCE_POD_TOOL_EXECUTION_VIA_SHELL_ENABLED, value); }
+    }
+
+    /// <summary>
+    /// Enable / disable setting of environment variables when executing pod tool via the shell.
+    /// </summary>
+    public static bool PodToolShellExecutionSetLang {
+        get { return settings.GetBool(PREFERENCE_POD_TOOL_SHELL_EXECUTION_SET_LANG,
+                                      defaultValue: true); }
+        set { settings.SetBool(PREFERENCE_POD_TOOL_SHELL_EXECUTION_SET_LANG, value); }
     }
 
     /// <summary>
@@ -2383,7 +2395,8 @@ public class IOSResolver : AssetPostprocessor {
                 Log(command.ToString(), verbose: true);
                 var result = CommandLine.RunViaShell(
                     command.Command, command.Arguments, workingDirectory: command.WorkingDirectory,
-                    envVars: envVars, useShellExecution: PodToolExecutionViaShellEnabled);
+                    envVars: envVars, useShellExecution: PodToolExecutionViaShellEnabled,
+                    setLangInShellMode: PodToolShellExecutionSetLang);
                 LogCommandLineResult(command.ToString(), result);
                 index = completionDelegate(index, commands, result, null);
             }
