@@ -17,6 +17,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Xml;
 using UnityEditor;
 
@@ -820,6 +821,7 @@ namespace Google {
                     using (var writer =
                            XmlWriter.Create(PROJECT_SETTINGS_FILE,
                                             new XmlWriterSettings {
+                                                Encoding = new UTF8Encoding(false),
                                                 Indent = true,
                                                 IndentChars = "  ",
                                                 NewLineChars = "\n",
