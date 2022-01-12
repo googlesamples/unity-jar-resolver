@@ -2166,8 +2166,8 @@ namespace GooglePlayServices {
                 }
 
                 lines.Add("        mavenLocal()");
-                lines.Add("        jcenter()");
                 lines.Add("        mavenCentral()");
+                lines.Add("        jcenter()");
                 lines.Add("    }");
                 lines.Add("}");
             }
