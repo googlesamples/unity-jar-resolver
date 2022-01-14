@@ -535,6 +535,8 @@ namespace GooglePlayServices
         /// executing a command via the shell.  This requires:
         /// * cmd.exe (on Windows) or bash (on OSX / Linux) are in the path.
         /// * Arguments containing whitespace are quoted.</param>
+        /// <param name="setLangInShellMode">Causes environment variable LANG to be explicitly set
+        /// when  executing a command via the shell.  This is only applicable to OSX.</param>
         /// <returns>CommandLineTool result if successful, raises an exception if it's not
         /// possible to execute the tool.</returns>
         public static Result RunViaShell(
