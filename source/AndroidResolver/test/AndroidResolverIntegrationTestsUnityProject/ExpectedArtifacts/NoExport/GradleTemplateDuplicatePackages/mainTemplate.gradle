@@ -2,7 +2,6 @@
 
 buildscript {
     repositories {
-        jcenter()
         google()
     }
 
@@ -36,7 +35,6 @@ allprojects {
             url (unityProjectPath + "/Assets/GeneratedLocalRepo/Firebase/m2repository") // Assets/ExternalDependencyManager/Editor/TestDependencies.xml:10
         }
         mavenLocal()
-        jcenter()
         mavenCentral()
     }
 }
