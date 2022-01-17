@@ -42,7 +42,7 @@ USE_MAVEN_LOCAL_REPO (optional project property):
   By default local maven repositories are enabled.
 USE_REMOTE_MAVEN_REPOS (optional project property):
   Optional property which, when not set to 1, disables the implicit use of
-  remote repositories (maven.google.com, jcenter and maven central) when
+  remote repositories (maven.google.com and maven central) when
   fetching artifacts.  By default remote repositories are enabled.
 USE_JETIFIER (optional project property):
   Optional project which, when not set to 1, disables the Jetifier tool to
@@ -70,7 +70,6 @@ buildscript {
   repositories {
     mavenLocal()
     mavenCentral()
-    jcenter()
     google()
   }
   dependencies {
@@ -2521,7 +2520,6 @@ project.ext {
     }
     if (useMavenLocalRepo) mavenLocal()
     if (useRemoteMavenRepos) {
-      jcenter()
       mavenCentral()
     }
   }

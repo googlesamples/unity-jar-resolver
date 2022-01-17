@@ -64,7 +64,6 @@ buildscript {
   repositories {
     mavenLocal()
     mavenCentral()
-    jcenter()
   }
   dependencies {
     classpath "commons-io:commons-io:2.6"
