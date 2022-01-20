@@ -1,8 +1,8 @@
 fileFormatVersion: 2
-guid: 18cf1ab3dd0046fc89cbc79e4b22fb15
+guid: f0ebd68c0b4541ada7e16bfce4ef4155
 labels:
-- gvh_version-1.2.168
-- gvhp_exportpath-ExternalDependencyManager/Editor/external-dependency-manager_version-1.2.168_manifest.txt
+- gvh_version-1.2.169
+- gvhp_exportpath-ExternalDependencyManager/Editor/external-dependency-manager_version-1.2.169_manifest.txt
 - gvh
 - gvh_manifest
 - gvhp_manifestname-0External Dependency Manager

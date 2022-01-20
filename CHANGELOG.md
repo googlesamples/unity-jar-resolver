@@ -1,3 +1,10 @@
+# Version 1.2.169 - Jan 20, 2021
+* General - Fixes #425 - Change to save `GvhProjectSettings.xml` without
+  Unicode byte order mark (BoM).
+* Android Resolver - Remove reference to `jcenter()`
+* iOS Resolver - Force setting `LANG` when executing Cocoapods in shell mode on
+  Mac.
+
 # Version 1.2.168 - Dec 9, 2021
 * All - Fixes #472 by removing the use of `System.Diagnostics.Debug.Assert`
 * All - Fixed #477 by properly enabling EDM4U libraries for Unity 2021.2+ when
