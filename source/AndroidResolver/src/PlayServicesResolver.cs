@@ -2143,8 +2143,14 @@ namespace GooglePlayServices {
                         // If "Export Gradle Project" setting is enabled, gradle project expects
                         // absolute path.
                         if (exportEnabled) {
-                            repoUri = String.Format("\"{0}\"",
-                                                    Path.Combine(projectFileUri, repoPath));
+                            if((SystemInfo.operatingSystem).Contains("Windows")){
+                                repoUri = String.Format("\"{0}\"",
+                                                        Path.Combine(projectFileUri, repoPath).Replace("\\", "/"));
+                            } else {
+                                repoUri = String.Format("\"{0}\"",
+                                                        Path.Combine(projectFileUri, repoPath));
+                            }
+
                         } else {
                             repoUri = String.Format("(unityProjectPath + \"/{0}\")", repoPath);
                         }
