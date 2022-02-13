@@ -77,7 +77,7 @@ public class IOSResolver : AssetPostprocessor {
         /// See: https://guides.cocoapods.org/syntax/podfile.html#source
         /// </summary>
         public List<string> sources = new List<string>() {
-            "https://github.com/CocoaPods/Specs.git"
+            "https://cdn.cocoapods.org/"
         };
 
         /// <summary>
