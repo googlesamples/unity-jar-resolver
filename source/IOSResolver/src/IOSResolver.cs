@@ -1032,7 +1032,7 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static bool PodfileStaticLinkFrameworks {
         get { return settings.GetBool(PREFERENCE_PODFILE_STATIC_LINK_FRAMEWORKS,
-                                    defaultValue: false); }
+                                    defaultValue: true); }
         set {
             settings.SetBool(PREFERENCE_PODFILE_STATIC_LINK_FRAMEWORKS, value);
         }

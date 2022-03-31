@@ -222,6 +222,8 @@ public class IOSResolverSettingsDialog : EditorWindow
                 settings.podfileStaticLinkFrameworks =
                     EditorGUILayout.Toggle(settings.podfileStaticLinkFrameworks);
                 GUILayout.EndHorizontal();
+                GUILayout.Label("Link frameworks statically is recommended just in case any pod " +
+                                "framework includes static libraries.");
             }
 
             if (IOSResolver.MultipleXcodeTargetsSupported) {
