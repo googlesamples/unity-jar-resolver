@@ -1048,7 +1048,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Ehether to enable Swift Framework support workaround.
+    /// Whether to enable Swift Framework support workaround.
     /// If enabled, iOS Resolver adds a Dummy.swift to the generated Xcode project, and change build
     //  properties in order to properly include Swift Standard Libraries.
     /// </summary>
@@ -2030,7 +2030,6 @@ public class IOSResolver : AssetPostprocessor {
     public static void OnPostProcessGenPodfile(BuildTarget buildTarget,
                                                string pathToBuiltProject) {
         if (!InjectDependencies() || !PodfileGenerationEnabled) return;
-        Log("OnPostProcessGenPodfile!", level: LogLevel.Error);
         GenPodfile(buildTarget, pathToBuiltProject);
     }
 

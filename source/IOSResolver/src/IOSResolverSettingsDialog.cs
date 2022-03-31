@@ -284,8 +284,8 @@ public class IOSResolverSettingsDialog : EditorWindow
                     settings.swiftLanguageVersion =
                         EditorGUILayout.TextField(settings.swiftLanguageVersion);
                     GUILayout.EndHorizontal();
-                    GUILayout.Label("Used to set 'SWIFT_VERSION' build setting in Xcode. Leave " +
-                                    "it blank to update it manually.");
+                    GUILayout.Label("Used to override 'SWIFT_VERSION' build setting in Xcode. " +
+                                    "Leave it blank to prevent override.");
                 }
             }
 
