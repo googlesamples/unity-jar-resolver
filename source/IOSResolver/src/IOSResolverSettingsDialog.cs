@@ -39,6 +39,8 @@ public class IOSResolverSettingsDialog : EditorWindow
         internal int cocoapodsIntegrationMenuIndex;
         internal bool podfileAddUseFrameworks;
         internal bool podfileStaticLinkFrameworks;
+        internal bool swiftFrameworkSupportWorkaroundEnabled;
+        internal string swiftLanguageVersion;
         internal bool podfileAlwaysAddMainTarget;
         internal bool podfileAllowPodsInMultipleTargets;
         internal bool useProjectSettings;
@@ -57,6 +59,9 @@ public class IOSResolverSettingsDialog : EditorWindow
                 IOSResolver.CocoapodsIntegrationMethodPref);
             podfileAddUseFrameworks = IOSResolver.PodfileAddUseFrameworks;
             podfileStaticLinkFrameworks = IOSResolver.PodfileStaticLinkFrameworks;
+            swiftFrameworkSupportWorkaroundEnabled =
+                IOSResolver.SwiftFrameworkSupportWorkaroundEnabled;
+            swiftLanguageVersion = IOSResolver.SwiftLanguageVersion;
             podfileAlwaysAddMainTarget = IOSResolver.PodfileAlwaysAddMainTarget;
             podfileAllowPodsInMultipleTargets = IOSResolver.PodfileAllowPodsInMultipleTargets;
             useProjectSettings = IOSResolver.UseProjectSettings;
@@ -76,6 +81,9 @@ public class IOSResolverSettingsDialog : EditorWindow
                 integrationMapping[cocoapodsIntegrationMenuIndex];
             IOSResolver.PodfileAddUseFrameworks = podfileAddUseFrameworks;
             IOSResolver.PodfileStaticLinkFrameworks = podfileStaticLinkFrameworks;
+            IOSResolver.SwiftFrameworkSupportWorkaroundEnabled =
+                swiftFrameworkSupportWorkaroundEnabled;
+            IOSResolver.SwiftLanguageVersion = swiftLanguageVersion;
             IOSResolver.PodfileAlwaysAddMainTarget = podfileAlwaysAddMainTarget;
             IOSResolver.PodfileAllowPodsInMultipleTargets = podfileAllowPodsInMultipleTargets;
             IOSResolver.UseProjectSettings = useProjectSettings;
@@ -98,6 +106,8 @@ public class IOSResolverSettingsDialog : EditorWindow
         IOSResolver.CocoapodsIntegrationMethod.Project,
         IOSResolver.CocoapodsIntegrationMethod.None,
     };
+
+    private Vector2 scrollPosition = new Vector2(0, 0);
 
     // enum to index (linear search because there's no point in creating a reverse mapping
     // with such a small list).
@@ -136,6 +146,8 @@ public class IOSResolverSettingsDialog : EditorWindow
                                       IOSResolverVersionNumber.Value.Major,
                                       IOSResolverVersionNumber.Value.Minor,
                                       IOSResolverVersionNumber.Value.Build));
+
+        scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Podfile Generation", EditorStyles.boldLabel);
@@ -250,6 +262,33 @@ public class IOSResolverSettingsDialog : EditorWindow
                 }
             }
 
+            if (settings.podfileAddUseFrameworks) {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Enable Swift Framework Support Workaround",
+                    EditorStyles.boldLabel);
+                settings.swiftFrameworkSupportWorkaroundEnabled =
+                    EditorGUILayout.Toggle(settings.swiftFrameworkSupportWorkaroundEnabled);
+                GUILayout.EndHorizontal();
+                GUILayout.Label("This workround patches the Xcode project to properly link Swift " +
+                                "Standard Library when some plugins depend on Swift Framework " +
+                                "pods by:");
+                GUILayout.Label("1. Add a dummy Swift file to Xcode project.");
+                GUILayout.Label("2. Enable 'CLANG_ENABLE_MODULES' and " +
+                                "'ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES' build settings and set " +
+                                "'SWIFT_VERSION' to the value below.");
+
+                if (settings.swiftFrameworkSupportWorkaroundEnabled) {
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Label("Swift Framework Version",
+                        EditorStyles.boldLabel);
+                    settings.swiftLanguageVersion =
+                        EditorGUILayout.TextField(settings.swiftLanguageVersion);
+                    GUILayout.EndHorizontal();
+                    GUILayout.Label("Used to set 'SWIFT_VERSION' build setting in Xcode. Leave " +
+                                    "it blank to update it manually.");
+                }
+            }
+
             GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(1));
         }
 
@@ -265,8 +304,11 @@ public class IOSResolverSettingsDialog : EditorWindow
         settings.useProjectSettings = EditorGUILayout.Toggle(settings.useProjectSettings);
         GUILayout.EndHorizontal();
 
-        GUILayout.Space(10);
+        EditorGUILayout.EndScrollView();
+        GUILayout.EndVertical();
 
+        GUILayout.BeginVertical();
+        GUILayout.Space(10);
         if (GUILayout.Button("Reset to Defaults")) {
             // Load default settings into the dialog but preserve the state in the user's
             // saved preferences.
@@ -316,6 +358,12 @@ public class IOSResolverSettingsDialog : EditorWindow
                     new KeyValuePair<string, string>(
                         "podfileAllowPodsInMultipleTargets",
                         IOSResolver.PodfileAllowPodsInMultipleTargets.ToString()),
+                    new KeyValuePair<string, string>(
+                        "swiftFrameworkSupportWorkaroundEnabled",
+                        IOSResolver.SwiftFrameworkSupportWorkaroundEnabled.ToString()),
+                    new KeyValuePair<string, string>(
+                        "swiftLanguageVersion",
+                        IOSResolver.SwiftLanguageVersion.ToString()),
                 },
                 "Settings Save");
             settings.Save();
