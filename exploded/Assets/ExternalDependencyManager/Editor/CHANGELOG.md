@@ -1,4 +1,19 @@
-# Version 1.2.169 - Jan 20, 2021
+# Version 1.2.170 - Apr 4, 2022
+* Android Resolver - Fixes #498 - Fix the path separator of the Maven repo
+  injected to `mainTemplate.gradle`.
+* iOS Resolver - Fixes #470 - Switch default Cocoapods master repo from Github
+  to CDN.
+* iOS Resolver - `Link Framework Statically` setting is now default to `true`.
+  That is, `use_frameworks! :linkage => static` will be added to `Podfile` by
+  default instead of `use_frameworks!`. This can be changed in iOS Resolver
+  settings. This fixes odd behaviors when pods include static libraries, ex.
+  Firebase Analytics.
+* iOS Resolver - Added a workaround when app crashes on launch due to
+  `Library not loaded: @rpath/libswiftCore.dylib` when some pods includes Swift
+  framework. This is turned `OFF` by default and can be changed in iOS Resolver
+  settings.
+
+# Version 1.2.169 - Jan 20, 2022
 * General - Fixes #425 - Change to save `GvhProjectSettings.xml` without
   Unicode byte order mark (BoM).
 * Android Resolver - Remove reference to `jcenter()`
