@@ -1054,7 +1054,7 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static bool SwiftFrameworkSupportWorkaroundEnabled {
         get { return settings.GetBool(PREFERENCE_SWIFT_FRAMEWORK_SUPPORT_WORKAROUND,
-                                    defaultValue: false); }
+                                    defaultValue: true); }
         set {
             settings.SetBool(PREFERENCE_SWIFT_FRAMEWORK_SUPPORT_WORKAROUND, value);
         }
