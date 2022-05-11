@@ -1,3 +1,7 @@
+# Version 1.2.170 - May 11, 2022
+* iOS Resolver - Change `Enable Swift Framework Support Workaround` setting to
+  be `ON` by default since more pods are using Swift Framework now.
+
 # Version 1.2.170 - Apr 4, 2022
 * Android Resolver - Fixes #498 - Fix the path separator of the Maven repo
   injected to `mainTemplate.gradle`.
