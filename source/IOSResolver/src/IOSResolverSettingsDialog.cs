@@ -264,7 +264,7 @@ public class IOSResolverSettingsDialog : EditorWindow
 
             if (settings.podfileAddUseFrameworks) {
                 GUILayout.BeginHorizontal();
-                GUILayout.Label("Enable Swift Framework Support Workaround",
+                GUILayout.Label("(Recommended) Enable Swift Framework Support Workaround",
                     EditorStyles.boldLabel);
                 settings.swiftFrameworkSupportWorkaroundEnabled =
                     EditorGUILayout.Toggle(settings.swiftFrameworkSupportWorkaroundEnabled);
