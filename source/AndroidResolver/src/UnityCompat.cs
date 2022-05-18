@@ -462,7 +462,7 @@ public class UnityCompat {
     private static bool SetUnity56AndAboveApplicationIdentifier(BuildTarget buildTarget,
                                                                 string applicationIdentifier) {
         var setApplicationIdentifierMethod =
-            typeof(UnityEditor.PlayerSettings).GetMethod("SetApplicationIdentifier");
+            typeof(UnityEditor.PlayerSettings).GetMethod("SetApplicationIdentifier", new[] {typeof(BuildTargetGroup), typeof(string) });
         if (setApplicationIdentifierMethod == null) return false;
         var buildTargetGroup = ConvertBuildTargetToBuildTargetGroup(buildTarget);
         if (buildTargetGroup == BuildTargetGroup.Unknown) return false;
