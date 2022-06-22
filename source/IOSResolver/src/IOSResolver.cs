@@ -2016,7 +2016,6 @@ public class IOSResolver : AssetPostprocessor {
             // generated from 2019.3+.
             if(MultipleXcodeTargetsSupported) {
                 project.SetBuildProperty(target, "CLANG_ENABLE_MODULES", "YES");
-                project.SetBuildProperty(target, "ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES", "YES");
             }
         }
 
