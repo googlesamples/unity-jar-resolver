@@ -1,4 +1,9 @@
-# Version 1.2.170 - May 11, 2022
+# Version 1.2.172 - Jun 23, 2022
+* iOS Resolver - Stop forcing `ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES` to `YES`,
+  which seems to cause problem for some when submitting apps. See #526 for more
+  information.
+
+# Version 1.2.171 - May 11, 2022
 * iOS Resolver - Change `Enable Swift Framework Support Workaround` setting to
   be `ON` by default since more pods are using Swift Framework now.
 
