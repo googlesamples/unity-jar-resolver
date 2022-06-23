@@ -273,8 +273,7 @@ public class IOSResolverSettingsDialog : EditorWindow
                                 "Standard Library when some plugins depend on Swift Framework " +
                                 "pods by:");
                 GUILayout.Label("1. Add a dummy Swift file to Xcode project.");
-                GUILayout.Label("2. Enable 'CLANG_ENABLE_MODULES' and " +
-                                "'ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES' build settings and set " +
+                GUILayout.Label("2. Enable 'CLANG_ENABLE_MODULES' build settings and set " +
                                 "'SWIFT_VERSION' to the value below.");
 
                 if (settings.swiftFrameworkSupportWorkaroundEnabled) {
