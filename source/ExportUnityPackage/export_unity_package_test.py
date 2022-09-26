@@ -1678,6 +1678,7 @@ class AssetTest(absltest.TestCase):
     del platform_data["Win64"]
     del platform_data["WindowsStoreApps"]
     del platform_data["iOS"]
+    del platform_data["tvOS"]
 
     expected_metadata = copy.deepcopy(
         export_unity_package.PLUGIN_IMPORTER_METADATA_TEMPLATE)
@@ -1697,6 +1698,7 @@ class AssetTest(absltest.TestCase):
     platform_data["Win64"]["enabled"] = 1
     platform_data["WindowsStoreApps"]["enabled"] = 1
     platform_data["iOS"]["enabled"] = 1
+    platform_data["tvOS"]["enabled"] = 1
 
     all_platforms_enabled = (
         export_unity_package.Asset.apply_any_platform_selection(
@@ -2050,6 +2052,15 @@ class AssetConfigurationTest(absltest.TestCase):
         export_unity_package.AssetConfiguration(
             self.package, {"importer": "PluginImporter",
                            "platforms": ["iOS"]}).importer_metadata)
+
+  def test_importer_metadata_tvos_only(self):
+    """Create metadata that only targets tvOS."""
+    self.plugin_metadata["PluginImporter"]["platformData"]["tvOS"]["enabled"] = 1
+    self.assertEqual(
+        self.plugin_metadata,
+        export_unity_package.AssetConfiguration(
+            self.package, {"importer": "PluginImporter",
+                           "platforms": ["tvOS"]}).importer_metadata)
 
   def test_importer_metadata_standalone_invalid_cpu(self):
     """Create metadata with an invalid CPU."""

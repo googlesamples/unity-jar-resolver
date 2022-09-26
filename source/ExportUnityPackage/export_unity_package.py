@@ -72,6 +72,7 @@ The json file should have the following format:
                     #    platforms including the editor.
                     # * Android
                     # * iOS
+                    # * tvOS
                     "platforms": ["Editor", "Standalone", "Android", "iOS"],
 
                     # CPUs supported by standalone or editor platforms when the
