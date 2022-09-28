@@ -72,6 +72,7 @@ The json file should have the following format:
                     #    platforms including the editor.
                     # * Android
                     # * iOS
+                    # * tvOS
                     "platforms": ["Editor", "Standalone", "Android", "iOS"],
 
                     # CPUs supported by standalone or editor platforms when the
@@ -404,6 +405,12 @@ DEFAULT_PLATFORM_SETTINGS_DISABLED_IOS = collections.OrderedDict(
         [("CompileFlags", None),
          ("FrameworkDependencies", None)]))])
 
+DEFAULT_PLATFORM_SETTINGS_DISABLED_TVOS = collections.OrderedDict(
+    PLATFORM_SETTINGS_DISABLED +
+    [("settings", collections.OrderedDict(
+        [("CompileFlags", None),
+         ("FrameworkDependencies", None)]))])
+
 PLUGIN_IMPORTER_METADATA_TEMPLATE = collections.OrderedDict(
     [("PluginImporter", collections.OrderedDict(
         [("serializedVersion", 1),
@@ -441,6 +448,8 @@ PLUGIN_IMPORTER_METADATA_TEMPLATE = collections.OrderedDict(
                   DEFAULT_PLATFORM_SETTINGS_DISABLED)),
               ("iOS", copy.deepcopy(
                   DEFAULT_PLATFORM_SETTINGS_DISABLED_IOS)),
+              ("tvOS", copy.deepcopy(
+                  DEFAULT_PLATFORM_SETTINGS_DISABLED_TVOS)),
              ]))
         ] + DEFAULT_IMPORTER_DATA))
     ])
@@ -465,6 +474,7 @@ PLATFORM_TARGET_BY_PLATFORM = {
     "Win64": "Standalone",
     "WindowsStoreApps": "Windows Store Apps",
     "iOS": "iPhone",
+    "tvOS": "tvOS",
 }
 
 # Alias for standalone platforms specified by the keys of
@@ -1755,6 +1765,7 @@ class AssetConfiguration(ConfigurationBlock):
     elif importer_type == "PluginImporter":
       platforms = set(safe_dict_get_value(
           self._json, "platforms", default_value=["Editor", "Android", "iOS",
+                                                  "tvOS",
                                                   STANDALONE_PLATFORM_ALIAS]))
       cpu_string = safe_dict_get_value(self._json, "cpu",
                                        default_value="AnyCPU")
