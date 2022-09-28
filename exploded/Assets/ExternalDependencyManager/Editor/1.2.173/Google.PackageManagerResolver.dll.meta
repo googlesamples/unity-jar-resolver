@@ -1,8 +1,8 @@
 fileFormatVersion: 2
-guid: 90bc0a7b76d346cdb0151348847e8e5d
+guid: 2337b82b1a5f4fb69f73557914ec4a9a
 labels:
-- gvh_version-1.2.172
-- gvhp_exportpath-ExternalDependencyManager/Editor/1.2.172/Google.VersionHandlerImpl.dll
+- gvh_version-1.2.173
+- gvhp_exportpath-ExternalDependencyManager/Editor/1.2.173/Google.PackageManagerResolver.dll
 - gvh
 - gvhp_targets-editor
 PluginImporter:
@@ -14,7 +14,7 @@ PluginImporter:
   isOverridable: 0
   platformData:
   - first:
-      Any: 
+      Any:
     second:
       enabled: 0
       settings: {}
@@ -30,6 +30,6 @@ PluginImporter:
       enabled: 0
       settings:
         CPU: AnyCPU
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
+  userData:
+  assetBundleName:
+  assetBundleVariant:

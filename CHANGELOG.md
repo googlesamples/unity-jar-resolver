@@ -1,3 +1,6 @@
+# Version 1.2.173 - Sep 28, 2022
+* General - added tvOS library support to the export unity package scripts.
+
 # Version 1.2.172 - Jun 23, 2022
 * iOS Resolver - Stop forcing `ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES` to `YES`,
   which seems to cause problem for some when submitting apps. See #526 for more

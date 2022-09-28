@@ -27,5 +27,8 @@
     },
     "1.2.172": {
         "com.google.external-dependency-manager/ExternalDependencyManager/Editor/1.2.172": "3f9604d812054a74a5726176ad683fb3"
+    },
+    "1.2.173": {
+        "com.google.external-dependency-manager/ExternalDependencyManager/Editor/1.2.173": "fdeeb5a9eafe4d2bbd8a94a41eb5302e"
     }
 }
