@@ -53,6 +53,11 @@ namespace Google {
                 new Regex(@"^(Library[/\\]PackageCache[/\\])([^/\\]+)(@[^/\\]+)[/\\](.*)?$");
 
         /// <summary>
+        /// Regex to match invalid GUID like "00000000-0000-0000-0000-000000000000" or "00000000000000000000000000000000"
+        /// </summary>
+        private static Regex ZERO_GUID_REGEX = new Regex(@"^[0-]+$");
+
+        /// <summary>
         /// Returns the project directory (e.g contains the Assets folder).
         /// </summary>
         /// <returns>Full path to the project directory.</returns>
@@ -619,6 +624,22 @@ namespace Google {
         }
 
         /// <summary>
+        /// Check if a guid returned from Unity API is valid.
+        /// </summary>
+        /// <param name="guid">GUID returned from Unity API.</param>
+        /// <returns>True if the guid is valid.</returns>
+        internal static bool IsValidGuid(string guidStr) {
+            if(String.IsNullOrEmpty(guidStr)) return false;
+            try {
+                var guid = new Guid(guidStr);
+                if (guid == Guid.Empty) return false;
+            } catch (FormatException e) {
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>
         /// Recursively create all parent folders given a path.
         /// </summary>
         /// <param name="path">Path to the file/directory that needs checking.</param>
@@ -632,7 +653,15 @@ namespace Google {
             if (!CreateFolder(parentFolder)) {
                 return false;
             }
-            return !String.IsNullOrEmpty(AssetDatabase.CreateFolder(parentFolder, di.Name));
+
+            // Try to use Unity API to create folder. However, some versions of Unity has issue to
+            // create folders with version number in it like '9.0.0'. In this case, instead of
+            // returnig empty guid, it can return guids with all zeroes.
+            if (IsValidGuid(AssetDatabase.CreateFolder(parentFolder, di.Name))) {
+                return true;
+            }
+
+            return Directory.CreateDirectory(path) != null;
         }
 
         /// <summary>
