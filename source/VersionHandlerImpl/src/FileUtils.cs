@@ -53,11 +53,6 @@ namespace Google {
                 new Regex(@"^(Library[/\\]PackageCache[/\\])([^/\\]+)(@[^/\\]+)[/\\](.*)?$");
 
         /// <summary>
-        /// Regex to match invalid GUID like "00000000-0000-0000-0000-000000000000" or "00000000000000000000000000000000"
-        /// </summary>
-        private static Regex ZERO_GUID_REGEX = new Regex(@"^[0-]+$");
-
-        /// <summary>
         /// Returns the project directory (e.g contains the Assets folder).
         /// </summary>
         /// <returns>Full path to the project directory.</returns>
