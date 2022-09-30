@@ -172,7 +172,7 @@ package:
       you add the `-gvh_disable` option.
    1. Export your plugin by [running Unity from the command line](https://docs.unity3d.com/Manual/CommandLineArguments.html), ensuring that
       you:
-      - Include the contents of the `Assets/PlayServicesResolver` and
+      - Include the contents of the `Assets/PlayServicesResolver`(optional) and
         `Assets/ExternalDependencyManager` directory.
       - Add the `-gvh_disable` option.
 
