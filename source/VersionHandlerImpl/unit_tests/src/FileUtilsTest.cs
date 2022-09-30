@@ -391,5 +391,50 @@ namespace Google.VersionHandlerImpl.Tests {
                     "Foo/Bar", "Assets"),
                 Is.EqualTo("Foo/Bar"));
         }
+
+        /// <summary>
+        /// Test FileUtils.IsValidGuid() when it returns true
+        /// </summary>
+        [Test]
+        public void IsValidGuid_TrueCases() {
+            Assert.That(
+                FileUtils.IsValidGuid("4b7c4a82-79ca-4eb5-a154-5d78a3b3d3d7"),
+                Is.EqualTo(true));
+
+            Assert.That(
+                FileUtils.IsValidGuid("017885d9f22374a53844077ede0ccda6"),
+                Is.EqualTo(true));
+        }
+
+        /// <summary>
+        /// Test FileUtils.IsValidGuid() when it returns false
+        /// </summary>
+        [Test]
+        public void IsValidGuid_FalseCases() {
+            Assert.That(
+                FileUtils.IsValidGuid(""),
+                Is.EqualTo(false));
+            Assert.That(
+                FileUtils.IsValidGuid(null),
+                Is.EqualTo(false));
+            Assert.That(
+                FileUtils.IsValidGuid("00000000-0000-0000-0000-000000000000"),
+                Is.EqualTo(false));
+            Assert.That(
+                FileUtils.IsValidGuid("00000000000000000000000000000000"),
+                Is.EqualTo(false));
+            Assert.That(
+                FileUtils.IsValidGuid("g000000000000000000000000000000"),
+                Is.EqualTo(false));
+            Assert.That(
+                FileUtils.IsValidGuid("   "),
+                Is.EqualTo(false));
+            Assert.That(
+                FileUtils.IsValidGuid("12300000 0000 0000 0000 000000000000"),
+                Is.EqualTo(false));
+            Assert.That(
+                FileUtils.IsValidGuid("12300000\n0000\n0000\n0000\n000000000000"),
+                Is.EqualTo(false));
+        }
     }
 }
