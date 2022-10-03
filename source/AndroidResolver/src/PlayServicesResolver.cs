@@ -571,8 +571,17 @@ namespace GooglePlayServices {
         // Gradle plugin version.
         private static DateTime mainTemplateLastWriteTime = default(DateTime);
         // Extracts an Android Gradle Plugin version number from the contents of a *.gradle file.
+        // This should work for Unity 2022.1 and below.
+        // Ex.
+        //   classpath 'com.android.tools.build:gradle:4.0.1'
+        private static Regex androidGradlePluginVersionExtract_legacy = new Regex(
+            @"['""]com\.android\.tools\.build:gradle:([^'""]+)['""]$");
+        // Extracts an Android Gradle Plugin version number from the contents of a *.gradle file for
+        // Unity 2022.2+ or 2023.1+.
+        // Ex.
+        //   id 'com.android.application' version '7.1.2' apply false
         private static Regex androidGradlePluginVersionExtract = new Regex(
-            @"['""]com\.android\.tools\.build:gradle:([^']+)['""]$");
+            @"['""]com\.android\.application['""] version ['""]([^'""]+)['""]");
 
         /// <summary>
         /// Get the Android Gradle Plugin version used by Unity.
@@ -609,7 +618,12 @@ namespace GooglePlayServices {
                                                                 SearchOption.TopDirectoryOnly));
                     foreach (var path in gradleTemplates) {
                         foreach (var line in File.ReadAllLines(path)) {
-                            var match = androidGradlePluginVersionExtract.Match(line);
+                            var match = androidGradlePluginVersionExtract_legacy.Match(line);
+                            if (match != null && match.Success) {
+                                androidGradlePluginVersion = match.Result("$1");
+                                break;
+                            }
+                            match = androidGradlePluginVersionExtract.Match(line);
                             if (match != null && match.Success) {
                                 androidGradlePluginVersion = match.Result("$1");
                                 break;
