@@ -64,8 +64,8 @@ public class UnityCompat {
             //Fall back on auto if the enum value is not parsable
             return -1;
         }
-        
-        // If the enumName is empty then enumValue was not represented in the enum, 
+
+        // If the enumName is empty then enumValue was not represented in the enum,
         // most likely because Unity has not yet added the new version,
         // fall back on the raw enumValue
         if (String.IsNullOrEmpty(enumName)) return (int)enumValue;
@@ -462,7 +462,9 @@ public class UnityCompat {
     private static bool SetUnity56AndAboveApplicationIdentifier(BuildTarget buildTarget,
                                                                 string applicationIdentifier) {
         var setApplicationIdentifierMethod =
-            typeof(UnityEditor.PlayerSettings).GetMethod("SetApplicationIdentifier");
+            typeof(UnityEditor.PlayerSettings).GetMethod(
+                "SetApplicationIdentifier",
+                new[]{typeof(BuildTargetGroup), typeof(string)});
         if (setApplicationIdentifierMethod == null) return false;
         var buildTargetGroup = ConvertBuildTargetToBuildTargetGroup(buildTarget);
         if (buildTargetGroup == BuildTargetGroup.Unknown) return false;
