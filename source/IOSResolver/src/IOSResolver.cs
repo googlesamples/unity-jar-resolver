@@ -709,7 +709,8 @@ public class IOSResolver : AssetPostprocessor {
         // Delay initialization until the build target is iOS and the editor is not in play
         // mode.
         EditorInitializer.InitializeOnMainThread(condition: () => {
-            return EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
+            return (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS ||
+                    EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) &&
                     !EditorApplication.isPlayingOrWillChangePlaymode;
         }, initializer: Initialize, name: "IOSResolver", logger: logger);
     }
@@ -719,9 +720,10 @@ public class IOSResolver : AssetPostprocessor {
     /// current active build target is iOS and not in play mode.
     /// </summary>
     private static bool Initialize() {
-        if ( EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS ) {
+        if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.iOS &&
+            EditorUserBuildSettings.activeBuildTarget != BuildTarget.tvOS) {
             throw new Exception("IOSResolver.Initialize() is called when active build target " +
-                    "is not iOS. This should never happen.  If it does, please report to the " +
+                    "is not iOS+. This should never happen.  If it does, please report to the " +
                     "developer.");
         }
 
@@ -955,7 +957,9 @@ public class IOSResolver : AssetPostprocessor {
     /// Enable / disable target SDK polling.
     /// </summary>
     private static void SetEnablePollTargetSdk(bool enable) {
-        if (enable && EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
+        if (enable &&
+            (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS ||
+             EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS)) {
             RunOnMainThread.OnUpdate += PollTargetSdk;
         } else {
             RunOnMainThread.OnUpdate -= PollTargetSdk;
@@ -1174,7 +1178,8 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static bool CocoapodsIntegrationEnabled {
         get {
-            return EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
+            return (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS ||
+                EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) &&
                 CocoapodsIntegrationMethodPref != CocoapodsIntegrationMethod.None;
         }
     }
@@ -1231,7 +1236,8 @@ public class IOSResolver : AssetPostprocessor {
     /// project.
     /// </summary>
     private static bool InjectDependencies() {
-        return EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS &&
+        return (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS ||
+                EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) &&
             Enabled && pods.Count > 0;
     }
 
