@@ -659,7 +659,7 @@ namespace Google {
             if (logger != null) {
                 logger.Log(
                     String.Format(
-                        "Please ignore Unity error message like '{0}'.\n" +
+                        "Please ignore Unity error messages similar to '{0}'.\n" +
                         "Unable to use Unity API `AssetDatabase.CreateFolder()` to " +
                         "create folder: '{1}'. Switch to use `Directory.CreateDirectory()` " +
                         "instead. \n\n" +
