@@ -639,7 +639,7 @@ namespace Google {
         /// </summary>
         /// <param name="path">Path to the file/directory that needs checking.</param>
         /// <returns>True if all folders are created successfully.</returns>
-        public static bool CreateFolder(string path) {
+        public static bool CreateFolder(string path, Google.Logger logger = null) {
             if (AssetDatabase.IsValidFolder(path)) {
                 return true;
             }
@@ -654,6 +654,20 @@ namespace Google {
             // returnig empty guid, it can return guids with all zeroes.
             if (IsValidGuid(AssetDatabase.CreateFolder(parentFolder, di.Name))) {
                 return true;
+            }
+
+            if (logger != null) {
+                logger.Log(
+                    String.Format(
+                        "Please ignore Unity error messages similar to '{0}'.\n" +
+                        "Unable to use Unity API `AssetDatabase.CreateFolder()` to " +
+                        "create folder: '{1}'. Switch to use `Directory.CreateDirectory()` " +
+                        "instead. \n\n" +
+                        "See {2} for more information.",
+                        "*** is not a valid directory name.",
+                        path,
+                        "https://issuetracker.unity3d.com/product/unity/issues/guid/UUM-7046"),
+                    LogLevel.Info);
             }
 
             return Directory.CreateDirectory(path) != null;

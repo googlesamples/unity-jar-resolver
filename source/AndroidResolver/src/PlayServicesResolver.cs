@@ -2468,7 +2468,7 @@ namespace GooglePlayServices {
             }
 
             var targetDir = Path.GetDirectoryName(targetLocation);
-            if (!FileUtils.CreateFolder(targetDir)) {
+            if (!FileUtils.CreateFolder(targetDir, logger)) {
                 return String.Format("Failed to create folders at {0}", targetDir);
             }
 
