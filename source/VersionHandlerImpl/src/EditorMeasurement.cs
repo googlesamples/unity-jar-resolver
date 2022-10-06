@@ -514,7 +514,7 @@ public class EditorMeasurement {
                     if (String.IsNullOrEmpty(cookie.Key)) continue;
                     // See https://developers.google.com/analytics/devguides/collection/protocol/v1
                     var status = PortableWebRequest.DefaultInstance.Post(
-                        "http://www.google-analytics.com/collect",
+                        "https://www.google-analytics.com/collect",
                         new[] {
                             // Version
                             new KeyValuePair<string, string>("v", "1"),
