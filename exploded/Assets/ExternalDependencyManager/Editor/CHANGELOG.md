@@ -1,5 +1,11 @@
+# Version 1.2.174 - Oct 06, 2022
+* General - Added tvOS support to the iOS resolver.
+* General - Fixed #484 - Changed `EditorMeasurement` to use secure connection.
+* Android Resolver - Fixed Android Resolver unable to resolve
+  `mainTemplate.gradle` in Unity `2022.2+` or `2023.1+`.
+
 # Version 1.2.173 - Sep 28, 2022
-* General - added tvOS library support to the export unity package scripts.
+* General - Added tvOS library support to the export unity package scripts.
 
 # Version 1.2.172 - Jun 23, 2022
 * iOS Resolver - Stop forcing `ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES` to `YES`,
