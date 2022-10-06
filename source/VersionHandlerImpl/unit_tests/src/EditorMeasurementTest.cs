@@ -366,7 +366,7 @@ namespace Google.VersionHandlerImpl.Tests {
         private KeyValuePair<string, string> CreateMeasurementEvent(
                 string reportUrl, string reportName, string cookie) {
             return new KeyValuePair<string, string>(
-                String.Format("http://www.google-analytics.com/collect" +
+                String.Format("https://www.google-analytics.com/collect" +
                               "?v=1" +
                               "&tid={0}" +
                               "&cid={1}" +
