@@ -453,19 +453,24 @@ The resolution strategy can be changed via the
 In order to modify the generated Podfile you can create a script like this:
 ```
 using System.IO;
-public class PostProcessIOS : MonoBehaviour {
-[PostProcessBuildAttribute(45)]//must be between 40 and 50 to ensure that it's not overriden by Podfile generation (40) and that it's added before "pod install" (50)
-private static void PostProcessBuild_iOS(BuildTarget target, string buildPath)
+using UnityEditor;
+using UnityEditor.Callbacks;
+using UnityEngine;
+
+public class PostProcessIOS : MonoBehaviour
 {
+  [PostProcessBuildAttribute(45)]//must be between 40 and 50 to ensure that it's not overriden by Podfile generation (40) and that it's added before "pod install" (50)
+  private static void PostProcessBuild_iOS(BuildTarget target, string buildPath)
+  {
     if (target == BuildTarget.iOS)
     {
-
         using (StreamWriter sw = File.AppendText(buildPath + "/Podfile"))
         {
             //in this example I'm adding an app extension
             sw.WriteLine("\ntarget 'NSExtension' do\n  pod 'Firebase/Messaging', '6.6.0'\nend");
         }
     }
+  }
 }
 ```
 
