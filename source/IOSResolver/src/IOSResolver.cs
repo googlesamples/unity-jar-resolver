@@ -177,7 +177,7 @@ public class IOSResolver : AssetPostprocessor {
         /// reference.</param>
         public Pod(string name, string version, bool bitcodeEnabled, string minTargetSdk,
                    bool addToAllTargets, IEnumerable<string> sources,
-                   Dictionary<string, string> propertiesByName) {
+                   Dictionary<string, string> propertiesByName), {
             this.name = name;
             this.version = version;
             if (propertiesByName != null) {
@@ -540,7 +540,11 @@ public class IOSResolver : AssetPostprocessor {
 
     // Default iOS target SDK if the selected version is invalid.
     private const int DEFAULT_TARGET_SDK = 82;
-    // Valid iOS target SDK version.
+
+    // Default tvOS target SDK if the selected version is invalid.
+    private const string DEFAULT_TVOS_TARGET_SDK = "12.0"
+
+    // Valid iOS / tvOS target SDK version.
     private static Regex TARGET_SDK_REGEX = new Regex("^[0-9]+\\.[0-9]$");
 
     // Current window being used for a long running shell command.
@@ -1426,7 +1430,7 @@ public class IOSResolver : AssetPostprocessor {
             DialogWindow.Display(
                 "Unsupported Target SDK",
                 String.Format(
-                    "Target SDK selected in the iOS Player Settings ({0}) is not supported by " +
+                    "Target SDK selected in the iOS/tvOS Player Settings ({0}) is not supported by " +
                     "the Cocoapods included in this project. The build will very likely fail. " +
                     "The minimum supported version is \"{1}\" required by pods ({2})\n" +
                     "Would you like to update the target SDK version?",
@@ -1495,62 +1499,59 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Get or set the Unity iOS target SDK version string (e.g "7.1")
-    /// build setting.
+    /// Get or set the Unity iOS or tvOS target SDK version string (e.g "7.1")
+    /// build setting dependeding on the current active build target.
     /// </summary>
     static string TargetSdk {
         get {
             string name = null;
-            var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
-            // Read the version (Unity 5.5 and above).
-            var osVersionProperty = iosSettingsType.GetProperty(
+            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) {
+                var tvosSettingsType = typeof(UnityEditor.PlayerSettings.tvOs);
+                var osVersionProperty = iosSettingsType.GetProperty(
                    "targetOSVersionString");
-            if (osVersionProperty != null) {
-                name = (string)osVersionProperty.GetValue(null, null);
-            }
-            if (name == null) {
-                // Read the version (deprecated in Unity 5.5).
-                osVersionProperty = iosSettingsType.GetProperty(
-                   "targetOSVersion");
                 if (osVersionProperty != null) {
-                    var osVersionValue =
-                        osVersionProperty.GetValue(null, null);
-                    if (osVersionValue != null) {
-                        name = Enum.GetName(osVersionValue.GetType(),
-                                            osVersionValue);
-                    }
+                    name = (string)osVersionProperty.GetValue(null, null);
                 }
+                if (String.IsNullOrEmpty(name)) {
+                    return DEFAULT_TVOS_TARGET_SDK;
+                }
+                return name.Trim().Replace("tvOS_", "").Replace("_", ".");
+            } else {
+                var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
+                var osVersionProperty = iosSettingsType.GetProperty(
+                   "targetOSVersionString");
+                if (osVersionProperty != null) {
+                    name = (string)osVersionProperty.GetValue(null, null);
+                }
+                if (String.IsNullOrEmpty(name)) {
+                    return TargetSdkVersionToString(DEFAULT_TARGET_SDK);
+                }
+                return name.Trim().Replace("iOS_", "").Replace("_", ".");
             }
-            if (String.IsNullOrEmpty(name)) {
-                // Versions 8.2 and above do not have enum symbols
-                // The values in Unity 5.4.1f1:
-                // 8.2 == 32
-                // 8.3 == 34
-                // 8.4 == 36
-                // 9.0 == 38
-                // 9.1 == 40
-                // Since these are undocumented just report
-                // 8.2 as selected for the moment.
-                return TargetSdkVersionToString(DEFAULT_TARGET_SDK);
-            }
-            return name.Trim().Replace("iOS_", "").Replace("_", ".");
         }
 
         set {
-            var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
-            // Write the version (Unity 5.5 and above).
-            var osVersionProperty =
-                iosSettingsType.GetProperty("targetOSVersionString");
-            if (osVersionProperty != null) {
+            if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) {
+                var tvosSettingsType = typeof(UnityEditor.PlayerSettings.tvOS);
+                var osVersionProperty =
+                    tvosSettingsType.GetProperty("targetOSVersionString");
                 osVersionProperty.SetValue(null, value, null);
             } else {
-                osVersionProperty =
-                    iosSettingsType.GetProperty("targetOSVersion");
-                osVersionProperty.SetValue(
-                    null,
-                    Enum.Parse(osVersionProperty.PropertyType,
-                               "iOS_" + value.Replace(".", "_")),
-                    null);
+                var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
+                // Write the version (Unity 5.5 and above).
+                var osVersionProperty =
+                    iosSettingsType.GetProperty("targetOSVersionString");
+                if (osVersionProperty != null) {
+                    osVersionProperty.SetValue(null, value, null);
+                } else {
+                    osVersionProperty =
+                        iosSettingsType.GetProperty("targetOSVersion");
+                    osVersionProperty.SetValue(
+                        null,
+                        Enum.Parse(osVersionProperty.PropertyType,
+                                "iOS_" + value.Replace(".", "_")),
+                        null);
+                }
             }
         }
     }
@@ -2202,8 +2203,11 @@ public class IOSResolver : AssetPostprocessor {
             verbose: true);
 
         using (StreamWriter file = new StreamWriter(podfilePath)) {
-            file.WriteLine(GeneratePodfileSourcesSection() +
-                           String.Format("platform :ios, '{0}'\n", TargetSdk));
+            file.WriteLine(GeneratePodfileSourcesSection());
+            String platform_name = (EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) ?
+                "tvos" : "ios";
+            file.WriteLine(String.Format("platform :{0}}, '{1}'\n", platform_name, TargetSdk));
+
             foreach (var target in XcodeTargetNames) {
                 file.WriteLine(String.Format("target '{0}' do", target));
                 foreach(var pod in pods.Values) {
