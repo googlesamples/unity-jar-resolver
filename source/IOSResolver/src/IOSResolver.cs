@@ -177,7 +177,7 @@ public class IOSResolver : AssetPostprocessor {
         /// reference.</param>
         public Pod(string name, string version, bool bitcodeEnabled, string minTargetSdk,
                    bool addToAllTargets, IEnumerable<string> sources,
-                   Dictionary<string, string> propertiesByName), {
+                   Dictionary<string, string> propertiesByName) {
             this.name = name;
             this.version = version;
             if (propertiesByName != null) {
@@ -542,7 +542,7 @@ public class IOSResolver : AssetPostprocessor {
     private const int DEFAULT_TARGET_SDK = 82;
 
     // Default tvOS target SDK if the selected version is invalid.
-    private const string DEFAULT_TVOS_TARGET_SDK = "12.0"
+    private const string DEFAULT_TVOS_TARGET_SDK = "12.0";
 
     // Valid iOS / tvOS target SDK version.
     private static Regex TARGET_SDK_REGEX = new Regex("^[0-9]+\\.[0-9]$");
@@ -1507,8 +1507,7 @@ public class IOSResolver : AssetPostprocessor {
             string name = null;
             if (EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) {
                 var tvosSettingsType = typeof(UnityEditor.PlayerSettings.tvOs);
-                var osVersionProperty = iosSettingsType.GetProperty(
-                   "targetOSVersionString");
+                var osVersionProperty = iosSettingsType.GetProperty("targetOSVersionString");
                 if (osVersionProperty != null) {
                     name = (string)osVersionProperty.GetValue(null, null);
                 }
@@ -1518,8 +1517,7 @@ public class IOSResolver : AssetPostprocessor {
                 return name.Trim().Replace("tvOS_", "").Replace("_", ".");
             } else {
                 var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
-                var osVersionProperty = iosSettingsType.GetProperty(
-                   "targetOSVersionString");
+                var osVersionProperty = iosSettingsType.GetProperty("targetOSVersionString");
                 if (osVersionProperty != null) {
                     name = (string)osVersionProperty.GetValue(null, null);
                 }
@@ -2204,7 +2202,7 @@ public class IOSResolver : AssetPostprocessor {
 
         using (StreamWriter file = new StreamWriter(podfilePath)) {
             file.WriteLine(GeneratePodfileSourcesSection());
-            String platform_name = (EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) ?
+            String platform_name = EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS ?
                 "tvos" : "ios";
             file.WriteLine(String.Format("platform :{0}}, '{1}'\n", platform_name, TargetSdk));
 
