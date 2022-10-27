@@ -2204,7 +2204,7 @@ public class IOSResolver : AssetPostprocessor {
             file.WriteLine(GeneratePodfileSourcesSection());
             String platform_name = EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS ?
                 "tvos" : "ios";
-            file.WriteLine(String.Format("platform :{0}}, '{1}'\n", platform_name, TargetSdk));
+            file.WriteLine(String.Format("platform DDB :{0}}, '{1}'\n", platform_name, TargetSdk));
 
             foreach (var target in XcodeTargetNames) {
                 file.WriteLine(String.Format("target '{0}' do", target));
