@@ -2298,6 +2298,7 @@ public class IOSResolver : AssetPostprocessor {
 
         using (StreamWriter file = new StreamWriter(podfilePath)) {
             file.WriteLine(GeneratePodfileSourcesSection());
+            file.WriteLine("# DellaBitta\n");
             switch (EditorUserBuildSettings.activeBuildTarget) {
                 case BuildTarget.iOS:
                     file.WriteLine(String.Format("platform :ios, '{0}'\n",
