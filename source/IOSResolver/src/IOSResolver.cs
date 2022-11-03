@@ -1424,7 +1424,6 @@ public class IOSResolver : AssetPostprocessor {
     /// Determine whether the target iOS SDK has changed.
     /// </summary>
     private static void PollTargetIosSdk() {
-        LogToDialog("DEDB PollTargetIosSdk");
         iosTargetSdkPoller.Poll(() => TargetIosSdkVersionString,
                              (previousValue, currentValue) => { ScheduleCheckTargetIosSdkVersion(); });
     }
@@ -1433,7 +1432,6 @@ public class IOSResolver : AssetPostprocessor {
     /// Determine whether the target tvOS SDK has changed.
     /// </summary>
     private static void PollTargetTvosSdk() {
-        LogToDialog("DEDB PollTargetTvosSdk");
         tvosTargetSdkPoller.Poll(() => TargetTvosSdkVersionString,
                              (previousValue, currentValue) => { ScheduleCheckTargetTvosSdkVersion(); });
     }
@@ -1447,9 +1445,7 @@ public class IOSResolver : AssetPostprocessor {
     /// Cocoapods.
     /// </summary>
     private static void ScheduleCheckTargetIosSdkVersion() {
-        LogToDialog("DEDB ScheduleCheckTargetIosSdkVersion");
         if(EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
-            LogToDialog("DEDB Scheduling Check");
             RunOnMainThread.Cancel(checkIosTargetSdkVersionJobId);
             checkIosTargetSdkVersionJobId = RunOnMainThread.Schedule(() => {
                 UpdateTargetIosSdkVersion(false);
@@ -1466,9 +1462,7 @@ public class IOSResolver : AssetPostprocessor {
     /// Cocoapods.
     /// </summary>
     private static void ScheduleCheckTargetTvosSdkVersion() {
-        LogToDialog("DEDB ScheduleCheckTargetTvosSdkVersion");
         if(EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) {
-            LogToDialog("DEDB Scheduling Check");
             RunOnMainThread.Cancel(checkTvosTargetSdkJobId);
             checkTvosTargetSdkJobId = RunOnMainThread.Schedule(() => {
                     UpdateTargetTvosSdkVersion(false);
@@ -1481,12 +1475,9 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     /// <param name="runningBuild">Whether the build is being processed.</param>
     public static void UpdateTargetIosSdkVersion(bool runningBuild) {
-        LogToDialog("DEDB UpdateTargetIosSdkVersion");
         var minVersionAndPodNames = TargetSdkNeedsUpdate(TargetIosSdkVersionNum);
-        LogToDialog("DEDB minVersionAndPodNames: " + minVersionAndPodNames);
         if (minVersionAndPodNames.Value != null) {
             var minVersionString = TargetSdkVersionToString(minVersionAndPodNames.Key);
-            LogToDialog("DEDB minVersionString: " + minVersionString);
             DialogWindow.Display("Unsupported Target iOS SDK",
                 String.Format(
                     TARGET_SDK_NEEDS_UPDATE_STRING, /*platformName=*/"iOS",
@@ -1517,13 +1508,10 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     /// <param name="runningBuild">Whether the build is being processed.</param>
     public static void UpdateTargetTvosSdkVersion(bool runningBuild) {
-        LogToDialog("DEDB UpdateTargetTvosSdkVersion");
         var minVersionAndPodNames = TargetSdkNeedsUpdate(TargetTvosSdkVersionNum);
-        LogToDialog("DEDB minVersionAndPodNames: " + minVersionAndPodNames);
         if (minVersionAndPodNames.Value != null) {
             var minVersionString =
                 TargetSdkVersionToString(minVersionAndPodNames.Key);
-            LogToDialog("DEDB minVersionString: " + minVersionString);
             DialogWindow.Display("Unsupported Target tvOS SDK",
                 String.Format(
                     TARGET_SDK_NEEDS_UPDATE_STRING, /*platformName=*/"tvOS",
@@ -1558,7 +1546,6 @@ public class IOSResolver : AssetPostprocessor {
     /// selected target SDK version does not satisfy pod requirements, the list
     /// (value) is null otherwise.</returns>
     private static KeyValuePair<int, List<string>> TargetSdkNeedsUpdate(int targetSdkVersionNum) {
-        LogToDialog("DEDB TargetSdkNeedsUpdate");
         var emptyVersionAndPodNames = new KeyValuePair<int, List<string>>(0, null);
         var minVersionAndPodNames = emptyVersionAndPodNames;
         int maxOfMinRequiredVersions = 0;
@@ -1568,7 +1555,6 @@ public class IOSResolver : AssetPostprocessor {
                 minVersionAndPodNames = versionAndPodList;
             }
         }
-        LogToDialog("DEDB targetSdkVersionNum: " + targetSdkVersionNum + " maxOfMinRequiredVersions: " + maxOfMinRequiredVersions);
         // If the target SDK version exceeds the minimum required version return an empty tuple
         // otherwise return the minimum required SDK version and the set of pods that need it.
         return targetSdkVersionNum >= maxOfMinRequiredVersions ? emptyVersionAndPodNames :
@@ -1598,7 +1584,6 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     static string TargetIosSdkVersionString {
         get {
-            LogToDialog("DEDB TargetIosSdkVersionString get");
             string name = null;
 
             var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
@@ -1613,7 +1598,6 @@ public class IOSResolver : AssetPostprocessor {
         }
 
         set {
-            LogToDialog("DEDB TargetIosSdkVersionString set");
             var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
             // Write the version (Unity 5.5 and above).
             var osVersionProperty =
@@ -1638,7 +1622,6 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     static string TargetTvosSdkVersionString {
         get {
-            LogToDialog("DEDB TargetTvosSdkVersionString get");
             string name = null;
             var tvosSettingsType = typeof(UnityEditor.PlayerSettings.tvOS);
             var osVersionProperty = tvosSettingsType.GetProperty("targetOSVersionString");
@@ -1652,7 +1635,6 @@ public class IOSResolver : AssetPostprocessor {
         }
 
         set {
-            LogToDialog("DEDB TargetTvosSdkVersionString set");
             var tvosSettingsType = typeof(UnityEditor.PlayerSettings.tvOS);
             var osVersionProperty = tvosSettingsType.GetProperty("targetOSVersionString");
             osVersionProperty.SetValue(null, value, null);
