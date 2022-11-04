@@ -427,8 +427,9 @@ public class IOSResolver : AssetPostprocessor {
     // target iOS or tvOS sdk version.
     private const string TARGET_SDK_NEEDS_UPDATE_STRING = (
         "Target SDK selected in the {0} Player Settings ({1}) is not supported by " +
-                    "the Cocoapods included in this project. The build will very likely fail. " +
-                    "The minimum supported version is \"{2}\" required by pods ({3})\n" +
+                    "the Cocoapods included in this project. The build will very " +
+                    "likely fail. The minimum supported version is \"{2}\" required " +
+                    "by pods ({3})\n" +
                     "Would you like to update the target SDK version?");
 
     // Dialog box text when the IOSResolver has updated the target sdk version on behalf
@@ -978,7 +979,7 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
-    /// Enable / disable target iOS SDK polling.
+    /// Enable / disable polling of target iOS and tvOS SDK project setting values.
     /// </summary>
     private static void SetEnablePollTargetSdks(bool enable) {
         if (enable && EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
@@ -1441,8 +1442,8 @@ public class IOSResolver : AssetPostprocessor {
     private static int checkIosTargetSdkVersionJobId = 0;
 
     /// <summary>
-    /// Schedule a check to ensure target iOS SDK is configured correctly given the set of selected
-    /// Cocoapods.
+    /// Schedule a check to ensure target iOS SDK is configured correctly given the
+    /// set of selected Cocoapods.
     /// </summary>
     private static void ScheduleCheckTargetIosSdkVersion() {
         if(EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
@@ -1453,13 +1454,13 @@ public class IOSResolver : AssetPostprocessor {
         }
     }
 
-    // ID of the job which checks that the target tvOS SDK is correct for the currently selected
-    // set of Cocoapods.
+    // ID of the job which checks that the target tvOS SDK is correct for the
+    // currently selected set of Cocoapods.
     private static int checkTvosTargetSdkJobId = 0;
 
     /// <summary>
-    /// Schedule a check to ensure target tvOS SDK is configured correctly given the set of selected
-    /// Cocoapods.
+    /// Schedule a check to ensure target tvOS SDK is configured correctly given the
+    /// set of selected Cocoapods.
     /// </summary>
     private static void ScheduleCheckTargetTvosSdkVersion() {
         if(EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) {
@@ -1545,7 +1546,8 @@ public class IOSResolver : AssetPostprocessor {
     /// a list of pod names that require it (value) if the currently
     /// selected target SDK version does not satisfy pod requirements, the list
     /// (value) is null otherwise.</returns>
-    private static KeyValuePair<int, List<string>> TargetSdkNeedsUpdate(int targetSdkVersionNum) {
+    private static KeyValuePair<int, List<string>>
+    TargetSdkNeedsUpdate(int targetSdkVersionNum) {
         var emptyVersionAndPodNames = new KeyValuePair<int, List<string>>(0, null);
         var minVersionAndPodNames = emptyVersionAndPodNames;
         int maxOfMinRequiredVersions = 0;
@@ -1587,7 +1589,8 @@ public class IOSResolver : AssetPostprocessor {
             string name = null;
 
             var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
-            var osVersionProperty = iosSettingsType.GetProperty("targetOSVersionString");
+            var osVersionProperty =
+                iosSettingsType.GetProperty("targetOSVersionString");
             if (osVersionProperty != null) {
                 name = (string)osVersionProperty.GetValue(null, null);
             }
@@ -1624,7 +1627,8 @@ public class IOSResolver : AssetPostprocessor {
         get {
             string name = null;
             var tvosSettingsType = typeof(UnityEditor.PlayerSettings.tvOS);
-            var osVersionProperty = tvosSettingsType.GetProperty("targetOSVersionString");
+            var osVersionProperty =
+                tvosSettingsType.GetProperty("targetOSVersionString");
             if (osVersionProperty != null) {
                 name = (string)osVersionProperty.GetValue(null, null);
             }
@@ -1636,7 +1640,8 @@ public class IOSResolver : AssetPostprocessor {
 
         set {
             var tvosSettingsType = typeof(UnityEditor.PlayerSettings.tvOS);
-            var osVersionProperty = tvosSettingsType.GetProperty("targetOSVersionString");
+            var osVersionProperty =
+                tvosSettingsType.GetProperty("targetOSVersionString");
             osVersionProperty.SetValue(null, value, null);
         }
     }
@@ -2308,8 +2313,8 @@ public class IOSResolver : AssetPostprocessor {
                         TargetTvosSdkVersionString));
                     break;
                 default:
-                    throw new Exception("IOSResolver.GenPodfile() invoked for a build target " +
-                    "other than iOS or tvOS.");
+                    throw new Exception("IOSResolver.GenPodfile() invoked for a " +
+                        "build target other than iOS or tvOS.");
                     break;
             }
 
