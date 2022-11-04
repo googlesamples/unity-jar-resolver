@@ -1587,7 +1587,6 @@ public class IOSResolver : AssetPostprocessor {
     static string TargetIosSdkVersionString {
         get {
             string name = null;
-
             var iosSettingsType = typeof(UnityEditor.PlayerSettings.iOS);
             var osVersionProperty =
                 iosSettingsType.GetProperty("targetOSVersionString");
