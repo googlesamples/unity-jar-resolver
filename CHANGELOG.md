@@ -1,3 +1,6 @@
+# Version 1.2.175 - Nov 16, 2022
+* General - Added tvOS podfile support to the iOS resolver.
+
 # Version 1.2.174 - Oct 06, 2022
 * General - Added tvOS support to the iOS resolver.
 * General - Fixed #484 - Changed `EditorMeasurement` to use secure connection.
