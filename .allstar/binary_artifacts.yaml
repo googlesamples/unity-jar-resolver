@@ -1,0 +1,4 @@
+# Exemption reason: Binary files are either for testing or part of the release artifacts.
+# Exemption timeframe: permanent
+optConfig:
+  optOut: true
