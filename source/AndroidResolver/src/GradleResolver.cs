@@ -1161,7 +1161,7 @@ namespace GooglePlayServices
             // To work around this when Gradle builds are enabled, explosion is enabled for all
             // AARs that require variable expansion unless this behavior is explicitly disabled
             // in the settings dialog.
-            if (PlayServicesResolver.GradleProjectExportEnabled && !SettingsDialog.ExplodeAars) {
+            if (PlayServicesResolver.GradleProjectExportEnabled || !SettingsDialog.ExplodeAars) {
                 return false;
             }
             // If this version of Unity doesn't support AAR files, always explode.
