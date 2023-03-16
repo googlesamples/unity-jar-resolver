@@ -337,6 +337,8 @@ namespace GooglePlayServices {
         /// Called when the GUI should be rendered.
         /// </summary>
         public void OnGUI() {
+            GUI.skin.label.wordWrap = true;
+
             GUILayout.BeginVertical();
             GUILayout.Label(String.Format("Android Resolver (version {0}.{1}.{2})",
                                           AndroidResolverVersionNumber.Value.Major,
@@ -543,6 +545,10 @@ namespace GooglePlayServices {
             settings.useProjectSettings = EditorGUILayout.Toggle(settings.useProjectSettings);
             GUILayout.EndHorizontal();
 
+            GUILayout.EndVertical();
+            EditorGUILayout.EndScrollView();
+
+            GUILayout.BeginVertical();
             GUILayout.Space(10);
 
             if (GUILayout.Button("Reset to Defaults")) {
@@ -604,9 +610,8 @@ namespace GooglePlayServices {
             }
             if (closeWindow) Close();
             GUILayout.EndHorizontal();
-
             GUILayout.EndVertical();
-            EditorGUILayout.EndScrollView();
+
             GUILayout.EndVertical();
         }
     }
