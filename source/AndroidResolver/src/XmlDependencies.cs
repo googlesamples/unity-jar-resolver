@@ -29,14 +29,6 @@ namespace GooglePlayServices {
     internal class XmlDependencies {
 
         /// <summary>
-        /// Set of regular expressions that match files which contain dependency
-        /// specifications.
-        /// </summary>
-        internal HashSet<Regex> fileRegularExpressions = new HashSet<Regex> {
-            new Regex(@".*[/\\]Editor[/\\].*Dependencies\.xml$")
-        };
-
-        /// <summary>
         /// Human readable name for dependency files managed by this class.
         /// </summary>
         protected string dependencyType = "dependencies";

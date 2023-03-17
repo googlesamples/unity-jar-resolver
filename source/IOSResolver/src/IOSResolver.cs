@@ -1939,7 +1939,7 @@ public class IOSResolver : AssetPostprocessor {
         var changedAssets = new List<string>(importedAssets);
         changedAssets.AddRange(deletedAssets);
         foreach (var asset in changedAssets) {
-            dependencyFileChanged = xmlDependencies.IsDependenciesFile(asset);
+            dependencyFileChanged = XmlDependencies.IsDependenciesFile(asset);
             if (dependencyFileChanged) break;
         }
         if (dependencyFileChanged) RefreshXmlDependencies();
