@@ -46,13 +46,9 @@ namespace GooglePlayServices {
         /// </summary>
         /// <param name="filename"></param>
         /// <returns>true if it is a match, false otherwise.</returns>
-        internal bool IsDependenciesFile(string filename) {
-            foreach (var regex in fileRegularExpressions) {
-                if (regex.Match(filename).Success) {
-                    return true;
-                }
-            }
-            return false;
+        internal static bool IsDependenciesFile(string filename) {
+            bool isInEditorFolder = filename.Contains("/Editor/") || filename.Contains(@"\Editor\");
+            return isInEditorFolder && filename.EndsWith("Dependencies.xml");
         }
 
         /// <summary>

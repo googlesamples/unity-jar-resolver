@@ -16,9 +16,8 @@ namespace GooglePlayServices.Tests {
 		[TestCase("Assets/MyEditorCode/SomeDependencies.xml")]
 		[TestCase("Assets/Editor/")]
 		[TestCase("Assets/Editor/Dependendencies")]
-		public void Test1(string path) {
-			var dependencies = new XmlDependencies();
-			bool actualResult = dependencies.IsDependenciesFile(path);
+		public void IsDependenciesFileReturnsExpected(string path) {
+			bool actualResult = XmlDependencies.IsDependenciesFile(path);
 
 			// This logic was part of the previous unoptimized implementation and can act as a test reference.
 			bool expectedResult = Regex.IsMatch(input: path, pattern: @".*[/\\]Editor[/\\].*Dependencies\.xml$");
