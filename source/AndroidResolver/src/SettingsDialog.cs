@@ -39,6 +39,8 @@ namespace GooglePlayServices {
             internal bool patchAndroidManifest;
             internal bool patchMainTemplateGradle;
             internal bool patchPropertiesTemplateGradle;
+            internal bool useFullCustomMavenRepoPathWhenExport;
+            internal bool useFullCustomMavenRepoPathWhenNotExport;
             internal string localMavenRepoDir;
             internal bool useJetifier;
             internal bool verboseLogging;
@@ -60,6 +62,8 @@ namespace GooglePlayServices {
                 patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
                 patchMainTemplateGradle = SettingsDialog.PatchMainTemplateGradle;
                 patchPropertiesTemplateGradle = SettingsDialog.PatchPropertiesTemplateGradle;
+                useFullCustomMavenRepoPathWhenExport = SettingsDialog.UseFullCustomMavenRepoPathWhenExport;
+                useFullCustomMavenRepoPathWhenNotExport = SettingsDialog.UseFullCustomMavenRepoPathWhenNotExport;
                 localMavenRepoDir = SettingsDialog.LocalMavenRepoDir;
                 useJetifier = SettingsDialog.UseJetifier;
                 verboseLogging = SettingsDialog.VerboseLogging;
@@ -82,6 +86,8 @@ namespace GooglePlayServices {
                 SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
                 SettingsDialog.PatchMainTemplateGradle = patchMainTemplateGradle;
                 SettingsDialog.PatchPropertiesTemplateGradle = patchPropertiesTemplateGradle;
+                SettingsDialog.UseFullCustomMavenRepoPathWhenExport = useFullCustomMavenRepoPathWhenExport;
+                SettingsDialog.UseFullCustomMavenRepoPathWhenNotExport = useFullCustomMavenRepoPathWhenNotExport;
                 SettingsDialog.LocalMavenRepoDir = localMavenRepoDir;
                 SettingsDialog.UseJetifier = useJetifier;
                 SettingsDialog.VerboseLogging = verboseLogging;
@@ -101,6 +107,8 @@ namespace GooglePlayServices {
         private const string PatchAndroidManifestKey = Namespace + "PatchAndroidManifest";
         private const string PatchMainTemplateGradleKey = Namespace + "PatchMainTemplateGradle";
         private const string PatchPropertiesTemplateGradleKey = Namespace + "PatchPropertiesTemplateGradle";
+        private const string UseFullCustomMavenRepoPathWhenExportKey = Namespace + "UseFullCustomMavenRepoPathWhenExport";
+        private const string UseFullCustomMavenRepoPathWhenNotExportKey = Namespace + "UseFullCustomMavenRepoPathWhenNotExport";
         private const string LocalMavenRepoDirKey = Namespace + "LocalMavenRepoDir";
         private const string UseJetifierKey = Namespace + "UseJetifier";
         private const string VerboseLoggingKey = Namespace + "VerboseLogging";
@@ -120,6 +128,8 @@ namespace GooglePlayServices {
             PatchAndroidManifestKey,
             PatchMainTemplateGradleKey,
             PatchPropertiesTemplateGradleKey,
+            UseFullCustomMavenRepoPathWhenExportKey,
+            UseFullCustomMavenRepoPathWhenNotExportKey,
             LocalMavenRepoDirKey,
             UseJetifierKey,
             VerboseLoggingKey,
@@ -243,6 +253,16 @@ namespace GooglePlayServices {
         internal static bool PatchPropertiesTemplateGradle {
             set { projectSettings.SetBool(PatchPropertiesTemplateGradleKey, value); }
             get { return projectSettings.GetBool(PatchPropertiesTemplateGradleKey, true); }
+        }
+
+        internal static bool UseFullCustomMavenRepoPathWhenExport {
+            set { projectSettings.SetBool(UseFullCustomMavenRepoPathWhenExportKey, value); }
+            get { return projectSettings.GetBool(UseFullCustomMavenRepoPathWhenExportKey, true); }
+        }
+
+        internal static bool UseFullCustomMavenRepoPathWhenNotExport {
+            set { projectSettings.SetBool(UseFullCustomMavenRepoPathWhenNotExportKey, value); }
+            get { return projectSettings.GetBool(UseFullCustomMavenRepoPathWhenNotExportKey, false); }
         }
 
         internal static string LocalMavenRepoDir {
@@ -479,6 +499,44 @@ namespace GooglePlayServices {
             }
 
             if (settings.patchMainTemplateGradle) {
+                GUILayout.Label("Use Full Custom Local Maven Repo Path", EditorStyles.boldLabel);
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("  When building Android app through Unity", EditorStyles.boldLabel);
+                settings.useFullCustomMavenRepoPathWhenNotExport =
+                    EditorGUILayout.Toggle(settings.useFullCustomMavenRepoPathWhenNotExport);
+                GUILayout.EndHorizontal();
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("  When exporting Android project", EditorStyles.boldLabel);
+                settings.useFullCustomMavenRepoPathWhenExport =
+                    EditorGUILayout.Toggle(settings.useFullCustomMavenRepoPathWhenExport);
+                GUILayout.EndHorizontal();
+
+                GUILayout.Label(
+                    "EDM4U can inject custom local Maven repo to Gradle template files " +
+                    "differnetly depending on whether 'Export Project' in Build Settings is " +
+                    "enabled or not.\n" +
+                    "If checked, custom local Maven repo path will look like the following. " +
+                    "This is best if the Unity project is always under the same path, or when " +
+                    "Unity editor has bugs which fail to resolve template variables like " +
+                    "'**DIR_UNITYPROJECT**'");
+                GUILayout.Box(
+                    "  maven {\n" +
+                    "    url \"file:////path/to/myUnityProject/path/to/m2repository\"\n" +
+                    "  }", EditorStyles.wordWrappedMiniLabel);
+                GUILayout.Label(
+                    "If unchecked, custom local Maven repo path will look like the following. " +
+                    "This is best if the Unity projects locates in different folders on " +
+                    "different workstations. 'unityProjectPath' will be resolved at build time " +
+                    "using template variables like '**DIR_UNITYPROJECT**'");
+                GUILayout.Box(
+                    "  def unityProjectPath = $/file:///**DIR_UNITYPROJECT**/$.replace(\"\\\", \"/\")\n" +
+                    "  maven {\n" +
+                    "    url (unityProjectPath + \"/path/to/m2repository\")\n" +
+                    "  }", EditorStyles.wordWrappedMiniLabel);
+                GUILayout.Label(
+                    "Note that EDM4U always uses full path if the custom local Maven repo is NOT " +
+                    "under Unity project folder.");
+
                 GUILayout.BeginHorizontal();
                 string previousDir = settings.localMavenRepoDir;
                 GUILayout.Label("Local Maven Repo Directory", EditorStyles.boldLabel);
@@ -587,6 +645,12 @@ namespace GooglePlayServices {
                         new KeyValuePair<string, string>(
                             "patchAndroidManifest",
                             SettingsDialog.PatchAndroidManifest.ToString()),
+                        new KeyValuePair<string, string>(
+                            "UseFullCustomMavenRepoPathWhenNotExport",
+                            SettingsDialog.UseFullCustomMavenRepoPathWhenNotExport.ToString()),
+                        new KeyValuePair<string, string>(
+                            "UseFullCustomMavenRepoPathWhenExport",
+                            SettingsDialog.UseFullCustomMavenRepoPathWhenExport.ToString()),
                         new KeyValuePair<string, string>(
                             "localMavenRepoDir",
                             SettingsDialog.LocalMavenRepoDir.ToString()),
