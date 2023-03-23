@@ -2120,6 +2120,12 @@ namespace GooglePlayServices {
             var lines = new List<string>();
             if (dependencies.Count > 0) {
                 var exportEnabled = GradleProjectExportEnabled;
+                var useFullPath = (
+                        exportEnabled &&
+                        SettingsDialogObj.UseFullCustomMavenRepoPathWhenExport ) || (
+                        !exportEnabled &&
+                        SettingsDialogObj.UseFullCustomMavenRepoPathWhenNotExport);
+
                 var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
                 var projectFileUri = GradleResolver.RepoPathToUri(projectPath);
                 lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
@@ -2127,9 +2133,11 @@ namespace GooglePlayServices {
                 // projectPath will point to the Unity project root directory as Unity will
                 // generate the root Gradle project in "Temp/gradleOut" when *not* exporting a
                 // gradle project.
-                lines.Add(String.Format(
-                          "        def unityProjectPath = $/{0}**DIR_UNITYPROJECT**/$" +
-                          ".replace(\"\\\\\", \"/\")", GradleWrapper.FILE_SCHEME));
+                if (!useFullPath) {
+                    lines.Add(String.Format(
+                            "        def unityProjectPath = $/{0}**DIR_UNITYPROJECT**/$" +
+                            ".replace(\"\\\\\", \"/\")", GradleWrapper.FILE_SCHEME));
+                }
                 lines.Add("        maven {");
                 lines.Add("            url \"https://maven.google.com\"");
                 lines.Add("        }");
@@ -2154,9 +2162,7 @@ namespace GooglePlayServices {
                             repoPath = relativePath;
                         }
 
-                        // If "Export Gradle Project" setting is enabled, gradle project expects
-                        // absolute path.
-                        if (exportEnabled) {
+                        if (useFullPath) {
                             // build.gradle expects file:/// URI so file separator will be "/" in anycase
                             // and we must NOT use Path.Combine here because it will use "\" for win platforms
                             repoUri = String.Format("\"{0}/{1}\"", projectFileUri, repoPath);
@@ -2541,6 +2547,8 @@ namespace GooglePlayServices {
                 {"explodeAars", SettingsDialogObj.ExplodeAars.ToString()},
                 {"patchAndroidManifest", SettingsDialogObj.PatchAndroidManifest.ToString()},
                 {"patchMainTemplateGradle", SettingsDialogObj.PatchMainTemplateGradle.ToString()},
+                {"useFullCustomMavenRepoPathWhenExport", SettingsDialogObj.UseFullCustomMavenRepoPathWhenExport.ToString()},
+                {"useFullCustomMavenRepoPathWhenNotExport", SettingsDialogObj.UseFullCustomMavenRepoPathWhenNotExport.ToString()},
                 {"localMavenRepoDir", SettingsDialogObj.LocalMavenRepoDir.ToString()},
                 {"useJetifier", SettingsDialogObj.UseJetifier.ToString()},
                 {"bundleId", GetAndroidApplicationId()},
@@ -2558,6 +2566,8 @@ namespace GooglePlayServices {
             "explodeAars",
             "patchAndroidManifest",
             "patchMainTemplateGradle",
+            "useFullCustomMavenRepoPathWhenExport",
+            "useFullCustomMavenRepoPathWhenNotExport",
             "localMavenRepoDir",
             "useJetifier",
             "gradleBuildEnabled",
