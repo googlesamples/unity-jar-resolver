@@ -522,6 +522,115 @@ namespace GooglePlayServices {
             }
         }
 
+        /// <summary>
+        /// Whether the Gradle settings template is enabled. (Unity 
+        /// </summary>
+        public static bool GradleSettingsTemplateEnabled {
+            get {
+                return GradleBuildEnabled && File.Exists(GradleTemplateResolver.GradleSettingsTemplatePath);
+            }
+        }
+
+        // Searches for "RepositoriesMode.FAIL_ON_PROJECT_REPOS" or "RepositoriesMode.PREFER_SETTINGS" inside
+        // dependencyResolutionManagement implementation.
+        // WARNING: this regex checks if code is ignored simply by matching "/*" and "//" symbols. This regex will 
+        // produce wrong results if gradle script contains strings with these symbols inside e.g.: 
+        // def stringVar = 'some text /* some text'
+        private static Regex dependencyResolutionManagementPattern = new Regex(
+            @"(?<!/\*([^*]|\*(?=[^/]))+|//[^\n]*)" + // Negative lookbehind. Do not match if comment block is opened
+                                                           // and not closed or if current line is commented
+            @"dependencyResolutionManagement.+" +          // Using regex in single line mode, so ".+" also matches new lines 
+            @"(?<!/\*([^*]|\*(?=[^/]))+|//[^\n]*)" +       // Ignoring "repositoriesMode" if it is inside a comment inside
+                                                           // dependencyResolutionManagement block
+            @"(get)?(R|r)epositoriesMode(\(\))?\.set\([\s\n]*RepositoriesMode\.(FAIL_ON_PROJECT_REPOS|PREFER_SETTINGS)[\s\n]*\)", 
+            RegexOptions.Singleline
+        );
+        
+        
+        /// <summary>
+        /// Whether the Gradle settings template implements "dependencyResolutionManagement" interface and
+        /// the "RepositoryMode" is set either in FAIL_ON_PROJECT_REPOS on in PREFER_SETTINGS
+        /// </summary>
+        /// Unity starting from 2022.2 by default uses "dependencyResolutionManagement" with
+        /// "RepositoryMode.PREFER_SETTINGS" but checking settings template directly is safer
+        /// because settings template can be changed by the user 
+        public static bool GradleSettingsTemplateContainsRepositories
+        {
+            get
+            {
+                Debug.Log($"GradleSettingsTemplateEnabled {GradleSettingsTemplateEnabled}");
+                return GradleSettingsTemplateEnabled &&
+                       dependencyResolutionManagementPattern
+                           .Match(File.ReadAllText(GradleTemplateResolver.GradleSettingsTemplatePath))
+                           .Success;
+            }
+        }
+
+        // Backing store for UnityDefaultGradleSettingsTemplateContainsRepositories property.
+        private static bool? unityDefaultGradleSettingsTemplateContainsRepositories = null;
+        /// <summary>
+        /// Whether Unity's default gradle settings template contains "dependencyResolutionManagement" block
+        /// This variable is needed to know whether to generate enable settings template automatically or not because
+        /// Starting from Unity 2022.2 it uses "dependencyResolutionManagement" in settings template but at the same time
+        /// doesn't provide possibility to enable it from Project Settings. Settings template can be enabled only starting
+        /// from Unity 2023.1. Thus for Unity 2022.2 - 2023.1 PlayServicesResolver will enable settings template automatically
+        /// </summary>
+        public static bool UnityDefaultGradleSettingsTemplateContainsRepositories
+        {
+            set { unityDefaultGradleSettingsTemplateContainsRepositories = value; }
+            get
+            {
+                Debug.Log($"unityDefaultGradleSettingsTemplateContainsRepositories != null {unityDefaultGradleSettingsTemplateContainsRepositories != null}");
+                if (unityDefaultGradleSettingsTemplateContainsRepositories != null)
+                    return unityDefaultGradleSettingsTemplateContainsRepositories == true;
+                
+                // Search the gradle templates for the settings template.
+                var engineDir = AndroidPlaybackEngineDirectory;
+                Debug.Log($"engineDir {engineDir}");
+                if (String.IsNullOrEmpty(engineDir)) {
+                    unityDefaultGradleSettingsTemplateContainsRepositories = false;
+                    return false;
+                }
+                
+                var gradleTemplateDir = Path.Combine(Path.Combine(engineDir, "Tools"), "GradleTemplates");
+                Debug.Log($"gradleTemplateDir {gradleTemplateDir}");
+                if (!Directory.Exists(gradleTemplateDir)) {
+                    unityDefaultGradleSettingsTemplateContainsRepositories = false;
+                    return false;
+                }
+                
+                var settingsTemplatePath = Path.Combine(gradleTemplateDir, "settingsTemplate.gradle");
+                Debug.Log($"settingTemplatePath {settingsTemplatePath}");
+                if (!File.Exists(settingsTemplatePath)) {
+                    unityDefaultGradleSettingsTemplateContainsRepositories = false;
+                    return false;
+                }
+
+                unityDefaultGradleSettingsTemplateContainsRepositories =
+                        dependencyResolutionManagementPattern.Match(File.ReadAllText(settingsTemplatePath)).Success;
+
+                Debug.Log($"Settings template matched {unityDefaultGradleSettingsTemplateContainsRepositories == true}");
+                return unityDefaultGradleSettingsTemplateContainsRepositories == true;
+            }
+        }
+
+        /// <summary>
+        /// Whether PlayServicesResolver can auto enable settings template. True if Unity version is below 2023.1 and
+        /// if user hasn't already enabled it itself and if settings template contains repositories block.
+        /// For Unity greater or equal to 2023.1 settings template will not be automatically enabled because it can be
+        /// enabled manually through Player Settings 
+        /// </summary>
+        // public static bool CanAutoEnableSettingsTemplate
+        // {
+        //     get
+        //     {
+        //         //Starting from Unity 2023 settings template can be enabled by the user from the Player Settings
+        //         return (Google.VersionHandler.GetUnityVersionMajorMinor() < 2023.1f) &&
+        //                !GradleSettingsTemplateEnabled && 
+        //                UnityDefaultGradleSettingsTemplateContainsRepositories;
+        //     }
+        // }
+
         // Backing store for GradleVersion property.
         private static string gradleVersion = null;
         // Extracts a version number from a gradle distribution jar file.
@@ -680,6 +789,11 @@ namespace GooglePlayServices {
             public bool GradlePropertiesTemplateEnabled { get; private set; }
 
             /// <summary>
+            /// Whether the Gradle settings template is enabled.
+            /// </summary>
+            public bool GradleSettingsTemplateEnabled { get; private set; }
+
+            /// <summary>
             // Whether project export is enabled.
             /// </summary>
             public bool ProjectExportEnabled { get; private set; }
@@ -693,6 +807,7 @@ namespace GooglePlayServices {
                         GradleBuildEnabled = PlayServicesResolver.GradleBuildEnabled,
                         GradleTemplateEnabled = PlayServicesResolver.GradleTemplateEnabled,
                         GradlePropertiesTemplateEnabled = PlayServicesResolver.GradlePropertiesTemplateEnabled,
+                        GradleSettingsTemplateEnabled = PlayServicesResolver.GradleSettingsTemplateEnabled,
                         ProjectExportEnabled = PlayServicesResolver.ProjectExportEnabled
                     };
                 }
@@ -708,6 +823,7 @@ namespace GooglePlayServices {
                 return other.GradleBuildEnabled == GradleBuildEnabled &&
                     other.GradleTemplateEnabled == GradleTemplateEnabled &&
                     other.GradlePropertiesTemplateEnabled == GradlePropertiesTemplateEnabled &&
+                    other.GradleSettingsTemplateEnabled == GradleSettingsTemplateEnabled &&
                     other.ProjectExportEnabled == ProjectExportEnabled;
             }
 
@@ -718,6 +834,7 @@ namespace GooglePlayServices {
             public override int GetHashCode() {
                 return GradleBuildEnabled.GetHashCode() ^ GradleTemplateEnabled.GetHashCode() ^
                        GradlePropertiesTemplateEnabled.GetHashCode() ^
+                       GradleSettingsTemplateEnabled.GetHashCode() ^
                        ProjectExportEnabled.GetHashCode();
             }
 
@@ -728,9 +845,11 @@ namespace GooglePlayServices {
             /// <returns>String representation.</returns>
             public override string ToString() {
                 return String.Format("[GradleBuildEnabled={0} GradleTemplateEnabled={1} " +
-                                     "GradlePropertiesTemplateEnabled={2} ProjectExportEnabled={2}]",
+                                     "GradlePropertiesTemplateEnabled={2} GradleSettingsTemplateEnabled={3} " +
+                                     "ProjectExportEnabled={4}]",
                                      GradleBuildEnabled, GradleTemplateEnabled,
-                                     GradlePropertiesTemplateEnabled, ProjectExportEnabled);
+                                     GradlePropertiesTemplateEnabled, GradleSettingsTemplateEnabled, 
+                                     ProjectExportEnabled);
             }
         }
 
@@ -780,6 +899,18 @@ namespace GooglePlayServices {
             /// was enabled the last time this event was fired.
             /// </summary>
             public bool PreviousGradlePropertiesTemplateEnabled { get; set; }
+            
+            /// <summary>
+            /// Weather a custom Gradle settings template is enabled.
+            /// This will only be true if GradleBuildEnabled is also true.
+            /// </summary>
+            public bool GradleSettingsTemplateEnabled { get; set; }
+            
+            /// <summary>
+            /// Weather a custom Gradle settings template
+            /// was enabled the last time this event was fired.
+            /// </summary>
+            public bool PreviousGradleSettingsTemplateEnabled { get; set; }
 
             /// <summary>
             /// Project export was selected when this event was fired.
@@ -1475,6 +1606,8 @@ namespace GooglePlayServices {
                                 PreviousGradleTemplateEnabled = previousValue.GradleTemplateEnabled,
                                 GradlePropertiesTemplateEnabled = currentValue.GradlePropertiesTemplateEnabled,
                                 PreviousGradlePropertiesTemplateEnabled = previousValue.GradlePropertiesTemplateEnabled,
+                                GradleSettingsTemplateEnabled = currentValue.GradleSettingsTemplateEnabled,
+                                PreviousGradleSettingsTemplateEnabled = previousValue.GradleSettingsTemplateEnabled,
                                 ProjectExportEnabled = currentValue.ProjectExportEnabled,
                                 PreviousProjectExportEnabled = previousValue.ProjectExportEnabled,
                             });
@@ -1668,6 +1801,9 @@ namespace GooglePlayServices {
                 PlayServicesSupport.GetAllDependencies().Values);
             if (GradleTemplateEnabled) {
                 GradleTemplateResolver.InjectDependencies(new List<Dependency>());
+                if (GradleSettingsTemplateContainsRepositories) {
+                    GradleTemplateResolver.InjectRepositoriesInSettings(new List<Dependency>());
+                }
             }
         }
 
@@ -1974,14 +2110,84 @@ namespace GooglePlayServices {
                 }
                 return true;
             };
+            
+            Func<ICollection<Dependency>, bool> patchGradleSettings = dependencies => {
+                // If patching is enabled but custom gradle settings template isn't enabled  
+                Debug.Log($"GradleBuildEnabled {GradleBuildEnabled}");
+                Debug.Log($"Google.VersionHandler.GetUnityVersionMajorMinor() {Google.VersionHandler.GetUnityVersionMajorMinor()}");
+                Debug.Log($"GradleTemplateEnabled {GradleTemplateEnabled}");
+                Debug.Log($"UnityDefaultGradleSettingsTemplateContainsRepositories {UnityDefaultGradleSettingsTemplateContainsRepositories}");
+                Debug.Log($"SettingsDialogObj.PatchSettingsTemplateGradle {SettingsDialogObj.PatchSettingsTemplateGradle}");
+                Debug.Log($"GradleSettingsTemplateEnabled {GradleSettingsTemplateEnabled}");
+                
+                if (GradleBuildEnabled &&
+                    GradleTemplateEnabled &&
+                    UnityDefaultGradleSettingsTemplateContainsRepositories &&
+                    SettingsDialogObj.PatchSettingsTemplateGradle &&
+                    !GradleSettingsTemplateEnabled) {
+                    
+                    if (Google.VersionHandler.GetUnityVersionMajorMinor() >= 2023.1f) {
+                        // For Unity 2023.1 and above it is possible for the user to enable custom gradle settings template,
+                        // so warn the user if patching is enabled but settings template is disabled
+                        lastError = String.Format(
+                            "Resolution failed because Custom Gradle Settings Template is disabled. " +
+                            "In Unity {0} Gradle repositories must be declared in Custom Gradle Settings Template." +
+                            "Please enable 'Custom Gradle Settings Template' found under " +
+                            "'Player Settings > Settings for Android -> Publishing Settings' menu. " +
+                            "Due to changes in Gradle project generated by Unity 2022.2 and "+
+                            "above, Gradle repositories must be declared in Assets/Plugins/Android/settingsTemplate.gradle.\n" +
+                            "If you like to patch this yourself, simply disable 'Patch " +
+                            "settingsTemplate.gradle' in Android Resolver settings.",
+                            Google.VersionHandler.GetUnityVersionMajorMinor()
+                        );
+                        return false;
+                    }
+                    
+                    // Effectively for Unity 2022.2 - 2023.1 enable custom gradle settings template automatically
+                    var engineDir = AndroidPlaybackEngineDirectory;
+                    if (String.IsNullOrEmpty(engineDir)) {
+                        lastError = String.Format("Couldn't find directory: {0}", engineDir);
+                        return false;
+                    }
+            
+                    var gradleTemplateDir = Path.Combine(Path.Combine(engineDir, "Tools"), "GradleTemplates");
+                    if (!Directory.Exists(gradleTemplateDir)) {
+                        lastError = String.Format("Couldn't find directory: {0}", gradleTemplateDir);
+                        return false;
+                    }
+            
+                    var settingTemplatePath = Path.Combine(gradleTemplateDir, "settingsTemplate.gradle");
+                    if (!File.Exists(settingTemplatePath)) {
+                        lastError = String.Format("Couldn't find settingsTemplate.gradle in: {0}", settingTemplatePath);
+                        return false;
+                    }
+
+                    var androidPluginsDir = Path.Combine(Path.Combine(FileUtils.ASSETS_FOLDER, "Plugins"), "Android");
+                    if (!File.Exists(androidPluginsDir)) Directory.CreateDirectory(androidPluginsDir);
+                    var newSettingsTemplatePath = Path.Combine(androidPluginsDir, "settingsTemplate.gradle");
+                    
+                    File.Copy(settingTemplatePath, newSettingsTemplatePath);
+                }
+
+                if (GradleBuildEnabled &&
+                    GradleTemplateEnabled &&
+                    GradleSettingsTemplateContainsRepositories &&
+                    SettingsDialogObj.PatchSettingsTemplateGradle) {
+                    return GradleTemplateResolver.InjectRepositoriesInSettings(dependencies);
+                }
+
+                return true;
+            };
 
             if (GradleTemplateEnabled &&
                 SettingsDialogObj.PatchMainTemplateGradle) {
                 lastError = "";
                 RunOnMainThread.Run(() => {
-                        finishResolution(GradleTemplateResolver.InjectDependencies(
-                            PlayServicesSupport.GetAllDependencies().Values) &&
-                            patchGradleProperties(), lastError);
+                        finishResolution(
+                            patchGradleSettings(PlayServicesSupport.GetAllDependencies().Values) &&
+                            GradleTemplateResolver.InjectDependencies(PlayServicesSupport.GetAllDependencies().Values) &&
+                            patchGradleProperties(), 
+                            lastError);
                     });
             } else {
                 lastError = "";
@@ -2122,8 +2328,15 @@ namespace GooglePlayServices {
                 var exportEnabled = GradleProjectExportEnabled;
                 var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
                 var projectFileUri = GradleResolver.RepoPathToUri(projectPath);
-                lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
-                lines.Add("    project.repositories {");
+
+                if (GradleSettingsTemplateContainsRepositories) {
+                    lines.Add("dependencyResolutionManagement {");
+                    lines.Add("    repositories {");
+                } else {
+                    lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
+                    lines.Add("    project.repositories {");
+                }
+
                 // projectPath will point to the Unity project root directory as Unity will
                 // generate the root Gradle project in "Temp/gradleOut" when *not* exporting a
                 // gradle project.
@@ -2541,12 +2754,14 @@ namespace GooglePlayServices {
                 {"explodeAars", SettingsDialogObj.ExplodeAars.ToString()},
                 {"patchAndroidManifest", SettingsDialogObj.PatchAndroidManifest.ToString()},
                 {"patchMainTemplateGradle", SettingsDialogObj.PatchMainTemplateGradle.ToString()},
+                {"patchSettingsTemplateGradle", SettingsDialogObj.PatchSettingsTemplateGradle.ToString()},
                 {"localMavenRepoDir", SettingsDialogObj.LocalMavenRepoDir.ToString()},
                 {"useJetifier", SettingsDialogObj.UseJetifier.ToString()},
                 {"bundleId", GetAndroidApplicationId()},
                 {"gradleBuildEnabled", buildSystemSettings.GradleBuildEnabled.ToString()},
                 {"gradleTemplateEnabled", buildSystemSettings.GradleTemplateEnabled.ToString()},
                 {"gradlePropertiesTemplateEnabled", buildSystemSettings.GradlePropertiesTemplateEnabled.ToString()},
+                {"gradleSettingsTemplateEnabled", buildSystemSettings.GradleSettingsTemplateEnabled.ToString()},
                 {"projectExportEnabled", buildSystemSettings.ProjectExportEnabled.ToString()},
                 {"androidAbis", androidAbis.ToString()},
             };

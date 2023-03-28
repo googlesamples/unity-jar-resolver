@@ -38,6 +38,7 @@ namespace GooglePlayServices {
             internal bool explodeAars;
             internal bool patchAndroidManifest;
             internal bool patchMainTemplateGradle;
+            internal bool patchSettingsTemplateGradle;
             internal bool patchPropertiesTemplateGradle;
             internal string localMavenRepoDir;
             internal bool useJetifier;
@@ -59,6 +60,7 @@ namespace GooglePlayServices {
                 explodeAars = SettingsDialog.ExplodeAars;
                 patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
                 patchMainTemplateGradle = SettingsDialog.PatchMainTemplateGradle;
+                patchSettingsTemplateGradle = SettingsDialog.PatchSettingsTemplateGradle;
                 patchPropertiesTemplateGradle = SettingsDialog.PatchPropertiesTemplateGradle;
                 localMavenRepoDir = SettingsDialog.LocalMavenRepoDir;
                 useJetifier = SettingsDialog.UseJetifier;
@@ -81,6 +83,7 @@ namespace GooglePlayServices {
                 SettingsDialog.ExplodeAars = explodeAars;
                 SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
                 SettingsDialog.PatchMainTemplateGradle = patchMainTemplateGradle;
+                SettingsDialog.PatchSettingsTemplateGradle = patchSettingsTemplateGradle;
                 SettingsDialog.PatchPropertiesTemplateGradle = patchPropertiesTemplateGradle;
                 SettingsDialog.LocalMavenRepoDir = localMavenRepoDir;
                 SettingsDialog.UseJetifier = useJetifier;
@@ -100,6 +103,7 @@ namespace GooglePlayServices {
         private const string ExplodeAarsKey = Namespace + "ExplodeAars";
         private const string PatchAndroidManifestKey = Namespace + "PatchAndroidManifest";
         private const string PatchMainTemplateGradleKey = Namespace + "PatchMainTemplateGradle";
+        private const string PatchSettingsTemplateGradleKey = Namespace + "PatchSettingsTemplateGradle";
         private const string PatchPropertiesTemplateGradleKey = Namespace + "PatchPropertiesTemplateGradle";
         private const string LocalMavenRepoDirKey = Namespace + "LocalMavenRepoDir";
         private const string UseJetifierKey = Namespace + "UseJetifier";
@@ -119,6 +123,7 @@ namespace GooglePlayServices {
             ExplodeAarsKey,
             PatchAndroidManifestKey,
             PatchMainTemplateGradleKey,
+            PatchSettingsTemplateGradleKey,
             PatchPropertiesTemplateGradleKey,
             LocalMavenRepoDirKey,
             UseJetifierKey,
@@ -238,6 +243,12 @@ namespace GooglePlayServices {
         internal static bool PatchMainTemplateGradle {
             set { projectSettings.SetBool(PatchMainTemplateGradleKey, value); }
             get { return projectSettings.GetBool(PatchMainTemplateGradleKey, true); }
+        }
+
+        internal static bool PatchSettingsTemplateGradle
+        {
+            set { projectSettings.SetBool(PatchSettingsTemplateGradleKey, value); }
+            get { return projectSettings.GetBool(PatchSettingsTemplateGradleKey, true); }
         }
 
         internal static bool PatchPropertiesTemplateGradle {
@@ -500,6 +511,23 @@ namespace GooglePlayServices {
                 settings.localMavenRepoDir = FileUtils.PosixPathSeparators(
                         ValidateLocalMavenRepoDir(EditorGUILayout.TextField(
                                 settings.localMavenRepoDir)));
+                
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Patch settings.gradle", EditorStyles.boldLabel);
+                settings.patchSettingsTemplateGradle = EditorGUILayout.Toggle(settings.patchSettingsTemplateGradle);
+                GUILayout.EndHorizontal();
+                if (settings.patchSettingsTemplateGradle) {
+                    GUILayout.Label(
+                        "If Gradle builds are enabled and a settingsTemplate.gradle file is present for Unity 2022.2 " +
+                        "and above, the settingsTemplate.gradle file will be patched with repositories managed " +
+                        "by the Android Resolver. This has not effect in older versions of Unity.");
+                } else {
+                    GUILayout.Label(
+                        "If Gradle builds are enabled and a settingsTemplate.gradle file is present for Unity 2022.2 " +
+                        "and above, the settingsTemplate.gradle file will not be modified. WARNING: without specifying " +
+                        "repositories Android build may crash when resolving dependencies. You will need to manage declaring " +
+                        "repositories manually if patching is disabled.");
+                }
             }
 
             GUILayout.BeginHorizontal();

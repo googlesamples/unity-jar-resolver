@@ -14,6 +14,8 @@
 //    limitations under the License.
 // </copyright>
 
+using UnityEngine;
+
 namespace GooglePlayServices {
     using System;
     using System.Collections.Generic;
@@ -54,6 +56,12 @@ namespace GooglePlayServices {
             Path.Combine(SettingsDialog.AndroidPluginsDir, "mainTemplate.gradle");
 
         /// <summary>
+        /// Path of the Gradle settings file.
+        /// </summary>
+        public static string GradleSettingsTemplatePath =
+            Path.Combine(SettingsDialog.AndroidPluginsDir, "settingsTemplate.gradle");
+
+        /// <summary>
         /// Line that indicates the start of the injected repos block in the template.
         /// </summary>
         private const string ReposStartLine = "// Android Resolver Repos Start";
@@ -68,6 +76,12 @@ namespace GooglePlayServices {
         /// </summary>
         private const string ReposInjectionLine =
             @".*apply plugin: 'com\.android\.(application|library)'.*";
+
+        /// <summary>
+        /// Line that indicates where to initially inject repos in the gradle settings template.
+        /// </summary>
+        private const string GradleSettingsReposInjectionLine =
+            @".*dependencyResolutionManagement";
 
         /// <summary>
         /// Token that indicates where gradle properties should initially be injected.
@@ -508,7 +522,10 @@ namespace GooglePlayServices {
                         });
                 }
             }
-            repoLines.AddRange(PlayServicesResolver.GradleMavenReposLines(dependencies));
+            
+            if (!PlayServicesResolver.GradleSettingsTemplateContainsRepositories) {
+                repoLines.AddRange(PlayServicesResolver.GradleMavenReposLines(dependencies));
+            }
 
             TextFileLineInjector[] injectors = new [] {
                 new TextFileLineInjector(ReposInjectionLine, ReposStartLine, ReposEndLine,
@@ -526,6 +543,37 @@ namespace GooglePlayServices {
             return PatchFile(GradleTemplatePath, fileDescription,
                              "Gradle Template", "gradletemplate",
                              injectors, resolutionMeasurementParameters);
+        }
+
+        /// <summary>
+        /// Inject / update repositories in the gradle settings template file.
+        /// </summary>
+        /// <param name="dependencies">Dependencies to read repositories from.</param>
+        /// <returns>true if successful, false otherwise.</returns>
+        public static bool InjectRepositoriesInSettings(ICollection<Dependency> dependencies) {
+            var resolutionMeasurementParameters =
+                PlayServicesResolver.GetResolutionMeasurementParameters(null);
+            PlayServicesResolver.analytics.Report(
+                "/resolve/gradlesettingstemplate", resolutionMeasurementParameters,
+                "Gradle Settings Template Resolve");
+            
+            var repoLines = new List<string>();
+            repoLines.AddRange(PlayServicesResolver.GradleMavenReposLines(dependencies));
+            var fileDescription = String.Format("gradle settings template {0}", GradleSettingsTemplatePath);
+            TextFileLineInjector[] repoInjectors = new[] { 
+                new TextFileLineInjector(GradleSettingsReposInjectionLine, ReposStartLine, ReposEndLine,
+                    repoLines, "Repos", fileDescription)
+            };
+            
+            if (!PatchFile(GradleSettingsTemplatePath, fileDescription,
+                    "Gradle Settings Template", "gradlesettingstemplate",
+                    repoInjectors, resolutionMeasurementParameters)) {
+                PlayServicesResolver.Log(
+                    String.Format("Unable to patch " + fileDescription),
+                    level: LogLevel.Error);
+                return false;
+            }
+            return true;
         }
     }
 }
