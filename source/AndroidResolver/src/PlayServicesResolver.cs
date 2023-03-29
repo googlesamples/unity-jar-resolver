@@ -608,23 +608,6 @@ namespace GooglePlayServices {
             }
         }
 
-        /// <summary>
-        /// Whether PlayServicesResolver can auto enable settings template. True if Unity version is below 2023.1 and
-        /// if user hasn't already enabled it itself and if settings template contains repositories block.
-        /// For Unity greater or equal to 2023.1 settings template will not be automatically enabled because it can be
-        /// enabled manually through Player Settings 
-        /// </summary>
-        // public static bool CanAutoEnableSettingsTemplate
-        // {
-        //     get
-        //     {
-        //         //Starting from Unity 2023 settings template can be enabled by the user from the Player Settings
-        //         return (Google.VersionHandler.GetUnityVersionMajorMinor() < 2023.1f) &&
-        //                !GradleSettingsTemplateEnabled && 
-        //                UnityDefaultGradleSettingsTemplateContainsRepositories;
-        //     }
-        // }
-
         // Backing store for GradleVersion property.
         private static string gradleVersion = null;
         // Extracts a version number from a gradle distribution jar file.
