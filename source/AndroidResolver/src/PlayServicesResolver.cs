@@ -558,7 +558,6 @@ namespace GooglePlayServices {
         {
             get
             {
-                Debug.Log($"GradleSettingsTemplateEnabled {GradleSettingsTemplateEnabled}");
                 return GradleSettingsTemplateEnabled &&
                        dependencyResolutionManagementPattern
                            .Match(File.ReadAllText(GradleTemplateResolver.GradleSettingsTemplatePath))
@@ -580,27 +579,23 @@ namespace GooglePlayServices {
             set { unityDefaultGradleSettingsTemplateContainsRepositories = value; }
             get
             {
-                Debug.Log($"unityDefaultGradleSettingsTemplateContainsRepositories != null {unityDefaultGradleSettingsTemplateContainsRepositories != null}");
                 if (unityDefaultGradleSettingsTemplateContainsRepositories != null)
                     return unityDefaultGradleSettingsTemplateContainsRepositories == true;
                 
                 // Search the gradle templates for the settings template.
                 var engineDir = AndroidPlaybackEngineDirectory;
-                Debug.Log($"engineDir {engineDir}");
                 if (String.IsNullOrEmpty(engineDir)) {
                     unityDefaultGradleSettingsTemplateContainsRepositories = false;
                     return false;
                 }
                 
                 var gradleTemplateDir = Path.Combine(Path.Combine(engineDir, "Tools"), "GradleTemplates");
-                Debug.Log($"gradleTemplateDir {gradleTemplateDir}");
                 if (!Directory.Exists(gradleTemplateDir)) {
                     unityDefaultGradleSettingsTemplateContainsRepositories = false;
                     return false;
                 }
                 
                 var settingsTemplatePath = Path.Combine(gradleTemplateDir, "settingsTemplate.gradle");
-                Debug.Log($"settingTemplatePath {settingsTemplatePath}");
                 if (!File.Exists(settingsTemplatePath)) {
                     unityDefaultGradleSettingsTemplateContainsRepositories = false;
                     return false;
@@ -609,7 +604,6 @@ namespace GooglePlayServices {
                 unityDefaultGradleSettingsTemplateContainsRepositories =
                         dependencyResolutionManagementPattern.Match(File.ReadAllText(settingsTemplatePath)).Success;
 
-                Debug.Log($"Settings template matched {unityDefaultGradleSettingsTemplateContainsRepositories == true}");
                 return unityDefaultGradleSettingsTemplateContainsRepositories == true;
             }
         }
@@ -2113,13 +2107,6 @@ namespace GooglePlayServices {
             
             Func<ICollection<Dependency>, bool> patchGradleSettings = dependencies => {
                 // If patching is enabled but custom gradle settings template isn't enabled  
-                Debug.Log($"GradleBuildEnabled {GradleBuildEnabled}");
-                Debug.Log($"Google.VersionHandler.GetUnityVersionMajorMinor() {Google.VersionHandler.GetUnityVersionMajorMinor()}");
-                Debug.Log($"GradleTemplateEnabled {GradleTemplateEnabled}");
-                Debug.Log($"UnityDefaultGradleSettingsTemplateContainsRepositories {UnityDefaultGradleSettingsTemplateContainsRepositories}");
-                Debug.Log($"SettingsDialogObj.PatchSettingsTemplateGradle {SettingsDialogObj.PatchSettingsTemplateGradle}");
-                Debug.Log($"GradleSettingsTemplateEnabled {GradleSettingsTemplateEnabled}");
-                
                 if (GradleBuildEnabled &&
                     GradleTemplateEnabled &&
                     UnityDefaultGradleSettingsTemplateContainsRepositories &&

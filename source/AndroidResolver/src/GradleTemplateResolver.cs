@@ -14,8 +14,6 @@
 //    limitations under the License.
 // </copyright>
 
-using UnityEngine;
-
 namespace GooglePlayServices {
     using System;
     using System.Collections.Generic;
