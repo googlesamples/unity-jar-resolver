@@ -69,17 +69,25 @@ public class AndroidResolverIntegrationTests {
         "Assets/Plugins/Android/gradleTemplateDISABLED.properties";
 
     /// <summary>
+    /// Disabled Gradle settings template file.
+    /// </summary>
+    private const string GRADLE_SETTINGS_TEMPLATE_DISABLED = "Assets/Plugins/Android/settingsTemplateDISABLED.gradle";
+
     /// <summary>
     /// Enabled Gradle template file.
     /// </summary>
     private const string GRADLE_TEMPLATE_ENABLED = "Assets/Plugins/Android/mainTemplate.gradle";
 
     /// <summary>
-    /// <summary>
     /// Enabled Gradle template properties file.
     /// </summary>
     private const string GRADLE_TEMPLATE_PROPERTIES_ENABLED = "Assets/Plugins/Android/gradleTemplate.properties";
 
+    /// <summary>
+    /// Enabled Gradle settings template file
+    /// </summary>
+    private const string GRADLE_SETTINGS_TEMPLATE_ENABLED = "Assets/Plugins/Android/settingsTemplate.gradle";
+    
     /// <summary>
     /// Configure tests to run.
     /// </summary>
@@ -94,6 +102,13 @@ public class AndroidResolverIntegrationTests {
         // that do not use the Gradle template.
         var nonGradleTemplateFilesToIgnore = new HashSet<string>() {
             Path.GetFileName(GRADLE_TEMPLATE_DISABLED),
+            Path.GetFileName(GRADLE_SETTINGS_TEMPLATE_DISABLED),
+            Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
+            Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
+        };
+
+        var gradleTemplateFilesToIgnoreNotIncludingGradleTemplate = new HashSet<string>() {
+            Path.GetFileName(GRADLE_SETTINGS_TEMPLATE_DISABLED),
             Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
             Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
         };
@@ -129,10 +144,7 @@ public class AndroidResolverIntegrationTests {
                             otherExpectedFiles: new [] {
                                 "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
                                 "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
-                            filesToIgnore: new HashSet<string> {
-                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
-                                Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
-                            });
+                            filesToIgnore: gradleTemplateFilesToIgnoreNotIncludingGradleTemplate);
                     }
                 },
                 new IntegrationTester.TestCase {
@@ -152,10 +164,28 @@ public class AndroidResolverIntegrationTests {
                             otherExpectedFiles: new [] {
                                 "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
                                 "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
+                            filesToIgnore: gradleTemplateFilesToIgnoreNotIncludingGradleTemplate);
+                    }
+                },
+                new IntegrationTester.TestCase {
+                    Name = "ResolveForGradleBuildSystemWithSettingsTemplate",
+                    Method = (testCase, testCaseComplete) => {
+                        ClearAllDependencies();
+                        SetupDependencies();
+                        
+                        ResolveWithGradleTemplate(
+                            GRADLE_TEMPLATE_DISABLED,
+                            "ExpectedArtifacts/NoExport/GradleTemplateSettings",
+                            testCase, testCaseComplete,
+                            otherExpectedFiles: new [] {
+                                "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
+                                "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
                             filesToIgnore: new HashSet<string> {
-                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
-                                Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
-                            });
+                                Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED),
+                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED)
+                            },
+                            deleteGradleSettingsTemplate: true,
+                            gradleSettingsTemplate: GRADLE_SETTINGS_TEMPLATE_DISABLED);
                     }
                 },
                 new IntegrationTester.TestCase {
@@ -180,9 +210,7 @@ public class AndroidResolverIntegrationTests {
                             otherExpectedFiles: new [] {
                                 "Assets/GeneratedLocalRepo/Firebase/m2repository/com/google/" +
                                 "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
-                            filesToIgnore: new HashSet<string> {
-                                Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
-                                Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)},
+                            filesToIgnore: gradleTemplateFilesToIgnoreNotIncludingGradleTemplate,
                             deleteGradleTemplateProperties: true,
                             gradleTemplateProperties: gradleTemplateProperties
                             );
@@ -203,6 +231,7 @@ public class AndroidResolverIntegrationTests {
                                 "firebase/firebase-app-unity/5.1.1/firebase-app-unity-5.1.1.aar" },
                             filesToIgnore: new HashSet<string> {
                                 Path.GetFileName(GRADLE_TEMPLATE_DISABLED),
+                                Path.GetFileName(GRADLE_SETTINGS_TEMPLATE_DISABLED),
                                 Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
                             });
                     }
@@ -235,10 +264,7 @@ public class AndroidResolverIntegrationTests {
                                     enableDependencies();
                                     testCaseComplete(testCaseResult);
                                 },
-                                filesToIgnore: new HashSet<string> {
-                                    Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
-                                    Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED),
-                                });
+                                filesToIgnore: gradleTemplateFilesToIgnoreNotIncludingGradleTemplate);
                         } finally {
                             enableDependencies();
                         }
@@ -323,10 +349,6 @@ public class AndroidResolverIntegrationTests {
                     Method = (testCase, testCaseComplete) => {
                         ClearAllDependencies();
                         SetupDependencies();
-                        var filesToIgnore = new HashSet<string> {
-                            Path.GetFileName(GRADLE_TEMPLATE_LIBRARY_DISABLED),
-                            Path.GetFileName(GRADLE_TEMPLATE_PROPERTIES_DISABLED)
-                        };
 
                         ResolveWithGradleTemplate(
                             GRADLE_TEMPLATE_DISABLED,
@@ -335,14 +357,15 @@ public class AndroidResolverIntegrationTests {
                                 PlayServicesResolver.DeleteResolvedLibrariesSync();
                                 testCaseResult.ErrorMessages.AddRange(CompareDirectoryContents(
                                             "ExpectedArtifacts/NoExport/GradleTemplateEmpty",
-                                            "Assets/Plugins/Android", filesToIgnore));
+                                            "Assets/Plugins/Android", 
+                                            gradleTemplateFilesToIgnoreNotIncludingGradleTemplate));
                                 if (File.Exists(GRADLE_TEMPLATE_ENABLED)) {
                                     File.Delete(GRADLE_TEMPLATE_ENABLED);
                                 }
                                 testCaseComplete(testCaseResult);
                             },
                             deleteGradleTemplate: false,
-                            filesToIgnore: filesToIgnore);
+                            filesToIgnore: gradleTemplateFilesToIgnoreNotIncludingGradleTemplate);
                     }
                 },
             });
@@ -729,6 +752,9 @@ public class AndroidResolverIntegrationTests {
     /// <param name="gradleTemplateProperties">Gradle template properties to use.</param>
     /// <param name="deleteGradleTemplateProperties">Whether to delete the gradle template
     /// properties before testCaseComplete is called.</param>
+    /// <param name="deleteGradleSettingsTemplate">Whether to delete the gradle settings template
+    /// before testCaseComplete is called.</param>
+    /// <param name="gradleSettingsTemplate">Gradle settings template to use</param>
     private static void ResolveWithGradleTemplate(
             string gradleTemplate,
             string expectedAssetsDir,
@@ -738,13 +764,17 @@ public class AndroidResolverIntegrationTests {
             bool deleteGradleTemplateProperties = false,
             ICollection<string> filesToIgnore = null,
             bool deleteGradleTemplate = true,
-            string gradleTemplateProperties = null) {
+            string gradleTemplateProperties = null,
+            bool deleteGradleSettingsTemplate = true,
+            string gradleSettingsTemplate = null) {
         var cleanUpFiles = new List<string>();
         if (deleteGradleTemplate) cleanUpFiles.Add(GRADLE_TEMPLATE_ENABLED);
         if (deleteGradleTemplateProperties) cleanUpFiles.Add(GRADLE_TEMPLATE_PROPERTIES_ENABLED);
+        if (deleteGradleSettingsTemplate) cleanUpFiles.Add(GRADLE_SETTINGS_TEMPLATE_ENABLED);
         if (otherExpectedFiles != null) cleanUpFiles.AddRange(otherExpectedFiles);
         Action cleanUpTestCase = () => {
             GooglePlayServices.SettingsDialog.PatchMainTemplateGradle = false;
+            GooglePlayServices.SettingsDialog.PatchSettingsTemplateGradle = false;
             GooglePlayServices.SettingsDialog.PatchPropertiesTemplateGradle = false;
             foreach (var filename in cleanUpFiles) {
                 if (File.Exists(filename)) File.Delete(filename);
@@ -753,6 +783,10 @@ public class AndroidResolverIntegrationTests {
         try {
             GooglePlayServices.SettingsDialog.PatchMainTemplateGradle = true;
             File.Copy(gradleTemplate, GRADLE_TEMPLATE_ENABLED);
+            if (gradleSettingsTemplate != null) {
+                GooglePlayServices.SettingsDialog.PatchSettingsTemplateGradle = true;
+                File.Copy(gradleSettingsTemplate, GRADLE_SETTINGS_TEMPLATE_ENABLED);
+            } 
             if (gradleTemplateProperties != null) {
                 GooglePlayServices.SettingsDialog.PatchPropertiesTemplateGradle = true;
                 File.Copy(gradleTemplateProperties, GRADLE_TEMPLATE_PROPERTIES_ENABLED);
