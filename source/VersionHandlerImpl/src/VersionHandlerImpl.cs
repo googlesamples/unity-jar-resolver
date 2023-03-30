@@ -3010,6 +3010,10 @@ public class VersionHandlerImpl : AssetPostprocessor {
         return ExecutionEnvironment.VersionMajorMinor;
     }
 
+    public static int GetUnityPatchVersion() {
+        return ExecutionEnvironment.PatchVersion;
+    }
+
     // ID of the scheduled job which performs an update.
     private static int updateVersionedAssetsJob = 0;
 

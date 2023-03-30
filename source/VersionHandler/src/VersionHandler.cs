@@ -399,6 +399,21 @@ public class VersionHandler {
         }
     }
 
+    private static int unityPatchVersion = -1;
+    // Returns the patch version of the unity environment we are running in as a int
+    public static float GetUnityPatchVersion()
+    {
+        if (unityPatchVersion > 0) return unityPatchVersion;
+        try
+        {
+            var version = InvokeImplMethod("GetUnityPatchVersion");
+            unityPatchVersion = (int)version;
+            return unityPatchVersion;
+        } catch (Exception) {
+            return 0.0f;
+        }
+    }
+
     /// Call a static method on a type returning null if type is null.
     private static object InvokeImplMethod(string methodName, object[] args = null,
                                            Dictionary<string, object> namedArgs = null,

@@ -572,7 +572,7 @@ namespace GooglePlayServices {
         /// This variable is needed to know whether to generate enable settings template automatically or not because
         /// Starting from Unity 2022.2 it uses "dependencyResolutionManagement" in settings template but at the same time
         /// doesn't provide possibility to enable it from Project Settings. Settings template can be enabled only starting
-        /// from Unity 2023.1. Thus for Unity 2022.2 - 2023.1 PlayServicesResolver will enable settings template automatically
+        /// from Unity 2022.2.10. Thus for Unity 2022.2 - 2022.2.10 PlayServicesResolver will enable settings template automatically
         /// </summary>
         public static bool UnityDefaultGradleSettingsTemplateContainsRepositories
         {
@@ -2095,9 +2095,9 @@ namespace GooglePlayServices {
                     UnityDefaultGradleSettingsTemplateContainsRepositories &&
                     SettingsDialogObj.PatchSettingsTemplateGradle &&
                     !GradleSettingsTemplateEnabled) {
-                    
-                    if (Google.VersionHandler.GetUnityVersionMajorMinor() >= 2023.1f) {
-                        // For Unity 2023.1 and above it is possible for the user to enable custom gradle settings template,
+                    if (Math.Abs(Google.VersionHandler.GetUnityVersionMajorMinor() - 2022.2f) < 0.0001f && Google.VersionHandler.GetUnityPatchVersion() >= 10 || 
+                        Google.VersionHandler.GetUnityVersionMajorMinor() > 2022.2f) {
+                        // For Unity 2022.2.10 and above it is possible for the user to enable custom gradle settings template,
                         // so warn the user if patching is enabled but settings template is disabled
                         lastError = String.Format(
                             "Resolution failed because Custom Gradle Settings Template is disabled. " +
@@ -2113,7 +2113,7 @@ namespace GooglePlayServices {
                         return false;
                     }
                     
-                    // Effectively for Unity 2022.2 - 2023.1 enable custom gradle settings template automatically
+                    // Effectively for Unity 2022.2 - 2022.2.10 enable custom gradle settings template automatically
                     var engineDir = AndroidPlaybackEngineDirectory;
                     if (String.IsNullOrEmpty(engineDir)) {
                         lastError = String.Format("Couldn't find directory: {0}", engineDir);

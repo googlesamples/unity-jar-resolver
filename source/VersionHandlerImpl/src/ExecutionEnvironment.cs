@@ -80,6 +80,40 @@ internal class ExecutionEnvironment {
             return result;
         }
     }
+
+    /// <summary>
+    /// If the Unity version can't be parsed, return a safe-ish patch version number.
+    /// </summary>
+    private static int DEFAULT_UNITY_PATCH_VERSION = 0;
+    
+    // Cached patch version
+    private static int unityPatchVersion = -1;
+
+    /// <summary>
+    /// Returns the patch version of the unity environment we are running in
+    /// as a int
+    /// </summary>
+    public static int PatchVersion {
+        get {
+            if (unityPatchVersion > 0) return unityPatchVersion;
+            int result = DEFAULT_UNITY_PATCH_VERSION;
+            string version = Application.unityVersion;
+            if (!string.IsNullOrEmpty(version)) {
+                int firstDotIndex = version.IndexOf('.');
+                if (firstDotIndex > 0 && version.Length > firstDotIndex) {
+                    int secondDotIndex = version.IndexOf('.', firstDotIndex + 1);
+                    if (secondDotIndex > 0 && version.Length > secondDotIndex + 2) {
+                        if (!int.TryParse(version.Substring(secondDotIndex + 1, 2), out result)) {
+                            result = DEFAULT_UNITY_PATCH_VERSION;
+                        }
+                    }
+                }
+            }
+
+            unityPatchVersion = result;
+            return result;
+        }
+    }
 }
 
 }
