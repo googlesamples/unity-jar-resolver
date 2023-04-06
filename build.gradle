@@ -223,6 +223,8 @@ project.ext {
 
   // Directory for intermediate and final build outputs.
   buildDir = new File(scriptDirectory, "build")
+  // Directory for external tools.
+  externalToolsDir = new File(scriptDirectory, "external_tools")
   // Directory for testing.
   testDir = new File(scriptDirectory, "test_output")
   // Version of the plugin (update this with CHANGELOG.md on each release).
@@ -282,7 +284,7 @@ project.ext {
   symbolDatabaseExtension = pdbSupported ? ".pdb" : ".dll.mdb"
   // Changelog file.
   changelog = new File(scriptDirectory, "CHANGELOG.md")
-  pythonBootstrapDir = new File(buildDir, "python_bootstrap")
+  pythonBootstrapDir = new File(externalToolsDir, "python_bootstrap")
   pythonBinDir = new File(new File(pythonBootstrapDir, "python"), "bin")
   // Python binary after it has been bootstrapped.
   pythonExe = new File(pythonBinDir, "python3")

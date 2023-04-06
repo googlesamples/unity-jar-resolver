@@ -25,3 +25,5 @@
 /unity_dlls/
 
 .DS_Store
+
+external_tools/
