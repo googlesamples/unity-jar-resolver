@@ -488,7 +488,8 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
-        /// Inject / update dependencies in the gradle template file.
+        /// Inject / update additional Maven repository urls specified from `Dependencies.xml` in
+        /// the Gradle settings template file.
         /// </summary>
         /// <param name="dependencies">Dependencies to inject.</param>
         /// <returns>true if successful, false otherwise.</returns>
@@ -590,6 +591,7 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        /// Inject / update dependencies in the gradle template file.
         /// </summary>
         /// <returns>true if successful, false otherwise.</returns>
         public static bool InjectSettings(ICollection<Dependency> dependencies, out string lastError) {
