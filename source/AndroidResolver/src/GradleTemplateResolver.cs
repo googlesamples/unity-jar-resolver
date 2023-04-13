@@ -31,11 +31,49 @@ namespace GooglePlayServices {
     internal class GradleTemplateResolver {
 
         /// <summary>
-        /// Path of the Gradle properties file.
+        /// Filename of the Custom Gradle Properties Template file.
+        /// </summary>
+        public static string GradlePropertiesTemplateFilename = "gradleTemplate.properties";
+
+        /// <summary>
+        /// Path of the Custom Gradle Properties Template file in the Unity project.
         /// Available only from Unity version 2019.3 onwards
         /// </summary>
         public static string GradlePropertiesTemplatePath =
-            Path.Combine(SettingsDialog.AndroidPluginsDir, "gradleTemplate.properties");
+            Path.Combine(SettingsDialog.AndroidPluginsDir, GradlePropertiesTemplateFilename);
+
+        /// <summary>
+        /// Filename of the Custom Gradle Settings Template file.
+        /// </summary>
+        public static string GradleSettingsTemplatePathFilename = "settingsTemplate.gradle";
+
+        /// <summary>
+        /// Path of the Custom Gradle Settings Template file.
+        /// </summary>
+        public static string GradleSettingsTemplatePath =
+            Path.Combine(SettingsDialog.AndroidPluginsDir, GradleSettingsTemplatePathFilename);
+
+        public static string UnityGradleTemplatesDir {
+            get {
+                if (unityGradleTemplatesDir == null) {
+                    var engineDir = PlayServicesResolver.AndroidPlaybackEngineDirectory;
+                    if (String.IsNullOrEmpty(engineDir)) return null;
+                    var gradleTemplateDir =
+                        Path.Combine(Path.Combine(engineDir, "Tools"), "GradleTemplates");
+                    unityGradleTemplatesDir = gradleTemplateDir;
+                }
+                return unityGradleTemplatesDir;
+            }
+        }
+        private static string unityGradleTemplatesDir = null;
+
+        public static string UnityGradleSettingsTemplatePath {
+            get {
+                return Path.Combine(
+                        UnityGradleTemplatesDir,
+                        GradleSettingsTemplatePathFilename);
+            }
+        }
 
         /// <summary>
         /// Line that indicates the start of the injected properties block in properties template.
@@ -48,10 +86,15 @@ namespace GooglePlayServices {
         private const string PropertiesEndLine = "# Android Resolver Properties End";
 
         /// <summary>
+        /// Filename of the Custom Main Gradle Template file.
+        /// </summary>
+        public static string GradleTemplateFilename = "mainTemplate.gradle";
+
+        /// <summary>
         /// Path of the Gradle template file.
         /// </summary>
         public static string GradleTemplatePath =
-            Path.Combine(SettingsDialog.AndroidPluginsDir, "mainTemplate.gradle");
+            Path.Combine(SettingsDialog.AndroidPluginsDir, GradleTemplateFilename);
 
         /// <summary>
         /// Line that indicates the start of the injected repos block in the template.
@@ -68,6 +111,12 @@ namespace GooglePlayServices {
         /// </summary>
         private const string ReposInjectionLine =
             @".*apply plugin: 'com\.android\.(application|library)'.*";
+
+        /// <summary>
+        /// Line that indicates where to initially inject repos in the settings template.
+        /// </summary>
+        private const string ReposInjectionLineInGradleSettings =
+            @".*flatDir {";
 
         /// <summary>
         /// Token that indicates where gradle properties should initially be injected.
@@ -107,6 +156,16 @@ namespace GooglePlayServices {
         /// Token that indicates where exclusions should be injected.
         /// </summary>
         private const string PackagingOptionsToken = @"android +{";
+
+        /// <summary>
+        /// Whether current of Unity has changed the place to specify Maven repos from
+        /// `mainTemplate.gradle` to `settingsTemplate.gradle`.
+        /// </summary>
+        public static bool UnityChangeMavenRepoInSettingsTemplate {
+            get {
+                return Google.VersionHandler.GetUnityVersionMajorMinor() >= 2022.2f;
+            }
+        }
 
         /// <summary>
         /// Copy srcaar files to aar files that are excluded from Unity's build process.
@@ -429,7 +488,8 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
-        /// Inject / update dependencies in the gradle template file.
+        /// Inject / update additional Maven repository urls specified from `Dependencies.xml` in
+        /// the Gradle settings template file.
         /// </summary>
         /// <param name="dependencies">Dependencies to inject.</param>
         /// <returns>true if successful, false otherwise.</returns>
@@ -508,7 +568,9 @@ namespace GooglePlayServices {
                         });
                 }
             }
-            repoLines.AddRange(PlayServicesResolver.GradleMavenReposLines(dependencies));
+            if (!UnityChangeMavenRepoInSettingsTemplate) {
+                repoLines.AddRange(PlayServicesResolver.GradleMavenReposLines(dependencies));
+            }
 
             TextFileLineInjector[] injectors = new [] {
                 new TextFileLineInjector(ReposInjectionLine, ReposStartLine, ReposEndLine,
@@ -526,6 +588,182 @@ namespace GooglePlayServices {
             return PatchFile(GradleTemplatePath, fileDescription,
                              "Gradle Template", "gradletemplate",
                              injectors, resolutionMeasurementParameters);
+        }
+
+        /// <summary>
+        /// Inject / update dependencies in the gradle template file.
+        /// </summary>
+        /// <returns>true if successful, false otherwise.</returns>
+        public static bool InjectSettings(ICollection<Dependency> dependencies, out string lastError) {
+            if (!UnityChangeMavenRepoInSettingsTemplate ||
+                !PlayServicesResolver.GradleTemplateEnabled) {
+                // Early out since there is no need to patch settings template.
+                lastError = "";
+                return true;
+            }
+
+            if (!EnsureGradleTemplateEnabled(GradleSettingsTemplatePathFilename)) {
+                lastError = String.Format(
+                    "Failed to auto-generate '{0}'. This is required to specify " +
+                    "additional Maven repos from Unity 2022.2. " +
+                    "Please manually generate '{2}' through one " +
+                    "of the following methods:\n" +
+                    "* For Unity 2022.2.10+, enable 'Custom Gradle Settings Template' " +
+                    "found under 'Player Settings > Settings for Android -> Publishing " +
+                    "Settings' menu. \n" +
+                    "* Manually copy '{1}' to '{2}'\n" +
+                    "If you like to patch this yourself, simply disable 'Copy and patch " +
+                    "settingsTemplate.gradle' in Android Resolver settings.",
+                    GradleSettingsTemplatePathFilename,
+                    UnityGradleSettingsTemplatePath,
+                    GradleSettingsTemplatePath);
+                return false;
+            }
+
+            // ReposInjectionLineInGradleSettings
+
+            var resolutionMeasurementParameters =
+                PlayServicesResolver.GetResolutionMeasurementParameters(null);
+            PlayServicesResolver.analytics.Report(
+                    "/resolve/gradlesettings", resolutionMeasurementParameters,
+                    "Gradle Settings Template Resolve");
+
+            var settingsFileDescription = String.Format(
+                "gradle settings template " + GradleSettingsTemplatePath);
+
+            TextFileLineInjector[] settingsInjectors = new [] {
+                new TextFileLineInjector(ReposInjectionLineInGradleSettings,
+                                        ReposStartLine, ReposEndLine,
+                                        GradleMavenReposLinesFromDependencies(
+                                                dependencies: dependencies,
+                                                addMavenGoogle: false,
+                                                addMavenCentral: false,
+                                                addMavenLocal: true),
+                                        "Repo",
+                                        settingsFileDescription)
+            };
+            if (!PatchFile(GradleSettingsTemplatePath, settingsFileDescription,
+                        "Gradle Settings", "gradlesettings",
+                        settingsInjectors,
+                        resolutionMeasurementParameters)) {
+                lastError = String.Format("Unable to patch " + settingsFileDescription);
+                return false;
+            }
+
+            lastError = "";
+            return true;
+        }
+
+        /// <summary>
+        /// Get the included dependency repos as lines that can be included in a Gradle file.
+        /// </summary>
+        /// <returns>Lines that can be included in a gradle file.</returns>
+        internal static IList<string> GradleMavenReposLinesFromDependencies(
+                ICollection<Dependency> dependencies,
+                bool addMavenGoogle,
+                bool addMavenCentral,
+                bool addMavenLocal) {
+            var lines = new List<string>();
+            if (dependencies.Count > 0) {
+                var exportEnabled = PlayServicesResolver.GradleProjectExportEnabled;
+                var useFullPath = (
+                        exportEnabled &&
+                        SettingsDialog.UseFullCustomMavenRepoPathWhenExport ) || (
+                        !exportEnabled &&
+                        SettingsDialog.UseFullCustomMavenRepoPathWhenNotExport);
+
+                var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
+                var projectFileUri = GradleResolver.RepoPathToUri(projectPath);
+                // projectPath will point to the Unity project root directory as Unity will
+                // generate the root Gradle project in "Temp/gradleOut" when *not* exporting a
+                // gradle project.
+                if (!useFullPath) {
+                    lines.Add(String.Format(
+                            "        def unityProjectPath = $/{0}**DIR_UNITYPROJECT**/$" +
+                            ".replace(\"\\\\\", \"/\")", GradleWrapper.FILE_SCHEME));
+                }
+                if(addMavenGoogle) {
+                    lines.Add("        maven {");
+                    lines.Add("            url \"https://maven.google.com\"");
+                    lines.Add("        }");
+                }
+                // Consolidate repos url from Packages folders like
+                //   "Packages/com.company.pkg1/Path/To/m2repository" and
+                //   "Packages/com.company.pkg2/Path/To/m2repository"
+                Dictionary< string, List<string> > repoUriToSources =
+                        new Dictionary<string, List<string>>();
+                foreach (var repoAndSources in PlayServicesResolver.GetRepos(dependencies: dependencies)) {
+                    string repoUri;
+                    if (repoAndSources.Key.StartsWith(projectFileUri)) {
+                        var relativePath = repoAndSources.Key.Substring(projectFileUri.Length + 1);
+                        // Convert "Assets", "Packages/packageid", or
+                        // "Library/PackageCache/packageid@version" prefix to local maven repo
+                        // path.  Note that local maven repo path only exists if the original repo
+                        // path contains .srcaar.
+                        var repoPath = FileUtils.PosixPathSeparators(
+                            FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                                relativePath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir));
+                        if (!Directory.Exists(repoPath)) {
+                            repoPath = relativePath;
+                        }
+
+                        if (useFullPath) {
+                            // build.gradle expects file:/// URI so file separator will be "/" in anycase
+                            // and we must NOT use Path.Combine here because it will use "\" for win platforms
+                            repoUri = String.Format("\"{0}/{1}\"", projectFileUri, repoPath);
+                        } else {
+                            repoUri = String.Format("(unityProjectPath + \"/{0}\")", repoPath);
+                        }
+                    } else {
+                        repoUri = String.Format("\"{0}\"", repoAndSources.Key);
+                    }
+                    List<string> sources;
+                    if (!repoUriToSources.TryGetValue(repoUri, out sources)) {
+                        sources = new List<string>();
+                        repoUriToSources[repoUri] = sources;
+                    }
+                    sources.Add(repoAndSources.Value);
+                }
+                foreach(var kv in repoUriToSources) {
+                    lines.Add("        maven {");
+                    lines.Add(String.Format("            url {0} // {1}", kv.Key,
+                                            String.Join(", ", kv.Value.ToArray())));
+                    lines.Add("        }");
+                }
+                if (addMavenLocal) {
+                    lines.Add("        mavenLocal()");
+                }
+                if (addMavenCentral) {
+                    lines.Add("        mavenCentral()");
+                }
+            }
+            return lines;
+        }
+
+        public static bool EnsureGradleTemplateEnabled(string templateName) {
+            string templatePath = Path.Combine(SettingsDialog.AndroidPluginsDir, templateName);
+            if (File.Exists(templatePath)) {
+                return true;
+            }
+
+            string templateSourcePath = Path.Combine(UnityGradleTemplatesDir, templateName);
+
+            try {
+                File.Copy(templateSourcePath, templatePath);
+            } catch (Exception e) {
+                PlayServicesResolver.Log(String.Format(
+                        "Unable to copy '{0}' from Unity engine folder '{1}' to this project " +
+                        "folder '{2}'. \n {3}",
+                        templateName,
+                        UnityGradleTemplatesDir,
+                        SettingsDialog.AndroidPluginsDir,
+                        e.ToString()), LogLevel.Error);
+                return false;
+            }
+            PlayServicesResolver.Log(String.Format(
+                    "Copied '{0}' from Unity engine folder to this project '{1}'",
+                    templateName, SettingsDialog.AndroidPluginsDir));
+            return true;
         }
     }
 }

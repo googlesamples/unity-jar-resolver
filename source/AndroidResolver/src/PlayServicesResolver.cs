@@ -522,6 +522,16 @@ namespace GooglePlayServices {
             }
         }
 
+        /// <summary>
+        /// Whether the Gradle Settings template is enabled.
+        /// </summary>
+        public static bool GradleSettingsTemplateEnabled {
+            get {
+                return GradleBuildEnabled &&
+                 File.Exists(GradleTemplateResolver.GradleSettingsTemplatePath);
+            }
+        }
+
         // Backing store for GradleVersion property.
         private static string gradleVersion = null;
         // Extracts a version number from a gradle distribution jar file.
@@ -605,10 +615,7 @@ namespace GooglePlayServices {
                     return androidGradlePluginVersion;
                 }
                 // Search the gradle templates for the plugin version.
-                var engineDir = AndroidPlaybackEngineDirectory;
-                if (String.IsNullOrEmpty(engineDir)) return null;
-                var gradleTemplateDir =
-                    Path.Combine(Path.Combine(engineDir, "Tools"), "GradleTemplates");
+                var gradleTemplateDir = GradleTemplateResolver.UnityGradleTemplatesDir;
                 if (Directory.Exists(gradleTemplateDir)) {
                     var gradleTemplates = new List<string>();
                     if (File.Exists(mainTemplateGradlePath)) {
@@ -1663,11 +1670,20 @@ namespace GooglePlayServices {
         /// Remove libraries references from Gradle template files and patch POM files to work
         /// with the Gradle template.
         /// </summary>
-        private static void DeleteResolvedLibrariesFromGradleTemplate() {
+        /// <param name="updateMainTemplate">Whether to update mainTemplate.gradle. </param>
+        /// <param name="updateSettingsTemplate">Whether to update settingsTemplate.gradle. </param>
+        /// have changed.  This is useful if a dependency specifies a wildcard in the version
+        /// expression.</param>
+        private static void DeleteResolvedLibrariesFromGradleTemplate(
+                bool updateMainTemplate, bool updateSettingsTemplate) {
             LocalMavenRepository.PatchPomFilesInLocalRepos(
                 PlayServicesSupport.GetAllDependencies().Values);
-            if (GradleTemplateEnabled) {
+            if (updateMainTemplate && GradleTemplateEnabled) {
                 GradleTemplateResolver.InjectDependencies(new List<Dependency>());
+            }
+            if (updateSettingsTemplate && GradleSettingsTemplateEnabled) {
+                string lastError;
+                GradleTemplateResolver.InjectSettings(new List<Dependency>(), out lastError);
             }
         }
 
@@ -1685,7 +1701,8 @@ namespace GooglePlayServices {
                     PlayServicesResolver.analytics.Report("/deleteresolved",
                                                           "Delete Resolved Packages");
                     DeleteLabeledAssets();
-                    DeleteResolvedLibrariesFromGradleTemplate();
+                    DeleteResolvedLibrariesFromGradleTemplate(updateMainTemplate: true,
+                                                              updateSettingsTemplate: true);
                     if (complete != null) complete();
                 }, 0);
         }
@@ -1806,7 +1823,9 @@ namespace GooglePlayServices {
                     Log("Stale dependencies exist. Deleting assets...", level: LogLevel.Verbose);
                     DeleteLabeledAssets();
                 }
-                DeleteResolvedLibrariesFromGradleTemplate();
+                    DeleteResolvedLibrariesFromGradleTemplate(updateMainTemplate: true,
+                                                              updateSettingsTemplate: true);
+
                 if (resolutionComplete != null) {
                     resolutionComplete(true);
                 }
@@ -1934,10 +1953,11 @@ namespace GooglePlayServices {
 
             // If a gradle template is present but patching is disabled, remove managed libraries
             // from the template.
-            if (GradleTemplateEnabled &&
-                !SettingsDialogObj.PatchMainTemplateGradle) {
-                DeleteResolvedLibrariesFromGradleTemplate();
-            }
+            DeleteResolvedLibrariesFromGradleTemplate(
+                updateMainTemplate: GradleTemplateEnabled &&
+                                    !SettingsDialogObj.PatchMainTemplateGradle,
+                updateSettingsTemplate: GradleSettingsTemplateEnabled &&
+                                        !SettingsDialogObj.PatchSettingsTemplateGradle);
 
             Func<bool> patchGradleProperties = () => {
                 // For Unity 2019.3 and above, warn the user if jetifier is enabled
@@ -1975,13 +1995,23 @@ namespace GooglePlayServices {
                 return true;
             };
 
+            Func<ICollection<Dependency>, bool> patchSettingsTemplateGradle = (dependencies) => {
+                if (GradleBuildEnabled && GradleTemplateEnabled &&
+                    SettingsDialogObj.PatchSettingsTemplateGradle) {
+                    return GradleTemplateResolver.InjectSettings(dependencies, out lastError);
+                }
+                return true;
+            };
+
             if (GradleTemplateEnabled &&
                 SettingsDialogObj.PatchMainTemplateGradle) {
                 lastError = "";
                 RunOnMainThread.Run(() => {
-                        finishResolution(GradleTemplateResolver.InjectDependencies(
-                            PlayServicesSupport.GetAllDependencies().Values) &&
-                            patchGradleProperties(), lastError);
+                        var dependencies = PlayServicesSupport.GetAllDependencies().Values;
+                        finishResolution(
+                            GradleTemplateResolver.InjectDependencies(dependencies) &&
+                            patchGradleProperties() &&
+                            patchSettingsTemplateGradle(dependencies), lastError);
                     });
             } else {
                 lastError = "";
@@ -2119,75 +2149,15 @@ namespace GooglePlayServices {
         internal static IList<string> GradleMavenReposLines(ICollection<Dependency> dependencies) {
             var lines = new List<string>();
             if (dependencies.Count > 0) {
-                var exportEnabled = GradleProjectExportEnabled;
-                var useFullPath = (
-                        exportEnabled &&
-                        SettingsDialogObj.UseFullCustomMavenRepoPathWhenExport ) || (
-                        !exportEnabled &&
-                        SettingsDialogObj.UseFullCustomMavenRepoPathWhenNotExport);
-
                 var projectPath = FileUtils.PosixPathSeparators(Path.GetFullPath("."));
                 var projectFileUri = GradleResolver.RepoPathToUri(projectPath);
                 lines.Add("([rootProject] + (rootProject.subprojects as List)).each { project ->");
                 lines.Add("    project.repositories {");
-                // projectPath will point to the Unity project root directory as Unity will
-                // generate the root Gradle project in "Temp/gradleOut" when *not* exporting a
-                // gradle project.
-                if (!useFullPath) {
-                    lines.Add(String.Format(
-                            "        def unityProjectPath = $/{0}**DIR_UNITYPROJECT**/$" +
-                            ".replace(\"\\\\\", \"/\")", GradleWrapper.FILE_SCHEME));
-                }
-                lines.Add("        maven {");
-                lines.Add("            url \"https://maven.google.com\"");
-                lines.Add("        }");
-
-                // Consolidate repos url from Packages folders like
-                //   "Packages/com.company.pkg1/Path/To/m2repository" and
-                //   "Packages/com.company.pkg2/Path/To/m2repository"
-                Dictionary< string, List<string> > repoUriToSources =
-                        new Dictionary<string, List<string>>();
-                foreach (var repoAndSources in GetRepos(dependencies: dependencies)) {
-                    string repoUri;
-                    if (repoAndSources.Key.StartsWith(projectFileUri)) {
-                        var relativePath = repoAndSources.Key.Substring(projectFileUri.Length + 1);
-                        // Convert "Assets", "Packages/packageid", or
-                        // "Library/PackageCache/packageid@version" prefix to local maven repo
-                        // path.  Note that local maven repo path only exists if the original repo
-                        // path contains .srcaar.
-                        var repoPath = FileUtils.PosixPathSeparators(
-                            FileUtils.ReplaceBaseAssetsOrPackagesFolder(
-                                relativePath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir));
-                        if (!Directory.Exists(repoPath)) {
-                            repoPath = relativePath;
-                        }
-
-                        if (useFullPath) {
-                            // build.gradle expects file:/// URI so file separator will be "/" in anycase
-                            // and we must NOT use Path.Combine here because it will use "\" for win platforms
-                            repoUri = String.Format("\"{0}/{1}\"", projectFileUri, repoPath);
-                        } else {
-                            repoUri = String.Format("(unityProjectPath + \"/{0}\")", repoPath);
-                        }
-                    } else {
-                        repoUri = String.Format("\"{0}\"", repoAndSources.Key);
-                    }
-                    List<string> sources;
-                    if (!repoUriToSources.TryGetValue(repoUri, out sources)) {
-                        sources = new List<string>();
-                        repoUriToSources[repoUri] = sources;
-                    }
-                    sources.Add(repoAndSources.Value);
-                }
-                foreach(var kv in repoUriToSources) {
-                    lines.Add("        maven {");
-                    lines.Add(String.Format("            url {0} // {1}", kv.Key,
-                                            String.Join(", ", kv.Value.ToArray())));
-                    lines.Add("        }");
-                }
-
-                lines.Add("        mavenLocal()");
-                lines.Add("        mavenCentral()");
+                lines.AddRange(GradleTemplateResolver.GradleMavenReposLinesFromDependencies(
+                        dependencies: dependencies,
+                        addMavenGoogle: true,
+                        addMavenCentral: true,
+                        addMavenLocal: true));
                 lines.Add("    }");
                 lines.Add("}");
             }
