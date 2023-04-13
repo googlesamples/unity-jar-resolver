@@ -39,6 +39,7 @@ namespace GooglePlayServices {
             internal bool patchAndroidManifest;
             internal bool patchMainTemplateGradle;
             internal bool patchPropertiesTemplateGradle;
+            internal bool patchSettingsTemplateGradle;
             internal bool useFullCustomMavenRepoPathWhenExport;
             internal bool useFullCustomMavenRepoPathWhenNotExport;
             internal string localMavenRepoDir;
@@ -62,6 +63,7 @@ namespace GooglePlayServices {
                 patchAndroidManifest = SettingsDialog.PatchAndroidManifest;
                 patchMainTemplateGradle = SettingsDialog.PatchMainTemplateGradle;
                 patchPropertiesTemplateGradle = SettingsDialog.PatchPropertiesTemplateGradle;
+                patchSettingsTemplateGradle = SettingsDialog.PatchSettingsTemplateGradle;
                 useFullCustomMavenRepoPathWhenExport = SettingsDialog.UseFullCustomMavenRepoPathWhenExport;
                 useFullCustomMavenRepoPathWhenNotExport = SettingsDialog.UseFullCustomMavenRepoPathWhenNotExport;
                 localMavenRepoDir = SettingsDialog.LocalMavenRepoDir;
@@ -86,6 +88,7 @@ namespace GooglePlayServices {
                 SettingsDialog.PatchAndroidManifest = patchAndroidManifest;
                 SettingsDialog.PatchMainTemplateGradle = patchMainTemplateGradle;
                 SettingsDialog.PatchPropertiesTemplateGradle = patchPropertiesTemplateGradle;
+                SettingsDialog.PatchSettingsTemplateGradle = patchSettingsTemplateGradle;
                 SettingsDialog.UseFullCustomMavenRepoPathWhenExport = useFullCustomMavenRepoPathWhenExport;
                 SettingsDialog.UseFullCustomMavenRepoPathWhenNotExport = useFullCustomMavenRepoPathWhenNotExport;
                 SettingsDialog.LocalMavenRepoDir = localMavenRepoDir;
@@ -107,6 +110,7 @@ namespace GooglePlayServices {
         private const string PatchAndroidManifestKey = Namespace + "PatchAndroidManifest";
         private const string PatchMainTemplateGradleKey = Namespace + "PatchMainTemplateGradle";
         private const string PatchPropertiesTemplateGradleKey = Namespace + "PatchPropertiesTemplateGradle";
+        private const string PatchSettingsTemplateGradleKey = Namespace + "PatchSettingsTemplateGradle";
         private const string UseFullCustomMavenRepoPathWhenExportKey = Namespace + "UseFullCustomMavenRepoPathWhenExport";
         private const string UseFullCustomMavenRepoPathWhenNotExportKey = Namespace + "UseFullCustomMavenRepoPathWhenNotExport";
         private const string LocalMavenRepoDirKey = Namespace + "LocalMavenRepoDir";
@@ -128,6 +132,7 @@ namespace GooglePlayServices {
             PatchAndroidManifestKey,
             PatchMainTemplateGradleKey,
             PatchPropertiesTemplateGradleKey,
+            PatchSettingsTemplateGradleKey,
             UseFullCustomMavenRepoPathWhenExportKey,
             UseFullCustomMavenRepoPathWhenNotExportKey,
             LocalMavenRepoDirKey,
@@ -253,6 +258,11 @@ namespace GooglePlayServices {
         internal static bool PatchPropertiesTemplateGradle {
             set { projectSettings.SetBool(PatchPropertiesTemplateGradleKey, value); }
             get { return projectSettings.GetBool(PatchPropertiesTemplateGradleKey, true); }
+        }
+
+        internal static bool PatchSettingsTemplateGradle {
+            set { projectSettings.SetBool(PatchSettingsTemplateGradleKey, value); }
+            get { return projectSettings.GetBool(PatchSettingsTemplateGradleKey, true); }
         }
 
         internal static bool UseFullCustomMavenRepoPathWhenExport {
@@ -481,6 +491,23 @@ namespace GooglePlayServices {
             }
 
             GUILayout.BeginHorizontal();
+            GUILayout.Label("Use Jetifier.", EditorStyles.boldLabel);
+            settings.useJetifier = EditorGUILayout.Toggle(settings.useJetifier);
+            GUILayout.EndHorizontal();
+            if (settings.useJetifier) {
+                GUILayout.Label(
+                    "Legacy Android support libraries and references to them from other " +
+                    "libraries will be rewritten to use Jetpack using the Jetifier tool. " +
+                    "Enabling option allows an application to use Android Jetpack " +
+                    "when other libraries in the project use the Android support libraries.");
+            } else {
+                GUILayout.Label(
+                    "Class References to legacy Android support libraries (pre-Jetpack) will be " +
+                    "left unmodified in the project. This will possibly result in broken Android " +
+                    "builds when mixing legacy Android support libraries and Jetpack libraries.");
+            }
+
+            GUILayout.BeginHorizontal();
             GUILayout.Label("Patch mainTemplate.gradle", EditorStyles.boldLabel);
             settings.patchMainTemplateGradle =
                 EditorGUILayout.Toggle(settings.patchMainTemplateGradle);
@@ -562,23 +589,6 @@ namespace GooglePlayServices {
                                 settings.localMavenRepoDir)));
             }
 
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Use Jetifier.", EditorStyles.boldLabel);
-            settings.useJetifier = EditorGUILayout.Toggle(settings.useJetifier);
-            GUILayout.EndHorizontal();
-            if (settings.useJetifier) {
-                GUILayout.Label(
-                    "Legacy Android support libraries and references to them from other " +
-                    "libraries will be rewritten to use Jetpack using the Jetifier tool. " +
-                    "Enabling option allows an application to use Android Jetpack " +
-                    "when other libraries in the project use the Android support libraries.");
-            } else {
-                GUILayout.Label(
-                    "Class References to legacy Android support libraries (pre-Jetpack) will be " +
-                    "left unmodified in the project. This will possibly result in broken Android " +
-                    "builds when mixing legacy Android support libraries and Jetpack libraries.");
-            }
-
             if (settings.useJetifier) {
                 GUILayout.BeginHorizontal();
                 GUILayout.Label("Patch gradleTemplate.properties", EditorStyles.boldLabel);
@@ -591,6 +601,18 @@ namespace GooglePlayServices {
                     "Settings for Android > Publishing Settings' menu item. " +
                     "This has no effect in older versions of Unity.");
             }
+
+            if (settings.patchMainTemplateGradle) {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("Copy and patch settingsTemplate.gradle from 2022.2", EditorStyles.boldLabel);
+                settings.patchSettingsTemplateGradle = EditorGUILayout.Toggle(settings.patchSettingsTemplateGradle);
+                GUILayout.EndHorizontal();
+                GUILayout.Label(
+                    "For Unity 2022.2 and above, any additional Maven repositories should be " +
+                    "specified in settingsTemplate.gradle. If checked, EDM4U will also copy " +
+                    "settingsTemplate.gradle from Unity engine folder.");
+            }
+
             settings.analyticsSettings.RenderGui();
 
             GUILayout.BeginHorizontal();
@@ -666,6 +688,16 @@ namespace GooglePlayServices {
                         new KeyValuePair<string, string>(
                             "promptBeforeAutoResolution",
                             SettingsDialog.PromptBeforeAutoResolution.ToString()),
+                        new KeyValuePair<string, string>(
+                            "patchMainTemplateGradle",
+                            SettingsDialog.PatchMainTemplateGradle.ToString()),
+                        new KeyValuePair<string, string>(
+                            "patchPropertiesTemplateGradle",
+                            SettingsDialog.PatchPropertiesTemplateGradle.ToString()),
+                        new KeyValuePair<string, string>(
+                            "patchSettingsTemplateGradle",
+                            SettingsDialog.PatchSettingsTemplateGradle.ToString()),
+
                     },
                     "Settings Save");
 
