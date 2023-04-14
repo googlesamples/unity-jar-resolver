@@ -285,7 +285,7 @@ namespace GooglePlayServices {
 
         internal static bool UseJetifier {
             set { projectSettings.SetBool(UseJetifierKey, value); }
-            get { return projectSettings.GetBool(UseJetifierKey, false); }
+            get { return projectSettings.GetBool(UseJetifierKey, true); }
         }
 
         internal static bool VerboseLogging {
