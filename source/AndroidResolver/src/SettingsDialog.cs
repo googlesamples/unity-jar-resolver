@@ -442,8 +442,8 @@ namespace GooglePlayServices {
                                 "AndroidManifest.xml or a single target ABI is selected " +
                                 "without a compatible build system.");
             } else {
-                GUILayout.Label("AAR explosion will be disabled in exported Gradle builds " +
-                                "(Unity 5.5 and above). You will need to set " +
+                GUILayout.Label("AAR explosion will be disabled." +
+                                "You may need to set " +
                                 "android.defaultConfig.applicationId to your bundle ID in your " +
                                 "build.gradle to generate a functional APK.");
             }
