@@ -291,7 +291,7 @@ project.ext {
   // Pip binary after it has been bootstrapped.
   pipExe = new File(pythonBinDir, "pip3")
   // Python packages required by export_unity_package.py
-  exportUnityPackageRequirements = ["absl-py", "PyYAML"]
+  exportUnityPackageRequirements = ["absl-py", "PyYAML", "packaging"]
   // Python packages required by gen_guids.py
   genGuidRequirements = ["absl-py"]
 }

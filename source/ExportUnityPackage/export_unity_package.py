@@ -293,7 +293,7 @@ import zipfile
 from absl import app
 from absl import flags
 from absl import logging
-import distutils.version
+import packaging.version
 import yaml
 
 FLAGS = flags.FLAGS
@@ -983,11 +983,11 @@ class GuidDatabase(object):
 
       if plugin_version:
         # Aggregate guids for older versions of files.
-        current_version = distutils.version.LooseVersion(plugin_version)
-        for version in sorted(guids_json, key=distutils.version.LooseVersion,
+        current_version = packaging.version.Version(plugin_version)
+        for version in sorted(guids_json, key=packaging.version.Version,
                               reverse=True):
           # Skip all versions after and including the current version.
-          if distutils.version.LooseVersion(version) >= current_version:
+          if packaging.version.Version(version) >= current_version:
             continue
           # Add all guids for files to the current version.
           guids_by_filename = guids_json[version]
