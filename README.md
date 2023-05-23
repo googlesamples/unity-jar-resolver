@@ -36,6 +36,9 @@ This causes the following problems:
 
 EDM provides solutions for each of these problems.
 
+If, after reading this, you need to debug usage of EDM in a Unity project,
+consult the debugging [step-by-step guide](troubleshooting-faq.md).
+
 ## Android Dependency Management
 
 The *Android Resolver* component of this plugin will download and integrate
