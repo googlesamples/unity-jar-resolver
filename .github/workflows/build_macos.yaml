@@ -1,0 +1,101 @@
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Workflow to handle building the EDM4U on macOS
+name: Build macOS (SubWorkflow)
+
+on:
+  workflow_call:
+    inputs:
+      unity_version:
+        description: 'Unity version'
+        default: '2019'
+        required: true
+        type: string
+
+env:
+  pythonVersion: '3.7'
+  artifactRetentionDays: 2
+  assetPackageArtifactName: "AssetPackage_macOS"
+  tarballPackageArtifactName: "TarballPackage_macOS"
+
+jobs:
+  build_desktop:
+    name: build-macOS-unity${{ inputs.unity_version}}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - id: build_setup
+        uses: ./gha/build_setup
+        timeout-minutes: 30
+        with:
+          unity_version: ${{ inputs.unity_version }}
+          platform: macOS
+          python_version: ${{ env.pythonVersion }}
+          unity_username: ${{ secrets.UNITY_USERNAME }}
+          unity_password: ${{ secrets.UNITY_PASSWORD }}
+          unity_serial_ids: ${{ secrets.SERIAL_ID }}
+
+      - name: Set Unity Env for EDM4U build script
+        shell: bash
+        run: echo "UNITY_EXE=${{ env.UNITY_ROOT_DIR }}/Unity.app/Contents/MacOS/Unity" >> $GITHUB_ENV
+
+      # Build .unitypackage
+      - run: ./gradlew buildPlugin --info
+
+      # Build .tgz
+      - run: ./gradlew buildUpmPlugin --info
+
+      - name: Return Unity license
+        if: always()
+        uses: ./external/firebase-unity-sdk/gha/unity
+        with:
+          version: ${{ inputs.unity_version }}
+          release_license: "true"
+
+      - name: Check build files
+        shell: bash
+        run: |
+          if [ -f build/external-dependency-manager.unitypackage ]; then
+            echo "external-dependency-manager.unitypackage zip created."
+          else
+            echo "Fail to create external-dependency-manager.unitypackage."
+            exit 1
+          fi
+          if ls build/com.google.external-dependency-manager*.tgz 1> /dev/null 2>&1; then
+            echo "com.google.external-dependency-manager.tgz created."
+          else
+            echo "Fail to create com.google.external-dependency-manager.tgz ."
+            exit 1
+          fi
+
+      - name: Upload build results artifact
+        uses: actions/upload-artifact@v3
+        if: ${{ !cancelled() }}
+        with:
+          name: ${{ env.assetPackageArtifactName }}
+          path: build/external-dependency-manager.unitypackage
+          retention-days: ${{ env.artifactRetentionDays }}
+
+      - name: Upload build results artifact
+        uses: actions/upload-artifact@v3
+        if: ${{ !cancelled() }}
+        with:
+          name: ${{ env.tarballPackageArtifactName }}
+          path: build/com.google.external-dependency-manager-*.tgz
+          retention-days: ${{ env.artifactRetentionDays }}

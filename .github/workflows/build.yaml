@@ -1,6 +1,26 @@
-name: EDM4U build
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-on: 
+name: Build
+
+on:
+  schedule:
+    - cron: "0 10 * * *"  # 10am UTC = 2am PST
+
+  pull_request:
+    types: [ labeled, closed ]
+
   workflow_dispatch:
     inputs:
       unity_version:
@@ -10,14 +30,44 @@ on:
         type: string
 
 env:
-  pythonVersion: '3.7'
-  
-  
+  # Use SHA256 for hashing files.
+  hashCommand: "sha256sum"
+
 jobs:
-  build_desktop:
-    name: build-macOS-unity${{ inputs.unity_version}}
-    runs-on: macos-latest
+  build_macos:
+    name: build-macos-unity${{ inputs.unity_version}}
+    uses: ./.github/workflows/build_macos.yaml
+    with:
+      unity_version: ${{ inputs.unity_version}}
+
+  finalizing:
+    # Only compute SHA hash for macOS build
+    name: finalizing-macOS-unity${{ inputs.unity_version}}
+    needs: [build_macos]
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - run: python -v
-      - run: sysctl -n machdep.cpu.brand_string
+      - name: Fetch All builds
+        uses: actions/download-artifact@v3
+        with:
+          path: built_artifact
+
+      - name: Compute Plugin Hash
+        shell: bash
+        run: |
+          # Compute hash for .tgz package
+          pushd built_artifact/TarballPackage_macOS
+          tgz_files_list=$(find -type f -name '*.tgz')
+          for tgz_file in "${tgz_files_list[@]}"; do
+            echo tgz_file
+            ${{ env.hashCommand }} --tag ${tgz_file} >> edm4u_hash.txt
+          done
+          echo "::warning update sha txt \n ::$(cat edm4u_hash.txt)"
+          popd
+
+          # Compute hash for .unitypackage package
+          pushd built_artifact/AssetPackage_macOS
+          ${{ env.hashCommand }} --tag external-dependency-manager.unitypackage >> edm4u_hash.txt
+          echo "::warning update sha txt \n ::$(cat edm4u_hash.txt)"
+          popd
+
+
