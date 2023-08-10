@@ -445,6 +445,7 @@ public class IOSResolver : AssetPostprocessor {
     private static string[] POD_SEARCH_PATHS = new string[] {
         "/usr/local/bin",
         "/usr/bin",
+        "/opt/homebrew/bin",
     };
     // Ruby Gem executable filename.
     private static string GEM_EXECUTABLE = "gem";
