@@ -1,0 +1,23 @@
+name: EDM4U build
+
+on: 
+  workflow_dispatch:
+    inputs:
+      unity_version:
+        description: 'Unity version'
+        default: '2019'
+        required: true
+        type: string
+
+env:
+  pythonVersion: '3.7'
+  
+  
+jobs:
+  build_desktop:
+    name: build-macOS-unity${{ inputs.unity_version}}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: python -v
+      - run: sysctl -n machdep.cpu.brand_string
