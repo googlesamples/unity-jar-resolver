@@ -25,12 +25,12 @@ on:
     inputs:
       unity_version:
         description: 'Unity version'
-        default: '2019'
-        required: true
+        default: 2019
         type: choice
         options:
-          - '2019'
-          - '2020'
+          - 2019
+          - 2020
+        required: true
 env:
   # Use SHA256 for hashing files.
   hashCommand: "sha256sum"
