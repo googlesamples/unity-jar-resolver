@@ -68,7 +68,6 @@ runs:
 
     - name: unity_setup
       uses: firebase/firebase-unity-sdk/gha/unity@main
-      secrets: inherit # pass all secrets
       with:
         version: ${{ inputs.unity_version }}
         # iOS build support is always required to build EDM4U
