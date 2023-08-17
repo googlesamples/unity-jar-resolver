@@ -56,8 +56,19 @@ runs:
       run: |
         pip install -r ./external/firebase-unity-sdk/scripts/gha/requirements.txt
 
+    # - name: unity_setup
+    #   uses: ./external/firebase-unity-sdk/gha/unity
+    #   with:
+    #     version: ${{ inputs.unity_version }}
+    #     # iOS build support is always required to build EDM4U
+    #     platforms: "${{ inputs.platform }},iOS"
+    #     username: ${{ inputs.unity_username }}
+    #     password: ${{ inputs.unity_password }}
+    #     serial_ids: ${{ inputs.unity_serial_ids }}
+
     - name: unity_setup
-      uses: ./external/firebase-unity-sdk/gha/unity
+      uses: firebase/firebase-unity-sdk/gha/unity@main
+      secrets: inherit # pass all secrets
       with:
         version: ${{ inputs.unity_version }}
         # iOS build support is always required to build EDM4U
@@ -65,3 +76,4 @@ runs:
         username: ${{ inputs.unity_username }}
         password: ${{ inputs.unity_password }}
         serial_ids: ${{ inputs.unity_serial_ids }}
+
