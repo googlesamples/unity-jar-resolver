@@ -20,11 +20,8 @@ on:
     inputs:
       unity_version:
         description: 'Unity version'
-        default: 2019
-        type: choice
-        options:
-          - 2019
-          - 2020
+        default: '2019'
+        type: string
         required: true
 
 env:
