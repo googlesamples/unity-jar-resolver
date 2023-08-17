@@ -29,9 +29,8 @@ on:
         required: true
         type: choice
         options:
-          - 2019
-          - 2020
-
+          - '2019'
+          - '2020'
 env:
   # Use SHA256 for hashing files.
   hashCommand: "sha256sum"
