@@ -27,7 +27,10 @@ on:
         description: 'Unity version'
         default: '2019'
         required: true
-        type: string
+        type: choice
+        options:
+          - 2019
+          - 2020
 
 env:
   # Use SHA256 for hashing files.
