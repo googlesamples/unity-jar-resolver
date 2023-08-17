@@ -27,7 +27,8 @@ on:
         description: 'Unity version'
         default: '2019'
         type: string
-       required: true
+        required: true
+
 env:
   # Use SHA256 for hashing files.
   hashCommand: "sha256sum"
