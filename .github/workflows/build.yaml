@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Workflow to build EDM4U packages and compute their hash
-name: Build All
+name: Build
 
 on:
   schedule:
