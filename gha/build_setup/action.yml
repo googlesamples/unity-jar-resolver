@@ -12,7 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Reusable workflow to setup for the build environment.
+# Reusable cross-platform workflow to setup for the build environment.
+# * Install Python and required Python packages
+# * Install Unity, platform build support, and register license if
+#   username, password and serial id are provided
 name: 'Build Setup'
 
 inputs:
@@ -30,7 +33,7 @@ inputs:
     required: false
   unity_password:
     required: false
-  unity_serial_ids:
+  unity_serial_id:
     required: false
   python_version:
     required: true
@@ -65,5 +68,5 @@ runs:
         platforms: "${{ inputs.platform }},iOS"
         username: ${{ inputs.unity_username }}
         password: ${{ inputs.unity_password }}
-        serial_ids: ${{ inputs.unity_serial_ids }}
+        serial_ids: ${{ inputs.unity_serial_id }}
 
