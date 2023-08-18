@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Workflow to handle building the EDM4U on macOS
+# Workflow to build EDM4U packages on macOS
 name: Build macOS (SubWorkflow)
 
 on:
