@@ -49,7 +49,7 @@ jobs:
           python_version: ${{ env.pythonVersion }}
           unity_username: ${{ secrets.UNITY_USERNAME }}
           unity_password: ${{ secrets.UNITY_PASSWORD }}
-          unity_serial_ids: ${{ secrets.SERIAL_ID }}
+          unity_serial_id: ${{ secrets.SERIAL_ID }}
 
       - name: Set Unity Env for EDM4U build script
         shell: bash
