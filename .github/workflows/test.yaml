@@ -1,0 +1,19 @@
+name: Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      unity_versions:
+        description: 'Unity version (value: 2018, 2019, 2020. separated by commas)'
+        default: '2019'
+        required: true
+
+env:
+  pythonVersion: '3.7'
+  artifactRetentionDays: 2
+
+jobs:
+  test_on_macos:
+    runs-on: macos-latest
+    steps:
+    - run: echo "Hello World"
