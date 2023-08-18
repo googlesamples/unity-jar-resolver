@@ -61,13 +61,14 @@ jobs:
             echo tgz_file
             ${{ env.hashCommand }} --tag ${tgz_file} >> edm4u_hash.txt
           done
-          echo "::warning update sha txt \n ::$(cat edm4u_hash.txt)"
+          # echo "::warning update sha txt \n ::$(cat edm4u_hash.txt)"
           popd
 
           # Compute hash for .unitypackage package
           pushd built_artifact/AssetPackage_macOS
           ${{ env.hashCommand }} --tag external-dependency-manager.unitypackage >> edm4u_hash.txt
           echo "::warning update sha txt \n ::$(cat edm4u_hash.txt)"
+          cat edm4u_hash.txt
           popd
 
 
