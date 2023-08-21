@@ -35,16 +35,37 @@ env:
   hashCommand: "sha256sum"
 
 jobs:
+  # Set default value for scheduled cron job
+  check_and_prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      unity_version: ${{ steps.set_outputs.outputs.unity_version }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - id: set_outputs
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "unity_version=${{ github.event.inputs.unity_version }}" >> $GITHUB_OUTPUT
+          else
+            echo "unity_version=2019" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Print output
+        run: |
+          echo outputs.unity_version : ${{ steps.set_outputs.outputs.unity_version }}
+
   build_macos:
-    name: build-macos-unity${{ inputs.unity_version}}
+    name: build-macos-unity${{ needs.check_and_prepare.outputs.unity_version }}
+    needs: [check_and_prepare]
     uses: ./.github/workflows/build_macos.yaml
     with:
-      unity_version: ${{ inputs.unity_version}}
+      unity_version: {{ needs.check_and_prepare.outputs.unity_version }}
 
   finalizing:
     # Only compute SHA hash for macOS build
-    name: finalizing-macOS-unity${{ inputs.unity_version}}
-    needs: [build_macos]
+    name: finalizing-macOS-unity{{ needs.check_and_prepare.outputs.unity_version }}
+    needs: [check_and_prepare, build_macos]
     runs-on: ubuntu-latest
     steps:
       - name: Fetch All builds
