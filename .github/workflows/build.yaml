@@ -45,7 +45,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "unity_version=${{ github.event.inputs.unity_version }}" >> $GITHUB_OUTPUT
           else
-            # inputs are not available for cron. Therefore, set default value here.
+            # inputs are not available for non "workflow_dispatch" events. Therefore, set default value here.
             echo "unity_version=2019" >> $GITHUB_OUTPUT
           fi
 
