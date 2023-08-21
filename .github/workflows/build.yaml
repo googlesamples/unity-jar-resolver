@@ -60,11 +60,11 @@ jobs:
     needs: [check_and_prepare]
     uses: ./.github/workflows/build_macos.yaml
     with:
-      unity_version: {{ needs.check_and_prepare.outputs.unity_version }}
+      unity_version: ${{ needs.check_and_prepare.outputs.unity_version }}
 
   finalizing:
     # Only compute SHA hash for macOS build
-    name: finalizing-macOS-unity{{ needs.check_and_prepare.outputs.unity_version }}
+    name: finalizing-macOS-unity${{ needs.check_and_prepare.outputs.unity_version }}
     needs: [check_and_prepare, build_macos]
     runs-on: ubuntu-latest
     steps:
