@@ -2543,7 +2543,7 @@ class PackageConfiguration(ConfigurationBlock):
                 os.utime(filename, (FLAGS.timestamp, FLAGS.timestamp))
             # Don't recurse directories.
             tar_args.append("-n")
-            # Avoid creating mac metadata file start with "."
+            # Avoid creating mac metadata files with name started with "."
             if platform.system() == "Darwin":
               tar_args.append("--no-mac-metadata")
           tar_args.extend(["-T", list_filename])
