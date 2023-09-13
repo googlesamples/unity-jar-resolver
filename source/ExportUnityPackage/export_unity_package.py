@@ -1848,7 +1848,7 @@ class AssetConfiguration(ConfigurationBlock):
         platform_data_options["enabled"] = 1
       importer_metadata = Asset.set_cpu_for_desktop_platforms(
           importer_metadata)
-      if "Android" in platforms:
+      if "Android" in platforms and cpu_string != "AnyCPU":
         importer_metadata = Asset.set_cpu_for_android(
             importer_metadata, cpu_string)
     else:
