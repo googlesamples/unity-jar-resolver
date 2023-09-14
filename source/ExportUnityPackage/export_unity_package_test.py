@@ -1665,6 +1665,39 @@ class AssetTest(absltest.TestCase):
         export_unity_package.Asset.set_cpu_for_desktop_platforms(linux_enabled))
     self.assertEqual(expected_metadata, linux_enabled_with_cpu)
 
+  def test_set_cpu_for_android_serializationv1(self):
+    """Set CPU field for the enabled Android platform in v1 metadata format."""
+    android_enabled = copy.deepcopy(
+        export_unity_package.PLUGIN_IMPORTER_METADATA_TEMPLATE)
+    android_enabled["PluginImporter"]["platformData"]["Android"]["enabled"] = 1
+    expected_metadata = copy.deepcopy(android_enabled)
+    expected_metadata["PluginImporter"]["platformData"]["Android"]["settings"][
+        "CPU"] = "ARMv7"
+    android_enabled_with_cpu = (
+        export_unity_package.Asset.set_cpu_for_android(android_enabled, "ARMv7"))
+    self.assertEqual(expected_metadata, android_enabled_with_cpu)
+
+  def test_set_cpu_for_android_serializationv2(self):
+    """Set CPU field for the enabled Android platform in v2 metadata format."""
+    android_enabled = collections.OrderedDict([
+        ("PluginImporter", collections.OrderedDict([
+            ("serializedVersion", 2),
+            ("platformData", [
+                collections.OrderedDict([
+                    ("first", collections.OrderedDict([
+                        ("Android", "Android")])),
+                    ("second", collections.OrderedDict([
+                        ("enabled", 1)]))])
+            ])
+        ]))
+    ])
+    expected_metadata = copy.deepcopy(android_enabled)
+    expected_metadata["PluginImporter"]["platformData"][0]["second"][
+        "settings"] = collections.OrderedDict([("CPU", "ARMv7")])
+    android_enabled_with_cpu = (
+        export_unity_package.Asset.set_cpu_for_android(android_enabled, "ARMv7"))
+    self.assertEqual(expected_metadata, android_enabled_with_cpu)
+
   def test_apply_any_platform_selection_serializationv1(self):
     """Modify v1 importer metadata to enable all platforms."""
     # Enable all platforms.
@@ -2043,6 +2076,19 @@ class AssetConfigurationTest(absltest.TestCase):
         export_unity_package.AssetConfiguration(
             self.package, {"importer": "PluginImporter",
                            "platforms": ["Android"]}).importer_metadata)
+
+  def test_importer_metadata_android_only_armv7(self):
+    """Create metadata with ARMv7 CPU set."""
+    self.plugin_metadata["PluginImporter"]["platformData"]["Android"][
+        "enabled"] = 1
+    self.plugin_metadata["PluginImporter"]["platformData"]["Android"][
+        "settings"]["CPU"] = "ARMv7"
+    self.assertEqual(
+        self.plugin_metadata,
+        export_unity_package.AssetConfiguration(
+            self.package, {"importer": "PluginImporter",
+                           "platforms": ["Android"],
+                           "cpu": "ARMv7"}).importer_metadata)
 
   def test_importer_metadata_ios_only(self):
     """Create metadata that only targets iOS."""

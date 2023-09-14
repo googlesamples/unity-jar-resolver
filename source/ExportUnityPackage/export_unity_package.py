@@ -1375,6 +1375,55 @@ class Asset(object):
     return importer_metadata
 
   @staticmethod
+  def set_cpu_for_android(importer_metadata, cpu_string):
+    """Sets the CPU for Android in the metadata if enabled.
+
+    Args:
+      importer_metadata: Metadata to modify.
+      cpu_string: The desired CPU string value.
+
+    Returns:
+      Modified importer_metadata.
+    """
+    plugin_importer = safe_dict_get_value(
+        importer_metadata, "PluginImporter", default_value={})
+    serialized_version = safe_dict_get_value(
+        plugin_importer, "serializedVersion", default_value=1)
+
+    if serialized_version == 1:
+      platform_data = safe_dict_get_value(plugin_importer, "platformData",
+                                          default_value={})
+      for platform_name, options in platform_data.items():
+        if not safe_dict_get_value(options, "enabled", default_value=0):
+          continue
+        if not cpu_string:
+          continue
+        if platform_name == "Android":
+          settings = options.get("settings", collections.OrderedDict())
+          settings["CPU"] = cpu_string
+          options["settings"] = settings
+    else:
+      platform_data = safe_dict_get_value(plugin_importer, "platformData",
+                                          default_value=[])
+      for entry in platform_data:
+        # Parse the platform name tuple from the "first" dictionary.
+        first, second = Asset.platform_data_get_entry(entry)
+        platform_tuple = list(first.items())[0]
+        if len(platform_tuple) < 2:
+          continue
+        unused_platform_target, platform_name = platform_tuple
+        if not second.get("enabled", 0):
+          continue
+        if not cpu_string:
+          continue
+        settings = safe_dict_get_value(second, "settings",
+                                       default_value=collections.OrderedDict())
+        if platform_name == "Android":
+          settings["CPU"] = cpu_string
+          second["settings"] = settings
+    return importer_metadata
+
+  @staticmethod
   def apply_any_platform_selection(importer_metadata):
     """Enable / disable all platforms if the "Any" platform is enabled.
 
@@ -1799,6 +1848,9 @@ class AssetConfiguration(ConfigurationBlock):
         platform_data_options["enabled"] = 1
       importer_metadata = Asset.set_cpu_for_desktop_platforms(
           importer_metadata)
+      if "Android" in platforms and cpu_string != "AnyCPU":
+        importer_metadata = Asset.set_cpu_for_android(
+            importer_metadata, cpu_string)
     else:
       raise ProjectConfigurationError(
           "Unknown importer type %s for package %s, paths %s" % (
