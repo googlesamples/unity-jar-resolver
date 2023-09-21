@@ -221,6 +221,16 @@ project.ext {
   interactiveModeTestsEnabled =
     findProperty("INTERACTIVE_MODE_TESTS_ENABLED", "1") == "1"
 
+  // Whether to continue to the next test if one fails.
+  continueOnFailForTestsEnabled =
+    findProperty("CONTINUE_ON_FAIL_FOR_TESTS_ENABLED", "0") == "1"
+
+  // List of failed tests
+  failedTests = []
+
+  // List of passed tests
+  passedTests = []
+
   // Directory for intermediate and final build outputs.
   buildDir = new File(scriptDirectory, "build")
   // Directory for external tools.
@@ -922,6 +932,9 @@ Task createNUnitTask(String name, String description, File testDll,
         args ([sprintf("-output:%s", logFile.absolutePath),
                sprintf("-xml:%s", xmlLogFile.absolutePath),
                testDll.absolutePath])
+        // TODO: Support continueOnFailForTestsEnabled
+        // NUnit test is currently broken. Need to fix it before implementing
+        // continueOnFailForTestsEnabled
       }
     }
   }
@@ -935,12 +948,13 @@ Task createNUnitTask(String name, String description, File testDll,
  * @param dependsOn Tasks this depends upon.
  * @param executable Executable to run.
  * @param arguments Arguments for the executable.
+ * @param continueOnFail Whether to ignore non-zero return code and continue.
  *
  * @returns Task which runs the specified executable.
  */
 Task createExecTask(String name, String description,
                     Iterable<Task> dependsOn, File executableToRun,
-                    Iterable<String> arguments) {
+                    Iterable<String> arguments, Boolean continueOnFail = false) {
   Task execTask = tasks.create(name: name,
                                description: description,
                                type: Exec,
@@ -948,6 +962,7 @@ Task createExecTask(String name, String description,
   execTask.with {
     executable executableToRun
     args arguments
+    ignoreExitValue continueOnFail
   }
   return execTask
 }
@@ -989,6 +1004,7 @@ Task createEmptyTask(String taskName, String summary,
  * @param batchMode Whether to run Unity in batch mode.
  * @param createTaskClosure Optional task used to start Unity, this must
  *   conform to createExecTask()
+ * @param continueOnFail Whether to ignore non-zero return code and continue.
  *
  * @returns Task which executes Unity.
  * The following extended properties are set on the task:
@@ -1000,7 +1016,8 @@ Task createEmptyTask(String taskName, String summary,
 Task createUnityTask(String taskName, String summary,
                      Iterable<Task> dependsOn, String projectName,
                      File projectContainerDir, Iterable<String> arguments,
-                     Boolean batchMode, createTaskClosure) {
+                     Boolean batchMode, createTaskClosure,
+                     Boolean continueOnFail = false) {
   Boolean createProject = summary == "create"
   File logFile = new File(projectContainerDir,
                           sprintf("%s_%s.log", projectName, summary))
@@ -1021,8 +1038,13 @@ Task createUnityTask(String taskName, String summary,
   if (!createTaskClosure) {
     createTaskClosure = {
       String name, String description, Iterable<Task> depends,
-      File executable, Iterable<String> args ->
-        return createExecTask(name, description, depends, executable, args)
+      File executable, Iterable<String> args, Boolean contOnFail->
+        return createExecTask(name,
+                              description,
+                              depends,
+                              executable,
+                              args,
+                              contOnFail)
     }
   }
 
@@ -1036,7 +1058,8 @@ Task createUnityTask(String taskName, String summary,
                                     summary, projectName),
                                   dependsOn,
                                   project.ext.unityExe,
-                                  executeArguments)
+                                  executeArguments,
+                                  continueOnFail)
   }
   unityTask.with {
     outputs.files files(logFile)
@@ -1173,8 +1196,15 @@ Task createUnityTestTask(String taskName, String description,
                                   setupTestProject.ext.projectDir.name,
                                   setupTestProject.ext.containerDir,
                                   additionalArguments, batchMode,
-                                  createTaskClosure)
+                                  createTaskClosure,
+                                  true)
   testTask.description = description
+  testTask.with {
+    finalizedBy reportAllTestsResult
+    doLast {
+      EvaluateTestResult(testTask)
+    }
+  }
 
   // Create a clean task
   Task cleanTestTask = tasks.create(name: sprintf("clean%s", taskName),
@@ -1267,13 +1297,15 @@ Task createInstallPythonPackageTask(String taskName, String description,
  * @param script Python script to run.
  * @param arguments Command line arguments to pass to the Python script.
  * @param packages Optional Python packages to install.
+ * @param continueOnFail Whether to ignore non-zero return code and continue.
  *
  * @returns Task which executes Python.
  */
 Task createPythonTask(String taskName, String description,
                       Iterable<Task> dependsOn,
                       File script, Iterable<String> arguments,
-                      Iterable<String> packages) {
+                      Iterable<String> packages,
+                      Boolean continueOnFail = false) {
   List<Task> installPackagesTask = []
   if (packages) {
     installPackagesTask = [
@@ -1289,6 +1321,7 @@ Task createPythonTask(String taskName, String description,
       description: sprintf("Run Python to %s", description),
       type: Exec,
       dependsOn: (dependsOn + installPackagesTask + ["build_envs"])).with {
+    ignoreExitValue continueOnFail
     executable project.ext.pythonExe
     args ([script.absolutePath] + arguments)
   }
@@ -1389,37 +1422,103 @@ task testDownloadArtifacts(type: GradleBuild) {
   dir "source/AndroidResolver/scripts"
 }
 
-createPythonTask(
+/*
+ * Evaluate previously-ran test result
+ *
+ * @param testTask Task for previously-ran test
+ */
+void EvaluateTestResult(Task testTask) {
+  if (testTask.class.simpleName.startsWith("Exec")) {
+    if (testTask.execResult.exitValue != 0) {
+      String errorMsg = sprintf("Test %s FAILED", testTask.name)
+      println sprintf("::error::%s", errorMsg)
+      project.ext.failedTests.add(testTask.name)
+      if (!project.ext.continueOnFailForTestsEnabled) {
+        throw new GradleException(errorMsg)
+      }
+    } else {
+      println sprintf("::debug::Test %s PASSED", testTask.name, testTask.execResult.exitValue)
+      project.ext.passedTests.add(testTask.name)
+    }
+  }
+}
+
+Task reportAllTestsResult = tasks.create (
+  name: "reportAllTestsResult",
+  description: "Report the result all every test that has been run",
+  type: Task
+).with {
+  doLast {
+    project.ext.passedTests.each {
+      println sprintf("Test %s PASSED", it)
+    }
+    project.ext.failedTests.each {
+      println sprintf("Test %s FAILED", it)
+    }
+    if(project.ext.failedTests.size > 0) {
+        throw new GradleException(
+          sprintf("%d out of %d tests failed",
+            project.ext.failedTests.size,
+            project.ext.failedTests.size + project.ext.passedTests.size))
+    }
+  }
+}
+
+Task testPackageUploader = createPythonTask(
   "testPackageUploader",
   "Test the unity_asset_uploader.py application.",
   [],
   new File(project.ext.unityAssetUploaderDir, "unity_asset_uploader_test.py"),
   [],
-  [])
+  [],
+  true).with {
+    finalizedBy reportAllTestsResult
+    doLast {
+      EvaluateTestResult(testPackageUploader)
+    }
+  }
 
-createPythonTask(
+Task testExportUnityPackage = createPythonTask(
   "testExportUnityPackage",
   "Test the export_unity_package.py application",
   [],
   new File(project.ext.exportUnityPackageDir, "export_unity_package_test.py"),
   [],
-  exportUnityPackageRequirements)
+  exportUnityPackageRequirements,
+  true).with {
+    finalizedBy reportAllTestsResult
+    doLast {
+      EvaluateTestResult(testExportUnityPackage)
+    }
+  }
 
-createPythonTask(
+Task testGenGuids = createPythonTask(
   "testGenGuids",
   "Test the gen_guids.py application",
   [],
   new File(project.ext.exportUnityPackageDir, "gen_guids_test.py"),
   [],
-  ["absl-py"])
+  ["absl-py"],
+  true).with {
+    finalizedBy reportAllTestsResult
+    doLast {
+      EvaluateTestResult(testGenGuids)
+    }
+  }
 
-createPythonTask(
+Task testImportUnityPackage = createPythonTask(
   "testImportUnityPackage",
   "Test the import_unity_package.py application",
   [],
   new File(project.ext.importUnityPackageDir, "import_unity_package_test.py"),
   [],
-  ["absl-py"])
+  ["absl-py"],
+  true).with {
+    finalizedBy reportAllTestsResult
+    doLast {
+      EvaluateTestResult(testImportUnityPackage)
+    }
+  }
 
 task updateEmbeddedGradleWrapper(type: Zip) {
   description "Update the gradle wrapper in gradle-template.zip"
@@ -1841,7 +1940,7 @@ createUnityTestBatchAndNonBatch(
            "source/VersionHandlerImpl/test/webrequest"),
   [], [],
   { String name, String description, Iterable<Task> depends,
-    File executable, Iterable<String> args ->
+    File executable, Iterable<String> args, Boolean continueOnFail ->
       Iterable<String> runnerArgs = [executable.absolutePath] + args
       return createPythonTask(
         name, description, depends,
@@ -1852,7 +1951,7 @@ createUnityTestBatchAndNonBatch(
             "test"),
           "webrequest_launcher.py"),
         runnerArgs,
-        [])
+        [], continueOnFail)
   })
 
 createUnityTestBatchAndNonBatch(
