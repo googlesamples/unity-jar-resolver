@@ -231,6 +231,45 @@ project.ext {
   // List of passed tests
   passedTests = []
 
+  // List of test types that should be included. Controlled by
+  // "INCLUDE_TEST_TYPES" parameter. Includes every tests if the parameter is
+  // empty.
+  // DO NOT USE THIS FOR FILTER, Use `actualIncludeTestTypes` instead.
+  includeTestTypesParam =
+    TestTypeEnum.toSet(
+      findProperty("INCLUDE_TEST_TYPES", "").split('\\s+|\\s*,\\s*').toList(),
+      true)
+  // List of test types that should be excluded. Controlled by
+  // "EXCLUDE_TEST_TYPES" parameter. Excludes none if the parameter is
+  // empty.
+  // DO NOT USE THIS FOR FILTER, Use `actualIncludeTestTypes` instead.
+  excludeTestTypesParam =
+    TestTypeEnum.toSet(
+      findProperty("EXCLUDE_TEST_TYPES", "").split('\\s+|\\s*,\\s*').toList(),
+      false)
+  // The actual list of test types to run.
+  actualIncludeTestTypes = includeTestTypesParam.clone()
+  actualIncludeTestTypes.removeAll(excludeTestTypesParam)
+  // List of test modules that should be included. Controlled by
+  // "INCLUDE_TEST_MODULES" parameter. Includes every tests if the parameter is
+  // empty.
+  // DO NOT USE THIS FOR FILTER, Use `actualIncludeTestModules` instead.
+  includeTestModulesParam =
+    TestModuleEnum.toSet(
+      findProperty("INCLUDE_TEST_MODULES", "").split('\\s+|\\s*,\\s*').toList(),
+      true)
+  // List of test modules that should be excluded. Controlled by
+  // "EXCLUDE_TEST_MODULES" parameter. Excludes none if the parameter is
+  // empty.
+  // DO NOT USE THIS FOR FILTER, Use `actualIncludeTestModules` instead.
+  excludeTestModulesParam =
+    TestModuleEnum.toSet(
+      findProperty("EXCLUDE_TEST_MODULES", "").split('\\s+|\\s*,\\s*').toList(),
+      false)
+  // The actual list of test module to run.
+  actualIncludeTestModules = includeTestModulesParam.clone()
+  actualIncludeTestModules.removeAll(excludeTestModulesParam)
+
   // Directory for intermediate and final build outputs.
   buildDir = new File(scriptDirectory, "build")
   // Directory for external tools.
@@ -334,6 +373,207 @@ public enum OperatingSystem {
       return OperatingSystem.LINUX
     }
     return OperatingSystem.UNKNOWN
+  }
+}
+
+/*
+ * Test Types
+ */
+public enum TestTypeEnum {
+  INTEGRATION, NUNIT, PYTHON, GRADLE
+
+  // A complete set of all enums
+  private static HashSet<TestTypeEnum> completeSet;
+
+  /*
+   * Get a complete set of all enums
+   *
+   * @returns A complete set of all enums
+   */
+  private static HashSet<TestTypeEnum> getCompleteSet() {
+    if (completeSet == null) {
+      completeSet = new HashSet<TestTypeEnum>()
+      for (TestTypeEnum type : TestTypeEnum.values()) {
+        completeSet.add(type);
+      }
+    }
+    return completeSet.clone()
+  }
+
+  /*
+   * Convert a list of strings to a set of enums
+   *
+   * @param values A list of case-insensitive strings to convert to enum.
+   * @param completeSetWhenEmpty Whether to return a complete set if the list
+   *        is empty.
+   *
+   * @returns A set of enums
+   */
+  public static HashSet<TestTypeEnum> toSet(
+      Collection<String> values, Boolean completeSetWhenEmpty) {
+    def result = new HashSet<TestTypeEnum>()
+    if ( values == null) {
+      return completeSetWhenEmpty ? getCompleteSet() : result;
+    }
+    for (String value : values) {
+      def trimmed = value.trim().toUpperCase()
+      if (!trimmed.isEmpty()) {
+        result.add(TestTypeEnum.valueOf(trimmed))
+      }
+    }
+    if (result.size() == 0) {
+      result = completeSetWhenEmpty ? getCompleteSet() : result;
+    }
+    return result
+  }
+}
+
+/*
+ * Test Modules
+ */
+public enum TestModuleEnum {
+  ANDROIDRESOLVER, VERSIONHANDLER, IOSRESOLVER, PACKAGEMANAGER, CORE, TOOL
+
+  // A complete set of all enums
+  private static HashSet<TestModuleEnum> completeSet;
+
+  /*
+   * Get a complete set of all enums
+   *
+   * @returns A complete set of all enums
+   */
+  private static HashSet<TestModuleEnum> getCompleteSet() {
+    if (completeSet == null) {
+      completeSet = new HashSet<TestModuleEnum>()
+      for (TestModuleEnum type : TestModuleEnum.values()) {
+        completeSet.add(type);
+      }
+    }
+    return completeSet.clone()
+  }
+
+  /*
+   * Convert a list of strings to a set of enums
+   *
+   * @param values A list of case-insensitive strings to convert to enum.
+   * @param completeSetWhenEmpty Whether to return a complete set if the list
+   *        is empty.
+   *
+   * @returns A set of enums
+   */
+  public static HashSet<TestModuleEnum> toSet(
+      Collection<String> values, Boolean completeSetWhenEmpty) {
+    def result = new HashSet<TestModuleEnum>()
+    if ( values == null) {
+      return completeSetWhenEmpty ? getCompleteSet() : result;
+    }
+    for (String value : values) {
+      def trimmed = value.trim().toUpperCase()
+      if (!trimmed.isEmpty()) {
+        result.add(TestModuleEnum.valueOf(trimmed))
+      }
+    }
+    if (result.size() == 0) {
+      result = completeSetWhenEmpty ? getCompleteSet() : result;
+    }
+    return result
+  }
+}
+
+/*
+ * Determine whether the test should be run given the filter parameters,
+ * the current test type and the current test module
+ *
+ * @param type Name of the property to search for.
+ * @param module Value of the property if it's not found.
+ *
+ * @returns True if the test should be run by the given the filters.
+ */
+boolean shouldTestRunWithFilters(TestTypeEnum type, TestModuleEnum module) {
+  project.ext.actualIncludeTestTypes.contains(type) &&
+  project.ext.actualIncludeTestModules.contains(module)
+}
+
+task(testTestTypeEnum) {
+  doLast {
+    def expectedTestTypeEnumCompleteSet =
+      new HashSet([
+        TestTypeEnum.INTEGRATION,
+        TestTypeEnum.NUNIT,
+        TestTypeEnum.PYTHON,
+        TestTypeEnum.GRADLE])
+    def expectedEmptySet = new HashSet()
+    def expectedPythonOnlySet = new HashSet([TestTypeEnum.PYTHON])
+    def expectedPythonAndIntegrationSet = new HashSet([
+      TestTypeEnum.PYTHON,
+      TestTypeEnum.INTEGRATION])
+
+    assert TestTypeEnum.getCompleteSet().equals(
+           expectedTestTypeEnumCompleteSet)
+    assert TestTypeEnum.toSet([], false).equals(
+           expectedEmptySet)
+    assert TestTypeEnum.toSet([], true).equals(
+           expectedTestTypeEnumCompleteSet)
+    assert TestTypeEnum.toSet(["python"], false).equals(
+           expectedPythonOnlySet)
+    assert TestTypeEnum.toSet(["python"], true).equals(
+           expectedPythonOnlySet)
+    assert TestTypeEnum.toSet(["PYTHON"], false).equals(
+           expectedPythonOnlySet)
+    assert TestTypeEnum.toSet(["PyThOn"], false).equals(
+           expectedPythonOnlySet)
+    assert TestTypeEnum.toSet(["Python", "Integration"], false).equals(
+           expectedPythonAndIntegrationSet)
+    assert TestTypeEnum.toSet(["Integration", "Python"], false).equals(
+           expectedPythonAndIntegrationSet)
+    assert TestTypeEnum.toSet(
+           ["Integration", "Python", "Gradle", "NUnit"], false).equals(
+           expectedTestTypeEnumCompleteSet)
+  }
+}
+
+task(testTestModuleEnum) {
+  doLast {
+    def expectedTestModuleEnumCompleteSet =
+      new HashSet([
+        TestModuleEnum.ANDROIDRESOLVER,
+        TestModuleEnum.VERSIONHANDLER,
+        TestModuleEnum.IOSRESOLVER,
+        TestModuleEnum.PACKAGEMANAGER,
+        TestModuleEnum.CORE,
+        TestModuleEnum.TOOL])
+    def expectedEmptySet = new HashSet()
+    def expectedToolOnlySet = new HashSet([TestModuleEnum.TOOL])
+    def expectedToolAndAndroidResolverSet = new HashSet([
+      TestModuleEnum.TOOL,
+      TestModuleEnum.ANDROIDRESOLVER])
+
+    assert TestModuleEnum.getCompleteSet().equals(
+           expectedTestModuleEnumCompleteSet)
+    assert TestModuleEnum.toSet([], false).equals(
+           expectedEmptySet)
+    assert TestModuleEnum.toSet([], true).equals(
+           expectedTestModuleEnumCompleteSet)
+    assert TestModuleEnum.toSet(["tool"], false).equals(
+           expectedToolOnlySet)
+    assert TestModuleEnum.toSet(["tool"], true).equals(
+           expectedToolOnlySet)
+    assert TestModuleEnum.toSet(["TOOL"], false).equals(
+           expectedToolOnlySet)
+    assert TestModuleEnum.toSet(["TooL"], false).equals(
+           expectedToolOnlySet)
+    assert TestModuleEnum.toSet(["Tool", "AndroidResolver"], false).equals(
+           expectedToolAndAndroidResolverSet)
+    assert TestModuleEnum.toSet(["AndroidResolver", "Tool"], false).equals(
+           expectedToolAndAndroidResolverSet)
+    assert TestModuleEnum.toSet([
+             "AndroidResolver",
+             "VersionHandler",
+             "iOSResolver",
+             "PackageManager",
+             "Core",
+             "Tool"], false).equals(
+           expectedTestModuleEnumCompleteSet)
   }
 }
 
