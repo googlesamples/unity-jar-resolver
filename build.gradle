@@ -236,6 +236,7 @@ project.ext {
     TestTypeEnum.toSet(
       findProperty("INCLUDE_TEST_TYPES", "").split('\\s+|\\s*,\\s*').toList(),
       true)
+
   // List of test types that should be excluded. Controlled by
   // "EXCLUDE_TEST_TYPES" parameter. Excludes none if the parameter is
   // empty.
@@ -244,9 +245,11 @@ project.ext {
     TestTypeEnum.toSet(
       findProperty("EXCLUDE_TEST_TYPES", "").split('\\s+|\\s*,\\s*').toList(),
       false)
+
   // The actual list of test types to run.
   actualIncludeTestTypes = includeTestTypesParam.clone()
   actualIncludeTestTypes.removeAll(excludeTestTypesParam)
+
   // List of test modules that should be included. Controlled by
   // "INCLUDE_TEST_MODULES" parameter. Includes every tests if the parameter is
   // empty.
@@ -255,6 +258,7 @@ project.ext {
     TestModuleEnum.toSet(
       findProperty("INCLUDE_TEST_MODULES", "").split('\\s+|\\s*,\\s*').toList(),
       true)
+
   // List of test modules that should be excluded. Controlled by
   // "EXCLUDE_TEST_MODULES" parameter. Excludes none if the parameter is
   // empty.
@@ -263,6 +267,7 @@ project.ext {
     TestModuleEnum.toSet(
       findProperty("EXCLUDE_TEST_MODULES", "").split('\\s+|\\s*,\\s*').toList(),
       false)
+
   // The actual list of test module to run.
   actualIncludeTestModules = includeTestModulesParam.clone()
   actualIncludeTestModules.removeAll(excludeTestModulesParam)
@@ -377,7 +382,10 @@ public enum OperatingSystem {
  * Test Types
  */
 public enum TestTypeEnum {
-  INTEGRATION, NUNIT, PYTHON, GRADLE
+  INTEGRATION,    // Unity Integration Tests using IntegrationTester framework.
+  NUNIT,          // Tests using NUnit framework
+  PYTHON,         // Tests implemented in Python
+  GRADLE          // Tests implemented in Gradle scripts
 
   // A complete set of all enums
   private static HashSet<TestTypeEnum> completeSet;
@@ -429,7 +437,12 @@ public enum TestTypeEnum {
  * Test Modules
  */
 public enum TestModuleEnum {
-  ANDROIDRESOLVER, VERSIONHANDLER, IOSRESOLVER, PACKAGEMANAGER, CORE, TOOL
+  ANDROIDRESOLVER,    // Tests for Android Resolver
+  VERSIONHANDLER,     // Tests for Version Handler
+  IOSRESOLVER,        // Tests for iOS Resolver
+  PACKAGEMANAGER,     // Tests for Package Manager
+  CORE,               // Tests for reusable C# libraries
+  TOOL                // Tests for build/packaging/release tools
 
   // A complete set of all enums
   private static HashSet<TestModuleEnum> completeSet;
