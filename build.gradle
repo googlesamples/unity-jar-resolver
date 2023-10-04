@@ -272,6 +272,12 @@ project.ext {
   actualIncludeTestModules = includeTestModulesParam.clone()
   actualIncludeTestModules.removeAll(excludeTestModulesParam)
 
+  // List of tests to exclude. Controlled by
+  // "EXCLUDE_TESTS" parameter. Excludes none if the parameter is
+  // empty.
+  excludeTestsParam =
+    new HashSet(findProperty("EXCLUDE_TESTS", "").toLowerCase().split('\\s+|\\s*,\\s*').toList())
+
   // Directory for intermediate and final build outputs.
   buildDir = new File(scriptDirectory, "build")
   // Directory for external tools.
@@ -2420,9 +2426,13 @@ project.defaultTasks = ["build", "test", "release", "clean"].collect {
 
 // Disable tests by filters.
 project.tasks.findAll { task ->
-  if(task.hasProperty("testType") && task.testType != null &&
+  if (task.hasProperty("testType") && task.testType != null &&
      task.hasProperty("testModule") && task.testModule != null) {
     if (!shouldTestRunWithFilters(task.testType, task.testModule)) {
+      println sprintf("DISABLED :%s", task.name)
+      task.enabled = false
+    }
+    if (project.ext.excludeTestsParam.contains(task.name.toLowerCase())) {
       println sprintf("DISABLED :%s", task.name)
       task.enabled = false
     }

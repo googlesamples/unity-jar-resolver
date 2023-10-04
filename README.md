@@ -794,6 +794,11 @@ the test run behavior.
   `-PEXCLUDE_TEST_MODULES="Tool,AndroidResolver"` means to run tests for any
   modules other than tools and Android Resolver.
   See `TestModuleEnum` in `build.gradle` for availble options.
+* `EXCLUDE_TESTS` - Default to empty string, which means to exclude none.
+  To add tests to exclude, set this properties with a list of case-insensitive
+  test names separated by comma. For instance,
+  `-PEXCLUDE_TESTS="testGenGuids,testDownloadArtifacts"` means to run tests
+  except the tests with name of `testGenGuids` and `testDownloadArtifacts`.
 * `CONTINUE_ON_FAIL_FOR_TESTS_ENABLED` - Default to `1`. Set to `1` to continue
   running the next test when the current one fails. Otherwise, the build script
   stops whenever any test fails.
