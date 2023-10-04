@@ -223,13 +223,10 @@ project.ext {
 
   // Whether to continue to the next test if one fails.
   continueOnFailForTestsEnabled =
-    findProperty("CONTINUE_ON_FAIL_FOR_TESTS_ENABLED", "0") == "1"
+    findProperty("CONTINUE_ON_FAIL_FOR_TESTS_ENABLED", "1") == "1"
 
-  // List of failed tests
-  failedTests = []
-
-  // List of passed tests
-  passedTests = []
+  // List of test sessions
+  testSessions = []
 
   // List of test types that should be included. Controlled by
   // "INCLUDE_TEST_TYPES" parameter. Includes every tests if the parameter is
@@ -484,8 +481,8 @@ public enum TestModuleEnum {
  * Determine whether the test should be run given the filter parameters,
  * the current test type and the current test module
  *
- * @param type Name of the property to search for.
- * @param module Value of the property if it's not found.
+ * @param type Type of the test.
+ * @param module Module of the test.
  *
  * @returns True if the test should be run by the given the filters.
  */
@@ -494,7 +491,23 @@ boolean shouldTestRunWithFilters(TestTypeEnum type, TestModuleEnum module) {
   project.ext.actualIncludeTestModules.contains(module)
 }
 
-task(testTestTypeEnum) {
+/*
+ * Set the test type and module to the given task.
+ *
+ * @param task The task to set the properties to.
+ * @param type Type of the test.
+ * @param module Module of the test.
+ */
+void setTestProperties(Task task, TestTypeEnum type, TestModuleEnum module) {
+  task.ext.testType = type
+  task.ext.testModule = module
+}
+
+/*
+ * Unit test for TestTypeEnum
+ */
+task(testTestTypeEnum) { task ->
+  setTestProperties(task, TestTypeEnum.GRADLE, TestModuleEnum.TOOL)
   doLast {
     def expectedTestTypeEnumCompleteSet =
       new HashSet([
@@ -529,10 +542,16 @@ task(testTestTypeEnum) {
     assert TestTypeEnum.toSet(
            ["Integration", "Python", "Gradle", "NUnit"], false).equals(
            expectedTestTypeEnumCompleteSet)
+
+    EvaluateTestResult(task)
   }
 }
 
-task(testTestModuleEnum) {
+/*
+ * Unit test for TestModuleEnum
+ */
+task(testTestModuleEnum) { task ->
+  setTestProperties(task, TestTypeEnum.GRADLE, TestModuleEnum.TOOL)
   doLast {
     def expectedTestModuleEnumCompleteSet =
       new HashSet([
@@ -574,7 +593,18 @@ task(testTestModuleEnum) {
              "Core",
              "Tool"], false).equals(
            expectedTestModuleEnumCompleteSet)
+    EvaluateTestResult(task)
   }
+}
+
+/*
+ * Test session
+ */
+public class TestSession {
+  public String name;
+  public TestTypeEnum type;
+  public TestModuleEnum module;
+  public Boolean isPassed;
 }
 
 /*
@@ -1338,35 +1368,6 @@ Task createUnityProjectTask(String taskName, Iterable<Task> dependsOn,
 }
 
 /*
- * Setup a Unity project for a testing task and import the plugin in
- * preparation for testing.
- *
- * @param taskName Name of the test task.
- * @param dependsOn Dependencies of the new task.
- * @param projectName Name of the Unity project to create.
- * @param batchMode Whether to run Unity in batch mode.
- *
- * @returns Task which sets up a Unity project.
- * The following extended properties are set on the task:
- * - ext.projectDir: Directory of the created Unity project.
- * - ext.containerDir: Directory which contains the Unity project and the logs.
- * - ext.logFile: Unity log file for the import operation.
- */
-Task createSetupUnityProjectTask(String taskName, Iterable<Task> dependsOn,
-                                 String projectName, Boolean batchMode) {
-  File outputDir = new File(project.ext.testDir, projectName)
-  Task createProject = createUnityProjectTask(
-      sprintf("create%s", taskName), dependsOn, projectName, outputDir)
-  createProject.with {
-    inputs.files files(project.ext.pluginExportFile)
-  }
-  return createUnityTask(
-      taskName, "import_plugin", [createProject], projectName, outputDir,
-      ["-importPackage", project.ext.pluginExportFile.absolutePath,
-       "-quit"], batchMode, null)
-}
-
-/*
  * Creates a task which runs a test with the Unity plugin.
  *
  * @param taskName Name of the test.
@@ -1381,14 +1382,17 @@ Task createSetupUnityProjectTask(String taskName, Iterable<Task> dependsOn,
  *   project.
  * @param createTaskClosure Optional task used to start Unity, this must
  *   conform to tasks.create(name, description, type, dependsOn).
- *
+ * @param testType Type of the test
+ * @param testModule Module of the test
+*
  * @returns Test task.
  */
 Task createUnityTestTask(String taskName, String description,
                          Iterable<Task> dependsOn, File testScriptsDir,
                          Iterable<File> editorAssets,
                          Iterable<String> additionalArguments,
-                         Boolean batchMode, createTaskClosure) {
+                         Boolean batchMode, createTaskClosure,
+                         TestTypeEnum testType, TestModuleEnum testModule) {
   List<File> testScripts = []
   if (testScriptsDir) {
     testScripts = fileTree(testScriptsDir).collect {
@@ -1398,10 +1402,20 @@ Task createUnityTestTask(String taskName, String description,
   }
 
   // Setup the Unity project.
-  Task setupTestProject = createSetupUnityProjectTask(
-    sprintf("setup%s", taskName), dependsOn, taskName, batchMode)
-  setupTestProject.with {
+  File testOutputDir = new File(project.ext.testDir, taskName)
+  Task createProject = createUnityProjectTask(
+      sprintf("createsetup%s", taskName), dependsOn, taskName, testOutputDir)
+  createProject.with { task ->
+    inputs.files files(project.ext.pluginExportFile)
+    setTestProperties(task, testType, testModule)
+  }
+  Task setupTestProject = createUnityTask(
+      sprintf("setup%s", taskName), "import_plugin", [createProject], taskName,
+      testOutputDir, ["-importPackage", project.ext.pluginExportFile.absolutePath,
+       "-quit"], batchMode, null)
+  setupTestProject.with { task ->
     inputs.files (testScripts + editorAssets)
+    setTestProperties(task, testType, testModule)
   }
 
   List<Task> copyTasks = []
@@ -1413,6 +1427,9 @@ Task createUnityTestTask(String taskName, String description,
       sprintf("Copy the test scripts into the %s Unity project.", taskName),
       testScripts, testScriptsDir, setupTestProject.ext.projectDir,
       [setupTestProject], null)
+    copyTestScripts.with { task ->
+        setTestProperties(task, testType, testModule)
+    }
     copyTasks += [copyTestScripts]
   }
 
@@ -1423,10 +1440,11 @@ Task createUnityTestTask(String taskName, String description,
                          taskName),
     type: Copy,
     dependsOn: [setupTestProject])
-  copyEditorAssets.with {
+  copyEditorAssets.with { task ->
     from editorAssets
     into new File(new File(setupTestProject.ext.projectDir, "Assets"),
                   "Editor")
+    setTestProperties(task, testType, testModule)
   }
   copyTasks += [copyEditorAssets]
 
@@ -1439,11 +1457,12 @@ Task createUnityTestTask(String taskName, String description,
                                   createTaskClosure,
                                   true)
   testTask.description = description
-  testTask.with {
+  testTask.with { task ->
     finalizedBy reportAllTestsResult
     doLast {
-      EvaluateTestResult(testTask)
+      EvaluateTestResult(task)
     }
+    setTestProperties(task, testType, testModule)
   }
 
   // Create a clean task
@@ -1470,6 +1489,8 @@ Task createUnityTestTask(String taskName, String description,
  * @param additionalArguments Additional arguments to pass to Unity.
  * @param createTaskClosure Optional task used to start Unity, this must
  *   conform to tasks.create(name, description, type, dependsOn).
+ * @param testType Type of the test
+ * @param testModule Module of the test
  *
  * @returns Test task.
  */
@@ -1478,7 +1499,9 @@ Task createUnityTestBatchAndNonBatch(String taskName, String description,
                                      File testScriptsDir,
                                      Iterable<File> editorAssets,
                                      Iterable<String> additionalArguments,
-                                     createTaskClosure) {
+                                     createTaskClosure,
+                                     TestTypeEnum testType,
+                                     TestModuleEnum testModule) {
   return tasks.create(name: taskName,
                       description: description,
                       dependsOn: [
@@ -1486,12 +1509,14 @@ Task createUnityTestBatchAndNonBatch(String taskName, String description,
                           sprintf("%sBatchMode", taskName),
                           sprintf("%s (Batch Mode)", description),
                           dependsOn, testScriptsDir, editorAssets,
-                          additionalArguments, true, createTaskClosure),
+                          additionalArguments, true, createTaskClosure,
+                          testType, testModule),
                         createUnityTestTask(
                           sprintf("%sInteractiveMode", taskName),
                           sprintf("%s (Interactive Mode)", description),
                           dependsOn, testScriptsDir, editorAssets,
-                          additionalArguments, false, createTaskClosure)])
+                          additionalArguments, false, createTaskClosure,
+                          testType, testModule)])
 }
 
 Task compileResolverLibTests = createXbuildTask(
@@ -1503,6 +1528,9 @@ Task compileResolverLibTests = createXbuildTask(
     new File(project.ext.testDir, "ResolverLibTests"),
     [new File("JarResolverTests.dll")], []).with {
   doFirst { checkNUnitDllPath() }
+}
+compileResolverLibTests.with { task ->
+  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.ANDROIDRESOLVER)
 }
 
 /*
@@ -1650,6 +1678,9 @@ Task testResolverLibTests = createNUnitTask(
   "Runs the tests for the deprecated Jar Resolver library",
   compileResolverLibTests.outputs.files[0],
   [compileResolverLibTests])
+testResolverLibTests.with { task ->
+  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.ANDROIDRESOLVER)
+}
 
 task cleanResolverLibTests() {
   description "Clean test output for the deprecated Jar Resolver library"
@@ -1657,9 +1688,14 @@ task cleanResolverLibTests() {
                         testResolverLibTests.outputs.files) }
 }
 
-task testDownloadArtifacts(type: GradleBuild) {
+task testDownloadArtifacts(type: GradleBuild) { task ->
   description "Run tests for the download_artifacts.gradle script."
   dir "source/AndroidResolver/scripts"
+  setTestProperties(task, TestTypeEnum.GRADLE, TestModuleEnum.ANDROIDRESOLVER)
+  doLast {
+    EvaluateTestResult(task)
+  }
+  finalizedBy "reportAllTestsResult"
 }
 
 /*
@@ -1672,14 +1708,40 @@ void EvaluateTestResult(Task testTask) {
     if (testTask.execResult.exitValue != 0) {
       String errorMsg = sprintf("Test %s FAILED", testTask.name)
       println sprintf("::error::%s", errorMsg)
-      project.ext.failedTests.add(testTask.name)
+      project.ext.testSessions.add(new TestSession(
+        name: testTask.name,
+        type: testTask.ext.testType,
+        module: testTask.ext.testModule,
+        isPassed: false))
       if (!project.ext.continueOnFailForTestsEnabled) {
         throw new GradleException(errorMsg)
       }
     } else {
       println sprintf("::debug::Test %s PASSED", testTask.name, testTask.execResult.exitValue)
-      project.ext.passedTests.add(testTask.name)
+      project.ext.testSessions.add(new TestSession(
+        name: testTask.name,
+        type: testTask.ext.testType,
+        module: testTask.ext.testModule,
+        isPassed: true))
     }
+  } else if (testTask.class.simpleName.startsWith("DefaultTask") ||
+             testTask.class.simpleName.startsWith("GradleBuild")) {
+    if (testTask.state.didWork && testTask.state.failure == null) {
+      project.ext.testSessions.add(new TestSession(
+        name: testTask.name,
+        type: testTask.ext.testType,
+        module: testTask.ext.testModule,
+        isPassed: true))
+    } else {
+      project.ext.testSessions.add(new TestSession(
+        name: testTask.name,
+        type: testTask.ext.testType,
+        module: testTask.ext.testModule,
+        isPassed: false))
+    }
+  } else {
+    throw new GradleException(
+        sprintf("Unsupported test class %s", testTask.class.simpleName))
   }
 }
 
@@ -1689,17 +1751,26 @@ Task reportAllTestsResult = tasks.create (
   type: Task
 ).with {
   doLast {
-    project.ext.passedTests.each {
-      println sprintf("Test %s PASSED", it)
+    int failedCount = 0
+    int totalCount = 0
+    project.ext.testSessions.each { session ->
+      String resultStr
+      ++totalCount
+      if (session.isPassed) {
+        resultStr = "PASSED"
+      } else {
+        resultStr = "FAILED"
+        ++failedCount
+      }
+      println sprintf("Test %s %s [%s/%s]",
+          session.name,
+          resultStr,
+          session.type,
+          session.module)
     }
-    project.ext.failedTests.each {
-      println sprintf("Test %s FAILED", it)
-    }
-    if(project.ext.failedTests.size > 0) {
-        throw new GradleException(
-          sprintf("%d out of %d tests failed",
-            project.ext.failedTests.size,
-            project.ext.failedTests.size + project.ext.passedTests.size))
+    if (failedCount > 0) {
+      throw new GradleException(
+        sprintf("%d out of %d tests failed", failedCount, totalCount))
     }
   }
 }
@@ -1711,52 +1782,56 @@ Task testPackageUploader = createPythonTask(
   new File(project.ext.unityAssetUploaderDir, "unity_asset_uploader_test.py"),
   [],
   [],
-  true).with {
+  true).with { task ->
     finalizedBy reportAllTestsResult
     doLast {
-      EvaluateTestResult(testPackageUploader)
+      EvaluateTestResult(task)
     }
+    setTestProperties(task, TestTypeEnum.PYTHON, TestModuleEnum.TOOL)
   }
 
-Task testExportUnityPackage = createPythonTask(
+createPythonTask(
   "testExportUnityPackage",
   "Test the export_unity_package.py application",
   [],
   new File(project.ext.exportUnityPackageDir, "export_unity_package_test.py"),
   [],
   exportUnityPackageRequirements,
-  true).with {
+  true).with { task ->
+    setTestProperties(task, TestTypeEnum.PYTHON, TestModuleEnum.TOOL)
     finalizedBy reportAllTestsResult
     doLast {
-      EvaluateTestResult(testExportUnityPackage)
+      EvaluateTestResult(task)
     }
   }
 
-Task testGenGuids = createPythonTask(
+createPythonTask(
   "testGenGuids",
   "Test the gen_guids.py application",
   [],
   new File(project.ext.exportUnityPackageDir, "gen_guids_test.py"),
   [],
   ["absl-py"],
-  true).with {
+  true).with { task ->
+    setTestProperties(task, TestTypeEnum.PYTHON, TestModuleEnum.TOOL)
     finalizedBy reportAllTestsResult
     doLast {
-      EvaluateTestResult(testGenGuids)
+      EvaluateTestResult(task)
     }
   }
 
-Task testImportUnityPackage = createPythonTask(
+createPythonTask(
   "testImportUnityPackage",
   "Test the import_unity_package.py application",
   [],
   new File(project.ext.importUnityPackageDir, "import_unity_package_test.py"),
   [],
   ["absl-py"],
-  true).with {
+  true).with { task ->
+    setTestProperties(task, TestTypeEnum.PYTHON, TestModuleEnum.TOOL)
     finalizedBy reportAllTestsResult
     doLast {
-      EvaluateTestResult(testImportUnityPackage)
+      EvaluateTestResult(task)
     }
   }
 
@@ -2131,12 +2206,16 @@ Task compileVersionHandlerImplTests = createXbuildTask(
     [new File("Google.VersionHandlerImplTests.dll")], []).with {
   doFirst { checkNUnitDllPath() }
 }
-
+compileVersionHandlerImplTests.with { task ->
+  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.VERSIONHANDLER)
+}
 createNUnitTask(
   "testVersionHandlerImpl",
   "Runs tests for the VersionHandlerImpl module",
   compileVersionHandlerImplTests.outputs.files[0],
-  [compileVersionHandlerImplTests])
+  [compileVersionHandlerImplTests]).with { task ->
+  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.VERSIONHANDLER)
+}
 
 Task compilePackageManagerResolverTests = createXbuildTask(
     "compilePackageManagerResolverTests",
@@ -2151,7 +2230,9 @@ Task compilePackageManagerResolverTests = createXbuildTask(
                "src")),
     new File(project.ext.testDir, "PackageManagerResolverTests"),
     [new File("Google.PackageManagerResolverTests.dll")],
-    [buildPackageManagerResolver]).with {
+    [buildPackageManagerResolver])
+compilePackageManagerResolverTests.with { task ->
+  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.PACKAGEMANAGER)
   doFirst { checkNUnitDllPath() }
 }
 
@@ -2159,7 +2240,9 @@ createNUnitTask(
   "testPackageManagerResolver",
   "Runs tests for the PackageManagerResolver module",
   compilePackageManagerResolverTests.outputs.files[0],
-  [compilePackageManagerResolverTests])
+  [compilePackageManagerResolverTests]).with { task ->
+  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.PACKAGEMANAGER)
+}
 
 createUnityTestBatchAndNonBatch(
   "testVersionHandlerActivation",
@@ -2168,7 +2251,7 @@ createUnityTestBatchAndNonBatch(
   [buildPlugin],
   new File(project.ext.scriptDirectory,
            "source/VersionHandlerImpl/test/activation"),
-  [], [], null)
+  [], [], null, TestTypeEnum.INTEGRATION, TestModuleEnum.VERSIONHANDLER)
 
 // Launch the test via a script that runs a local web server.
 createUnityTestBatchAndNonBatch(
@@ -2192,7 +2275,7 @@ createUnityTestBatchAndNonBatch(
           "webrequest_launcher.py"),
         runnerArgs,
         [], continueOnFail)
-  })
+  }, TestTypeEnum.INTEGRATION, TestModuleEnum.CORE)
 
 createUnityTestBatchAndNonBatch(
   "testVersionHandlerReflection",
@@ -2203,7 +2286,8 @@ createUnityTestBatchAndNonBatch(
            "source/VersionHandler/test/reflection"),
   [],
   [],
-  null)
+  null,
+  TestTypeEnum.INTEGRATION, TestModuleEnum.CORE)
 
 Task compileIntegrationTester = createXbuildTask(
   "compileIntegrationTester",
@@ -2232,6 +2316,8 @@ Task compileIntegrationTester = createXbuildTask(
  *   integration test project.
  * @param arguments Additional arguments for Unity when running the integration
  *   test.
+ * @param testType Type of the test
+ * @param testModule Module of the test
  */
 Task createUnityIntegrationTest(String taskName,
                                 String description,
@@ -2240,7 +2326,9 @@ Task createUnityIntegrationTest(String taskName,
                                 Iterable<File> integrationTestProjectSources,
                                 Iterable<File> integrationTestProjectOutputs,
                                 File unityProjectDir,
-                                Iterable<String> arguments) {
+                                Iterable<String> arguments,
+                                TestTypeEnum testType,
+                                TestModuleEnum testModule) {
   Task compileIntegrationTest = createXbuildTask(
     sprintf("compile%s", integrationTestProject),
     sprintf("Compile %s for %s", integrationTestProject, taskName),
@@ -2250,6 +2338,9 @@ Task createUnityIntegrationTest(String taskName,
     new File(project.ext.buildDir, integrationTestProject),
     integrationTestProjectOutputs,
     [compileIntegrationTester] + dependsOn)
+  compileIntegrationTest.with { task ->
+    setTestProperties(task, testType, testModule)
+  }
 
   createUnityTestBatchAndNonBatch(
     taskName,
@@ -2258,7 +2349,7 @@ Task createUnityIntegrationTest(String taskName,
     unityProjectDir,
     compileIntegrationTest.outputs.files +
     compileIntegrationTester.outputs.files,
-    arguments, null)
+    arguments, null, testType, testModule)
 }
 
 createUnityIntegrationTest(
@@ -2274,7 +2365,9 @@ createUnityIntegrationTest(
   new File(
     project.ext.scriptDirectory,
     "source/AndroidResolver/test/AndroidResolverIntegrationTestsUnityProject"),
-  ["-buildTarget", "android"])
+  ["-buildTarget", "android"],
+  TestTypeEnum.INTEGRATION,
+  TestModuleEnum.ANDROIDRESOLVER)
 
 createUnityIntegrationTest(
   "testPackageManagerClientIntegrationTests",
@@ -2287,7 +2380,9 @@ createUnityIntegrationTest(
                     "PackageManagerClientIntegrationTests")),
   [new File("Google.PackageManagerClientIntegrationTests.dll"),
    new File("Google.PackageManagerClientIntegrationTests.dll.mdb")],
-  null, [])
+  null, [],
+  TestTypeEnum.INTEGRATION,
+  TestModuleEnum.PACKAGEMANAGER)
 
 task cleanTests(type: Delete) {
   description "Clean test directories."
@@ -2308,4 +2403,15 @@ project.defaultTasks = ["build", "test", "release", "clean"].collect {
                  dependsOn: project.tasks.findAll {
                    task -> task.name.startsWith(topLevelTaskName)
                  })
+}
+
+// Disable tests by filters.
+project.tasks.findAll { task ->
+  if(task.hasProperty("testType") && task.testType != null &&
+     task.hasProperty("testModule") && task.testModule != null) {
+    if (!shouldTestRunWithFilters(task.testType, task.testModule)) {
+      println sprintf("DISABLED :%s", task.name)
+      task.enabled = false
+    }
+  }
 }
