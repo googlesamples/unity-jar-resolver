@@ -229,7 +229,7 @@ project.ext {
   testSessions = []
 
   // List of test types that should be included. Controlled by
-  // "INCLUDE_TEST_TYPES" parameter. Includes every tests if the parameter is
+  // "INCLUDE_TEST_TYPES" property. Includes every tests if the property is
   // empty.
   // DO NOT USE THIS FOR FILTER, Use `actualIncludeTestTypes` instead.
   includeTestTypesParam =
@@ -238,7 +238,7 @@ project.ext {
       true)
 
   // List of test types that should be excluded. Controlled by
-  // "EXCLUDE_TEST_TYPES" parameter. Excludes none if the parameter is
+  // "EXCLUDE_TEST_TYPES" property. Excludes none if the property is
   // empty.
   // DO NOT USE THIS FOR FILTER, Use `actualIncludeTestTypes` instead.
   excludeTestTypesParam =
@@ -251,7 +251,7 @@ project.ext {
   actualIncludeTestTypes.removeAll(excludeTestTypesParam)
 
   // List of test modules that should be included. Controlled by
-  // "INCLUDE_TEST_MODULES" parameter. Includes every tests if the parameter is
+  // "INCLUDE_TEST_MODULES" property. Includes every tests if the property is
   // empty.
   // DO NOT USE THIS FOR FILTER, Use `actualIncludeTestModules` instead.
   includeTestModulesParam =
@@ -260,7 +260,7 @@ project.ext {
       true)
 
   // List of test modules that should be excluded. Controlled by
-  // "EXCLUDE_TEST_MODULES" parameter. Excludes none if the parameter is
+  // "EXCLUDE_TEST_MODULES" property. Excludes none if the property is
   // empty.
   // DO NOT USE THIS FOR FILTER, Use `actualIncludeTestModules` instead.
   excludeTestModulesParam =
@@ -272,9 +272,8 @@ project.ext {
   actualIncludeTestModules = includeTestModulesParam.clone()
   actualIncludeTestModules.removeAll(excludeTestModulesParam)
 
-  // List of tests to exclude. Controlled by
-  // "EXCLUDE_TESTS" parameter. Excludes none if the parameter is
-  // empty.
+  // List of tests to exclude. Controlled by "EXCLUDE_TESTS" property. Excludes
+  // none if the property is empty.
   excludeTestsParam =
     new HashSet(findProperty("EXCLUDE_TESTS", "").toLowerCase().split('\\s+|\\s*,\\s*').toList())
 
