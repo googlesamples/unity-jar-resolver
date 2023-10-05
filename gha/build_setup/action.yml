@@ -65,7 +65,7 @@ runs:
       with:
         version: ${{ inputs.unity_version }}
         # iOS build support is always required to build EDM4U
-        platforms: "${{ inputs.platform }},iOS"
+        platforms: "${{ inputs.platform }},iOS,Android"
         username: ${{ inputs.unity_username }}
         password: ${{ inputs.unity_password }}
         serial_ids: ${{ inputs.unity_serial_id }}
