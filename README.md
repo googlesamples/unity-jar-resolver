@@ -775,25 +775,25 @@ the test run behavior.
   with a list of case-insensitive type strings separated by comma. For instance,
   `-PINCLUDE_TEST_TYPES="Python,NUnit"` means to include only Python tests and
   NUnit tests.
-  See `TestTypeEnum` in `build.gradle` for availble options.
+  See `TestTypeEnum` in `build.gradle` for available options.
 * `EXCLUDE_TEST_TYPES` - Default to empty string, which means to exclude none.
-  To add types of testa to exclude, set this properties with
+  To add types of tests to exclude, set this properties with
   a list of case-insensitive type strings separated by comma. For instance,
   `-PEXCLUDE_TEST_TYPES="Python,NUnit"` means to exclude Python tests and NUnit
   tests.
-  See `TestTypeEnum` in `build.gradle` for availble options.
+  See `TestTypeEnum` in `build.gradle` for available options.
 * `INCLUDE_TEST_MODULES` - Default to empty string, which means to include the
   tests for every modules. To narrow down modules to test, set this properties
   with a list of case-insensitive module strings separated by comma. For
   instance, `-PINCLUDE_TEST_MODULES="Tool,AndroidResolver"` means to run tests
   for tools and Android Resolver only.
-  See `TestModuleEnum` in `build.gradle` for availble options.
+  See `TestModuleEnum` in `build.gradle` for available options.
 * `EXCLUDE_TEST_MODULES` - Default to empty string, which means to exclude none.
   To add modules to exclude, set this properties with a list of case-insensitive
   module strings separated by comma. For instance,
   `-PEXCLUDE_TEST_MODULES="Tool,AndroidResolver"` means to run tests for any
   modules other than tools and Android Resolver.
-  See `TestModuleEnum` in `build.gradle` for availble options.
+  See `TestModuleEnum` in `build.gradle` for available options.
 * `EXCLUDE_TESTS` - Default to empty string, which means to exclude none.
   To add tests to exclude, set this properties with a list of case-insensitive
   test names separated by comma. For instance,
