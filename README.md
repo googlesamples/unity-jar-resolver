@@ -746,6 +746,74 @@ or Windows:
 ./gradlew.bat build
 ```
 
+# Testing
+
+To run the tests, you need the following tools installed:
+   * Unity (with iOS and Android modules installed)
+
+You can run the tests by running the following from your shell
+(Linux / OSX):
+
+```
+./gradlew test
+```
+
+or Windows:
+
+```
+./gradlew.bat test
+```
+
+The following properties can be set to narrow down the tests to run or change
+the test run behavior.
+
+* `INTERACTIVE_MODE_TESTS_ENABLED` - Default to `1`. Set to `1` to enable
+  interactive mode tests, which requires GPU on the machine. Otherwise, only run
+  tests in the batch mode.
+* `INCLUDE_TEST_TYPES` - Default to empty string, which means to include every
+  type of the test. To narrow down the types of test to run, set this properties
+  with a list of case-insensitive type strings separated by comma. For instance,
+  `-PINCLUDE_TEST_TYPES="Python,NUnit"` means to include only Python tests and
+  NUnit tests.
+  See `TestTypeEnum` in `build.gradle` for available options.
+* `EXCLUDE_TEST_TYPES` - Default to empty string, which means to exclude none.
+  To add types of tests to exclude, set this properties with
+  a list of case-insensitive type strings separated by comma. For instance,
+  `-PEXCLUDE_TEST_TYPES="Python,NUnit"` means to exclude Python tests and NUnit
+  tests.
+  See `TestTypeEnum` in `build.gradle` for available options.
+* `INCLUDE_TEST_MODULES` - Default to empty string, which means to include the
+  tests for every modules. To narrow down modules to test, set this properties
+  with a list of case-insensitive module strings separated by comma. For
+  instance, `-PINCLUDE_TEST_MODULES="Tool,AndroidResolver"` means to run tests
+  for tools and Android Resolver only.
+  See `TestModuleEnum` in `build.gradle` for available options.
+* `EXCLUDE_TEST_MODULES` - Default to empty string, which means to exclude none.
+  To add modules to exclude, set this properties with a list of case-insensitive
+  module strings separated by comma. For instance,
+  `-PEXCLUDE_TEST_MODULES="Tool,AndroidResolver"` means to run tests for any
+  modules other than tools and Android Resolver.
+  See `TestModuleEnum` in `build.gradle` for available options.
+* `EXCLUDE_TESTS` - Default to empty string, which means to exclude none.
+  To add tests to exclude, set this properties with a list of case-insensitive
+  test names separated by comma. For instance,
+  `-PEXCLUDE_TESTS="testGenGuids,testDownloadArtifacts"` means to run tests
+  except the tests with name of `testGenGuids` and `testDownloadArtifacts`.
+* `CONTINUE_ON_FAIL_FOR_TESTS_ENABLED` - Default to `1`. Set to `1` to continue
+  running the next test when the current one fails. Otherwise, the build script
+  stops whenever any test fails.
+
+For instance, by running the following command, it only runs the Unity integration
+tests that does not requires GPU, but exclude tests for Android Resolver module
+and iOS Resolver module.
+
+```
+./gradlew test \
+  -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
+  -PINCLUDE_TEST_TYPES="Integration" \
+  -PEXCLUDE_TEST_MODULES="AndroidResolver,iOSResolver"
+```
+
 # Releasing
 
 Each time a new build of this plugin is checked into the source tree you
