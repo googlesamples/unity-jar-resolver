@@ -3,8 +3,8 @@ name: Test
 on:
   workflow_dispatch:
     inputs:
-      unity_versions:
-        description: 'Unity version (value: 2018, 2019, 2020. separated by commas)'
+      unity_version:
+        description: 'Unity version (value: 2018, 2019, 2020)'
         default: '2019'
         required: true
 
@@ -13,9 +13,28 @@ env:
   artifactRetentionDays: 2
 
 jobs:
+  check_and_prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      unity_version: ${{ steps.set_outputs.outputs.unity_version }}
+    steps:
+      - id: set_outputs
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "unity_version=${{ github.event.inputs.unity_version }}" >> $GITHUB_OUTPUT
+          else
+            # inputs are not available for non "workflow_dispatch" events. Therefore, set default value here.
+            echo "unity_version=2019" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Print output
+        run: |
+          echo outputs.unity_version : ${{ steps.set_outputs.outputs.unity_version }}
+
   test_on_macos:
-    name: test-macOS-unity${{ inputs.unity_version}}
+    name: test-macOS-unity${{ needs.check_and_prepare.outputs.unity_version }}
     runs-on: macos-latest
+    needs: [check_and_prepare]
     strategy:
       fail-fast: false
     steps:
@@ -25,7 +44,7 @@ jobs:
         uses: ./gha/build_setup
         timeout-minutes: 30
         with:
-          unity_version: ${{ inputs.unity_version }}
+          unity_version: ${{ needs.check_and_prepare.outputs.unity_version }}
           platform: macOS
           python_version: ${{ env.pythonVersion }}
           unity_username: ${{ secrets.UNITY_USERNAME }}
@@ -36,7 +55,7 @@ jobs:
         shell: bash
         run: echo "UNITY_EXE=${{ env.UNITY_ROOT_DIR }}/Unity.app/Contents/MacOS/Unity" >> $GITHUB_ENV
 
-      - run: ./gradlew test -q -PINTERACTIVE_MODE_TESTS_ENABLED=0 -PEXCLUDE_TEST_TYPES=NUnit
+      - run: ./gradlew test -q -PINTERACTIVE_MODE_TESTS_ENABLED=0 -PINCLUDE_TEST_TYPES=INTEGRATION -PINCLUDE_TEST_MODULES=ANDROIDRESOLVER
 
       # Potential trouble maker
       # - run: ./gradlew :testPackageManagerResolver --info
