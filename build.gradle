@@ -1716,50 +1716,55 @@ task testDownloadArtifacts(type: GradleBuild) { task ->
   finalizedBy "reportAllTestsResult"
 }
 
+
+/*
+ * Evaluate previously-ran test result
+ *
+ * @param testTask Task for previously-ran test
+ */
+void ReportTestStarted(Task testTask) {
+  println sprintf("::debug::Test %s STARTED", testTask.name)
+}
+
 /*
  * Evaluate previously-ran test result
  *
  * @param testTask Task for previously-ran test
  */
 void EvaluateTestResult(Task testTask) {
+  Boolean succeeded = false
   if (testTask.class.simpleName.startsWith("Exec")) {
-    if (testTask.execResult.exitValue != 0) {
-      String errorMsg = sprintf("Test %s FAILED", testTask.name)
-      println sprintf("::error::%s", errorMsg)
-      project.ext.testSessions.add(new TestSession(
-        name: testTask.name,
-        type: testTask.ext.testType,
-        module: testTask.ext.testModule,
-        isPassed: false))
-      if (!project.ext.continueOnFailForTestsEnabled) {
-        throw new GradleException(errorMsg)
-      }
-    } else {
-      println sprintf("::debug::Test %s PASSED", testTask.name, testTask.execResult.exitValue)
-      project.ext.testSessions.add(new TestSession(
-        name: testTask.name,
-        type: testTask.ext.testType,
-        module: testTask.ext.testModule,
-        isPassed: true))
+    if (testTask.execResult.exitValue == 0) {
+      succeeded = true
     }
   } else if (testTask.class.simpleName.startsWith("DefaultTask") ||
              testTask.class.simpleName.startsWith("GradleBuild")) {
     if (testTask.state.didWork && testTask.state.failure == null) {
-      project.ext.testSessions.add(new TestSession(
-        name: testTask.name,
-        type: testTask.ext.testType,
-        module: testTask.ext.testModule,
-        isPassed: true))
-    } else {
-      project.ext.testSessions.add(new TestSession(
-        name: testTask.name,
-        type: testTask.ext.testType,
-        module: testTask.ext.testModule,
-        isPassed: false))
+      succeeded = true
     }
   } else {
     throw new GradleException(
         sprintf("Unsupported test class %s", testTask.class.simpleName))
+  }
+
+  if (succeeded) {
+    println sprintf("::debug::Test %s PASSED", testTask.name)
+    project.ext.testSessions.add(new TestSession(
+      name: testTask.name,
+      type: testTask.ext.testType,
+      module: testTask.ext.testModule,
+      isPassed: true))
+  } else {
+    String errorMsg = sprintf("Test %s FAILED", testTask.name)
+    println sprintf("::error::%s", errorMsg)
+    project.ext.testSessions.add(new TestSession(
+      name: testTask.name,
+      type: testTask.ext.testType,
+      module: testTask.ext.testModule,
+      isPassed: false))
+    if (!project.ext.continueOnFailForTestsEnabled) {
+      throw new GradleException(errorMsg)
+    }
   }
 }
 
