@@ -526,6 +526,9 @@ void setTestProperties(Task task, TestTypeEnum type, TestModuleEnum module) {
  */
 task(testTestTypeEnum) { task ->
   setTestProperties(task, TestTypeEnum.GRADLE, TestModuleEnum.TOOL)
+  doFirst {
+    ReportTestStarted(task)
+  }
   doLast {
     def expectedTestTypeEnumCompleteSet =
       new HashSet([
@@ -570,6 +573,9 @@ task(testTestTypeEnum) { task ->
  */
 task(testTestModuleEnum) { task ->
   setTestProperties(task, TestTypeEnum.GRADLE, TestModuleEnum.TOOL)
+  doFirst {
+    ReportTestStarted(task)
+  }
   doLast {
     def expectedTestModuleEnumCompleteSet =
       new HashSet([
@@ -1480,6 +1486,9 @@ Task createUnityTestTask(String taskName, String description,
     doLast {
       EvaluateTestResult(task)
     }
+    doFirst {
+      ReportTestStarted(task)
+    }
     setTestProperties(task, testType, testModule)
   }
 
@@ -1713,14 +1722,17 @@ task testDownloadArtifacts(type: GradleBuild) { task ->
   doLast {
     EvaluateTestResult(task)
   }
+  doFirst {
+    ReportTestStarted(task)
+  }
   finalizedBy "reportAllTestsResult"
 }
 
 
 /*
- * Evaluate previously-ran test result
+ * Report when a test starts to run
  *
- * @param testTask Task for previously-ran test
+ * @param testTask Task for test to start.
  */
 void ReportTestStarted(Task testTask) {
   println sprintf("::debug::Test %s STARTED", testTask.name)
@@ -1810,6 +1822,9 @@ Task testPackageUploader = createPythonTask(
     doLast {
       EvaluateTestResult(task)
     }
+    doFirst {
+      ReportTestStarted(task)
+    }
     setTestProperties(task, TestTypeEnum.PYTHON, TestModuleEnum.TOOL)
   }
 
@@ -1826,7 +1841,10 @@ createPythonTask(
     doLast {
       EvaluateTestResult(task)
     }
-  }
+    doFirst {
+      ReportTestStarted(task)
+    }
+}
 
 createPythonTask(
   "testGenGuids",
@@ -1840,6 +1858,9 @@ createPythonTask(
     finalizedBy reportAllTestsResult
     doLast {
       EvaluateTestResult(task)
+    }
+    doFirst {
+      ReportTestStarted(task)
     }
   }
 
@@ -1855,6 +1876,9 @@ createPythonTask(
     finalizedBy reportAllTestsResult
     doLast {
       EvaluateTestResult(task)
+    }
+    doFirst {
+      ReportTestStarted(task)
     }
   }
 
