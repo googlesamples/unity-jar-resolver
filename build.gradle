@@ -1738,6 +1738,7 @@ void ReportTestStarted(Task testTask) {
   println sprintf("::debug::Test %s STARTED", testTask.name)
   println sprintf("::notice::Test %s STARTED", testTask.name)
   println sprintf("::warning::Test %s STARTED", testTask.name)
+  println sprintf("[!] Test %s STARTED", testTask.name)
 }
 
 /*
