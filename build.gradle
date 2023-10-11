@@ -1735,10 +1735,7 @@ task testDownloadArtifacts(type: GradleBuild) { task ->
  * @param testTask Task for test to start.
  */
 void ReportTestStarted(Task testTask) {
-  println sprintf("::debug::Test %s STARTED", testTask.name)
-  println sprintf("::notice::Test %s STARTED", testTask.name)
-  println sprintf("::warning::Test %s STARTED", testTask.name)
-  println sprintf("[!] Test %s STARTED", testTask.name)
+  println sprintf("Test %s STARTED", testTask.name)
 }
 
 /*
@@ -1763,7 +1760,7 @@ void EvaluateTestResult(Task testTask) {
   }
 
   if (succeeded) {
-    println sprintf("::debug::Test %s PASSED", testTask.name)
+    println sprintf("Test %s PASSED", testTask.name)
     project.ext.testSessions.add(new TestSession(
       name: testTask.name,
       type: testTask.ext.testType,
@@ -1789,26 +1786,36 @@ Task reportAllTestsResult = tasks.create (
   type: Task
 ).with {
   doLast {
+    if (project.ext.testSessions.isEmpty()) {
+      return
+    }
+
+    println "\n\n[Test Summary]"
     int failedCount = 0
     int totalCount = 0
     project.ext.testSessions.each { session ->
       String resultStr
       ++totalCount
+      String logType = ""
       if (session.isPassed) {
         resultStr = "PASSED"
       } else {
         resultStr = "FAILED"
+        logType = "::error::"
         ++failedCount
       }
-      println sprintf("Test %s %s [%s/%s]",
+      println sprintf("%sTest %s %s [%s/%s]",
+          logType,
           session.name,
           resultStr,
           session.type,
           session.module)
     }
+    println "--------------------------------------"
+    println sprintf("::notice::%s out of %d test(s) passed", totalCount - failedCount, totalCount)
     if (failedCount > 0) {
       throw new GradleException(
-        sprintf("%d out of %d tests failed", failedCount, totalCount))
+        sprintf("%d out of %d test(s) failed", failedCount, totalCount))
     }
   }
 }
