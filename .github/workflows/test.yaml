@@ -66,6 +66,11 @@ jobs:
       - name: Print output
         run: |
           echo outputs.unity_version : ${{ steps.set_outputs.outputs.unity_version }}
+          echo outputs.include_test_types : ${{ steps.set_outputs.outputs.include_test_types }}
+          echo outputs.exclude_test_types : ${{ steps.set_outputs.outputs.exclude_test_types }}
+          echo outputs.include_test_modules : ${{ steps.set_outputs.outputs.include_test_modules }}
+          echo outputs.exclude_test_modules : ${{ steps.set_outputs.outputs.exclude_test_modules }}
+          echo outputs.exclude_tests : ${{ steps.set_outputs.outputs.exclude_tests }}
 
   test_on_macos:
     name: test-macOS-unity${{ needs.check_and_prepare.outputs.unity_version }}
