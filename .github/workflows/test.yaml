@@ -79,20 +79,28 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
       - name: Run tests
         shell: bash
-        timeout-minutes: 60
         run: |
-          # DISABLE: NUnit test is currently broken from Unity 2019
-          # DISABLE: testVersionHandlerActivationBatchMode is causing timeout.
-          ./gradlew foo -q \
-                    -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
-                    -PINCLUDE_TEST_TYPES="${{ needs.check_and_prepare.outputs.include_test_types }}" \
-                    -PEXCLUDE_TEST_TYPES="NUnit,${{ needs.check_and_prepare.outputs.exclude_test_types }}" \
-                    -PINCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.include_test_modules }}" \
-                    -PEXCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.exclude_test_modules }}" \
-                    -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode,${{ needs.check_and_prepare.outputs.exclude_tests }}"
+          echo ${{ needs.check_and_prepare.outputs.include_test_types }}
+          echo ${{ needs.check_and_prepare.outputs.exclude_test_types }}
+          echo ${{ needs.check_and_prepare.outputs.include_test_modules }}
+          echo ${{ needs.check_and_prepare.outputs.exclude_test_modules }}
+          echo ${{ needs.check_and_prepare.outputs.exclude_tests }}
+      # - uses: actions/checkout@v3
+      # - name: Run tests
+      #   shell: bash
+      #   timeout-minutes: 60
+      #   run: |
+      #     # DISABLE: NUnit test is currently broken from Unity 2019
+      #     # DISABLE: testVersionHandlerActivationBatchMode is causing timeout.
+      #     ./gradlew foo -q \
+      #               -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
+      #               -PINCLUDE_TEST_TYPES="${{ needs.check_and_prepare.outputs.include_test_types }}" \
+      #               -PEXCLUDE_TEST_TYPES="NUnit,${{ needs.check_and_prepare.outputs.exclude_test_types }}" \
+      #               -PINCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.include_test_modules }}" \
+      #               -PEXCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.exclude_test_modules }}" \
+      #               -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode,${{ needs.check_and_prepare.outputs.exclude_tests }}"
 
       # - id: build_setup
       #   uses: ./gha/build_setup
