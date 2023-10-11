@@ -84,83 +84,61 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - name: Run tests - ${{ needs.check_and_prepare.outputs.include_test_types }}
+      - uses: actions/checkout@v3
+      - id: build_setup
+        uses: ./gha/build_setup
+        timeout-minutes: 30
+        with:
+          unity_version: ${{ needs.check_and_prepare.outputs.unity_version }}
+          platform: macOS
+          python_version: ${{ env.pythonVersion }}
+          unity_username: ${{ secrets.UNITY_USERNAME }}
+          unity_password: ${{ secrets.UNITY_PASSWORD }}
+          unity_serial_id: ${{ secrets.SERIAL_ID }}
+
+      - name: Set Unity Env for EDM4U build script
         shell: bash
+        run: echo "UNITY_EXE=${{ env.UNITY_ROOT_DIR }}/Unity.app/Contents/MacOS/Unity" >> $GITHUB_ENV
+
+      - name: Run tests
+        shell: bash
+        timeout-minutes: 60
         run: |
-          echo ${{ needs.check_and_prepare.outputs.include_test_types }}
-          echo ${{ needs.check_and_prepare.outputs.exclude_test_types }}
-          echo ${{ needs.check_and_prepare.outputs.include_test_modules }}
-          echo ${{ needs.check_and_prepare.outputs.exclude_test_modules }}
-          echo ${{ needs.check_and_prepare.outputs.exclude_tests }}
-      # - uses: actions/checkout@v3
-      # - name: Run tests
-      #   shell: bash
-      #   timeout-minutes: 60
-      #   run: |
-      #     # DISABLE: NUnit test is currently broken from Unity 2019
-      #     # DISABLE: testVersionHandlerActivationBatchMode is causing timeout.
-      #     ./gradlew foo -q \
-      #               -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
-      #               -PINCLUDE_TEST_TYPES="${{ needs.check_and_prepare.outputs.include_test_types }}" \
-      #               -PEXCLUDE_TEST_TYPES="NUnit,${{ needs.check_and_prepare.outputs.exclude_test_types }}" \
-      #               -PINCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.include_test_modules }}" \
-      #               -PEXCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.exclude_test_modules }}" \
-      #               -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode,${{ needs.check_and_prepare.outputs.exclude_tests }}"
+          # DISABLE: NUnit test is currently broken from Unity 2019
+          # DISABLE: testVersionHandlerActivationBatchMode is causing timeout.
+          ./gradlew test -q \
+                    -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
+                    -PINCLUDE_TEST_TYPES="${{ needs.check_and_prepare.outputs.include_test_types }}" \
+                    -PEXCLUDE_TEST_TYPES="NUnit,${{ needs.check_and_prepare.outputs.exclude_test_types }}" \
+                    -PINCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.include_test_modules }}" \
+                    -PEXCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.exclude_test_modules }}" \
+                    -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode,${{ needs.check_and_prepare.outputs.exclude_tests }}"
 
-      # - id: build_setup
-      #   uses: ./gha/build_setup
-      #   timeout-minutes: 30
-      #   with:
-      #     unity_version: ${{ needs.check_and_prepare.outputs.unity_version }}
-      #     platform: macOS
-      #     python_version: ${{ env.pythonVersion }}
-      #     unity_username: ${{ secrets.UNITY_USERNAME }}
-      #     unity_password: ${{ secrets.UNITY_PASSWORD }}
-      #     unity_serial_id: ${{ secrets.SERIAL_ID }}
+      - name: Print test log
+        if: always()
+        shell: bash
+        run: cat test_output/test*IntegrationTestsBatchMode/*.log
 
-      # - name: Set Unity Env for EDM4U build script
-      #   shell: bash
-      #   run: echo "UNITY_EXE=${{ env.UNITY_ROOT_DIR }}/Unity.app/Contents/MacOS/Unity" >> $GITHUB_ENV
+      - name: Obtain Failed tests
+        if: always()
+        shell: bash
+        continue-on-error: true
+        run: |
+          cat test_output/test*/*_test.log | grep "^Test .* PASSED$"
+          cat test_output/test*/*_test.log | grep "^Test .* FAILED$"
+          cat test_output/test*/*_test.log | grep "^Test .* SKIPPED$"
 
-      # - name: Run tests
-      #   shell: bash
-      #   timeout-minutes: 60
-      #   run: |
-      #     # DISABLE: NUnit test is currently broken from Unity 2019
-      #     # DISABLE: testVersionHandlerActivationBatchMode is causing timeout.
-      #     ./gradlew test -q \
-      #               -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
-      #               -PINCLUDE_TEST_TYPES="${{ needs.check_and_prepare.outputs.include_test_types }}" \
-      #               -PEXCLUDE_TEST_TYPES="NUnit,${{ needs.check_and_prepare.outputs.exclude_test_types }}" \
-      #               -PINCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.include_test_modules }}" \
-      #               -PEXCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.exclude_test_modules }}" \
-      #               -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode,${{ needs.check_and_prepare.outputs.exclude_tests }}"
+      - name: Return Unity license
+        if: always()
+        uses: firebase/firebase-unity-sdk/gha/unity@main
+        with:
+          version: ${{ inputs.unity_version }}
+          release_license: "true"
 
-      # - name: Print test log
-      #   if: always()
-      #   shell: bash
-      #   run: cat test_output/test*IntegrationTestsBatchMode/*.log
-
-      # - name: Obtain Failed tests
-      #   if: always()
-      #   shell: bash
-      #   continue-on-error: true
-      #   run: |
-      #     cat test_output/test*/*_test.log | grep "^Test .* PASSED$"
-      #     cat test_output/test*/*_test.log | grep "^Test .* FAILED$"
-      #     cat test_output/test*/*_test.log | grep "^Test .* SKIPPED$"
-
-      # - name: Return Unity license
-      #   if: always()
-      #   uses: firebase/firebase-unity-sdk/gha/unity@main
-      #   with:
-      #     version: ${{ inputs.unity_version }}
-      #     release_license: "true"
-
-      # - name: Upload build logs
-      #   uses: actions/upload-artifact@v3
-      #   if: ${{ !cancelled() }}
-      #   with:
-      #     name: logs
-      #     path: test_output/test*/*.log
-      #     retention-days: ${{ env.artifactRetentionDays }}
+      - name: Upload build logs
+        uses: actions/upload-artifact@v3
+        if: ${{ !cancelled() }}
+        with:
+          name: logs
+          path: test_output/test*/*.log
+          retention-days: ${{ env.artifactRetentionDays }}
