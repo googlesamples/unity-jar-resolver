@@ -43,6 +43,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       unity_version: ${{ steps.set_outputs.outputs.unity_version }}
+      include_test_types: ${{ steps.set_outputs.outputs.include_test_types }}
+      exclude_test_types: ${{ steps.set_outputs.outputs.exclude_test_types }}
+      include_test_modules: ${{ steps.set_outputs.outputs.include_test_modules }}
+      exclude_test_modules: ${{ steps.set_outputs.outputs.exclude_test_modules }}
+      exclude_tests: ${{ steps.set_outputs.outputs.exclude_tests }}
     steps:
       - id: set_outputs
         run: |
@@ -79,7 +84,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - name: Run tests
+      - name: Run tests - ${{ needs.check_and_prepare.outputs.include_test_types }}
         shell: bash
         run: |
           echo ${{ needs.check_and_prepare.outputs.include_test_types }}
