@@ -64,7 +64,7 @@ jobs:
       - name: Run tests
         shell: bash
         timeout-minutes: 120
-        run: ./gradlew test -q -PINTERACTIVE_MODE_TESTS_ENABLED=0 -PEXCLUDE_TEST_TYPES=NUnit -PEXCLUDE_TEST_MODULES=PackageManager -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode"
+        run: ./gradlew test -q -PINTERACTIVE_MODE_TESTS_ENABLED=0 -PEXCLUDE_TEST_TYPES=NUnit -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode"
 
       - name: Print test log
         if: always()
