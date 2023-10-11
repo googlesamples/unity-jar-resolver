@@ -1,19 +1,145 @@
 name: Test
 
 on:
+  schedule:
+    - cron: "0 11 * * *"  # 11am UTC = 3`am PST
+
+  pull_request:
+    types: [ labeled, closed ]
+
   workflow_dispatch:
     inputs:
-      unity_versions:
-        description: 'Unity version (value: 2018, 2019, 2020. separated by commas)'
+      unity_version:
+        description: 'Unity version (value: 2018, 2019, 2020)'
         default: '2019'
         required: true
+      include_test_types:
+        description: 'Specify the only types of tests to run, separated by comma. See TestTypesEnum in build.gradle for options.'
+        default: ''
+        required: false
+      exclude_test_types:
+        description: 'Specify the types of tests to exclude, separated by comma. See TestTypesEnum in build.gradle for options.'
+        default: ''
+        required: false
+      include_test_modules:
+        description: 'Specify the only modules to test against, separated by comma. See TestModulesEnum in build.gradle for options.'
+        default: ''
+        required: false
+      exclude_test_modules:
+        description: 'Specify the modules to exclude from testing against, separated by comma. See TestModulesEnum in build.gradle for options.'
+        default: ''
+        required: false
+      exclude_tests:
+        description: 'Specify the tests to exclude, separated by comma. See the tasks in build.gradle for options.'
+        default: ''
+        required: false
 
 env:
   pythonVersion: '3.7'
   artifactRetentionDays: 2
 
 jobs:
-  test_on_macos:
-    runs-on: macos-latest
+  check_and_prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      unity_version: ${{ steps.set_outputs.outputs.unity_version }}
+      include_test_types: ${{ steps.set_outputs.outputs.include_test_types }}
+      exclude_test_types: ${{ steps.set_outputs.outputs.exclude_test_types }}
+      include_test_modules: ${{ steps.set_outputs.outputs.include_test_modules }}
+      exclude_test_modules: ${{ steps.set_outputs.outputs.exclude_test_modules }}
+      exclude_tests: ${{ steps.set_outputs.outputs.exclude_tests }}
     steps:
-    - run: echo "Hello World"
+      - id: set_outputs
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "unity_version=${{ github.event.inputs.unity_version }}" >> $GITHUB_OUTPUT
+            echo "include_test_types=${{ github.event.inputs.include_test_types }}" >> $GITHUB_OUTPUT
+            echo "exclude_test_types=${{ github.event.inputs.exclude_test_types }}" >> $GITHUB_OUTPUT
+            echo "include_test_modules=${{ github.event.inputs.include_test_modules }}" >> $GITHUB_OUTPUT
+            echo "exclude_test_modules=${{ github.event.inputs.exclude_test_modules }}" >> $GITHUB_OUTPUT
+            echo "exclude_tests=${{ github.event.inputs.exclude_tests }}" >> $GITHUB_OUTPUT
+          else
+            # inputs are not available for non "workflow_dispatch" events. Therefore, set default value here.
+            echo "unity_version=2019" >> $GITHUB_OUTPUT
+            echo "include_test_types=" >> $GITHUB_OUTPUT
+            echo "exclude_test_types=" >> $GITHUB_OUTPUT
+            echo "include_test_modules=" >> $GITHUB_OUTPUT
+            echo "exclude_test_modules=" >> $GITHUB_OUTPUT
+            echo "exclude_tests=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Print output
+        run: |
+          echo outputs.unity_version : ${{ steps.set_outputs.outputs.unity_version }}
+          echo outputs.include_test_types : ${{ steps.set_outputs.outputs.include_test_types }}
+          echo outputs.exclude_test_types : ${{ steps.set_outputs.outputs.exclude_test_types }}
+          echo outputs.include_test_modules : ${{ steps.set_outputs.outputs.include_test_modules }}
+          echo outputs.exclude_test_modules : ${{ steps.set_outputs.outputs.exclude_test_modules }}
+          echo outputs.exclude_tests : ${{ steps.set_outputs.outputs.exclude_tests }}
+
+  test_on_macos:
+    name: test-macOS-unity${{ needs.check_and_prepare.outputs.unity_version }}
+    runs-on: macos-latest
+    needs: [check_and_prepare]
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+      - id: build_setup
+        uses: ./gha/build_setup
+        timeout-minutes: 30
+        with:
+          unity_version: ${{ needs.check_and_prepare.outputs.unity_version }}
+          platform: macOS
+          python_version: ${{ env.pythonVersion }}
+          unity_username: ${{ secrets.UNITY_USERNAME }}
+          unity_password: ${{ secrets.UNITY_PASSWORD }}
+          unity_serial_id: ${{ secrets.SERIAL_ID }}
+
+      - name: Set Unity Env for EDM4U build script
+        shell: bash
+        run: echo "UNITY_EXE=${{ env.UNITY_ROOT_DIR }}/Unity.app/Contents/MacOS/Unity" >> $GITHUB_ENV
+
+      - name: Run tests
+        shell: bash
+        timeout-minutes: 60
+        run: |
+          # DISABLE: NUnit test is currently broken from Unity 2019
+          # DISABLE: testVersionHandlerActivationBatchMode is causing timeout.
+          ./gradlew test -q \
+                    -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
+                    -PINCLUDE_TEST_TYPES="${{ needs.check_and_prepare.outputs.include_test_types }}" \
+                    -PEXCLUDE_TEST_TYPES="NUnit,${{ needs.check_and_prepare.outputs.exclude_test_types }}" \
+                    -PINCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.include_test_modules }}" \
+                    -PEXCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.exclude_test_modules }}" \
+                    -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode,${{ needs.check_and_prepare.outputs.exclude_tests }}"
+
+      - name: Print test log
+        if: always()
+        shell: bash
+        continue-on-error: true
+        run: cat test_output/test*IntegrationTestsBatchMode/*.log
+
+      - name: Obtain Failed tests
+        if: always()
+        shell: bash
+        continue-on-error: true
+        run: |
+          cat test_output/test*/*_test.log | grep "^Test .* PASSED$"
+          cat test_output/test*/*_test.log | grep "^Test .* FAILED$"
+          cat test_output/test*/*_test.log | grep "^Test .* SKIPPED$"
+
+      - name: Return Unity license
+        if: always()
+        uses: firebase/firebase-unity-sdk/gha/unity@main
+        with:
+          version: ${{ inputs.unity_version }}
+          release_license: "true"
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v3
+        if: ${{ !cancelled() }}
+        with:
+          name: logs
+          path: test_output/test*/*.log
+          retention-days: ${{ env.artifactRetentionDays }}

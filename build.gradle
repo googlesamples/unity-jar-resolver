@@ -526,6 +526,9 @@ void setTestProperties(Task task, TestTypeEnum type, TestModuleEnum module) {
  */
 task(testTestTypeEnum) { task ->
   setTestProperties(task, TestTypeEnum.GRADLE, TestModuleEnum.TOOL)
+  doFirst {
+    ReportTestStarted(task)
+  }
   doLast {
     def expectedTestTypeEnumCompleteSet =
       new HashSet([
@@ -570,6 +573,9 @@ task(testTestTypeEnum) { task ->
  */
 task(testTestModuleEnum) { task ->
   setTestProperties(task, TestTypeEnum.GRADLE, TestModuleEnum.TOOL)
+  doFirst {
+    ReportTestStarted(task)
+  }
   doLast {
     def expectedTestModuleEnumCompleteSet =
       new HashSet([
@@ -1480,6 +1486,9 @@ Task createUnityTestTask(String taskName, String description,
     doLast {
       EvaluateTestResult(task)
     }
+    doFirst {
+      ReportTestStarted(task)
+    }
     setTestProperties(task, testType, testModule)
   }
 
@@ -1713,7 +1722,20 @@ task testDownloadArtifacts(type: GradleBuild) { task ->
   doLast {
     EvaluateTestResult(task)
   }
+  doFirst {
+    ReportTestStarted(task)
+  }
   finalizedBy "reportAllTestsResult"
+}
+
+
+/*
+ * Report when a test starts to run
+ *
+ * @param testTask Task for test to start.
+ */
+void ReportTestStarted(Task testTask) {
+  println sprintf("Test %s STARTED", testTask.name)
 }
 
 /*
@@ -1722,44 +1744,39 @@ task testDownloadArtifacts(type: GradleBuild) { task ->
  * @param testTask Task for previously-ran test
  */
 void EvaluateTestResult(Task testTask) {
+  Boolean succeeded = false
   if (testTask.class.simpleName.startsWith("Exec")) {
-    if (testTask.execResult.exitValue != 0) {
-      String errorMsg = sprintf("Test %s FAILED", testTask.name)
-      println sprintf("::error::%s", errorMsg)
-      project.ext.testSessions.add(new TestSession(
-        name: testTask.name,
-        type: testTask.ext.testType,
-        module: testTask.ext.testModule,
-        isPassed: false))
-      if (!project.ext.continueOnFailForTestsEnabled) {
-        throw new GradleException(errorMsg)
-      }
-    } else {
-      println sprintf("::debug::Test %s PASSED", testTask.name, testTask.execResult.exitValue)
-      project.ext.testSessions.add(new TestSession(
-        name: testTask.name,
-        type: testTask.ext.testType,
-        module: testTask.ext.testModule,
-        isPassed: true))
+    if (testTask.execResult.exitValue == 0) {
+      succeeded = true
     }
   } else if (testTask.class.simpleName.startsWith("DefaultTask") ||
              testTask.class.simpleName.startsWith("GradleBuild")) {
     if (testTask.state.didWork && testTask.state.failure == null) {
-      project.ext.testSessions.add(new TestSession(
-        name: testTask.name,
-        type: testTask.ext.testType,
-        module: testTask.ext.testModule,
-        isPassed: true))
-    } else {
-      project.ext.testSessions.add(new TestSession(
-        name: testTask.name,
-        type: testTask.ext.testType,
-        module: testTask.ext.testModule,
-        isPassed: false))
+      succeeded = true
     }
   } else {
     throw new GradleException(
         sprintf("Unsupported test class %s", testTask.class.simpleName))
+  }
+
+  if (succeeded) {
+    println sprintf("Test %s PASSED", testTask.name)
+    project.ext.testSessions.add(new TestSession(
+      name: testTask.name,
+      type: testTask.ext.testType,
+      module: testTask.ext.testModule,
+      isPassed: true))
+  } else {
+    String errorMsg = sprintf("Test %s FAILED", testTask.name)
+    println sprintf("::error::%s", errorMsg)
+    project.ext.testSessions.add(new TestSession(
+      name: testTask.name,
+      type: testTask.ext.testType,
+      module: testTask.ext.testModule,
+      isPassed: false))
+    if (!project.ext.continueOnFailForTestsEnabled) {
+      throw new GradleException(errorMsg)
+    }
   }
 }
 
@@ -1769,26 +1786,36 @@ Task reportAllTestsResult = tasks.create (
   type: Task
 ).with {
   doLast {
+    if (project.ext.testSessions.isEmpty()) {
+      return
+    }
+
+    println "\n\n[Test Summary]"
     int failedCount = 0
     int totalCount = 0
     project.ext.testSessions.each { session ->
       String resultStr
       ++totalCount
+      String logType = ""
       if (session.isPassed) {
         resultStr = "PASSED"
       } else {
         resultStr = "FAILED"
+        logType = "::error::"
         ++failedCount
       }
-      println sprintf("Test %s %s [%s/%s]",
+      println sprintf("%sTest %s %s [%s/%s]",
+          logType,
           session.name,
           resultStr,
           session.type,
           session.module)
     }
+    println "--------------------------------------"
+    println sprintf("::notice::%s out of %d test(s) passed", totalCount - failedCount, totalCount)
     if (failedCount > 0) {
       throw new GradleException(
-        sprintf("%d out of %d tests failed", failedCount, totalCount))
+        sprintf("%d out of %d test(s) failed", failedCount, totalCount))
     }
   }
 }
@@ -1804,6 +1831,9 @@ Task testPackageUploader = createPythonTask(
     finalizedBy reportAllTestsResult
     doLast {
       EvaluateTestResult(task)
+    }
+    doFirst {
+      ReportTestStarted(task)
     }
     setTestProperties(task, TestTypeEnum.PYTHON, TestModuleEnum.TOOL)
   }
@@ -1821,7 +1851,10 @@ createPythonTask(
     doLast {
       EvaluateTestResult(task)
     }
-  }
+    doFirst {
+      ReportTestStarted(task)
+    }
+}
 
 createPythonTask(
   "testGenGuids",
@@ -1835,6 +1868,9 @@ createPythonTask(
     finalizedBy reportAllTestsResult
     doLast {
       EvaluateTestResult(task)
+    }
+    doFirst {
+      ReportTestStarted(task)
     }
   }
 
@@ -1850,6 +1886,9 @@ createPythonTask(
     finalizedBy reportAllTestsResult
     doLast {
       EvaluateTestResult(task)
+    }
+    doFirst {
+      ReportTestStarted(task)
     }
   }
 
