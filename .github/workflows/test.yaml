@@ -13,6 +13,26 @@ on:
         description: 'Unity version (value: 2018, 2019, 2020)'
         default: '2019'
         required: true
+      include_test_types:
+        description: 'Specify the only types of tests to run, separated by comma. See TestTypesEnum in build.gradle for options.'
+        default: ''
+        required: false
+      exclude_test_types:
+        description: 'Specify the types of tests to exclude, separated by comma. See TestTypesEnum in build.gradle for options.'
+        default: ''
+        required: false
+      include_test_modules:
+        description: 'Specify the only modules to test against, separated by comma. See TestModulesEnum in build.gradle for options.'
+        default: ''
+        required: false
+      exclude_test_modules:
+        description: 'Specify the modules to exclude from testing against, separated by comma. See TestModulesEnum in build.gradle for options.'
+        default: ''
+        required: false
+      exclude_tests:
+        description: 'Specify the tests to exclude, separated by comma. See the tasks in build.gradle for options.'
+        default: ''
+        required: false
 
 env:
   pythonVersion: '3.7'
@@ -28,9 +48,19 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "unity_version=${{ github.event.inputs.unity_version }}" >> $GITHUB_OUTPUT
+            echo "include_test_types=${{ github.event.inputs.include_test_types }}" >> $GITHUB_OUTPUT
+            echo "exclude_test_types=${{ github.event.inputs.exclude_test_types }}" >> $GITHUB_OUTPUT
+            echo "include_test_modules=${{ github.event.inputs.include_test_modules }}" >> $GITHUB_OUTPUT
+            echo "exclude_test_modules=${{ github.event.inputs.exclude_test_modules }}" >> $GITHUB_OUTPUT
+            echo "exclude_tests=${{ github.event.inputs.exclude_tests }}" >> $GITHUB_OUTPUT
           else
             # inputs are not available for non "workflow_dispatch" events. Therefore, set default value here.
             echo "unity_version=2019" >> $GITHUB_OUTPUT
+            echo "include_test_types=" >> $GITHUB_OUTPUT
+            echo "exclude_test_types=" >> $GITHUB_OUTPUT
+            echo "include_test_modules=" >> $GITHUB_OUTPUT
+            echo "exclude_test_modules=" >> $GITHUB_OUTPUT
+            echo "exclude_tests=" >> $GITHUB_OUTPUT
           fi
 
       - name: Print output
@@ -69,8 +99,11 @@ jobs:
           # DISABLE: testVersionHandlerActivationBatchMode is causing timeout.
           ./gradlew test -q \
                     -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
-                    -PEXCLUDE_TEST_TYPES=NUnit \
-                    -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode"
+                    -PINCLUDE_TEST_TYPES="${{ needs.check_and_prepare.outputs.include_test_types }}" \
+                    -PEXCLUDE_TEST_TYPES="NUnit,${{ needs.check_and_prepare.outputs.exclude_test_types }}" \
+                    -PINCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.include_test_modules }}" \
+                    -PEXCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.exclude_test_modules }}" \
+                    -PEXCLUDE_TESTS="testVersionHandlerActivationBatchMode,${{ needs.check_and_prepare.outputs.exclude_tests }}"
 
       - name: Print test log
         if: always()
