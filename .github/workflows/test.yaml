@@ -133,7 +133,7 @@ jobs:
         if: always()
         uses: firebase/firebase-unity-sdk/gha/unity@main
         with:
-          version: ${{ inputs.unity_version }}
+          version: ${{ needs.check_and_prepare.outputs.unity_version }}
           release_license: "true"
 
       - name: Upload build logs
