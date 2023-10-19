@@ -42,7 +42,11 @@ public class TestEnabledCallback {
                 {
                     "IOS Resolver",
                     Google.VersionHandler.FindClass("Google.IOSResolver", "Google.IOSResolver")
-                 }
+                },
+                {
+                    "Package Manager Resolver",
+                    Google.VersionHandler.FindClass("Google.PackageManagerResolver", "Google.PackageManagerResolver")
+                }
             };
         }
     }
