@@ -67,6 +67,7 @@ jobs:
             echo "exclude_test_modules=" >> $GITHUB_OUTPUT
             echo "exclude_tests=" >> $GITHUB_OUTPUT
 
+            # This is currently checking for invalid trigger only.
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
               # Do nothing for now
               :
