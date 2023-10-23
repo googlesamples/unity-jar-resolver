@@ -88,7 +88,7 @@
       "export_upm" : 1,
       "upm_package_config" : {
         "manifest" : {
-          "unity": "2017.1"
+          "unity": "2019.1"
         }
       }
     }
