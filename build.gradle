@@ -166,35 +166,6 @@ project.ext {
               monoVersion))
   }
 
-  // Find the NUnit framework dll.
-  unityNUnitDll = getFileFromPropertyOrFileTree(
-    "UNITY_NUNIT_PATH", true, {
-      unityRootDirTree.matching {
-        include "**/nunit.framework.dll"
-        exclude unitySearchDirExcludes
-      }
-    })
-  if (unityNUnitDll == null) {
-    logger.warn("Unity NUnit DLL not found, tests will not build.")
-  }
-  saveProperty("UNITY_NUNIT_PATH", unityNUnitDll, cacheProperties)
-
-  // nunit-console is used to run tests.
-  nunitConsoleExe = getFileFromPropertyOrFileTree(
-    "NUNIT_CONSOLE_EXE", false, {
-      unityRootDirTree.matching {
-        include (operatingSystem == OperatingSystem.WINDOWS ?
-                 "**/bin/nunit-console2.bat" :
-                 "**/nunit-console2")
-        exclude unitySearchDirExcludes
-      }
-    })
-  if (nunitConsoleExe == null) {
-    logger.warn("nunit_console not found (NUNIT_CONSOLE_EXE) C# unit test " +
-                "execution will fail.")
-  }
-  saveProperty("NUNIT_CONSOLE_EXE", nunitConsoleExe, cacheProperties)
-
   // Get the directory that contains this script.
   scriptDirectory = buildscript.sourceFile.getParentFile()
 
@@ -741,24 +712,6 @@ void saveProperty(String name, value, Properties properties) {
 }
 
 /*
- * Make sure the NUnit DLL property is set.
- */
-void checkNUnitDllPath() {
-  if (project.ext.unityNUnitDll == null) {
-    throw new StopActionException("NUnit DLL not found.")
-  }
-}
-
-/*
- * Make sure the NUnit console property is set.
- */
-void checkNUnitConsolePath() {
-  if (project.ext.nunitConsoleExe == null) {
-    throw new StopActionException("NUnit Console not found.")
-  }
-}
-
-/*
  * Removes the extension from a filename.
  *
  * @param fileObj File object to split into a basename and extension.
@@ -1082,9 +1035,6 @@ Task createXbuildTask(String taskName, String taskDescription,
                        project.ext.unityDllPath.absolutePath),
                sprintf("/property:UnityIosPath=%s",
                        project.ext.unityIosPath.absolutePath),
-               sprintf("/property:NUnityHintPath=%s",
-                       project.ext.unityNUnitDll ?
-                 project.ext.unityNUnitDll.absolutePath: ""),
                sprintf("/property:BaseIntermediateOutputPath=%s%s",
                        intermediatesDir.absolutePath,
                        File.separator),
@@ -1194,44 +1144,6 @@ Task createBuildPluginDllTask(String componentName,
                  dependsOn: [copyTask])
   buildTask.ext.componentName = componentName
   return buildTask
-}
-
-/*
- * Create a Nunit test task.
- *
- * @param name Name of the task.
- * @param description Description of the task.
- * @param testDll Test DLL to execute.  The log file will be placed in the
- * parent directory of this DLL path.
- * @param dependsOn Dependencies of the new task.
- *
- * @returns Task which executes nunit-console.
- */
-Task createNUnitTask(String name, String description, File testDll,
-                     Iterable<Task> dependsOn) {
-  File logFileDir = testDll.parentFile.parentFile
-  File logFile = new File(logFileDir, name + ".log")
-  File xmlLogFile = new File(logFileDir, name + ".xml")
-  return tasks.create(name: name,
-                      description: description,
-                      type: Task,
-                      dependsOn: dependsOn).with {
-    inputs.files testDll
-    outputs.files logFile
-    doFirst { checkNUnitConsolePath() }
-    doLast {
-      exec {
-        workingDir project.ext.pluginSourceDir
-        executable project.ext.nunitConsoleExe
-        args ([sprintf("-output:%s", logFile.absolutePath),
-               sprintf("-xml:%s", xmlLogFile.absolutePath),
-               testDll.absolutePath])
-        // TODO: Support continueOnFailForTestsEnabled
-        // NUnit test is currently broken. Need to fix it before implementing
-        // continueOnFailForTestsEnabled
-      }
-    }
-  }
 }
 
 /*
