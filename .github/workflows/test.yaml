@@ -153,8 +153,8 @@ jobs:
         run: |
           # Quick and dirty way to get all failed tests in granular level.
           # TODO: better parser for more information, ex. error message.
-          cat test_output/test*/*_test.log | { grep "^Test .* FAILED$" || true; }
-          cat test_output/test*/test*/results.xml | { grep '^ *<test-case.*result="Failed"' || true; } | sed 's/^.* name="\([^\"]*\)".*$/Test \1: FAILED/'
+          { cat test_output/test*/*_test.log || true; } | { grep "^Test .* FAILED$" || true; }
+          { cat test_output/test*/test*/results.xml || true; } | { grep '^ *<test-case.*result="Failed"' || true; } | sed 's/^.* name="\([^\"]*\)".*$/Test \1: FAILED/'
 
       - name: Return Unity license
         if: always()
