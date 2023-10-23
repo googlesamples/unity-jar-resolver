@@ -69,11 +69,14 @@ jobs:
 
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
               # Do nothing for now
+              :
             elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
               if [[ "${{ github.event.action }}" == "labeled" && "${{ github.event.label.name }}" == "tests-requested" ]]; then
                 # Do nothing for now
+                :
               elif [[ "${{ github.event.action }}" == "closed" && "${{ github.event.pull_request.merged == true}}" == "true"  ]]; then
                 # Do nothing for now
+                :
               else
                 echo "invalid_trigger=1" >> $GITHUB_OUTPUT
               fi
