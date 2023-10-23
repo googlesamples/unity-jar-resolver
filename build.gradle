@@ -1235,6 +1235,46 @@ Task createNUnitTask(String name, String description, File testDll,
 }
 
 /*
+ * Creates a task which compiles and run an NUnit test.
+ *
+ * @param taskName Name of the test.
+ * @param description Description of the task.
+ * @param dependsOn Dependencies of the new task.
+ * @param unityProjectDir Directory containing a assets to copy into the
+ *   integration test project.
+ * @param arguments Additional arguments for Unity when running the integration
+ *   test.
+ * @param testType Type of the test
+ * @param testModule Module of the test
+ */
+Task createUnityNUnitTest(String taskName,
+                          String description,
+                          Iterable<Task> dependsOn,
+                          File unityProjectDir,
+                          Iterable<String> arguments,
+                          TestTypeEnum testType,
+                          TestModuleEnum testModule) {
+  createUnityTestBatchAndNonBatch(
+    taskName,
+    description,
+    ["buildPlugin"],
+    unityProjectDir,
+    [],
+    arguments + [
+      "-runTests",
+      "-batchmode",
+      "-testResults", "results.xml",
+      "-testPlatform", "EditMode"
+    ], null, testType, testModule,
+    true,
+    new File(new File(new File(
+        project.ext.scriptDirectory,
+        "test_resources"),
+        "nunit_upm"),
+        "manifest.json"))
+}
+
+/*
  * Create a task to run an executable.
  *
  * @param name Name of the task.
@@ -1408,7 +1448,9 @@ Task createUnityProjectTask(String taskName, Iterable<Task> dependsOn,
  *   conform to tasks.create(name, description, type, dependsOn).
  * @param testType Type of the test
  * @param testModule Module of the test
-*
+ * @param enableDlls Whether to enable dlls through Version Handlers before tests.
+ * @param upm_package_manifest Specify UPM package manifest (manifest.json)
+ *
  * @returns Test task.
  */
 Task createUnityTestTask(String taskName, String description,
@@ -1416,7 +1458,9 @@ Task createUnityTestTask(String taskName, String description,
                          Iterable<File> editorAssets,
                          Iterable<String> additionalArguments,
                          Boolean batchMode, createTaskClosure,
-                         TestTypeEnum testType, TestModuleEnum testModule) {
+                         TestTypeEnum testType, TestModuleEnum testModule,
+                         Boolean enableDlls = false,
+                         File upm_package_manifest = null) {
   List<File> testScripts = []
   if (testScriptsDir) {
     testScripts = fileTree(testScriptsDir).collect {
@@ -1426,6 +1470,7 @@ Task createUnityTestTask(String taskName, String description,
   }
 
   // Setup the Unity project.
+  List<Task> setupTasks = []
   File testOutputDir = new File(project.ext.testDir, taskName)
   Task createProject = createUnityProjectTask(
       sprintf("createsetup%s", taskName), dependsOn, taskName, testOutputDir)
@@ -1433,6 +1478,8 @@ Task createUnityTestTask(String taskName, String description,
     inputs.files files(project.ext.pluginExportFile)
     setTestProperties(task, testType, testModule)
   }
+  setupTasks += [createProject]
+
   Task setupTestProject = createUnityTask(
       sprintf("setup%s", taskName), "import_plugin", [createProject], taskName,
       testOutputDir, ["-importPackage", project.ext.pluginExportFile.absolutePath,
@@ -1440,6 +1487,36 @@ Task createUnityTestTask(String taskName, String description,
   setupTestProject.with { task ->
     inputs.files (testScripts + editorAssets)
     setTestProperties(task, testType, testModule)
+  }
+  setupTasks += [setupTestProject]
+
+  Task versionHandlerUpdate;
+  if (enableDlls) {
+    File updaterScriptDir = new File(new File(new File(
+        setupTestProject.ext.projectDir,
+        "Assets"),
+        "Editor"),
+        "VersionHandlerUpdater")
+    versionHandlerUpdate = createUnityTask(
+        sprintf("enableDlls%s", taskName), "enable_dlls", [setupTestProject], taskName,
+        testOutputDir, [], batchMode, null)
+    versionHandlerUpdate.with { task ->
+      setTestProperties(task, testType, testModule)
+      doFirst {
+        copy {
+          from new File(new File(new File(
+              project.ext.scriptDirectory,
+              "test_resources"),
+              "version_handler_update"),
+              "VersionHandlerUpdater.cs")
+          into updaterScriptDir
+        }
+      }
+      doLast {
+        delete updaterScriptDir
+      }
+    }
+    setupTasks += [versionHandlerUpdate]
   }
 
   List<Task> copyTasks = []
@@ -1450,11 +1527,26 @@ Task createUnityTestTask(String taskName, String description,
       sprintf("copyScriptsFor%s", taskName),
       sprintf("Copy the test scripts into the %s Unity project.", taskName),
       testScripts, testScriptsDir, setupTestProject.ext.projectDir,
-      [setupTestProject], null)
+      setupTasks, null)
     copyTestScripts.with { task ->
         setTestProperties(task, testType, testModule)
     }
     copyTasks += [copyTestScripts]
+  }
+
+  if (upm_package_manifest != null) {
+    Task copyPackageManifest = tasks.create(
+      name: sprintf("copyPackageManifestFor%s", taskName),
+      description: sprintf("Copy the package manifest into the %s Unity project.",
+                          taskName),
+      type: Copy,
+      dependsOn: setupTasks)
+    copyPackageManifest.with { task ->
+      from upm_package_manifest
+      into new File(setupTestProject.ext.projectDir, "Packages")
+      setTestProperties(task, testType, testModule)
+    }
+    copyTasks += [copyPackageManifest]
   }
 
   // Task which copies editor scripts into the project.
@@ -1463,7 +1555,7 @@ Task createUnityTestTask(String taskName, String description,
     description: sprintf("Copy the editor assets into the %s Unity project.",
                          taskName),
     type: Copy,
-    dependsOn: [setupTestProject])
+    dependsOn: setupTasks)
   copyEditorAssets.with { task ->
     from editorAssets
     into new File(new File(setupTestProject.ext.projectDir, "Assets"),
@@ -1482,7 +1574,7 @@ Task createUnityTestTask(String taskName, String description,
                                   true)
   testTask.description = description
   testTask.with { task ->
-    finalizedBy reportAllTestsResult
+    finalizedBy "reportAllTestsResult"
     doLast {
       EvaluateTestResult(task)
     }
@@ -1518,6 +1610,8 @@ Task createUnityTestTask(String taskName, String description,
  *   conform to tasks.create(name, description, type, dependsOn).
  * @param testType Type of the test
  * @param testModule Module of the test
+ * @param enableDlls Whether to enable dlls through Version Handlers before tests.
+ * @param upm_package_manifest Specify UPM package manifest (manifest.json)
  *
  * @returns Test task.
  */
@@ -1528,7 +1622,9 @@ Task createUnityTestBatchAndNonBatch(String taskName, String description,
                                      Iterable<String> additionalArguments,
                                      createTaskClosure,
                                      TestTypeEnum testType,
-                                     TestModuleEnum testModule) {
+                                     TestModuleEnum testModule,
+                                     Boolean enableDlls = false,
+                                     File upm_package_manifest = null) {
   return tasks.create(name: taskName,
                       description: description,
                       dependsOn: [
@@ -1537,27 +1633,15 @@ Task createUnityTestBatchAndNonBatch(String taskName, String description,
                           sprintf("%s (Batch Mode)", description),
                           dependsOn, testScriptsDir, editorAssets,
                           additionalArguments, true, createTaskClosure,
-                          testType, testModule),
+                          testType, testModule,
+                          enableDlls, upm_package_manifest),
                         createUnityTestTask(
                           sprintf("%sInteractiveMode", taskName),
                           sprintf("%s (Interactive Mode)", description),
                           dependsOn, testScriptsDir, editorAssets,
                           additionalArguments, false, createTaskClosure,
-                          testType, testModule)])
-}
-
-Task compileResolverLibTests = createXbuildTask(
-    "compileResolverLibTests",
-    "Compile tests for the deprecated Jar Resolver library.",
-    project.ext.pluginSolutionFile, "JarResolverTests",
-    fileTree(new File(new File(project.ext.pluginSourceDir,
-                               "JarResolverLib"), "src")),
-    new File(project.ext.testDir, "ResolverLibTests"),
-    [new File("JarResolverTests.dll")], []).with {
-  doFirst { checkNUnitDllPath() }
-}
-compileResolverLibTests.with { task ->
-  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.ANDROIDRESOLVER)
+                          testType, testModule,
+                          enableDlls, upm_package_manifest)])
 }
 
 /*
@@ -1700,20 +1784,14 @@ Task createGenGuidTask(String taskName,
 }
 
 
-Task testResolverLibTests = createNUnitTask(
-  "testResolverLibTests",
-  "Runs the tests for the deprecated Jar Resolver library",
-  compileResolverLibTests.outputs.files[0],
-  [compileResolverLibTests])
-testResolverLibTests.with { task ->
-  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.ANDROIDRESOLVER)
-}
-
-task cleanResolverLibTests() {
-  description "Clean test output for the deprecated Jar Resolver library"
-  doLast { delete files(compileResolverLibTests.ext.buildDir,
-                        testResolverLibTests.outputs.files) }
-}
+createUnityNUnitTest(
+  "testAndroidResolverNUnitTests",
+  "Runs NUnit tests for the Android Resolver module.",
+  [],
+  new File(project.ext.scriptDirectory,
+           "source/AndroidResolver/unit_tests"), [],
+           TestTypeEnum.NUNIT, TestModuleEnum.ANDROIDRESOLVER
+)
 
 task testDownloadArtifacts(type: GradleBuild) { task ->
   description "Run tests for the download_artifacts.gradle script."
@@ -2226,7 +2304,7 @@ task gitTagRelease(type: Exec) {
                               project.ext.pluginVersion))
 }
 
-// TODO: Version Handler tests to implement in both batch and interactive modes
+// TODO: Version Handler tests
 // - Per platform targeting (iOS, Android, Editor, desktop)
 // - Version enablement, import newer plugin on top of older plugin and validate
 //   new plugin is enabled, old plugin is removed.
@@ -2236,7 +2314,7 @@ task gitTagRelease(type: Exec) {
 // - Import plugin into a project and wait for asset processor to enable it.
 // - Switch .NET version, validate DLLs are enabled / disabled as expected.
 
-// TODO: Android Resolver tests to implement in both batch and interactive modes
+// TODO: Android Resolver tests
 // - Resolve with:
 //   - Conflicting dependencies
 //   - FAT ABI vs. single ABI selection
@@ -2249,57 +2327,23 @@ task gitTagRelease(type: Exec) {
 // - Project export
 // - Add a pod which changes the target SDK
 
-Task compileVersionHandlerImplTests = createXbuildTask(
-    "compileVersionHandlerImplTests",
-    "Compile tests for VersionHandlerImpl.",
-    project.ext.pluginSolutionFile, "VersionHandlerImplTests",
-    fileTree(new File(
-               new File(
-                 new File(project.ext.pluginSourceDir,
-                          "VersionHandlerImpl"),
-                 "unit_tests"),
-               "src")),
-    new File(project.ext.testDir, "VersionHandlerImplTests"),
-    [new File("Google.VersionHandlerImplTests.dll")], []).with {
-  doFirst { checkNUnitDllPath() }
-}
-compileVersionHandlerImplTests.with { task ->
-  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.VERSIONHANDLER)
-}
-createNUnitTask(
-  "testVersionHandlerImpl",
-  "Runs tests for the VersionHandlerImpl module",
-  compileVersionHandlerImplTests.outputs.files[0],
-  [compileVersionHandlerImplTests]).with { task ->
-  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.VERSIONHANDLER)
-}
+createUnityNUnitTest(
+  "testVersionHandlerImplNUnitTests",
+  "Runs NUnit tests for the VersionHandlerImpl module.",
+  [],
+  new File(project.ext.scriptDirectory,
+           "source/VersionHandlerImpl/unit_tests"), [],
+           TestTypeEnum.NUNIT, TestModuleEnum.VERSIONHANDLER
+)
 
-Task compilePackageManagerResolverTests = createXbuildTask(
-    "compilePackageManagerResolverTests",
-    "Compile tests for PackageManagerResolver.",
-    project.ext.pluginSolutionFile,
-    "PackageManagerResolverTests",
-    fileTree(new File(
-               new File(
-                 new File(project.ext.pluginSourceDir,
-                          "PackageManagerResolver"),
-                 "unit_tests"),
-               "src")),
-    new File(project.ext.testDir, "PackageManagerResolverTests"),
-    [new File("Google.PackageManagerResolverTests.dll")],
-    [buildPackageManagerResolver])
-compilePackageManagerResolverTests.with { task ->
-  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.PACKAGEMANAGER)
-  doFirst { checkNUnitDllPath() }
-}
-
-createNUnitTask(
-  "testPackageManagerResolver",
-  "Runs tests for the PackageManagerResolver module",
-  compilePackageManagerResolverTests.outputs.files[0],
-  [compilePackageManagerResolverTests]).with { task ->
-  setTestProperties(task, TestTypeEnum.NUNIT, TestModuleEnum.PACKAGEMANAGER)
-}
+createUnityNUnitTest(
+  "testPackageManagerResolverNUnitTests",
+  "Runs NUnit tests for the PackageManagerResolver module.",
+  [],
+  new File(project.ext.scriptDirectory,
+           "source/PackageManagerResolver/unit_tests"), [],
+           TestTypeEnum.NUNIT, TestModuleEnum.PACKAGEMANAGER
+)
 
 createUnityTestBatchAndNonBatch(
   "testVersionHandlerActivation",

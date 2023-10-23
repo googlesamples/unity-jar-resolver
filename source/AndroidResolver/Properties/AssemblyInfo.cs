@@ -57,3 +57,4 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("Google.IOSResolver")]
 // Uses all classes for testing.
 [assembly: InternalsVisibleTo("Google.AndroidResolverIntegrationTests")]
+[assembly: InternalsVisibleTo("Google.AndroidResolverTests")]

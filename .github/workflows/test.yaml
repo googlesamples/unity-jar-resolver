@@ -104,11 +104,10 @@ jobs:
         shell: bash
         timeout-minutes: 60
         run: |
-          # DISABLE: NUnit test is currently broken from Unity 2019
           ./gradlew test -q \
                     -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
                     -PINCLUDE_TEST_TYPES="${{ needs.check_and_prepare.outputs.include_test_types }}" \
-                    -PEXCLUDE_TEST_TYPES="NUnit,${{ needs.check_and_prepare.outputs.exclude_test_types }}" \
+                    -PEXCLUDE_TEST_TYPES="${{ needs.check_and_prepare.outputs.exclude_test_types }}" \
                     -PINCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.include_test_modules }}" \
                     -PEXCLUDE_TEST_MODULES="${{ needs.check_and_prepare.outputs.exclude_test_modules }}" \
                     -PEXCLUDE_TESTS="${{ needs.check_and_prepare.outputs.exclude_tests }}"
