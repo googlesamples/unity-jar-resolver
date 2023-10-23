@@ -66,7 +66,31 @@ jobs:
             echo "include_test_modules=" >> $GITHUB_OUTPUT
             echo "exclude_test_modules=" >> $GITHUB_OUTPUT
             echo "exclude_tests=" >> $GITHUB_OUTPUT
+
+            if [[ "${{ github.event_name }}" == "schedule" ]]; then
+              # Do nothing for now
+            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              if [[ "${{ github.event.action }}" == "labeled" && "${{ github.event.label.name }}" == "tests-requested" ]]; then
+                # Do nothing for now
+              elif [[ "${{ github.event.action }}" == "closed" && "${{ github.event.pull_request.merged == true}}" == "true"  ]]; then
+                # Do nothing for now
+              else
+                echo "invalid_trigger=1" >> $GITHUB_OUTPUT
+              fi
+            else
+              echo "invalid_trigger=1" >> $GITHUB_OUTPUT
+            fi
           fi
+
+      - name: Cancel workflow
+        if: ${{ steps.set_outputs.outputs.invalid_trigger }}
+        uses: andymckay/cancel-action@0.2
+
+      - name: Wait for workflow cancellation
+        if: ${{ steps.set_outputs.outputs.invalid_trigger }}
+        run: |
+          sleep 300
+          exit 1  # fail out if the cancellation above somehow failed.
 
       - name: Print output
         run: |
@@ -124,9 +148,7 @@ jobs:
         shell: bash
         continue-on-error: true
         run: |
-          cat test_output/test*/*_test.log | grep "^Test .* PASSED$"
-          cat test_output/test*/*_test.log | grep "^Test .* FAILED$"
-          cat test_output/test*/*_test.log | grep "^Test .* SKIPPED$"
+          cat test_output/test*/*_test.log | { grep "^Test .* FAILED$" || true; }
 
       - name: Return Unity license
         if: always()
