@@ -165,7 +165,7 @@ public static class PackageManagerClientTests {
                     CheckPackageNamesInPackageInfos(
                         new List<string>() {
                             "com.unity.2d.animation",
-                            "com.unity.entities"
+                            "com.unity.test-framework"
                         },
                         result.Packages, testCaseResult,
                         "SearchAvailablePackages returned an unexpected set of packages");
