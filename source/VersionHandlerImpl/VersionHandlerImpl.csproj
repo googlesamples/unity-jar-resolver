@@ -32,15 +32,15 @@
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
   </PropertyGroup>
-    <PropertyGroup>
-        <UnityHintPath>..\..\unity_dlls</UnityHintPath>
-   </PropertyGroup>
+  <PropertyGroup>
+    <UnityHintPath>$(SolutionDir)..\unity_dlls\</UnityHintPath>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="UnityEditor">
-        <HintPath>$(UnityHintPath)/UnityEditor.dll</HintPath>
+      <HintPath>$(UnityHintPath)UnityEditor.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine">
-        <HintPath>$(UnityHintPath)/UnityEngine.dll</HintPath>
+      <HintPath>$(UnityHintPath)UnityEngine.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

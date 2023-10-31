@@ -7,7 +7,7 @@
     <OutputType>Library</OutputType>
     <RootNamespace>Google.PackageManagerResolver.Tests</RootNamespace>
     <AssemblyName>Google.PackageManagerResolverTests</AssemblyName>
-	<TargetFrameworkVersion>v2.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <ReleaseVersion>1.2</ReleaseVersion>
     <ProductVersion>12.0.0</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
@@ -22,34 +22,42 @@
     <WarningLevel>4</WarningLevel>
     <ConsolePause>False</ConsolePause>
   </PropertyGroup>
-   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-     <DebugType>none</DebugType>
-     <Optimize>True</Optimize>
-     <OutputPath>bin\Release</OutputPath>
-     <ErrorReport>prompt</ErrorReport>
-     <WarningLevel>4</WarningLevel>
-     <ConsolePause>False</ConsolePause>
-   </PropertyGroup>
-   <PropertyGroup>
-         <NUnityHintPath>..\packages\NUnit.2.6.3\lib\</NUnityHintPath>
-   </PropertyGroup>
-   <ItemGroup>
-     <Reference Include="System" />
-     <Reference Include="System.Core" />
-  <Reference Include="nunit.framework">
-         <HintPath>$(NUnityHintPath)/nunit.framework.dll</HintPath>
-  </Reference>
-   </ItemGroup>
-   <ItemGroup>
-     <Compile Include="src\PackageManifestModifierTest.cs" />
-     <Compile Include="src\PackageManagerRegistryTest.cs" />
-     <Compile Include="src\XmlPackageManagerRegistriesTest.cs" />
-   </ItemGroup>
-   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
-   <ItemGroup>
-     <ProjectReference Include="..\PackageManagerResolver.csproj">
-       <Project>{77EBE819-CBE6-4CA8-A791-ED747EA29D30}</Project>
-       <Name>PackageManagerResolver</Name>
-     </ProjectReference>
-   </ItemGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>none</DebugType>
+    <Optimize>True</Optimize>
+    <OutputPath>bin\Release</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>False</ConsolePause>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NUnityHintPath>$(SolutionDir)packages\NUnit.2.6.3\lib\</NUnityHintPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="nunit.framework">
+      <HintPath>$(NUnityHintPath)nunit.framework.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="src\PackageManifestModifierTest.cs" />
+    <Compile Include="src\PackageManagerRegistryTest.cs" />
+    <Compile Include="src\XmlPackageManagerRegistriesTest.cs" />
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <ItemGroup>
+    <ProjectReference Include="..\..\VersionHandler\VersionHandler.csproj">
+      <Project>{5378B37A-887E-49ED-A8AE-42FA843AA9DC}</Project>
+      <Name>VersionHandler</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\VersionHandlerImpl\VersionHandlerImpl.csproj">
+      <Project>{1E162334-8EA2-440A-9B3A-13FD8FE5C22E}</Project>
+      <Name>VersionHandlerImpl</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\PackageManagerResolver.csproj">
+      <Project>{77EBE819-CBE6-4CA8-A791-ED747EA29D30}</Project>
+      <Name>PackageManagerResolver</Name>
+    </ProjectReference>
+  </ItemGroup>
 </Project>
