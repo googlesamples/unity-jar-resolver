@@ -817,9 +817,10 @@ namespace Google {
                                       PROJECT_SETTINGS_FILE), LogLevel.Error);
                     return;
                 }
+                string tmpFile = Path.GetTempFileName();
                 try {
                     using (var writer =
-                           XmlWriter.Create(PROJECT_SETTINGS_FILE,
+                           XmlWriter.Create(tmpFile,
                                             new XmlWriterSettings {
                                                 Encoding = new UTF8Encoding(false),
                                                 Indent = true,
@@ -839,6 +840,8 @@ namespace Google {
                         }
                         writer.WriteEndElement();
                     }
+                    
+                    File.Copy(tmpFile, PROJECT_SETTINGS_FILE, true);
                 } catch (Exception exception) {
                     if (exception is IOException || exception is UnauthorizedAccessException) {
                         logger.Log(String.Format("Unable to write to '{0}' ({1}, " +
@@ -847,6 +850,10 @@ namespace Google {
                         return;
                     }
                     throw exception;
+                }
+                finally
+                {
+                    File.Delete(tmpFile);
                 }
             }
         }
