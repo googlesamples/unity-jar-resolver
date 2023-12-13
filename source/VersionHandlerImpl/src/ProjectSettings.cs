@@ -51,6 +51,12 @@ namespace Google {
     /// This is a UnityEditor.EditorPrefs compatible interface.
     /// </summary>
     public interface ISettings {
+        
+        /// <summary>
+        /// Determine whether setting are out of sync and and to be persisted or not 
+        /// </summary>
+        bool IsModified { get; set; }
+        
         /// <summary>
         /// Set an int property.
         /// </summary>
@@ -131,6 +137,13 @@ namespace Google {
     /// Default implementation of system wide settings.
     /// </summary>
     internal class EditorSettings : ISettings {
+
+        /// <summary>
+        /// Determine whether setting are out of sync and and to be persisted or not
+        /// Always true as editor settings are always persisted by Unity
+        /// </summary>
+        public bool IsModified { get { return false; } set { } }
+        
         /// <summary>
         /// Set a int property.
         /// </summary>
@@ -224,6 +237,12 @@ namespace Google {
     /// In-memory settings storage.
     /// </summary>
     internal class InMemorySettings : ISettings {
+        
+        /// <summary>
+        /// Determine whether setting are out of sync and and to be persisted or not
+        /// </summary>
+        public bool IsModified { get; set; }
+        
         /// <summary>
         /// In-memory storage for settings.
         /// </summary>
@@ -234,8 +253,14 @@ namespace Google {
         /// </summary>
         /// <param name="name">Name of the value.</param>
         /// <param name="value">Value to set.</param>
-        private void Set<T>(string name, T value) {
-            settings[name] = value.ToString();
+        private void Set<T>(string name, T value)
+        {
+            string stringValue = value.ToString();
+
+            if (!settings.ContainsKey(name) || settings[name] != stringValue) 
+                IsModified = true;
+            
+            settings[name] = stringValue;
         }
 
         /// <summary>
@@ -333,6 +358,7 @@ namespace Google {
         /// <param name="name">Name of the value to delete.</param>
         public void DeleteKey(string name) {
             settings.Remove(name);
+            IsModified = true;
         }
 
         /// <summary>
@@ -347,6 +373,16 @@ namespace Google {
     /// either application or project level settings based upon the UseProjectSettings flag.
     /// </summary>
     public class ProjectSettings : ISettings {
+        
+        /// <summary>
+        /// Determine whether setting are out of sync and and to be persisted or not
+        /// </summary>
+        public bool IsModified
+        {
+            get { return systemSettings.IsModified || projectSettings.IsModified; }
+            set { systemSettings.IsModified = projectSettings.IsModified = value; }
+        }
+
         /// <summary>
         /// Whether to load settings from and save settings to disk.
         /// Exposed for testing.
@@ -798,6 +834,9 @@ namespace Google {
                     })) {
                     return false;
                 }
+                
+                // Project settings were just loaded so there shouldn't be any stale values
+                projectSettings.IsModified = false;
                 return true;
             }
         }
@@ -807,7 +846,7 @@ namespace Google {
         /// </summary>
         private static void Save() {
             lock (classLock) {
-                if (projectSettings == null || !persistenceEnabled) {
+                if (projectSettings == null || !persistenceEnabled || !projectSettings.IsModified) {
                     return;
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(PROJECT_SETTINGS_FILE));
