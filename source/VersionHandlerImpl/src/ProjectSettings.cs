@@ -53,7 +53,7 @@ namespace Google {
     public interface ISettings {
         
         /// <summary>
-        /// Determine whether setting are out of sync and and to be persisted or not 
+        /// Determine whether setting are out of sync and needs to be persisted or not 
         /// </summary>
         bool IsModified { get; set; }
         
@@ -139,8 +139,8 @@ namespace Google {
     internal class EditorSettings : ISettings {
 
         /// <summary>
-        /// Determine whether setting are out of sync and and to be persisted or not
-        /// Always true as editor settings are always persisted by Unity
+        /// Determine whether setting are out of sync and needs to be persisted or not
+        /// Always false as editor settings are always persisted by Unity
         /// </summary>
         public bool IsModified { get { return false; } set { } }
         
@@ -239,7 +239,7 @@ namespace Google {
     internal class InMemorySettings : ISettings {
         
         /// <summary>
-        /// Determine whether setting are out of sync and and to be persisted or not
+        /// Determine whether setting are out of sync and needs to be persisted or not
         /// </summary>
         public bool IsModified { get; set; }
         
@@ -375,7 +375,7 @@ namespace Google {
     public class ProjectSettings : ISettings {
         
         /// <summary>
-        /// Determine whether setting are out of sync and and to be persisted or not
+        /// Determine whether setting are out of sync and needs to be persisted or not
         /// </summary>
         public bool IsModified
         {
