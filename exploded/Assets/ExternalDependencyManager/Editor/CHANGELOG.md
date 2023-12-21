@@ -1,3 +1,6 @@
+# Version 1.2.178 - Dec 20, 2023
+* Added [OpenUPM support](https://openupm.com/packages/com.google.external-dependency-manager/).
+
 # Version 1.2.177 - Aug 14, 2023
 * iOS Resolver - Added `/opt/homebrew/bin` to Cocoapod executable search path.
   Fixes #627
