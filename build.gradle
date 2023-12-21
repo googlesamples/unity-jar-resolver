@@ -255,7 +255,7 @@ project.ext {
   // Directory for testing.
   testDir = new File(scriptDirectory, "test_output")
   // Version of the plugin (update this with CHANGELOG.md on each release).
-  pluginVersion = "1.2.177"
+  pluginVersion = "1.2.178"
   // Directory that contains the template plugin.
   // Files under this directory are copied into the staging area for the
   // plugin.
@@ -264,14 +264,18 @@ project.ext {
   pluginStagingAreaDir = new File(buildDir, "staging")
   // Directory where the build plugin is unpacked to.
   pluginExplodedDir = new File(scriptDirectory, "exploded")
+  // Directory where the UPM package is unpacked to.
+  pluginUpmDir = new File(scriptDirectory, "upm")
   // Base filename of the released plugin.
   currentPluginBasename = "external-dependency-manager"
+  // Base UPM package name of the released plugin.
+  currentPluginUpmPackageName = "com.google.external-dependency-manager"
   // Where the exported plugin file is built before it's copied to the release
   // location.
   pluginExportFile = new File(buildDir, currentPluginBasename + ".unitypackage")
   // Where the exported UPM plugin file is built.
   pluginUpmExportFile = new File(buildDir,
-                                 currentPluginBasename + pluginVersion + ".tgz")
+                                 currentPluginUpmPackageName + "-" + pluginVersion + ".tgz")
   // Directory within the plugin staging area that just contains the plugin.
   pluginAssetsDir = new File("Assets", "ExternalDependencyManager")
   // Directories within the staging area to export.
@@ -2069,8 +2073,7 @@ buildPlugin.with {
 }
 
 // Guid paths for UPM package.
-File upmPluginPackageDir = new File("com.google.external-dependency-manager",
-    "ExternalDependencyManager")
+File upmPluginPackageDir = new File(currentPluginUpmPackageName, "ExternalDependencyManager")
 File upmPluginEditorDir = new File(upmPluginPackageDir, "Editor")
 File upmPluginDllDir = new File(upmPluginEditorDir, project.ext.pluginVersion)
 
@@ -2121,6 +2124,7 @@ task releasePlugin(dependsOn: [buildPlugin, buildUpmPlugin]) {
                       fileTree(dir: project.ext.pluginExplodedDir),
                       pluginTemplateFilesMap.values())
   doLast {
+    // Delete and regenerate built .unitypackage in the repo.
     delete fileTree(
       dir: project.ext.pluginReleaseFile.parentFile,
       includes: [project.ext.currentPluginBasename + "-*.unitypackage"])
@@ -2134,6 +2138,7 @@ task releasePlugin(dependsOn: [buildPlugin, buildUpmPlugin]) {
       into project.ext.pluginReleaseFileUnversioned.parentFile
       rename { src_filename -> project.ext.pluginReleaseFileUnversioned.name }
     }
+    // Delete and regenerate the exploded plugin folder in the repo.
     delete fileTree(dir: project.ext.pluginExplodedDir)
     copy {
       from project.ext.pluginStagingAreaDir
@@ -2141,6 +2146,16 @@ task releasePlugin(dependsOn: [buildPlugin, buildUpmPlugin]) {
       include project.ext.pluginExportDirs.collect {
         it.path + "/**/*"
       }
+    }
+    // Delete and regenerate the UPM package in the repo.
+    delete fileTree(dir: project.ext.pluginUpmDir) 
+    copy {
+      // Rename the top-level package folder to upm.
+      eachFile {
+        path = path.replaceFirst(/^.+?\//, "upm/")
+      }  
+      from tarTree(project.ext.pluginUpmExportFile)
+      into project.ext.scriptDirectory
     }
     pluginTemplateFilesMap.each {
       sourceFile, targetFile -> copyFile(sourceFile, targetFile)
