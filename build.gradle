@@ -2124,6 +2124,7 @@ task releasePlugin(dependsOn: [buildPlugin, buildUpmPlugin]) {
                       fileTree(dir: project.ext.pluginExplodedDir),
                       pluginTemplateFilesMap.values())
   doLast {
+    // Delete and regenerate built .unitypackage in the repo.
     delete fileTree(
       dir: project.ext.pluginReleaseFile.parentFile,
       includes: [project.ext.currentPluginBasename + "-*.unitypackage"])
@@ -2137,6 +2138,7 @@ task releasePlugin(dependsOn: [buildPlugin, buildUpmPlugin]) {
       into project.ext.pluginReleaseFileUnversioned.parentFile
       rename { src_filename -> project.ext.pluginReleaseFileUnversioned.name }
     }
+    // Delete and regenerate the exploded plugin folder in the repo.
     delete fileTree(dir: project.ext.pluginExplodedDir)
     copy {
       from project.ext.pluginStagingAreaDir
@@ -2145,6 +2147,7 @@ task releasePlugin(dependsOn: [buildPlugin, buildUpmPlugin]) {
         it.path + "/**/*"
       }
     }
+    // Delete and regenerate the UPM package in the repo.
     delete fileTree(dir: project.ext.pluginUpmDir) 
     copy {
       // Rename the top-level package folder to upm.
