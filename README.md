@@ -335,6 +335,10 @@ In order to modify the generated Podfile you can create a script like this:
 ```csharp
 using System.IO;
 
+using UnityEditor;
+using UnityEditor.Callbacks;
+using UnityEngine;
+
 public class PostProcessIOS : MonoBehaviour
 {
     // Must be between 40 and 50 to ensure that it's not overriden by Podfile generation (40) and
