@@ -46,7 +46,7 @@
 		<Compile Include="Properties\AssemblyInfo.cs" />
 	</ItemGroup>
 	<ItemGroup>
-	  <ProjectReference Include="..\AndroidResolver\AndroidResolver.csproj">
+	  <ProjectReference Include="..\AndroidResolver.csproj">
 	    <Project>{82eedfbe-afe4-4def-99d9-bc929747dd9a}</Project>
 	    <Name>AndroidResolver</Name>
 	  </ProjectReference>

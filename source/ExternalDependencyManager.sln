@@ -27,7 +27,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageManagerClientIntegra
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PackageMigratorIntegrationTests", "PackageManagerResolver\test\PackageMigratorIntegrationTests.csproj", "{4DBDEE33-4B6C-A866-93FE-04C15486BB03}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AndroidResolverTests", "AndroidResolverTests\AndroidResolverTests.csproj", "{12F40968-4B80-4DCF-8D51-4C8E06F9CC4B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AndroidResolverTests", "AndroidResolver\unit_tests\AndroidResolverTests.csproj", "{12F40968-4B80-4DCF-8D51-4C8E06F9CC4B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

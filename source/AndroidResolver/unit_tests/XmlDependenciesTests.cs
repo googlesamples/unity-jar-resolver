@@ -19,7 +19,7 @@ namespace GooglePlayServices.Tests {
 		public void IsDependenciesFileReturnsExpected(string path) {
 			bool actualResult = XmlDependencies.IsDependenciesFile(path);
 
-			// This logic was part of the previous unoptimized implementation and can act as a test reference.
+			// This was the previous implementation before the optimization attempt and acts as a test reference.
 			bool expectedResult = Regex.IsMatch(input: path, pattern: @".*[/\\]Editor[/\\].*Dependencies\.xml$");
 
 			Assert.AreEqual(expectedResult, actualResult);
