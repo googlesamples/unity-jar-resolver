@@ -36,11 +36,13 @@ namespace GooglePlayServices {
         /// <summary>
         /// Determines whether a filename matches an XML dependencies file.
         /// </summary>
-        /// <param name="filename"></param>
         /// <returns>true if it is a match, false otherwise.</returns>
         internal static bool IsDependenciesFile(string filename) {
-            bool isInEditorFolder = filename.Contains("/Editor/") || filename.Contains(@"\Editor\");
-            return isInEditorFolder && filename.EndsWith("Dependencies.xml");
+            if (!filename.EndsWith("Dependencies.xml")) {
+                return false;
+            }
+
+            return filename.Contains("/Editor/") || filename.Contains(@"\Editor\");
         }
 
         /// <summary>
