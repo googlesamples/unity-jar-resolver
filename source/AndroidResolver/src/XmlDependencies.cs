@@ -41,7 +41,7 @@ namespace GooglePlayServices {
             if (!filename.EndsWith("Dependencies.xml")) {
                 return false;
             }
-
+            // This method was optimized to avoid using regex after profiling results from a large Unity project.
             return filename.Contains("/Editor/") || filename.Contains(@"\Editor\");
         }
 
