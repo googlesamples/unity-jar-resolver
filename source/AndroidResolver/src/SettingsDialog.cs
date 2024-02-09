@@ -48,6 +48,7 @@ namespace GooglePlayServices {
             internal bool autoResolutionDisabledWarning;
             internal bool promptBeforeAutoResolution;
             internal bool useProjectSettings;
+            internal bool userRejectedGradleUpgrade;
             internal EditorMeasurement.Settings analyticsSettings;
 
             /// <summary>
@@ -72,6 +73,7 @@ namespace GooglePlayServices {
                 autoResolutionDisabledWarning = SettingsDialog.AutoResolutionDisabledWarning;
                 promptBeforeAutoResolution = SettingsDialog.PromptBeforeAutoResolution;
                 useProjectSettings = SettingsDialog.UseProjectSettings;
+                userRejectedGradleUpgrade = SettingsDialog.UserRejectedGradleUpgrade;
                 analyticsSettings = new EditorMeasurement.Settings(PlayServicesResolver.analytics);
             }
 
@@ -97,6 +99,7 @@ namespace GooglePlayServices {
                 SettingsDialog.AutoResolutionDisabledWarning = autoResolutionDisabledWarning;
                 SettingsDialog.PromptBeforeAutoResolution = promptBeforeAutoResolution;
                 SettingsDialog.UseProjectSettings = useProjectSettings;
+                SettingsDialog.UserRejectedGradleUpgrade = userRejectedGradleUpgrade;
                 analyticsSettings.Save();
             }
         }
@@ -121,6 +124,7 @@ namespace GooglePlayServices {
         private const string PromptBeforeAutoResolutionKey =
             Namespace + "PromptBeforeAutoResolution";
         private const string UseGradleDaemonKey = Namespace + "UseGradleDaemon";
+        private const string UserRejectedGradleUpgradeKey = Namespace + "UserRejectedGradleUpgrade";
 
         // List of preference keys, used to restore default settings.
         private static string[] PreferenceKeys = new[] {
@@ -140,7 +144,8 @@ namespace GooglePlayServices {
             VerboseLoggingKey,
             AutoResolutionDisabledWarningKey,
             PromptBeforeAutoResolutionKey,
-            UseGradleDaemonKey
+            UseGradleDaemonKey,
+            UserRejectedGradleUpgradeKey
         };
 
         internal const string AndroidPluginsDir = "Assets/Plugins/Android";
@@ -291,6 +296,11 @@ namespace GooglePlayServices {
         internal static bool VerboseLogging {
             private set { projectSettings.SetBool(VerboseLoggingKey, value); }
             get { return projectSettings.GetBool(VerboseLoggingKey, false); }
+        }
+
+        internal static bool UserRejectedGradleUpgrade {
+            set { projectSettings.SetBool(UserRejectedGradleUpgradeKey, value); }
+            get { return projectSettings.GetBool(UserRejectedGradleUpgradeKey, false); }
         }
 
         internal static string ValidatePackageDir(string directory) {
@@ -508,6 +518,12 @@ namespace GooglePlayServices {
             }
 
             GUILayout.BeginHorizontal();
+            GUILayout.Label("Disable MainTemplate Gradle prompt", EditorStyles.boldLabel);
+            settings.userRejectedGradleUpgrade =
+                EditorGUILayout.Toggle(settings.userRejectedGradleUpgrade);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
             GUILayout.Label("Patch mainTemplate.gradle", EditorStyles.boldLabel);
             settings.patchMainTemplateGradle =
                 EditorGUILayout.Toggle(settings.patchMainTemplateGradle);
@@ -697,7 +713,9 @@ namespace GooglePlayServices {
                         new KeyValuePair<string, string>(
                             "patchSettingsTemplateGradle",
                             SettingsDialog.PatchSettingsTemplateGradle.ToString()),
-
+                        new KeyValuePair<string, string>(
+                            "userRejectedGradleUpgrade",
+                            SettingsDialog.UserRejectedGradleUpgrade.ToString()),
                     },
                     "Settings Save");
 
