@@ -8,8 +8,8 @@
 		<ProjectTypeGuids>{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
 		<OutputType>Library</OutputType>
 		<AppDesignerFolder>Properties</AppDesignerFolder>
-		<RootNamespace>AndroidResolverTests</RootNamespace>
-		<AssemblyName>AndroidResolverTests</AssemblyName>
+		<RootNamespace>Google</RootNamespace>
+		<AssemblyName>Google.AndroidResolverTests</AssemblyName>
 		<TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
 		<FileAlignment>512</FileAlignment>
 	</PropertyGroup>
