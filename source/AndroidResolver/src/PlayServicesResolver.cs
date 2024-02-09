@@ -1080,7 +1080,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Patterns of files that are monitored to trigger auto resolution.
         /// </summary>
-        private static HashSet<FileMatchPattern> autoResolveFilePatterns = new HashSet<FileMatchPattern>();
+        private static HashSet<Func<string, bool>> autoResolveFilePatterns = new HashSet<Func<string, bool>>();
 
         /// <summary>
         /// Add file patterns to monitor to trigger auto resolution.
@@ -1089,7 +1089,7 @@ namespace GooglePlayServices {
         /// resolution.</param>
         public static void AddAutoResolutionFilePatterns(IEnumerable<Regex> patterns) {
             // Only regex patterns are supported in the public API, but a more performant default is used internally.
-            autoResolveFilePatterns.UnionWith(patterns.Select<Regex, FileMatchPattern>(p => p.IsMatch));
+            autoResolveFilePatterns.UnionWith(patterns.Select<Regex, Func<string, bool>>(p => p.IsMatch));
         }
 
         /// <summary>
