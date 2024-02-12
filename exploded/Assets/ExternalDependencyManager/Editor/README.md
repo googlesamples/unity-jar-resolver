@@ -30,7 +30,7 @@ should add EDM4U as a
 [package dependency](https://docs.unity3d.com/2019.3/Documentation/Manual/upm-dependencies.html)
 in your package manifest (`package.json`):
 
-```
+```json
 {
   "dependencies": {
     "com.google.external-dependency-manager": "1.2.178"
@@ -68,7 +68,7 @@ Check out [troubleshooting](troubleshooting-faq.md) if you need help.
 EDM4U is available on
 [OpenUPM](https://openupm.com/packages/com.google.external-dependency-manager/):
 
-```
+```shell
 openupm add com.google.external-dependency-manager
 ```
 
@@ -118,7 +118,7 @@ For example, to add the Google Play Games library
 (`com.google.android.gms:play-services-games` package) at version `9.8.0` to the
 set of a plugin's Android dependencies:
 
-```
+```xml
 <dependencies>
   <androidPackages>
     <androidPackage spec="com.google.android.gms:play-services-games:9.8.0">
@@ -147,7 +147,7 @@ package if it's not found. If your Android dependency is located on Maven
 central it's possible to specify the package simply using the `androidPackage`
 element:
 
-```
+```xml
 <dependencies>
   <androidPackages>
     <androidPackage spec="com.google.api-client:google-api-client-android:1.22.0" />
@@ -305,7 +305,7 @@ Dependencies for iOS are added by referring to CocoaPods.
 
 For example, to add the AdMob pod, version 7.0 or greater with bitcode enabled:
 
-```
+```xml
 <dependencies>
   <iosPods>
     <iosPod name="Google-Mobile-Ads-SDK" version="~> 7.0" bitcodeEnabled="true"
@@ -332,8 +332,12 @@ Manager > iOS Resolver > Settings` menu.
 
 In order to modify the generated Podfile you can create a script like this:
 
-```
+```csharp
 using System.IO;
+
+using UnityEditor;
+using UnityEditor.Callbacks;
+using UnityEngine;
 
 public class PostProcessIOS : MonoBehaviour
 {
@@ -366,7 +370,7 @@ easy for plugin users to manage PM registry servers.
 
 For example, to add a registry for plugins in the scope `com.coolstuff`:
 
-```
+```xml
 <registries>
   <registry name="Cool Stuff"
             url="https://unityregistry.coolstuff.com"
@@ -765,7 +769,7 @@ For example, the following command will import the
 `MyPluginProject` and export the entire Assets folder to
 `MyPlugin.unitypackage`:
 
-```
+```shell
 Unity -gvh_disable \
       -batchmode \
       -importPackage external-dependency-manager-1.2.46.0.unitypackage \
@@ -792,14 +796,14 @@ To build this plugin from source you need the following tools installed: * Unity
 
 You can build the plugin by running the following from your shell (Linux / OSX):
 
-```
+```shell
 ./gradlew build
 
 ```
 
 or Windows:
 
-```
+```shell
 ./gradlew.bat build
 ```
 
@@ -810,13 +814,13 @@ If Java 11 is not your default Java command, add
 
 You can run the tests by running the following from your shell (Linux / OSX):
 
-```
+```shell
 ./gradlew test
 ```
 
 or Windows:
 
-```
+```shell
 ./gradlew.bat test
 ```
 
@@ -862,7 +866,7 @@ For instance, by running the following command, it only runs the Unity
 integration tests that does not requires GPU, but exclude tests for Android
 Resolver module and iOS Resolver module.
 
-```
+```shell
 ./gradlew test \
   -PINTERACTIVE_MODE_TESTS_ENABLED=0 \
   -PINCLUDE_TEST_TYPES="Integration" \

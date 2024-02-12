@@ -1,3 +1,8 @@
+# Version 1.2.179 - Feb 12, 2024
+* Android Resolver - Added logic to automatically turn on `mainTemplate.gradle`
+  for new projects, and prompt users to enable it on projects that have previously
+  had the resolver run.
+
 # Version 1.2.178 - Dec 20, 2023
 * Added [OpenUPM support](https://openupm.com/packages/com.google.external-dependency-manager/).
 
