@@ -18,6 +18,7 @@ namespace GooglePlayServices {
     using System;
     using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
     using System.Text.RegularExpressions;
     using System.Threading;
     using System.Xml;
@@ -1747,7 +1748,7 @@ namespace GooglePlayServices {
                     new ResolutionJob(
                         isAutoResolveJob,
                         () => {
-                            ResolveUnsafeAfterJetifierCheck(
+                            ResolveUnsafeAfterMainTemplateCheck(
                                 (success) => {
                                     SignalResolveJobComplete(() => {
                                             if (resolutionCompleteWithResult != null) {
@@ -1761,6 +1762,72 @@ namespace GooglePlayServices {
                         }));
             }
             if (firstJob) ExecuteNextResolveJob();
+        }
+
+        /// <summary>
+        /// Ensures that the mainTemplate.gradle and gradle.properties files are present in the project,
+        /// creating them via the Unity Editor's template files if needed.
+        /// </summary>
+        /// <returns>True if both files are present.</returns>
+        private static bool EnableGradleTemplates() {
+            return GradleTemplateResolver.EnsureGradleTemplateEnabled(GradleTemplateResolver.GradleTemplateFilename) &&
+            GradleTemplateResolver.EnsureGradleTemplateEnabled(GradleTemplateResolver.GradlePropertiesTemplateFilename);
+        }
+
+        /// <summary>
+        /// Resolve dependencies after checking if mainTemplate.gradle is enabled (or previously disabled).
+        /// </summary>
+        /// <param name="resolutionComplete">Delegate called when resolution is complete
+        /// with a parameter that indicates whether it succeeded or failed.</param>
+        /// <param name="forceResolution">Whether resolution should be executed when no dependencies
+        /// have changed.  This is useful if a dependency specifies a wildcard in the version
+        /// expression.</param>
+        /// <param name="isAutoResolveJob">Whether this is an auto-resolution job.</param>
+        /// <param name="closeWindowOnCompletion">Whether to unconditionally close the resolution
+        /// window when complete.</param>
+        private static void ResolveUnsafeAfterMainTemplateCheck(Action<bool> resolutionComplete,
+                                                                bool forceResolution,
+                                                                bool isAutoResolveJob,
+                                                                bool closeWindowOnCompletion) {
+            // If mainTemplate.gradle is already enabled, or if the user has rejected the switch,
+            // move to the next step.
+            if (GradleTemplateEnabled ||
+                SettingsDialogObj.UserRejectedGradleUpgrade) {
+                ResolveUnsafeAfterJetifierCheck(resolutionComplete, forceResolution, isAutoResolveJob, closeWindowOnCompletion);
+                return;
+            }
+            
+            // Else, if there are no resolved files tracked by this (aka, it hasn't been run before),
+            // turn on mainTemplate, and log a message to the user.
+            // Or, if using Batch mode, we want to enable the templates as well, since that is now the
+            // desired default behavior. If Users want to preserve the old method, they can save their
+            // SettingsObject with the UserRejectedGradleUpgrade option enabled.
+            if (ExecutionEnvironment.InBatchMode || !PlayServicesResolver.FindLabeledAssets().Any()) {
+                EnableGradleTemplates();
+                ResolveUnsafeAfterJetifierCheck(resolutionComplete, forceResolution, isAutoResolveJob, closeWindowOnCompletion);
+                return;
+            }
+
+            // Else, prompt the user to turn it on for them.
+            DialogWindow.Display(
+                "Enable Android Gradle templates?",
+                "Android Resolver recommends using Gradle templates " +
+                "for managing Android dependencies. The old method of downloading " +
+                "the dependencies into Plugins/Android is no longer recommended.",
+                DialogWindow.Option.Selected0, "Enable", "Disable",
+                complete: (selectedOption) => {
+                    switch (selectedOption) {
+                        case DialogWindow.Option.Selected0: // Enable
+                            EnableGradleTemplates();
+                            break;
+                        case DialogWindow.Option.Selected1: // Disable
+                            SettingsDialogObj.UserRejectedGradleUpgrade = true;
+                            break;
+                    }
+
+                    // Either way, proceed with the resolution.
+                    ResolveUnsafeAfterJetifierCheck(resolutionComplete, forceResolution, isAutoResolveJob, closeWindowOnCompletion);
+                });
         }
 
         /// <summary>

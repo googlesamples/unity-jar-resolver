@@ -642,6 +642,8 @@ public class AndroidResolverIntegrationTests {
         GooglePlayServices.SettingsDialog.PatchPropertiesTemplateGradle = false;
         GooglePlayServices.SettingsDialog.PatchSettingsTemplateGradle = false;
 
+        GooglePlayServices.SettingsDialog.UserRejectedGradleUpgrade = true;
+
         PlayServicesSupport.ResetDependencies();
         UpdateAdditionalDependenciesFile(false, ADDITIONAL_DEPENDENCIES_FILENAME);
         UpdateAdditionalDependenciesFile(false, ADDITIONAL_DUPLICATE_DEPENDENCIES_FILENAME);
