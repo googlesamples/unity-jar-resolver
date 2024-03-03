@@ -257,8 +257,9 @@ namespace Google {
         {
             string stringValue = value.ToString();
 
-            if (!settings.ContainsKey(name) || settings[name] != stringValue) 
+            if (!settings.ContainsKey(name) || settings[name] != stringValue) {
                 IsModified = true;
+            }
             
             settings[name] = stringValue;
         }
