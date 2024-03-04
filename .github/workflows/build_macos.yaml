@@ -33,7 +33,7 @@ env:
 jobs:
   build_desktop:
     name: build-macOS-unity${{ inputs.unity_version}}
-    runs-on: macos-latest
+    runs-on: self-hosted
     strategy:
       fail-fast: false
 
