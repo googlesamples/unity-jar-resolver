@@ -2290,7 +2290,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// Load log preferences.
     /// </summary>
     private static void LoadLogPreferences() {
-        VerboseLoggingEnabled = VerboseLoggingEnabled;
+        UpdateLoggerLevel(VerboseLoggingEnabled);
     }
 
     /// <summary>
@@ -2512,8 +2512,13 @@ public class VersionHandlerImpl : AssetPostprocessor {
                                       defaultValue: false); }
         set {
             settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value);
-            logger.Level = value ? LogLevel.Verbose : LogLevel.Info;
+            UpdateLoggerLevel(value);
         }
+    }
+    
+    private static void UpdateLoggerLevel(bool verboseLoggingEnabled)
+    {
+        logger.Level = verboseLoggingEnabled ? LogLevel.Verbose : LogLevel.Info;
     }
 
     /// <summary>
