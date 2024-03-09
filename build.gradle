@@ -126,7 +126,7 @@ project.ext {
     "MONO_EXE", false, {
       unityRootDirTree.matching {
         include (operatingSystem == OperatingSystem.WINDOWS ?
-          "**/bin/mono.exe" : "**/bin/mono")
+          "**/bin/mono.bat" : "**/bin/mono")
         exclude unitySearchDirExcludes
       }
     })
@@ -318,9 +318,9 @@ project.ext {
   pythonBootstrapDir = new File(externalToolsDir, "python_bootstrap")
   pythonBinDir = new File(new File(pythonBootstrapDir, "python"), "bin")
   // Python binary after it has been bootstrapped.
-  pythonExe = new File(new File(pythonBootstrapDir, "python"), "python")
+  pythonExe = new File(pythonBinDir, "python3")
   // Pip binary after it has been bootstrapped.
-  pipExe = new File(new File(new File(pythonBootstrapDir, "python"), "Scripts"), "pip3")
+  pipExe = new File(pythonBinDir, "pip3")
   // Python packages required by export_unity_package.py
   exportUnityPackageRequirements = ["absl-py", "PyYAML", "packaging"]
   // Python packages required by gen_guids.py
