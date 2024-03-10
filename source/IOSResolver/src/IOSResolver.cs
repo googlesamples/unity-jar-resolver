@@ -724,7 +724,7 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     static IOSResolver() {
         // Load log preferences.
-        VerboseLoggingEnabled = VerboseLoggingEnabled;
+        UpdateLoggerLevel(VerboseLoggingEnabled);
 
         // NOTE: We can't reference the UnityEditor.iOS.Xcode module in this
         // method as the Mono runtime in Unity 4 and below requires all
@@ -1039,8 +1039,12 @@ public class IOSResolver : AssetPostprocessor {
         get { return settings.GetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, defaultValue: false); }
         set {
             settings.SetBool(PREFERENCE_VERBOSE_LOGGING_ENABLED, value);
-            logger.Level = value ? LogLevel.Verbose : LogLevel.Info;
+            UpdateLoggerLevel(value);
         }
+    }
+
+    private static void UpdateLoggerLevel(bool verboseLoggingEnabled) {
+        logger.Level = verboseLoggingEnabled ? LogLevel.Verbose : LogLevel.Info;
     }
 
     /// <summary>

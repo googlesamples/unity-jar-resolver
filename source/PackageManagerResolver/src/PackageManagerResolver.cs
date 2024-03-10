@@ -94,7 +94,7 @@ public class PackageManagerResolver : AssetPostprocessor {
 
         RunOnMainThread.Run(() => {
                 // Load log preferences.
-                VerboseLoggingEnabled = VerboseLoggingEnabled;
+                UpdateLoggerLevel(VerboseLoggingEnabled);
             }, runNow: false);
     }
 
@@ -645,8 +645,12 @@ public class PackageManagerResolver : AssetPostprocessor {
         get { return settings.GetBool(PreferenceVerboseLoggingEnabled, defaultValue: false); }
         set {
             settings.SetBool(PreferenceVerboseLoggingEnabled, value);
-            logger.Level = value ? LogLevel.Verbose : LogLevel.Info;
+            UpdateLoggerLevel(value);
         }
+    }
+    
+    private static void UpdateLoggerLevel(bool verboseLoggingEnabled) {
+        logger.Level = verboseLoggingEnabled ? LogLevel.Verbose : LogLevel.Info;
     }
 
     /// <summary>
