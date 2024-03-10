@@ -649,8 +649,7 @@ public class PackageManagerResolver : AssetPostprocessor {
         }
     }
     
-    private static void UpdateLoggerLevel(bool verboseLoggingEnabled)
-    {
+    private static void UpdateLoggerLevel(bool verboseLoggingEnabled) {
         logger.Level = verboseLoggingEnabled ? LogLevel.Verbose : LogLevel.Info;
     }
 
