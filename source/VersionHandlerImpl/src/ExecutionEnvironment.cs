@@ -35,7 +35,7 @@ internal class ExecutionEnvironment {
     /// </summary>
     public static string Environment_CommandLine_Lower {
         get {
-            if (Cached_Environment_CommandLine_Lower != null) {
+            if (Cached_Environment_CommandLine_Lower == null) {
                 Cached_Environment_CommandLine_Lower = Environment.CommandLine.ToLower();
             }
             return Cached_Environment_CommandLine_Lower;
