@@ -26,17 +26,34 @@ namespace Google {
 internal class ExecutionEnvironment {
 
     /// <summary>
+    /// Cached lower case CommandLine
+    /// </summary>
+    private static string Cached_Environment_CommandLine_Lower = null;
+    
+    /// <summary>
+    /// Get/Set cached lower case CommandLine
+    /// </summary>
+    public static string Environment_CommandLine_Lower {
+        get {
+            if (Cached_Environment_CommandLine_Lower != null) {
+                Cached_Environment_CommandLine_Lower = Environment.CommandLine.ToLower();
+            }
+            return Cached_Environment_CommandLine_Lower;
+        }
+    }
+    
+    /// <summary>
     /// Whether the editor was started in batch mode.
     /// </summary>
     public static bool InBatchMode {
-        get { return Environment.CommandLine.ToLower().Contains("-batchmode"); }
+        get { return Environment_CommandLine_Lower.Contains("-batchmode"); }
     }
 
     /// <summary>
     /// Whether the editor was started with a method to executed.
     /// </summary>
     public static bool ExecuteMethodEnabled {
-        get { return Environment.CommandLine.ToLower().Contains("-executemethod"); }
+        get { return Environment_CommandLine_Lower.Contains("-executemethod"); }
     }
 
     /// <summary>
@@ -44,7 +61,7 @@ internal class ExecutionEnvironment {
     /// </summary>
     internal static bool InteractiveMode {
         get {
-            return !(Environment.CommandLine.ToLower().Contains("-gvh_noninteractive") ||
+            return !(Environment_CommandLine_Lower.Contains("-gvh_noninteractive") ||
                      ExecutionEnvironment.InBatchMode);
         }
     }
