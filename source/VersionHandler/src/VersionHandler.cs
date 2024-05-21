@@ -153,7 +153,7 @@ public class VersionHandler {
         if (implAvailable) return;
 
         var assemblies = new List<Match>();
-        foreach (string assetGuid in AssetDatabase.FindAssets("l:gvh")) {
+        foreach (var assetGuid in AssetDatabase.FindAssets("l:gvh")) {
             string filename = AssetDatabase.GUIDToAssetPath(assetGuid);
             var match = VERSION_HANDLER_FILENAME_RE.Match(filename);
             if (match.Success) assemblies.Add(match);
