@@ -55,6 +55,10 @@ jobs:
         shell: bash
         run: echo "UNITY_EXE=${{ env.UNITY_ROOT_DIR }}/Unity.app/Contents/MacOS/Unity" >> $GITHUB_ENV
 
+      - name: Force Java 8
+        shell: bash
+        run: echo "JAVA_HOME=${JAVA_HOME_8_X64}" >> $GITHUB_ENV
+
       # Build .unitypackage
       - run: ./gradlew buildPlugin --info
 
