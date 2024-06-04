@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: 37bc1e22dbdf496a8b92950da5329d3c
+labels:
+- gvh
+- gvh_version-1.2.180
+- gvhp_exportpath-ExternalDependencyManager/Editor/1.2.180/Google.VersionHandlerImpl.pdb
+- gvhp_targets-editor
+timeCreated: 1538009133
+licenseType: Pro
+DefaultImporter:
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+PluginImporter:
+  platformData:
+  - first:
+      Editor: Editor
+    second:
+      enabled: 1

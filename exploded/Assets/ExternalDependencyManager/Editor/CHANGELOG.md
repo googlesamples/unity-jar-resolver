@@ -1,3 +1,7 @@
+# Version 1.2.180 - Jun 4, 2024
+* General - Fix project settings resetting on domain reload.
+  Fixes #524
+
 # Version 1.2.179 - Feb 12, 2024
 * Android Resolver - Added logic to automatically turn on `mainTemplate.gradle`
   for new projects, and prompt users to enable it on projects that have previously
