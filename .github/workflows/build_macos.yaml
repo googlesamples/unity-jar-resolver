@@ -33,7 +33,7 @@ env:
 jobs:
   build_desktop:
     name: build-macOS-unity${{ inputs.unity_version}}
-    runs-on: macos-latest
+    runs-on: macos-13
     strategy:
       fail-fast: false
 
@@ -54,6 +54,10 @@ jobs:
       - name: Set Unity Env for EDM4U build script
         shell: bash
         run: echo "UNITY_EXE=${{ env.UNITY_ROOT_DIR }}/Unity.app/Contents/MacOS/Unity" >> $GITHUB_ENV
+
+      - name: Force Java 8
+        shell: bash
+        run: echo "JAVA_HOME=${JAVA_HOME_8_X64}" >> $GITHUB_ENV
 
       # Build .unitypackage
       - run: ./gradlew buildPlugin --info
