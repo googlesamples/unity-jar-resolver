@@ -2726,7 +2726,7 @@ public class VersionHandlerImpl : AssetPostprocessor {
         }
         var assetGuids = searchDirectories == null ? AssetDatabase.FindAssets(assetsFilter) :
             AssetDatabase.FindAssets(assetsFilter, searchDirectories);
-        foreach (string assetGuid in assetGuids) {
+        foreach (var assetGuid in assetGuids) {
             string filename = AssetDatabase.GUIDToAssetPath(assetGuid);
             // Ignore non-existent files as it's possible for the asset database to reference
             // missing files if it hasn't been refreshed or completed a refresh.
