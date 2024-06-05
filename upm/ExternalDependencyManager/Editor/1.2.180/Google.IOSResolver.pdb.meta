@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: f1f9374fc5674b598b8f8e60c7f37cb1
+labels:
+- gvh
+- gvh_version-1.2.180
+- gvhp_exportpath-ExternalDependencyManager/Editor/1.2.180/Google.IOSResolver.pdb
+- gvhp_targets-editor
+timeCreated: 1538009133
+licenseType: Pro
+DefaultImporter:
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+PluginImporter:
+  platformData:
+  - first:
+      Editor: Editor
+    second:
+      enabled: 1
