@@ -27,7 +27,7 @@ namespace Google {
         /// <summary>
         /// Version number, patched by the build process.
         /// </summary>
-        private const string VERSION_STRING = "1.2.180";
+        private const string VERSION_STRING = "1.2.181";
 
         /// <summary>
         /// Cached version structure.
