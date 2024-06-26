@@ -1,3 +1,7 @@
+# Version 1.2.181 - Jun 26, 2024
+* General - Disable `EditorMeasurement` reporting that relied on the
+  Measurement Protocol for Universal Analytics.
+
 # Version 1.2.180 - Jun 4, 2024
 * General - Fix project settings resetting on domain reload.
   Fixes #524

@@ -493,7 +493,14 @@ public class EditorMeasurement {
 
         PromptToEnable(() => {
             if (!Enabled) return;
-            try {
+
+            // TODO: This logic uses the Universal Analytics Measurement Protocol, which is stopping
+            // support on July 1st, 2024.  It needs to be upgraded to the new Google Analytics 4 protocols.
+            // Old: https://developers.google.com/analytics/devguides/collection/protocol/v1/reference
+            // New: https://developers.google.com/analytics/devguides/collection/protocol/ga4/sending-events?client_type=gtag
+            // Commenting it out now, to prevent any possible errors from appearing in the console until the
+            // upgrade is complete.
+            /*try {
                 var uri = new Uri("http://ignore.host/" + reportUrl);
                 bool reported = false;
                 var path = String.Join("", uri.Segments);
@@ -547,7 +554,7 @@ public class EditorMeasurement {
                 logger.Log(String.Format(
                     "Failed to reporting analytics data due to exception: {0}", e),
                     level: LogLevel.Verbose);
-            }
+            }*/
         });
     }
 }
