@@ -163,7 +163,10 @@ namespace GooglePlayServices {
         /// </summary>
         public static bool UnityChangeMavenRepoInSettingsTemplate {
             get {
-                return Google.VersionHandler.GetUnityVersionMajorMinor() >= 2022.2f;
+                // Check against the Android Gradle plugin version being used, since that can
+                // change between Unity minor versions.
+                return (new Dependency.VersionComparer()).Compare(
+                    "7.0", PlayServicesResolver.AndroidGradlePluginVersion) >= 0;
             }
         }
 
