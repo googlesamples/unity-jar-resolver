@@ -2731,7 +2731,26 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
            "7311924048bd457bac6d713576c952da/asset.meta",
            "7311924048bd457bac6d713576c952da/pathname"],
           unitypackage_file.getnames())
-      unitypackage_file.extractall(self.staging_dir)
+      def is_within_directory(directory, target):
+          
+          abs_directory = os.path.abspath(directory)
+          abs_target = os.path.abspath(target)
+      
+          prefix = os.path.commonprefix([abs_directory, abs_target])
+          
+          return prefix == abs_directory
+      
+      def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+      
+          for member in tar.getmembers():
+              member_path = os.path.join(path, member.name)
+              if not is_within_directory(path, member_path):
+                  raise Exception("Attempted Path Traversal in Tar File")
+      
+          tar.extractall(path, members, numeric_owner) 
+          
+      
+      safe_extract(unitypackage_file, self.staging_dir)
       self.assertTrue(filecmp.cmp(
           os.path.join(self.assets_dir, "Firebase/Plugins/Firebase.App.dll"),
           os.path.join(self.staging_dir,
@@ -2891,7 +2910,26 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
           "275bd6b96a28470986154b9a995e191c/asset.meta",
           "275bd6b96a28470986154b9a995e191c/pathname"
       ], unitypackage_file.getnames())
-      unitypackage_file.extractall(self.staging_dir)
+      def is_within_directory(directory, target):
+          
+          abs_directory = os.path.abspath(directory)
+          abs_target = os.path.abspath(target)
+      
+          prefix = os.path.commonprefix([abs_directory, abs_target])
+          
+          return prefix == abs_directory
+      
+      def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+      
+          for member in tar.getmembers():
+              member_path = os.path.join(path, member.name)
+              if not is_within_directory(path, member_path):
+                  raise Exception("Attempted Path Traversal in Tar File")
+      
+          tar.extractall(path, members, numeric_owner) 
+          
+      
+      safe_extract(unitypackage_file, self.staging_dir)
       self.assertTrue(
           filecmp.cmp(
               os.path.join(self.assets_dir,
@@ -3091,7 +3129,26 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
           "package/Documentation~",
           "package/Documentation~/index.md",
       ], unitypackage_file.getnames())
-      unitypackage_file.extractall(self.staging_dir)
+      def is_within_directory(directory, target):
+          
+          abs_directory = os.path.abspath(directory)
+          abs_target = os.path.abspath(target)
+      
+          prefix = os.path.commonprefix([abs_directory, abs_target])
+          
+          return prefix == abs_directory
+      
+      def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+      
+          for member in tar.getmembers():
+              member_path = os.path.join(path, member.name)
+              if not is_within_directory(path, member_path):
+                  raise Exception("Attempted Path Traversal in Tar File")
+      
+          tar.extractall(path, members, numeric_owner) 
+          
+      
+      safe_extract(unitypackage_file, self.staging_dir)
 
       self.assertTrue(
           filecmp.cmp(
@@ -3199,7 +3256,26 @@ class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
           "package/Documentation~",
           "package/Documentation~/index.md",
       ], upm_package_file.getnames())
-      upm_package_file.extractall(self.staging_dir)
+      def is_within_directory(directory, target):
+          
+          abs_directory = os.path.abspath(directory)
+          abs_target = os.path.abspath(target)
+      
+          prefix = os.path.commonprefix([abs_directory, abs_target])
+          
+          return prefix == abs_directory
+      
+      def safe_extract(tar, path=".", members=None, *, numeric_owner=False):
+      
+          for member in tar.getmembers():
+              member_path = os.path.join(path, member.name)
+              if not is_within_directory(path, member_path):
+                  raise Exception("Attempted Path Traversal in Tar File")
+      
+          tar.extractall(path, members, numeric_owner) 
+          
+      
+      safe_extract(upm_package_file, self.staging_dir)
 
       self.assertTrue(
           filecmp.cmp(
