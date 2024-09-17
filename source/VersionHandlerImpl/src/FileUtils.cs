@@ -48,9 +48,10 @@ namespace Google {
 
         /// <summary>
         /// Regex to match packages folder like "Library/PackageCache/com.company.pkg"
+        /// or "Library/PackageCache/com.company.pkg@version"
         /// </summary>
         private static Regex PACKAGES_PHYSICAL_PATH_REGEX =
-                new Regex(@"^(Library[/\\]PackageCache[/\\])([^/\\]+)(@[^/\\]+)[/\\](.*)?$");
+                new Regex(@"^(Library[/\\]PackageCache[/\\])([^/\\]+)(@[^/\\]+)?[/\\](.*)?$");
 
         /// <summary>
         /// Returns the project directory (e.g contains the Assets folder).
@@ -448,7 +449,9 @@ namespace Google {
                     // work if the package is installed from a local tarball or from a registry
                     // server.
                     string absolutePath = Path.GetFullPath(packageDir);
-                    packageDir = absolutePath.Substring(ProjectDirectory.Length + 1);
+                    if (absolutePath.StartsWith(ProjectDirectory)) {
+                        packageDir = absolutePath.Substring(ProjectDirectory.Length + 1);
+                    }
                 }
             } else {
                 nameMatch = PACKAGES_PHYSICAL_PATH_REGEX.Match(path);
@@ -640,42 +643,47 @@ namespace Google {
         /// <param name="path">Path to the file/directory that needs checking.</param>
         /// <returns>True if all folders are created successfully.</returns>
         public static bool CreateFolder(string path, Google.Logger logger = null) {
-            if (AssetDatabase.IsValidFolder(path)) {
-                return true;
-            }
-            DirectoryInfo di = new DirectoryInfo(path);
-            var parentFolder = Path.GetDirectoryName(path);
-            if (!CreateFolder(parentFolder)) {
+            try {
+                if (AssetDatabase.IsValidFolder(path)) {
+                    return true;
+                }
+                DirectoryInfo di = new DirectoryInfo(path);
+                var parentFolder = Path.GetDirectoryName(path);
+                if (!CreateFolder(parentFolder)) {
+                    return false;
+                }
+
+                // Try to use Unity API to create folder. However, some versions of Unity has issue to
+                // create folders with version number in it like '9.0.0'. In this case, instead of
+                // returning empty guid, it can return guids with all zeroes.
+                if (IsValidGuid(AssetDatabase.CreateFolder(parentFolder, di.Name))) {
+                    return true;
+                }
+
+                if (logger != null) {
+                    logger.Log(
+                        String.Format(
+                            "Please ignore Unity error messages similar to '{0}'.\n" +
+                            "Unable to use Unity API `AssetDatabase.CreateFolder()` to " +
+                            "create folder: '{1}'. Switch to use `Directory.CreateDirectory()` " +
+                            "instead. \n\n" +
+                            "See {2} for more information.",
+                            "*** is not a valid directory name.",
+                            path,
+                            "https://issuetracker.unity3d.com/product/unity/issues/guid/UUM-7046"),
+                        LogLevel.Info);
+                }
+
+                return Directory.CreateDirectory(path) != null;
+            } catch (Exception ex) {
+                logger.Log("Exception thrown trying to CreateFolder. " + ex, LogLevel.Error);
                 return false;
             }
-
-            // Try to use Unity API to create folder. However, some versions of Unity has issue to
-            // create folders with version number in it like '9.0.0'. In this case, instead of
-            // returnig empty guid, it can return guids with all zeroes.
-            if (IsValidGuid(AssetDatabase.CreateFolder(parentFolder, di.Name))) {
-                return true;
-            }
-
-            if (logger != null) {
-                logger.Log(
-                    String.Format(
-                        "Please ignore Unity error messages similar to '{0}'.\n" +
-                        "Unable to use Unity API `AssetDatabase.CreateFolder()` to " +
-                        "create folder: '{1}'. Switch to use `Directory.CreateDirectory()` " +
-                        "instead. \n\n" +
-                        "See {2} for more information.",
-                        "*** is not a valid directory name.",
-                        path,
-                        "https://issuetracker.unity3d.com/product/unity/issues/guid/UUM-7046"),
-                    LogLevel.Info);
-            }
-
-            return Directory.CreateDirectory(path) != null;
         }
 
         /// <summary>
         /// Replace "Assets/", "Packages/package-id", or "Library/PackageCache/package-id@version"
-        /// base in the path with the new base.
+        /// base (@version optional) in the path with the new base.
         /// </summary>
         /// <param name="path">Path to the file/directory to be modified.</param>
         /// <param name="newBase">New base used to replace the given path.</param>
