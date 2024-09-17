@@ -171,6 +171,22 @@ namespace GooglePlayServices {
         }
 
         /// <summary>
+        ///  Modifies the given path such that the m2repository is placed into the
+        ///  LocalMavenRepoDir/PrefixDirectory/m2repository/...
+        /// </summary>
+        /// <param name="path">The original path to modify.</param>
+        /// <returns>A modified path if m2repository is found, the same path otherwise.</returns>
+        private static string ReplaceLocalFolderBasedOnM2repo(string path) {
+            string regexPattern = @"^(.*[/\\])([^/\\]+[/\\]m2repository.*)$";
+            Match match = Regex.Match(path, regexPattern);
+            if (match.Success) {
+                path = Path.Combine(GooglePlayServices.SettingsDialog.LocalMavenRepoDir,
+                                    match.Groups[2].Value);
+            }
+            return path;
+        }
+
+        /// <summary>
         /// Copy srcaar files to aar files that are excluded from Unity's build process.
         /// </summary>
         /// <param name="dependencies">Dependencies to inject.</param>
@@ -198,6 +214,15 @@ namespace GooglePlayServices {
                 var dir = FileUtils.ReplaceBaseAssetsOrPackagesFolder(
                         Path.GetDirectoryName(aar),
                         GooglePlayServices.SettingsDialog.LocalMavenRepoDir);
+
+                if (!dir.StartsWith(GooglePlayServices.SettingsDialog.LocalMavenRepoDir)) {
+                    // The directory replace logic failed, likely because the original aar
+                    // is not located under the Assets or Packages folders.
+                    // Try to come up with a sensible destination folder by searching for
+                    // an m2repository within the path, and using that.
+                    dir = ReplaceLocalFolderBasedOnM2repo(Path.GetDirectoryName(aar));
+                }
+
                 var filename = Path.GetFileNameWithoutExtension(aarPath);
                 var targetFilename = Path.Combine(dir, filename + ".aar");
 
@@ -700,15 +725,18 @@ namespace GooglePlayServices {
                     if (repoAndSources.Key.StartsWith(projectFileUri)) {
                         var relativePath = repoAndSources.Key.Substring(projectFileUri.Length + 1);
                         // Convert "Assets", "Packages/packageid", or
-                        // "Library/PackageCache/packageid@version" prefix to local maven repo
-                        // path.  Note that local maven repo path only exists if the original repo
-                        // path contains .srcaar.
-                        var repoPath = FileUtils.PosixPathSeparators(
-                            FileUtils.ReplaceBaseAssetsOrPackagesFolder(
-                                relativePath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir));
+                        // "Library/PackageCache/packageid@version" prefix (@version optional) to local
+                        // maven repo path.  Note that local maven repo path only exists if the original
+                        // repo path contains .srcaar.
+                        var repoPath = FileUtils.ReplaceBaseAssetsOrPackagesFolder(
+                                relativePath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir);
+                        // We also want to just convert any prefixes before a directory/m2repository, since
+                        // they are copied to the LocalMavenRepoDir as well.
+                        repoPath = ReplaceLocalFolderBasedOnM2repo(repoPath);
                         if (!Directory.Exists(repoPath)) {
                             repoPath = relativePath;
                         }
+                        repoPath = FileUtils.PosixPathSeparators(repoPath);
 
                         if (useFullPath) {
                             // build.gradle expects file:/// URI so file separator will be "/" in anycase
