@@ -1,0 +1,36 @@
+fileFormatVersion: 2
+guid: 06f4aa8c065049e5970eedec5f52600f
+labels:
+- gvh
+- gvh_version-1.2.183
+- gvhp_exportpath-ExternalDependencyManager/Editor/1.2.183/Google.PackageManagerResolver.dll
+- gvhp_targets-editor
+timeCreated: 1480838400
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  iconMap: {}
+  executionOrder: {}
+  isPreloaded: 0
+  isOverridable: 0
+  platformData:
+  - first:
+      Any:
+    second:
+      enabled: 0
+      settings: {}
+  - first:
+      Editor: Editor
+    second:
+      enabled: 1
+      settings:
+        DefaultValueInitialized: true
+  - first:
+      Windows Store Apps: WindowsStoreApps
+    second:
+      enabled: 0
+      settings:
+        CPU: AnyCPU
+  userData:
+  assetBundleName:
+  assetBundleVariant:
