@@ -5,7 +5,9 @@
       "imports": [
         {
           "importer": "PluginImporter",
-          "platforms": ["Editor"],
+          "platforms": [
+            "Editor"
+          ],
           "paths": [
             "ExternalDependencyManager/Editor/Google.VersionHandler.*"
           ]
@@ -13,21 +15,27 @@
         {
           "importer": "PluginImporter",
           "platforms": [],
-          "labels": ["gvhp_targets-editor"],
+          "labels": [
+            "gvhp_targets-editor"
+          ],
           "paths": [
-            "ExternalDependencyManager/Editor/*/Google.IOSResolver.*",
             "ExternalDependencyManager/Editor/*/Google.JarResolver.*",
             "ExternalDependencyManager/Editor/*/Google.VersionHandlerImpl.*",
             "ExternalDependencyManager/Editor/*/Google.PackageManagerResolver.*"
           ],
           "override_metadata_upm": {
             "PluginImporter": {
-              "platformData": [ {
-                  "first" : {
-                      "Editor": "Editor"
+              "defineConstraints": [
+                "UNITY_EDITOR",
+                "UNITY_IOS"
+              ],
+              "platformData": [
+                {
+                  "first": {
+                    "Editor": "Editor"
                   },
                   "second": {
-                      "enabled": 1
+                    "enabled": 1
                   }
                 }
               ]
@@ -35,7 +43,33 @@
           }
         },
         {
-          "sections": ["documentation"],
+          "importer": "PluginImporter",
+          "platforms": [],
+          "labels": [
+            "gvhp_targets-editor"
+          ],
+          "paths": [
+            "ExternalDependencyManager/Editor/*/Google.IOSResolver.*",
+          ],
+          "override_metadata_upm": {
+            "PluginImporter": {
+              "platformData": [
+                {
+                  "first": {
+                    "Editor": "Editor"
+                  },
+                  "second": {
+                    "enabled": 1
+                  }
+                }
+              ]
+            }
+          }
+        },
+        {
+          "sections": [
+            "documentation"
+          ],
           "importer": "DefaultImporter",
           "paths": [
             "ExternalDependencyManager/Editor/README.md",
@@ -50,21 +84,21 @@
           ]
         },
         {
-          "sections": ["unitypackage"],
+          "sections": [
+            "unitypackage"
+          ],
           "importer": "DefaultImporter",
           "paths": [
-              "PlayServicesResolver/Editor/play-services-resolver_v1.2.137.0.txt"
+            "PlayServicesResolver/Editor/play-services-resolver_v1.2.137.0.txt"
           ]
         }
       ],
       "manifest_path": "ExternalDependencyManager/Editor",
-
       "readme": "ExternalDependencyManager/Editor/README.md",
       "license": "ExternalDependencyManager/Editor/LICENSE",
       "changelog": "ExternalDependencyManager/Editor/CHANGELOG.md",
       "documentation": "ExternalDependencyManager/Editor/README.md",
-
-      "common_manifest" : {
+      "common_manifest": {
         "name": "com.google.external-dependency-manager",
         "display_name": "External Dependency Manager for Unity",
         "description": [
@@ -74,20 +108,24 @@
           "and/or management of Unity Package Manager registries."
         ],
         "keywords": [
-          "Google", "Android", "Gradle", "Cocoapods", "Dependency",
-          "Unity Package Manager", "Unity",
+          "Google",
+          "Android",
+          "Gradle",
+          "Cocoapods",
+          "Dependency",
+          "Unity Package Manager",
+          "Unity",
           "vh-name:play-services-resolver",
           "vh-name:unity-jar-resolver"
         ],
         "author": {
-          "name" : "Google LLC",
+          "name": "Google LLC",
           "url": "https://github.com/googlesamples/unity-jar-resolver"
         }
       },
-
-      "export_upm" : 1,
-      "upm_package_config" : {
-        "manifest" : {
+      "export_upm": 1,
+      "upm_package_config": {
+        "manifest": {
           "unity": "2019.1"
         }
       }
