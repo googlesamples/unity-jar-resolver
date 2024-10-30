@@ -25,7 +25,7 @@ on:
         required: true
 
 env:
-  pythonVersion: '3.7'
+  pythonVersion: '3.9'
   artifactRetentionDays: 2
   assetPackageArtifactName: "AssetPackage_macOS"
   tarballPackageArtifactName: "TarballPackage_macOS"
