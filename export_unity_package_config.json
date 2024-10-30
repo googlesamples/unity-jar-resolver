@@ -49,7 +49,7 @@
             "gvhp_targets-editor"
           ],
           "paths": [
-            "ExternalDependencyManager/Editor/*/Google.IOSResolver.*",
+            "ExternalDependencyManager/Editor/*/Google.IOSResolver.*"
           ],
           "override_metadata_upm": {
             "PluginImporter": {
