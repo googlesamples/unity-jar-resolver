@@ -25,7 +25,7 @@ on:
         required: true
 
 env:
-  pythonVersion: '3.9'
+  pythonVersion: '3.7'
   artifactRetentionDays: 2
   assetPackageArtifactName: "AssetPackage_macOS"
   tarballPackageArtifactName: "TarballPackage_macOS"
@@ -33,7 +33,7 @@ env:
 jobs:
   build_desktop:
     name: build-macOS-unity${{ inputs.unity_version}}
-    runs-on: macos-15
+    runs-on: macos-13
     strategy:
       fail-fast: false
 

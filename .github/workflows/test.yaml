@@ -107,7 +107,7 @@ jobs:
 
   test_on_macos:
     name: test-macOS-unity${{ needs.check_and_prepare.outputs.unity_version }}
-    runs-on: macos-15
+    runs-on: macos-13
     needs: [check_and_prepare]
     strategy:
       fail-fast: false
