@@ -1512,7 +1512,8 @@ class Asset(object):
     Returns:
       Modified importer_metadata.
     """
-    define_constraints = safe_dict_get_value(importer_metadata, "PluginImporter", {}).get("defineConstraints")
+    plugin_importer = safe_dict_get_value(importer_metadata, "PluginImporter", default_value={})
+    define_constraints = plugin_importer.get("defineConstraints")
     if define_constraints:
         importer_metadata["PluginImporter"]["defineConstraints"] = define_constraints
     return importer_metadata
