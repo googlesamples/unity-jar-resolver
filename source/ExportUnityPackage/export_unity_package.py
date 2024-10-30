@@ -1851,6 +1851,12 @@ class AssetConfiguration(ConfigurationBlock):
       if "Android" in platforms and cpu_string != "AnyCPU":
         importer_metadata = Asset.set_cpu_for_android(
             importer_metadata, cpu_string)
+
+      # set define constraints
+      define_constraints = safe_dict_get_value(self._json, "defineConstraints", default_value=None)
+      if define_constraints:
+        importer_metadata["PluginImporter"]["defineConstraints"] = define_constraints
+
     else:
       raise ProjectConfigurationError(
           "Unknown importer type %s for package %s, paths %s" % (

@@ -33,12 +33,12 @@ env:
 jobs:
   build_desktop:
     name: build-macOS-unity${{ inputs.unity_version}}
-    runs-on: macos-13
+    runs-on: macos-15
     strategy:
       fail-fast: false
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - id: build_setup
         uses: ./gha/build_setup
@@ -89,7 +89,7 @@ jobs:
           fi
 
       - name: Upload build results artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: ${{ env.assetPackageArtifactName }}
@@ -97,7 +97,7 @@ jobs:
           retention-days: ${{ env.artifactRetentionDays }}
 
       - name: Upload build results artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: ${{ env.tarballPackageArtifactName }}

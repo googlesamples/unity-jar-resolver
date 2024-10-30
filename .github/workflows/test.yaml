@@ -107,12 +107,12 @@ jobs:
 
   test_on_macos:
     name: test-macOS-unity${{ needs.check_and_prepare.outputs.unity_version }}
-    runs-on: macos-13
+    runs-on: macos-15
     needs: [check_and_prepare]
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - id: build_setup
         uses: ./gha/build_setup
         timeout-minutes: 30
@@ -168,7 +168,7 @@ jobs:
           release_license: "true"
 
       - name: Upload build logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: logs
