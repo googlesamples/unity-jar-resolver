@@ -1502,6 +1502,21 @@ class Asset(object):
       plugin_importer["platformData"] = new_platform_data
     return importer_metadata
 
+  @staticmethod
+  def set_define_constraints(importer_metadata):
+    """Set define constraints for the target platform.
+
+    Args:
+      importer_metadata: Metadata to modify. This is modified in-place.
+
+    Returns:
+      Modified importer_metadata.
+    """
+    define_constraints = safe_dict_get_value(importer_metadata, "PluginImporter", {}).get("defineConstraints")
+    if define_constraints:
+        importer_metadata["PluginImporter"]["defineConstraints"] = define_constraints
+    return importer_metadata
+
   @property
   def importer_metadata_original(self):
     """Get the original metadata section used to import this asset.
@@ -1548,6 +1563,7 @@ class Asset(object):
     metadata = Asset.disable_unsupported_platforms(metadata, self._filename)
     metadata = Asset.apply_any_platform_selection(metadata)
     metadata = Asset.set_cpu_for_desktop_platforms(metadata)
+    metadata = Asset.set_define_constraints(metadata)
     return metadata
 
   @staticmethod
