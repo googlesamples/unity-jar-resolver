@@ -1281,7 +1281,8 @@ class Asset(object):
       return importer_metadata
 
     platform_data = safe_dict_get_value(plugin_importer, "platformData",
-                                        default_value={})
+                                        default_value={},
+                                        value_classes=[dict, list])
     disable_platforms = sorted(set(platform_data).difference(
         set(supported_platforms)))
     # Disable the Any platform if any platforms are disabled.
@@ -1339,7 +1340,8 @@ class Asset(object):
 
     if serialized_version == 1:
       platform_data = safe_dict_get_value(plugin_importer, "platformData",
-                                          default_value={})
+                                          default_value={},
+                                          value_classes=[dict, list])
       for platform_name, options in platform_data.items():
         if not safe_dict_get_value(options, "enabled", default_value=0):
           continue
@@ -1353,7 +1355,8 @@ class Asset(object):
           options["settings"] = settings
     else:
       platform_data = safe_dict_get_value(plugin_importer, "platformData",
-                                          default_value=[])
+                                          default_value=[],
+                                          value_classes=[dict, list])
       for entry in platform_data:
         # Parse the platform name tuple from the "first" dictionary.
         first, second = Asset.platform_data_get_entry(entry)
@@ -1392,7 +1395,8 @@ class Asset(object):
 
     if serialized_version == 1:
       platform_data = safe_dict_get_value(plugin_importer, "platformData",
-                                          default_value={})
+                                          default_value={},
+                                          value_classes=[dict, list])
       for platform_name, options in platform_data.items():
         if not safe_dict_get_value(options, "enabled", default_value=0):
           continue
@@ -1404,7 +1408,8 @@ class Asset(object):
           options["settings"] = settings
     else:
       platform_data = safe_dict_get_value(plugin_importer, "platformData",
-                                          default_value=[])
+                                          default_value=[],
+                                          value_classes=[dict, list])
       for entry in platform_data:
         # Parse the platform name tuple from the "first" dictionary.
         first, second = Asset.platform_data_get_entry(entry)
@@ -1440,7 +1445,8 @@ class Asset(object):
 
     if serialized_version == 1:
       platform_data = safe_dict_get_value(plugin_importer, "platformData",
-                                          default_value={})
+                                          default_value={},
+                                          value_classes=[dict, list])
       # Check PluginImporter.platformData.Any.enabled for the Any platform
       # enabled in Unity 4 & early 5 metadata.
       any_enabled = platform_data.get("Any", {}).get("enabled", 0)
@@ -1459,7 +1465,8 @@ class Asset(object):
       # Search for the Any platform and retrieve if it's present and
       # enabled / disabled if Unity 5.4+ metadata.
       platform_data = safe_dict_get_value(plugin_importer, "platformData",
-                                          default_value=[])
+                                          default_value=[],
+                                          value_classes=[dict, list])
       any_enabled = 0
       for entry in platform_data:
         first, second = Asset.platform_data_get_entry(entry)
@@ -1870,7 +1877,9 @@ class AssetConfiguration(ConfigurationBlock):
             importer_metadata, cpu_string)
 
       # set define constraints
-      define_constraints = safe_dict_get_value(self._json, "defineConstraints", default_value=None)
+      define_constraints = safe_dict_get_value(self._json, "defineConstraints",
+                                               default_value=None,
+                                               value_classes=[dict, list])
       if define_constraints:
         importer_metadata["PluginImporter"]["defineConstraints"] = define_constraints
 
