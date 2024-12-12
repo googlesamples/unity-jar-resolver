@@ -1,3 +1,6 @@
+# Upcoming
+* Android Resolver - Update and resolve `packaging` keyword in maintemplate based on android gradle plugin version. Fixes #715
+
 # Version 1.2.183 - Sep 18, 2024
 * Android Resolver - Handle package paths that don't include a version hash,
   which is no longer present with Unity 6. Fixes #697
