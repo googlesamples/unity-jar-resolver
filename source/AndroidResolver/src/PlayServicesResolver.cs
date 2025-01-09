@@ -2352,7 +2352,13 @@ namespace GooglePlayServices {
                     var sortedExcludeFiles = new List<string>(excludeFiles);
                     sortedExcludeFiles.Sort();
                     lines.Add("android {");
-                    lines.Add("  packagingOptions {");
+
+                    // `packagingOptions` is replaced by `packaging` keyword in Android Gradle plugin 8.0+
+                    if ((new Dependency.VersionComparer()).Compare("8.0", AndroidGradlePluginVersion) <= 0) {
+                        lines.Add("  packaging {");
+                    } else {
+                        lines.Add("  packagingOptions {");
+                    }
                     foreach (var filename in sortedExcludeFiles) {
                         // Unity's Android extension replaces ** in the template with an empty
                         // string presumably due to the token expansion it performs.  It's not
