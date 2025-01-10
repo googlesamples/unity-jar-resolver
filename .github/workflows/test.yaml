@@ -112,7 +112,7 @@ jobs:
     strategy:
       fail-fast: false
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - id: build_setup
         uses: ./gha/build_setup
         timeout-minutes: 30
@@ -168,7 +168,7 @@ jobs:
           release_license: "true"
 
       - name: Upload build logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
           name: logs
