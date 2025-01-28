@@ -1,0 +1,36 @@
+fileFormatVersion: 2
+guid: 59af55ec98c34b8d92e48d7184a21ec5
+labels:
+- gvh
+- gvh_version-1.2.184
+- gvhp_exportpath-ExternalDependencyManager/Editor/1.2.184/Google.IOSResolver.dll
+- gvhp_targets-editor
+timeCreated: 1480838400
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  iconMap: {}
+  executionOrder: {}
+  isPreloaded: 0
+  isOverridable: 0
+  platformData:
+  - first:
+      Any:
+    second:
+      enabled: 0
+      settings: {}
+  - first:
+      Editor: Editor
+    second:
+      enabled: 1
+      settings:
+        DefaultValueInitialized: true
+  - first:
+      Windows Store Apps: WindowsStoreApps
+    second:
+      enabled: 0
+      settings:
+        CPU: AnyCPU
+  userData:
+  assetBundleName:
+  assetBundleVariant:

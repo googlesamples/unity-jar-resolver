@@ -72,6 +72,12 @@ EDM4U is available on
 openupm add com.google.external-dependency-manager
 ```
 
+### Install via git URL
+1. Open Package Manager
+2. Click on the + icon on the top left corner of the "Package Manager" screen
+3. Click on "Install package from git url..."
+4. Paste: https://github.com/googlesamples/unity-jar-resolver.git?path=upm
+
 ### Install via Google APIs for Unity
 
 EDM4U is available both in UPM and legacy `.unitypackage` formats on
