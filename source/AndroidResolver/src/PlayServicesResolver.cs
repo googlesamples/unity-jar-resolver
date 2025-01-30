@@ -993,7 +993,7 @@ namespace GooglePlayServices {
             }
 
             // Monitor Android dependency XML files to perform auto-resolution.
-            AddAutoResolutionFilePatterns(xmlDependencies.fileRegularExpressions);
+            autoResolveFilePatterns.Add(XmlDependencies.IsDependenciesFile);
 
             svcSupport = PlayServicesSupport.CreateInstance(
                 "PlayServicesResolver",
@@ -1080,7 +1080,7 @@ namespace GooglePlayServices {
         /// <summary>
         /// Patterns of files that are monitored to trigger auto resolution.
         /// </summary>
-        private static HashSet<Regex> autoResolveFilePatterns = new HashSet<Regex>();
+        private static HashSet<Func<string, bool>> autoResolveFilePatterns = new HashSet<Func<string, bool>>();
 
         /// <summary>
         /// Add file patterns to monitor to trigger auto resolution.
@@ -1088,7 +1088,8 @@ namespace GooglePlayServices {
         /// <param name="patterns">Set of file patterns to monitor to trigger auto
         /// resolution.</param>
         public static void AddAutoResolutionFilePatterns(IEnumerable<Regex> patterns) {
-            autoResolveFilePatterns.UnionWith(patterns);
+            // Only regex patterns are supported in the public API, but a more performant default is used internally.
+            autoResolveFilePatterns.UnionWith(patterns.Select<Regex, Func<string, bool>>(p => p.IsMatch));
         }
 
         /// <summary>
@@ -1100,7 +1101,7 @@ namespace GooglePlayServices {
             bool resolve = false;
             foreach (var asset in filesToCheck) {
                 foreach (var pattern in autoResolveFilePatterns) {
-                    if (pattern.Match(asset).Success) {
+                    if (pattern.Invoke(asset)) {
                         Log(String.Format("Found asset {0} matching {1}, attempting " +
                                           "auto-resolution.",
                                           asset, pattern.ToString()),
