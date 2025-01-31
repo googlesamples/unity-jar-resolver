@@ -2354,7 +2354,7 @@ namespace GooglePlayServices {
                     lines.Add("android {");
 
                     // `packagingOptions` is replaced by `packaging` keyword in Android Gradle plugin 8.0+
-                    if ((new Dependency.VersionComparer()).Compare("8.0", AndroidGradlePluginVersion) <= 0) {
+                    if ((new Dependency.VersionComparer()).Compare("8.0", AndroidGradlePluginVersion) >= 0) {
                         lines.Add("  packaging {");
                     } else {
                         lines.Add("  packagingOptions {");
