@@ -1,4 +1,4 @@
-# Upcoming
+# Version 1.2.185 - Feb 3, 2025
 * Android Resolver - Reverse conditional checker for `packaging` keyword in maintemplate based on android gradle plugin version. Fixes #715
 
 # Version 1.2.184 - Jan 28, 2025
