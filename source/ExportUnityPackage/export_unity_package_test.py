@@ -2181,6 +2181,33 @@ class AssetConfigurationTest(absltest.TestCase):
                            "platforms": ["Standalone"],
                            "cpu": "x86_64"}).importer_metadata)
 
+  def test_importer_define_constraints(self):
+    """Test defineConstraints property."""
+    define_constraints = ["UNITY_EDITOR", "UNITY_IOS"]
+    self.plugin_metadata["PluginImporter"]["defineConstraints"] = define_constraints
+    self.assertEqual(
+        self.plugin_metadata,
+        export_unity_package.AssetConfiguration(
+            self.package, {
+                "importer": "PluginImporter",
+                "defineConstraints": define_constraints
+            }).importer_metadata)
+
+  def test_importer_define_constraints_upm(self):
+    """Test defineConstraints property for UPM."""
+    define_constraints = ["UNITY_EDITOR", "UNITY_IOS"]
+    self.plugin_metadata["PluginImporter"]["defineConstraints"] = define_constraints
+    self.assertEqual(
+        self.plugin_metadata,
+        export_unity_package.AssetConfiguration(
+            self.package, {
+                "importer": "PluginImporter",
+                "override_metadata_upm": {
+                    "PluginImporter": {
+                        "defineConstraints": define_constraints
+                    }
+                }
+            }).override_metadata_upm)
 
 class AssetPackageAndProjectFileOperationsTest(absltest.TestCase):
   """Tests for file operation methods."""

@@ -42,7 +42,7 @@ runs:
   using: 'composite'
   steps:
     # Download GHA tools and requirements from Firebase Unity SDK repo
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         repository: firebase/firebase-unity-sdk
         path: external/firebase-unity-sdk
@@ -51,7 +51,7 @@ runs:
         sparse-checkout-cone-mode: false
 
     - name: Setup python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python_version }}
 
