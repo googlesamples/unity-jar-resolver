@@ -14,7 +14,6 @@
 //    limitations under the License.
 // </copyright>
 
-#if UNITY_IOS
 using Google;
 using GooglePlayServices;
 using Google.JarResolver;
@@ -719,6 +718,123 @@ public class IOSResolver : AssetPostprocessor {
         return assembly;
     }
 
+    private static Type pbxProjectType = null;
+    private static bool loadedPbxProjectType = false;
+    private static MethodInfo pbxProjectReadFromString = null;
+    private static MethodInfo pbxProjectAddFileToBuild = null;
+    private static MethodInfo pbxProjectAddFile = null;
+    private static MethodInfo pbxProjectAddBuildProperty = null;
+    private static MethodInfo pbxProjectSetBuildProperty = null;
+    private static MethodInfo pbxProjectWriteToFile = null;
+    private static MethodInfo pbxProjectWriteToString = null;
+
+    private static MethodInfo LoadPbxMethodViaReflection(string name, Type[] parameters) {
+        var methodInfo = pbxProjectType.GetMethod(name,
+            BindingFlags.Public | BindingFlags.Instance,
+            null, parameters, null);
+        if (methodInfo == null) {
+            throw new Exception($"Unable to load method: {name}");
+        }
+        return methodInfo;
+    }
+
+    private static Type GetPbxProjectType() {
+        if (loadedPbxProjectType) {
+            return pbxProjectType;
+        }
+
+        // The type name including its namespace
+        string fullTypeName = "UnityEditor.iOS.Xcode.PBXProject";
+        // The name of the assembly (without the .dll extension)
+        string assemblyName = "UnityEditor.iOS.Extensions.Xcode";
+
+        try {
+            // First, try to get the type assuming the assembly is already loaded.
+            // This is often the case if the iOS module is installed and active.
+            pbxProjectType = Type.GetType(fullTypeName + ", " + assemblyName);
+
+/*
+            if (pbxProjectType == null) {
+                // If not found, iterate through all loaded assemblies.
+                // This is a more robust fallback if the assembly name guess
+                // or Type.GetType's search path isn't sufficient.
+                foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies()) {
+                    // Check if this assembly is the one we're looking for.
+                    // The actual assembly name might sometimes vary slightly or
+                    // not be exactly what's expected, so checking the type directly
+                    // can be more reliable.
+                    if (assembly.GetName().Name == assemblyName) {
+                            pbxProjectType = assembly.GetType(fullTypeName);
+                            if (pbxProjectType != null) {
+                                // Found it, exit out.
+                                break;
+                            }
+                    }
+                }
+            }*/
+
+            // Get the Enum type loaded in first, since one of the methods needs it.
+            GetPbxSourceTreeEnumSource();
+
+            // Load the various methods, throwing if failing to find any.
+            pbxProjectReadFromString = LoadPbxMethodViaReflection("ReadFromString",
+                new Type[] { typeof(string) });
+            pbxProjectAddFileToBuild = LoadPbxMethodViaReflection("AddFileToBuild",
+                new Type[] { typeof(string), typeof(string) });
+            pbxProjectAddFile = LoadPbxMethodViaReflection("AddFile",
+                new Type[] { typeof(string), typeof(string), pbxSourceTreeEnumType });
+            pbxProjectAddBuildProperty = LoadPbxMethodViaReflection("AddBuildProperty",
+                new Type[] { typeof(string), typeof(string), typeof(string) });
+            pbxProjectSetBuildProperty = LoadPbxMethodViaReflection("SetBuildProperty",
+                new Type[] { typeof(string), typeof(string), typeof(string) });
+            pbxProjectWriteToFile = LoadPbxMethodViaReflection("WriteToFile",
+                new Type[] { typeof(string) });
+            pbxProjectWriteToString = LoadPbxMethodViaReflection("WriteToString",
+                Type.EmptyTypes);
+        } catch (Exception e) {
+            Debug.LogWarning($"Exception while trying to find PBXProject type: {e}");
+            pbxProjectType = null;
+        }
+        loadedPbxProjectType = true;
+        return pbxProjectType;
+    }
+
+    private static Type pbxSourceTreeEnumType = null;
+    private static object pbxSourceTreeEnum_Source = null;
+    private static bool loadedPbxSourceTreeEnum = false;
+
+    private static object GetPbxSourceTreeEnumSource() {
+        if (loadedPbxSourceTreeEnum) {
+            return pbxSourceTreeEnum_Source;
+        }
+
+        // The type name including its namespace
+        string fullTypeName = "UnityEditor.iOS.Xcode.PBXSourceTree";
+        // The name of the assembly (without the .dll extension)
+        string assemblyName = "UnityEditor.iOS.Extensions.Xcode";
+
+        try {
+            // First, try to get the type assuming the assembly is already loaded.
+            // This is often the case if the iOS module is installed and active.
+            pbxSourceTreeEnumType = Type.GetType(fullTypeName + ", " + assemblyName);
+
+            if (pbxSourceTreeEnumType == null) {
+                pbxSourceTreeEnum_Source = null;
+                loadedPbxSourceTreeEnum = true;
+                return null;
+            }
+
+            // Get and cache the specific PBXSourceTree.Source value
+            pbxSourceTreeEnum_Source = Enum.Parse(pbxSourceTreeEnumType, "Source");
+        } catch (Exception e) {
+            Debug.LogWarning($"Exception while trying to find PBXSourceTree enum: {e}");
+            pbxSourceTreeEnumType = null;
+            pbxSourceTreeEnum_Source = null;
+        }
+        loadedPbxSourceTreeEnum = true;
+        return pbxSourceTreeEnum_Source;
+    }
+
     /// <summary>
     /// Initialize the module.
     /// </summary>
@@ -843,7 +959,9 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     internal static bool MultipleXcodeTargetsSupported {
         get {
-            return typeof(UnityEditor.iOS.Xcode.PBXProject).GetMethod(
+            Type pbxProject = GetPbxProjectType();
+            if (pbxProject == null) return false;
+            return pbxProject.GetMethod(
                 "GetUnityMainTargetGuid", Type.EmptyTypes) != null;
         }
     }
@@ -856,8 +974,9 @@ public class IOSResolver : AssetPostprocessor {
             // NOTE: Unity-iPhone is hard coded in UnityEditor.iOS.Xcode.PBXProject and will no
             // longer be exposed via GetUnityTargetName(). It hasn't changed in many years though
             // so we'll use this constant as a relatively safe default.
-            return MultipleXcodeTargetsSupported ? "Unity-iPhone" :
-                (string)VersionHandler.InvokeStaticMethod(typeof(UnityEditor.iOS.Xcode.PBXProject),
+            Type pbxProject = GetPbxProjectType();
+            return (pbxProject == null || MultipleXcodeTargetsSupported) ? "Unity-iPhone" :
+                (string)VersionHandler.InvokeStaticMethod(GetPbxProjectType(),
                                                           "GetUnityTargetName", null);
         }
     }
@@ -2035,7 +2154,6 @@ public class IOSResolver : AssetPostprocessor {
     /// <returns>List of target GUIDs.</returns>
     public static IEnumerable<string> GetXcodeTargetGuids(object xcodeProject,
                                                           bool includeAllTargets) {
-        var project = (UnityEditor.iOS.Xcode.PBXProject)xcodeProject;
         var targets = new List<string>();
         if (MultipleXcodeTargetsSupported) {
             // In Unity 2019.3+ TargetGuidByName will throw an exception if the Unity-iPhone target
@@ -2047,7 +2165,7 @@ public class IOSResolver : AssetPostprocessor {
                     guidMethods.Add("GetUnityMainTargetGuid");
                 }
                  foreach (var guidMethod in guidMethods) {
-                    targets.Add((string)VersionHandler.InvokeInstanceMethod(project, guidMethod,
+                    targets.Add((string)VersionHandler.InvokeInstanceMethod(xcodeProject, guidMethod,
                                                                             null));
                 }
             } catch (Exception exception) {
@@ -2062,7 +2180,7 @@ public class IOSResolver : AssetPostprocessor {
             // TargetGuidByName in Unity < 2019.3 can be used to lookup any target GUID.
             foreach (var targetName in XcodeTargetNames) {
                 targets.Add((string)VersionHandler.InvokeInstanceMethod(
-                    project, "TargetGuidByName", new [] { (object)targetName }));
+                    xcodeProject, "TargetGuidByName", new [] { (object)targetName }));
             }
         }
         return targets;
@@ -2083,53 +2201,86 @@ public class IOSResolver : AssetPostprocessor {
         }
         // Configure project settings for CocoaPods.
         string pbxprojPath = GetProjectPath(pathToBuiltProject);
-        var project = new UnityEditor.iOS.Xcode.PBXProject();
-        project.ReadFromString(File.ReadAllText(pbxprojPath));
+        var pbxProjectType = GetPbxProjectType();
+        if (pbxProjectType == null) {
+            return;
+        }
+        var project = Activator.CreateInstance(pbxProjectType);
+        pbxProjectReadFromString.Invoke(project, new object[] { File.ReadAllText(pbxprojPath) });
         foreach (var target in GetXcodeTargetGuids(project)) {
-            project.SetBuildProperty(target, "CLANG_ENABLE_MODULES", "YES");
-            project.AddBuildProperty(target, "OTHER_LDFLAGS", "-ObjC");
+            pbxProjectSetBuildProperty.Invoke(project, new object[] {
+                target, "CLANG_ENABLE_MODULES", "YES"
+            });
+            pbxProjectAddBuildProperty.Invoke(target, new object[] {
+                target, "OTHER_LDFLAGS", "-ObjC"
+            });
             // GTMSessionFetcher requires Obj-C exceptions.
-            project.SetBuildProperty(target, "GCC_ENABLE_OBJC_EXCEPTIONS", "YES");
+            pbxProjectSetBuildProperty.Invoke(project, new object[] {
+                target, "GCC_ENABLE_OBJC_EXCEPTIONS", "YES"
+            });
             if (bitcodeDisabled) {
-                project.AddBuildProperty(target, "ENABLE_BITCODE", "NO");
+                pbxProjectAddBuildProperty.Invoke(project, new object[] {
+                    target, "ENABLE_BITCODE", "NO"
+                });
             }
         }
-        File.WriteAllText(pbxprojPath, project.WriteToString());
+        var contents = pbxProjectWriteToString.Invoke(project, null) as string;
+        File.WriteAllText(pbxprojPath, contents);
     }
 
     internal static void AddDummySwiftFile(
             BuildTarget buildTarget, string pathToBuiltProject) {
-        string pbxprojPath = GetProjectPath(pathToBuiltProject);
-        var project = new UnityEditor.iOS.Xcode.PBXProject();
-        project.ReadFromString(File.ReadAllText(pbxprojPath));
+        try {
+            string pbxprojPath = GetProjectPath(pathToBuiltProject);
+            Type pbxProjectType = GetPbxProjectType();
+            if (pbxProjectType == null) {
+                return;
+            }
+            var project = Activator.CreateInstance(pbxProjectType);
+            pbxProjectReadFromString.Invoke(project, new object[] { File.ReadAllText(pbxprojPath) });
 
-        string DUMMY_SWIFT_FILE_NAME = "Dummy.swift";
-        string DUMMY_SWIFT_FILE_CONTENT =
-                "// Generated by External Dependency Manager for Unity\n" +
-                "import Foundation";
-        string dummySwiftPath = Path.Combine(pathToBuiltProject, DUMMY_SWIFT_FILE_NAME);
-        if (!File.Exists(dummySwiftPath)) {
-            File.WriteAllText(dummySwiftPath, DUMMY_SWIFT_FILE_CONTENT);
-        }
-
-        foreach (var target in GetXcodeTargetGuids(project, includeAllTargets: false)) {
-            project.AddFileToBuild(
-                target,
-                project.AddFile(DUMMY_SWIFT_FILE_NAME,
-                                DUMMY_SWIFT_FILE_NAME,
-                                UnityEditor.iOS.Xcode.PBXSourceTree.Source));
-            if(!string.IsNullOrEmpty(SwiftLanguageVersion)) {
-                project.SetBuildProperty(target, "SWIFT_VERSION", SwiftLanguageVersion);
+            string DUMMY_SWIFT_FILE_NAME = "Dummy.swift";
+            string DUMMY_SWIFT_FILE_CONTENT =
+                    "// Generated by External Dependency Manager for Unity\n" +
+                    "import Foundation";
+            string dummySwiftPath = Path.Combine(pathToBuiltProject, DUMMY_SWIFT_FILE_NAME);
+            if (!File.Exists(dummySwiftPath)) {
+                File.WriteAllText(dummySwiftPath, DUMMY_SWIFT_FILE_CONTENT);
             }
 
-            // These build properties are only required for multi-target Xcode project, which is
-            // generated from 2019.3+.
-            if(MultipleXcodeTargetsSupported) {
-                project.SetBuildProperty(target, "CLANG_ENABLE_MODULES", "YES");
-            }
-        }
+            foreach (var target in GetXcodeTargetGuids(project, includeAllTargets: false)) {
+                pbxProjectAddFileToBuild.Invoke(project, new object[] {
+                    target,
+                    pbxProjectAddFile.Invoke(project, new object[] {
+                        DUMMY_SWIFT_FILE_NAME,
+                        DUMMY_SWIFT_FILE_NAME,
+                        GetPbxSourceTreeEnumSource()
+                    }) as string
+                });
+                if(!string.IsNullOrEmpty(SwiftLanguageVersion)) {
+                    pbxProjectSetBuildProperty.Invoke(project, new object[] {
+                        target,
+                        "SWIFT_VERSION",
+                        SwiftLanguageVersion
+                    });
+                }
 
-        File.WriteAllText(pbxprojPath, project.WriteToString());
+                // These build properties are only required for multi-target Xcode project, which is
+                // generated from 2019.3+.
+                if(MultipleXcodeTargetsSupported) {
+                    pbxProjectSetBuildProperty.Invoke(project, new object[] {
+                        target,
+                        "CLANG_ENABLE_MODULES",
+                        "YES"
+                    });
+                }
+            }
+
+            var contents = pbxProjectWriteToString.Invoke(project, null) as string;
+            File.WriteAllText(pbxprojPath, contents);
+        } catch (Exception ex) {
+            Debug.LogWarning($"Failed to add Dummy Swift file to Xcode project: {ex}");
+        }
     }
 
     /// <summary>
@@ -2319,7 +2470,6 @@ public class IOSResolver : AssetPostprocessor {
                 default:
                     throw new Exception("IOSResolver.GenPodfile() invoked for a " +
                         "build target other than iOS or tvOS.");
-                    break;
             }
 
             foreach (var target in XcodeTargetNames) {
@@ -2866,16 +3016,24 @@ public class IOSResolver : AssetPostprocessor {
         }
 
         var pbxprojPath = GetProjectPath(pathToBuiltProject);
-        var project = new UnityEditor.iOS.Xcode.PBXProject();
-        project.ReadFromString(File.ReadAllText(pbxprojPath));
+        var pbxProjectType = GetPbxProjectType();
+        if (pbxProjectType == null) {
+            return;
+        }
+        var project = Activator.CreateInstance(pbxProjectType);
+        pbxProjectReadFromString.Invoke(project, new object[] { File.ReadAllText(pbxprojPath) });
         foreach (var target in GetXcodeTargetGuids(project)) {
-            var guid = project.AddFile(
+            var guid = pbxProjectAddFile.Invoke(project, new object[] {
                 Path.Combine(podsDir, PODS_PROJECT_NAME + ".xcodeproj"),
                 "Pods.xcodeproj",
-                UnityEditor.iOS.Xcode.PBXSourceTree.Source);
-            project.AddFileToBuild(target, guid);
+                GetPbxSourceTreeEnumSource()
+            }) as string;
+
+            pbxProjectAddFileToBuild.Invoke(project, new object[] {
+                target, guid
+            });
         }
-        project.WriteToFile(pbxprojPath);
+        pbxProjectWriteToFile.Invoke(project, new object[] { pbxprojPath });
     }
 
     /// <summary>
@@ -2900,5 +3058,3 @@ public class IOSResolver : AssetPostprocessor {
 }
 
 }  // namespace Google
-
-#endif  // UNITY_IOS
