@@ -843,8 +843,12 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     internal static bool MultipleXcodeTargetsSupported {
         get {
-            return typeof(UnityEditor.iOS.Xcode.PBXProject).GetMethod(
-                "GetUnityMainTargetGuid", Type.EmptyTypes) != null;
+            try {
+                return typeof(UnityEditor.iOS.Xcode.PBXProject).GetMethod(
+                    "GetUnityMainTargetGuid", Type.EmptyTypes) != null;
+            } catch (Exception) {
+                return false;
+            }
         }
     }
 
@@ -853,12 +857,16 @@ public class IOSResolver : AssetPostprocessor {
     /// </summary>
     public static string XcodeMainTargetName {
         get {
-            // NOTE: Unity-iPhone is hard coded in UnityEditor.iOS.Xcode.PBXProject and will no
-            // longer be exposed via GetUnityTargetName(). It hasn't changed in many years though
-            // so we'll use this constant as a relatively safe default.
-            return MultipleXcodeTargetsSupported ? "Unity-iPhone" :
-                (string)VersionHandler.InvokeStaticMethod(typeof(UnityEditor.iOS.Xcode.PBXProject),
-                                                          "GetUnityTargetName", null);
+            try {
+                // NOTE: Unity-iPhone is hard coded in UnityEditor.iOS.Xcode.PBXProject and will no
+                // longer be exposed via GetUnityTargetName(). It hasn't changed in many years though
+                // so we'll use this constant as a relatively safe default.
+                return MultipleXcodeTargetsSupported ? "Unity-iPhone" :
+                    (string)VersionHandler.InvokeStaticMethod(typeof(UnityEditor.iOS.Xcode.PBXProject),
+                                                            "GetUnityTargetName", null);
+            } catch (Exception) {
+                return "Unity-iPhone";
+            }
         }
     }
 
