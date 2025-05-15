@@ -13,6 +13,7 @@ PluginImporter:
   executionOrder: {}
   isPreloaded: 0
   isOverridable: 0
+  validateReferences: 0
   platformData:
   - first:
       Any:
