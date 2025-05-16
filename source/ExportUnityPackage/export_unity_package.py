@@ -1548,10 +1548,6 @@ class Asset(object):
     metadata = Asset.disable_unsupported_platforms(metadata, self._filename)
     metadata = Asset.apply_any_platform_selection(metadata)
     metadata = Asset.set_cpu_for_desktop_platforms(metadata)
-    # Set validateReferences, if requested, which should be either 0 or 1
-    validateRef = safe_dict_get_value(self._json, "validateReferences", default_value=2)
-    if validateRef == 0 or validateRef == 1:
-      metadata["validateReferences"] = validateRef
     return metadata
 
   @staticmethod
@@ -1855,6 +1851,10 @@ class AssetConfiguration(ConfigurationBlock):
       if "Android" in platforms and cpu_string != "AnyCPU":
         importer_metadata = Asset.set_cpu_for_android(
             importer_metadata, cpu_string)
+      # Set validateReferences, if requested, which should be either 0 or 1
+      validateRef = safe_dict_get_value(self._json, "validateReferences", default_value=2)
+      if validateRef == 0 or validateRef == 1:
+        importer_metadata["PluginImporter"]["validateReferences"] = validateRef
     else:
       raise ProjectConfigurationError(
           "Unknown importer type %s for package %s, paths %s" % (
