@@ -255,7 +255,7 @@ project.ext {
   // Directory for testing.
   testDir = new File(scriptDirectory, "test_output")
   // Version of the plugin (update this with CHANGELOG.md on each release).
-  pluginVersion = "1.2.185"
+  pluginVersion = "1.2.186"
   // Directory that contains the template plugin.
   // Files under this directory are copied into the staging area for the
   // plugin.

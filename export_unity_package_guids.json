@@ -66,5 +66,8 @@
     },
     "1.2.185": {
         "com.google.external-dependency-manager/ExternalDependencyManager/Editor/1.2.185": "eb66eed64a99451d81abd63ff417f837"
+    },
+    "1.2.186": {
+        "com.google.external-dependency-manager/ExternalDependencyManager/Editor/1.2.186": "8a6a9bd2649d4370b43be75e1689748c"
     }
 }
