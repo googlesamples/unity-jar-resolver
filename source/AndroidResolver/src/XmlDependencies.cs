@@ -29,14 +29,6 @@ namespace GooglePlayServices {
     internal class XmlDependencies {
 
         /// <summary>
-        /// Set of regular expressions that match files which contain dependency
-        /// specifications.
-        /// </summary>
-        internal HashSet<Regex> fileRegularExpressions = new HashSet<Regex> {
-            new Regex(@".*[/\\]Editor[/\\].*Dependencies\.xml$")
-        };
-
-        /// <summary>
         /// Human readable name for dependency files managed by this class.
         /// </summary>
         protected string dependencyType = "dependencies";
@@ -44,15 +36,13 @@ namespace GooglePlayServices {
         /// <summary>
         /// Determines whether a filename matches an XML dependencies file.
         /// </summary>
-        /// <param name="filename"></param>
         /// <returns>true if it is a match, false otherwise.</returns>
-        internal bool IsDependenciesFile(string filename) {
-            foreach (var regex in fileRegularExpressions) {
-                if (regex.Match(filename).Success) {
-                    return true;
-                }
+        internal static bool IsDependenciesFile(string filename) {
+            if (!filename.EndsWith("Dependencies.xml")) {
+                return false;
             }
-            return false;
+            // This method was optimized to avoid using regex after profiling results from a large Unity project.
+            return filename.Contains("/Editor/") || filename.Contains(@"\Editor\");
         }
 
         /// <summary>

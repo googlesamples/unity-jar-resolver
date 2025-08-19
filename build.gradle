@@ -2246,6 +2246,8 @@ task gitTagRelease(type: Exec) {
 //   - Conflicting dependencies
 //   - FAT ABI vs. single ABI selection
 
+// TODO: Build and run NUnit tests for #602
+
 // TODO: iOS Resolver tests (on OSX only)
 // - Import plugin test Cocoapods bootstrap
 // - Pod specification, with reflection & XML, validate both are present in the
