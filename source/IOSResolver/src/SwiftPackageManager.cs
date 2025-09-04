@@ -24,7 +24,6 @@ using System.Linq;
 using System.Reflection;
 using System.Xml.Linq;
 using UnityEditor;
-using UnityEditor.iOS.Xcode;
 
 namespace Google {
   /// <summary>
@@ -242,11 +241,11 @@ namespace Google {
         return;
       }
 
-      string pbxProjectPath = PBXProject.GetPBXProjectPath(projectPath);
-      PBXProject project = new PBXProject();
+      string pbxProjectPath = UnityEditor.iOS.Xcode.PBXProject.GetPBXProjectPath(projectPath);
+      var project = new UnityEditor.iOS.Xcode.PBXProject();
       project.ReadFromFile(pbxProjectPath);
 
-      string mainTargetGuid = project.GetUnityMainTargetGuid();
+      string frameworkTargetGuid = project.GetUnityFrameworkTargetGuid();
 
       foreach (var remotePackage in resolvedPackages) {
         try {
@@ -259,11 +258,11 @@ namespace Google {
             methodName = "AddRemotePackageReferenceAtVersion";
           }
 
-          VersionHandler.InvokeInstanceMethod(project, methodName, new object[] { mainTargetGuid, remotePackage.Url, remotePackage.Version });
+          var packageGuid = VersionHandler.InvokeInstanceMethod(project, methodName, new object[] { remotePackage.Url, remotePackage.Version });
           logger.Log(string.Format("Added SPM package {0} version {1} to project.", remotePackage.Url, remotePackage.Version), level: LogLevel.Info);
 
           foreach (var swiftPackage in remotePackage.Packages) {
-            VersionHandler.InvokeInstanceMethod(project, "AddRemotePackageFrameworkToProject", new object[] { mainTargetGuid, swiftPackage.Name, swiftPackage.Weak });
+            VersionHandler.InvokeInstanceMethod(project, "AddRemotePackageFrameworkToProject", new object[] { frameworkTargetGuid, swiftPackage.Name, packageGuid, swiftPackage.Weak });
             logger.Log(string.Format("  - Added framework {0} to project.", swiftPackage.Name), level: LogLevel.Info);
           }
         } catch (Exception e) {

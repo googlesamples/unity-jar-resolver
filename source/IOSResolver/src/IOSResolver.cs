@@ -407,6 +407,9 @@ public class IOSResolver : AssetPostprocessor {
 
     // List of pods to ignore because they are replaced by Swift packages.
     private static HashSet<string> podsToIgnore = new HashSet<string>();
+    // Flag used to denoted if generating the Podfile was skipped because of no pods.
+    // Used by subsequent steps to know they should be skipped as well.
+    private static bool podfileGenerationSkipped = false;
 
     // Order of post processing operations.
     private const int BUILD_ORDER_REFRESH_DEPENDENCIES = 10;
@@ -2352,6 +2355,21 @@ public class IOSResolver : AssetPostprocessor {
             }
         }
 
+        var filteredPods = new List<Pod>();
+        foreach (var pod in pods.Values) {
+            if (podsToIgnore != null && podsToIgnore.Contains(pod.name)) {
+                Log(String.Format("Skipping pod {0} because it is replaced by a Swift Package.", pod.name), verbose: true);
+                continue;
+            }
+            filteredPods.Add(pod);
+        }
+        if (filteredPods.Count == 0) {
+            Log("Found no pods to add, skipping generation of the Podfile");
+            podfileGenerationSkipped = true;
+            return;
+        }
+        podfileGenerationSkipped = false;
+
         Log(String.Format("Generating Podfile {0} with {1} integration.", podfilePath,
                           (CocoapodsWorkspaceIntegrationEnabled ? "Xcode workspace" :
                           (CocoapodsProjectIntegrationEnabled ? "Xcode project" : "no target"))),
@@ -2376,11 +2394,7 @@ public class IOSResolver : AssetPostprocessor {
 
             foreach (var target in XcodeTargetNames) {
                 file.WriteLine(String.Format("target '{0}' do", target));
-                foreach(var pod in pods.Values) {
-                    if (podsToIgnore != null && podsToIgnore.Contains(pod.name)) {
-                        Log(String.Format("Skipping pod {0} because it is replaced by a Swift Package.", pod.name), verbose: true);
-                        continue;
-                    }
+                foreach(var pod in filteredPods) {
                     file.WriteLine(String.Format("  {0}", pod.PodFilePodLine));
                 }
                 file.WriteLine("end");
@@ -2390,10 +2404,7 @@ public class IOSResolver : AssetPostprocessor {
                 file.WriteLine(String.Format("target '{0}' do", XcodeMainTargetName));
                 bool allowPodsInMultipleTargets = PodfileAllowPodsInMultipleTargets;
                 int podAdded = 0;
-                foreach(var pod in pods.Values) {
-                    if (podsToIgnore != null && podsToIgnore.Contains(pod.name)) {
-                        continue;
-                    }
+                foreach(var pod in filteredPods) {
                     if (pod.addToAllTargets) {
                         file.WriteLine(String.Format("  {0}{1}",
                                 allowPodsInMultipleTargets ? "" : "# ",
@@ -2420,7 +2431,7 @@ public class IOSResolver : AssetPostprocessor {
         int maxProperties = 0;
         int maxSources = Pod.Sources.Count;
         int fromXmlFileCount = 0;
-        foreach (var pod in pods.Values) {
+        foreach (var pod in filteredPods) {
             maxProperties = Math.Max(maxProperties, pod.propertiesByName.Count);
             maxSources = Math.Max(maxSources, pod.sources.Count);
             if (!String.IsNullOrEmpty(pod.version)) versionCount++;
@@ -2430,7 +2441,7 @@ public class IOSResolver : AssetPostprocessor {
         }
         analytics.Report("generatepodfile/podinfo",
                          new KeyValuePair<string, string>[] {
-                             new KeyValuePair<string, string>("numPods", pods.Count.ToString()),
+                             new KeyValuePair<string, string>("numPods", filteredPods.Count.ToString()),
                              new KeyValuePair<string, string>("numPodsWithVersions",
                                                               versionCount.ToString()),
                              new KeyValuePair<string, string>("numLocalPods",
@@ -2779,6 +2790,11 @@ public class IOSResolver : AssetPostprocessor {
                                                 string pathToBuiltProject) {
         if (!InjectDependencies() || !PodfileGenerationEnabled) return;
         
+        // If the Podfile Generation was skipped because of no pods to install, skip this step.
+        if (podfileGenerationSkipped) {
+            return;
+        }
+        
         if(EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS) {
             UpdateTargetIosSdkVersion(true);
         }
@@ -2885,7 +2901,8 @@ public class IOSResolver : AssetPostprocessor {
             BuildTarget buildTarget, string pathToBuiltProject) {
         if (!InjectDependencies() || !PodfileGenerationEnabled ||
             !CocoapodsProjectIntegrationEnabled ||  // Early out for Workspace level integration.
-            !cocoapodsToolsInstallPresent) {
+            !cocoapodsToolsInstallPresent ||
+            podfileGenerationSkipped) {
             return;
         }
 
