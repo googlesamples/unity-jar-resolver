@@ -50,6 +50,7 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
     <Reference Include="Google.JarResolver">
       <HintPath>..\AndroidResolver\bin\Release\Google.JarResolver.dll</HintPath>
     </Reference>

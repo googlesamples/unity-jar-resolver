@@ -199,7 +199,7 @@ namespace Google {
                                                         .Where(rp => !string.IsNullOrEmpty(rp))
                                                         .SelectMany(rp => rp.Split(','))
                                                         .Select(p => p.Trim())
-                                                        .Distinct()),
+                                                        .Distinct().ToArray()),
             RemotePackage = remotePackage
           };
           finalPackages.Add(mergedPackage);
