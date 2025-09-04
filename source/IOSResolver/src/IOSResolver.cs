@@ -405,6 +405,9 @@ public class IOSResolver : AssetPostprocessor {
     private static SortedDictionary<string, Pod> pods =
         new SortedDictionary<string, Pod>();
 
+    // List of pods to ignore because they are replaced by Swift packages.
+    private static HashSet<string> podsToIgnore = new HashSet<string>();
+
     // Order of post processing operations.
     private const int BUILD_ORDER_REFRESH_DEPENDENCIES = 10;
     private const int BUILD_ORDER_CHECK_COCOAPODS_INSTALL = 20;
@@ -510,6 +513,10 @@ public class IOSResolver : AssetPostprocessor {
     private const string PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS =
         PREFERENCE_NAMESPACE + "PodfileAllowPodsInMultipleTargets";
 
+    // Whether to use Swift Package Manager for dependency resolution.
+    private const string PREFERENCE_SWIFT_PACKAGE_MANAGER_ENABLED =
+        PREFERENCE_NAMESPACE + "SwiftPackageManagerEnabled";
+
     // List of preference keys, used to restore default settings.
     private static string[] PREFERENCE_KEYS = new [] {
         PREFERENCE_COCOAPODS_INSTALL_ENABLED,
@@ -525,7 +532,8 @@ public class IOSResolver : AssetPostprocessor {
         PREFERENCE_SWIFT_FRAMEWORK_SUPPORT_WORKAROUND,
         PREFERENCE_SWIFT_LANGUAGE_VERSION,
         PREFERENCE_PODFILE_ALWAYS_ADD_MAIN_TARGET,
-        PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS
+        PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS,
+        PREFERENCE_SWIFT_PACKAGE_MANAGER_ENABLED
     };
 
     // Whether the xcode extension was successfully loaded.
@@ -604,6 +612,9 @@ public class IOSResolver : AssetPostprocessor {
 
     // Parses dependencies from XML dependency files.
     private static IOSXmlDependencies xmlDependencies = new IOSXmlDependencies();
+
+    // Parses SPM dependencies from XML dependency files.
+    private static SwiftPackageManager spmDependencies = new SwiftPackageManager();
 
     // Project level settings for this module.
     private static ProjectSettings settings = new ProjectSettings(PREFERENCE_NAMESPACE);
@@ -1155,6 +1166,19 @@ public class IOSResolver : AssetPostprocessor {
                                     defaultValue: true); }
         set {
             settings.SetBool(PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS, value);
+        }
+    }
+
+    /// <summary>
+    /// Whether to use Swift Package Manager for dependency resolution.
+    /// If enabled, the resolver will attempt to use SPM for packages that define SPM support,
+    /// falling back to Cocoapods if disabled or if the package does not support SPM.
+    /// </summary>
+    public static bool SwiftPackageManagerEnabled {
+        get { return settings.GetBool(PREFERENCE_SWIFT_PACKAGE_MANAGER_ENABLED,
+                                    defaultValue: true); }
+        set {
+            settings.SetBool(PREFERENCE_SWIFT_PACKAGE_MANAGER_ENABLED, value);
         }
     }
 
@@ -2148,6 +2172,17 @@ public class IOSResolver : AssetPostprocessor {
         File.WriteAllText(pbxprojPath, project.WriteToString());
     }
 
+    [PostProcessBuildAttribute(35)]
+    public static void OnPostProcessResolveSwiftPackages(BuildTarget buildTarget,
+                                                           string pathToBuiltProject) {
+        if (!SwiftPackageManagerEnabled) {
+            return;
+        }
+        var resolvedPackages = SwiftPackageManager.Resolve(spmDependencies.SwiftPackages, logger);
+        SwiftPackageManager.AddPackagesToProject(resolvedPackages, pathToBuiltProject, logger);
+        podsToIgnore = SwiftPackageManager.GetReplacedPods(resolvedPackages);
+    }
+
     /// <summary>
     /// Post-processing build step to generate the podfile for ios.
     /// </summary>
@@ -2155,7 +2190,7 @@ public class IOSResolver : AssetPostprocessor {
     public static void OnPostProcessGenPodfile(BuildTarget buildTarget,
                                                string pathToBuiltProject) {
         if (!InjectDependencies() || !PodfileGenerationEnabled) return;
-        GenPodfile(buildTarget, pathToBuiltProject);
+        GenPodfile(buildTarget, pathToBuiltProject, podsToIgnore);
     }
 
     /// <summary>
@@ -2299,7 +2334,8 @@ public class IOSResolver : AssetPostprocessor {
     // Mono runtime from loading the Xcode API before calling the post
     // processing step.
     public static void GenPodfile(BuildTarget buildTarget,
-                                  string pathToBuiltProject) {
+                                  string pathToBuiltProject,
+                                  HashSet<string> podsToIgnore = null) {
         analytics.Report("generatepodfile", "Generate Podfile");
         string podfilePath = GetPodfilePath(pathToBuiltProject);
 
@@ -2341,6 +2377,10 @@ public class IOSResolver : AssetPostprocessor {
             foreach (var target in XcodeTargetNames) {
                 file.WriteLine(String.Format("target '{0}' do", target));
                 foreach(var pod in pods.Values) {
+                    if (podsToIgnore != null && podsToIgnore.Contains(pod.name)) {
+                        Log(String.Format("Skipping pod {0} because it is replaced by a Swift Package.", pod.name), verbose: true);
+                        continue;
+                    }
                     file.WriteLine(String.Format("  {0}", pod.PodFilePodLine));
                 }
                 file.WriteLine("end");
@@ -2351,6 +2391,9 @@ public class IOSResolver : AssetPostprocessor {
                 bool allowPodsInMultipleTargets = PodfileAllowPodsInMultipleTargets;
                 int podAdded = 0;
                 foreach(var pod in pods.Values) {
+                    if (podsToIgnore != null && podsToIgnore.Contains(pod.name)) {
+                        continue;
+                    }
                     if (pod.addToAllTargets) {
                         file.WriteLine(String.Format("  {0}{1}",
                                 allowPodsInMultipleTargets ? "" : "# ",
@@ -2908,10 +2951,14 @@ public class IOSResolver : AssetPostprocessor {
         foreach (var podName in podsToRemove) {
             pods.Remove(podName);
         }
+        spmDependencies.SwiftPackages.Clear();
+        podsToIgnore.Clear();
+
         // Clear all sources (only can be set via XML config).
         Pod.Sources = new List<KeyValuePair<string, string>>();
-        // Read pod specifications from XML dependencies.
+        // Read pod and spm specifications from XML dependencies.
         xmlDependencies.ReadAll(logger);
+        spmDependencies.ReadAll(logger);
     }
 }
 

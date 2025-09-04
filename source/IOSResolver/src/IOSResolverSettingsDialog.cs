@@ -43,6 +43,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         internal string swiftLanguageVersion;
         internal bool podfileAlwaysAddMainTarget;
         internal bool podfileAllowPodsInMultipleTargets;
+        internal bool swiftPackageManagerEnabled;
         internal bool useProjectSettings;
         internal EditorMeasurement.Settings analyticsSettings;
 
@@ -64,6 +65,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             swiftLanguageVersion = IOSResolver.SwiftLanguageVersion;
             podfileAlwaysAddMainTarget = IOSResolver.PodfileAlwaysAddMainTarget;
             podfileAllowPodsInMultipleTargets = IOSResolver.PodfileAllowPodsInMultipleTargets;
+            swiftPackageManagerEnabled = IOSResolver.SwiftPackageManagerEnabled;
             useProjectSettings = IOSResolver.UseProjectSettings;
             analyticsSettings = new EditorMeasurement.Settings(IOSResolver.analytics);
         }
@@ -86,6 +88,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             IOSResolver.SwiftLanguageVersion = swiftLanguageVersion;
             IOSResolver.PodfileAlwaysAddMainTarget = podfileAlwaysAddMainTarget;
             IOSResolver.PodfileAllowPodsInMultipleTargets = podfileAllowPodsInMultipleTargets;
+            IOSResolver.SwiftPackageManagerEnabled = swiftPackageManagerEnabled;
             IOSResolver.UseProjectSettings = useProjectSettings;
             analyticsSettings.Save();
         }
@@ -148,6 +151,18 @@ public class IOSResolverSettingsDialog : EditorWindow
                                       IOSResolverVersionNumber.Value.Build));
 
         scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+
+        GUILayout.BeginHorizontal();
+        GUILayout.Label("Swift Package Manager Integration", EditorStyles.boldLabel);
+        settings.swiftPackageManagerEnabled =
+            EditorGUILayout.Toggle(settings.swiftPackageManagerEnabled);
+        GUILayout.EndHorizontal();
+        GUILayout.Label("Use Swift Package Manager to resolve dependencies that support it. " +
+                        "If this is enabled, the resolver will prioritize SPM packages and " +
+                        "fall back to Cocoapods for any dependencies that do not have an " +
+                        "SPM equivalent specified.");
+
+        GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(1));
 
         GUILayout.BeginHorizontal();
         GUILayout.Label("Podfile Generation", EditorStyles.boldLabel);
