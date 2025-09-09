@@ -1315,7 +1315,7 @@ public class IOSResolver : AssetPostprocessor {
     private static bool InjectDependencies() {
         return (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS ||
                 EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) &&
-            Enabled && pods.Count > 0;
+            Enabled && (pods.Count > 0 || spmDependencies.SwiftPackages.Count > 0);
     }
 
     /// <summary>
@@ -2178,7 +2178,7 @@ public class IOSResolver : AssetPostprocessor {
     [PostProcessBuildAttribute(35)]
     public static void OnPostProcessResolveSwiftPackages(BuildTarget buildTarget,
                                                            string pathToBuiltProject) {
-        if (!SwiftPackageManagerEnabled) {
+        if (!InjectDependencies() || !SwiftPackageManagerEnabled) {
             return;
         }
         var resolvedPackages = SwiftPackageManager.Resolve(spmDependencies.SwiftPackages, logger);
