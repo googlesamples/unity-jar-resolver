@@ -516,6 +516,10 @@ public class IOSResolver : AssetPostprocessor {
     private const string PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS =
         PREFERENCE_NAMESPACE + "PodfileAllowPodsInMultipleTargets";
 
+    // Whether to allow empty Podfile generation.
+    private const string PREFERENCE_ALLOW_EMPTY_PODFILE_GENERATION =
+        PREFERENCE_NAMESPACE + "AllowEmptyPodfileGeneration";
+
     // Whether to use Swift Package Manager for dependency resolution.
     private const string PREFERENCE_SWIFT_PACKAGE_MANAGER_ENABLED =
         PREFERENCE_NAMESPACE + "SwiftPackageManagerEnabled";
@@ -536,6 +540,7 @@ public class IOSResolver : AssetPostprocessor {
         PREFERENCE_SWIFT_LANGUAGE_VERSION,
         PREFERENCE_PODFILE_ALWAYS_ADD_MAIN_TARGET,
         PREFERENCE_PODFILE_ALLOW_PODS_IN_MULTIPLE_TARGETS,
+        PREFERENCE_ALLOW_EMPTY_PODFILE_GENERATION,
         PREFERENCE_SWIFT_PACKAGE_MANAGER_ENABLED
     };
 
@@ -1173,6 +1178,18 @@ public class IOSResolver : AssetPostprocessor {
     }
 
     /// <summary>
+    /// Whether to allow empty Podfile generation. True by default.
+    /// If true, a Podfile will be generated even if there are no Pods to install.
+    /// </summary>
+    public static bool AllowEmptyPodfileGeneration {
+        get { return settings.GetBool(PREFERENCE_ALLOW_EMPTY_PODFILE_GENERATION,
+                                    defaultValue: true); }
+        set {
+            settings.SetBool(PREFERENCE_ALLOW_EMPTY_PODFILE_GENERATION, value);
+        }
+    }
+
+    /// <summary>
     /// Whether to use Swift Package Manager for dependency resolution.
     /// If enabled, the resolver will attempt to use SPM for packages that define SPM support,
     /// falling back to Cocoapods if disabled or if the package does not support SPM.
@@ -1315,7 +1332,7 @@ public class IOSResolver : AssetPostprocessor {
     private static bool InjectDependencies() {
         return (EditorUserBuildSettings.activeBuildTarget == BuildTarget.iOS ||
                 EditorUserBuildSettings.activeBuildTarget == BuildTarget.tvOS) &&
-            Enabled && (pods.Count > 0 || spmDependencies.SwiftPackages.Count > 0);
+            Enabled && (pods.Count > 0 || spmDependencies.SwiftPackages.Count > 0 || AllowEmptyPodfileGeneration);
     }
 
     /// <summary>
@@ -2193,6 +2210,7 @@ public class IOSResolver : AssetPostprocessor {
     public static void OnPostProcessGenPodfile(BuildTarget buildTarget,
                                                string pathToBuiltProject) {
         if (!InjectDependencies() || !PodfileGenerationEnabled) return;
+        if (pods.Count == 0 && !AllowEmptyPodfileGeneration) return;
         GenPodfile(buildTarget, pathToBuiltProject, podsToIgnore);
     }
 
@@ -2363,7 +2381,7 @@ public class IOSResolver : AssetPostprocessor {
             }
             filteredPods.Add(pod);
         }
-        if (filteredPods.Count == 0) {
+        if (filteredPods.Count == 0 && !AllowEmptyPodfileGeneration) {
             Log("Found no pods to add, skipping generation of the Podfile");
             podfileGenerationSkipped = true;
             return;
