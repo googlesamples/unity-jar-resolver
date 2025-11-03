@@ -730,9 +730,12 @@ namespace GooglePlayServices {
                         // repo path contains .srcaar.
                         var repoPath = FileUtils.ReplaceBaseAssetsOrPackagesFolder(
                                 relativePath, GooglePlayServices.SettingsDialog.LocalMavenRepoDir);
-                        // We also want to just convert any prefixes before a directory/m2repository, since
-                        // they are copied to the LocalMavenRepoDir as well.
-                        repoPath = ReplaceLocalFolderBasedOnM2repo(repoPath);
+
+                        if (!repoPath.StartsWith(GooglePlayServices.SettingsDialog.LocalMavenRepoDir)) {
+                            // same replacement logic as in CopySrcAars() 
+                            repoPath = ReplaceLocalFolderBasedOnM2repo(repoPath);
+                        }
+                        
                         if (!Directory.Exists(repoPath)) {
                             repoPath = relativePath;
                         }
