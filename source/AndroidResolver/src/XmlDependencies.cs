@@ -33,7 +33,7 @@ namespace GooglePlayServices {
         /// specifications.
         /// </summary>
         internal HashSet<Regex> fileRegularExpressions = new HashSet<Regex> {
-            new Regex(@".*[/\\]Editor[/\\].*Dependencies\.xml$")
+            new Regex(@".*[/\\]Editor[/\\].*Dependencies\.xml$", RegexOptions.RightToLeft)
         };
 
         /// <summary>
