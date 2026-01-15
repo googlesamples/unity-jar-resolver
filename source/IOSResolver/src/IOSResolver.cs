@@ -415,6 +415,7 @@ public class IOSResolver : AssetPostprocessor {
     private const int BUILD_ORDER_REFRESH_DEPENDENCIES = 10;
     private const int BUILD_ORDER_CHECK_COCOAPODS_INSTALL = 20;
     private const int BUILD_ORDER_PATCH_PROJECT = 30;
+    private const int BUILD_ORDER_RESOLVE_SWIFT_PACKAGES = 35;
     private const int BUILD_ORDER_GEN_PODFILE = 40;
     private const int BUILD_ORDER_INSTALL_PODS = 50;
     private const int BUILD_ORDER_UPDATE_DEPS = 60;
@@ -2192,7 +2193,7 @@ public class IOSResolver : AssetPostprocessor {
         File.WriteAllText(pbxprojPath, project.WriteToString());
     }
 
-    [PostProcessBuildAttribute(35)]
+    [PostProcessBuildAttribute(BUILD_ORDER_RESOLVE_SWIFT_PACKAGES)]
     public static void OnPostProcessResolveSwiftPackages(BuildTarget buildTarget,
                                                            string pathToBuiltProject) {
         if (!InjectDependencies() || !SwiftPackageManagerEnabled) {
