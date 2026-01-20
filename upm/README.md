@@ -302,8 +302,41 @@ Manager > Android Resolver > Display Libraries` menu item.
 
 ### iOS Resolver
 
-The iOS resolver component of this plugin manages
-[CocoaPods](https://cocoapods.org/). A CocoaPods `Podfile` is generated and the
+The iOS resolver component of this plugin supports both [Swift Packages](https://www.swift.org/packages/) and
+[CocoaPods](https://cocoapods.org/).
+
+#### Swift Package Manager Support
+Swift Packages are a newer way to add dependencies on iOS+ platforms. EDM4U uses Unity's built in ability to add Packages to the generated Xcode project, parsing from the library's Dependencies xml file.
+
+For example, to add the Firebase Analytics package:
+
+```xml
+<dependencies>
+  <remoteSwiftPackage url="https://github.com/firebase/firebase-ios-sdk.git"
+                      version="12.0.0">
+    <swiftPackage name="FirebaseAnalytics"/>
+  </remoteSwiftPackage>
+</dependencies>
+```
+
+##### Replacing Cocoapods
+
+In the Dependencies xml files, libraries can reference both Swift Packages, and Cocoapods. This is useful to give developers the option to fallback to the previous Cocoapods behavior if they want to. To specify which Pods the Package is meant to be replacing in the xml file, so that when the resolution runs, it knows not to add both.
+
+For example, to add the AdMob package to replace the Pod example provided below:
+
+```xml
+<dependencies>
+  <remoteSwiftPackage url="https://github.com/googleads/swift-package-manager-google-mobile-ads.git"
+                      version="12.12.0"
+                      upToNextMajor="true">
+    <swiftPackage name="GoogleMobileAds" replacesPod="Google-Mobiles-Ads-SDK"/>
+  </remoteSwiftPackage>
+</dependencies>
+```
+
+#### CocoaPods Support
+A CocoaPods `Podfile` is generated and the
 `pod` tool is executed as a post build process step to add dependencies to the
 Xcode project exported by Unity.
 
@@ -320,7 +353,7 @@ For example, to add the AdMob pod, version 7.0 or greater with bitcode enabled:
 </dependencies>
 ```
 
-#### Integration Strategies
+##### Integration Strategies
 
 The `CocoaPods` are either:
 
@@ -345,7 +378,7 @@ using UnityEditor;
 using UnityEditor.Callbacks;
 using UnityEngine;
 
-public class PostProcessIOS : MonoBehaviour
+public class PostProcessIOS
 {
     // Must be between 40 and 50 to ensure that it's not overriden by Podfile generation (40) and
     // that it's added before "pod install" (50).
