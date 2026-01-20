@@ -50,6 +50,7 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
     <Reference Include="Google.JarResolver">
       <HintPath>..\AndroidResolver\bin\Release\Google.JarResolver.dll</HintPath>
     </Reference>
@@ -68,6 +69,7 @@
   <ItemGroup>
     <Compile Include="src\IOSResolver.cs" />
     <Compile Include="src\IOSResolverSettingsDialog.cs" />
+    <Compile Include="src\SwiftPackageManager.cs" />
     <Compile Include="src\VersionNumber.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
