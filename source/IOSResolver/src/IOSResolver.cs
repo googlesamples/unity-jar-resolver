@@ -125,11 +125,15 @@ public class IOSResolver : AssetPostprocessor {
         /// <summary>
         /// Get the path of a pod without quotes.  If the path isn't present, returns an empty
         /// string.
+        /// This also support "podspecPath" parameters. It will prefer podspecPath parameter over path 
+        /// if present.
         /// </summary>
         public string LocalPath {
             get {
                 string path;
-                if (!propertiesByName.TryGetValue("path", out path)) return "";
+                if (!propertiesByName.TryGetValue("podspecPath", out path)){
+                    if (!propertiesByName.TryGetValue("path", out path)) return "";
+                } 
                 if (path.StartsWith("'") && path.EndsWith("'")) {
                     path = path.Substring(1, path.Length - 2);
                 }
@@ -149,7 +153,23 @@ public class IOSResolver : AssetPostprocessor {
                 var outputPropertiesByName = new Dictionary<string, string>(propertiesByName);
                 var path = LocalPath;
                 if (!String.IsNullOrEmpty(path)) {
-                    outputPropertiesByName["path"] = String.Format("'{0}'", Path.GetFullPath(path));
+                    if(outputPropertiesByName.ContainsKey("podspecPath")) {
+                        // Check if it is a local folder or http://
+                        // If it is local folder add full path into OutputProperties
+                        // If it is URI, kept as-is
+                        if(Uri.IsWellFormedUriString(path, UriKind.Absolute)) {
+                            outputPropertiesByName.Add("podspec", String.Format("'{0}'", path));
+                        }
+                        else {
+                            outputPropertiesByName.Add("podspec", String.Format("'{0}'", Path.GetFullPath(path)));
+                        }                      
+                        // Remove "path" parameter and temporary "podspecPath" parameter
+                        outputPropertiesByName.Remove("path");  
+                        outputPropertiesByName.Remove("podspecPath");  
+                    }
+                    else {
+                        outputPropertiesByName["path"] = String.Format("'{0}'", Path.GetFullPath(path));
+                    }                    
                 }
                 var propertiesString = PropertyDictionaryToString(outputPropertiesByName);
                 if (!String.IsNullOrEmpty(propertiesString)) podLine += ", " + propertiesString;
@@ -268,15 +288,19 @@ public class IOSResolver : AssetPostprocessor {
         // Properties to parse from a XML pod specification and store in the propert1iesByName
         // dictionary of the Pod class. These are eventually expanded to the named arguments of the
         // pod declaration in a Podfile.
-        // The value of each attribute with the exception of "path" is included as-is.
+        // The value of each attribute with the exception of "path" and "podspecPath" is included as-is.
         // "path" is converted to a full path on the local filesystem when the Podfile is generated.
+        // "podspecPath": If the value is a directory it is converted to a full path on the local filesystem when the Podfile is generated. 
+        //                If the value is a URI then it is kept as-is.
+        //                "podspecPath" will replace "path" if present
         private static string[] PODFILE_POD_PROPERTIES = new string[] {
             "configurations",
             "configuration",
             "modular_headers",
             "source",
             "subspecs",
-            "path"
+            "path",
+            "podspecPath"
         };
 
         public IOSXmlDependencies() {
@@ -295,6 +319,7 @@ public class IOSResolver : AssetPostprocessor {
         ///   <iosPods>
         ///     <iosPod name="name"
         ///             path="pathToLocal"
+        ///             podspecPath="pathToPodSpec"
         ///             version="versionSpec"
         ///             bitcodeEnabled="enabled"
         ///             minTargetSdk="sdk">
