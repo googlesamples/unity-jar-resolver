@@ -500,6 +500,9 @@ public class IOSResolver : AssetPostprocessor {
     // Whether to add "use_frameworks!" in the Podfile.
     private const string PREFERENCE_PODFILE_ADD_USE_FRAMEWORKS =
         PREFERENCE_NAMESPACE + "PodfileAddUseFrameworks";
+    // Whether to add "use_modular_headers!" in the Podfile.
+    private const string PREFERENCE_PODFILE_ADD_USE_MODULAR_HEADERS =
+        PREFERENCE_NAMESPACE + "PodfileAddUseModularHeaders";
     // Whether to statically link framework in the Podfile.
     private const string PREFERENCE_PODFILE_STATIC_LINK_FRAMEWORKS =
         PREFERENCE_NAMESPACE + "PodfileStaticLinkFrameworks";
@@ -536,6 +539,7 @@ public class IOSResolver : AssetPostprocessor {
         PREFERENCE_WARN_UPGRADE_WORKSPACE,
         PREFERENCE_SKIP_POD_INSTALL_WHEN_USING_WORKSPACE_INTEGRATION,
         PREFERENCE_PODFILE_ADD_USE_FRAMEWORKS,
+        PREFERENCE_PODFILE_ADD_USE_MODULAR_HEADERS,
         PREFERENCE_PODFILE_STATIC_LINK_FRAMEWORKS,
         PREFERENCE_SWIFT_FRAMEWORK_SUPPORT_WORKAROUND,
         PREFERENCE_SWIFT_LANGUAGE_VERSION,
@@ -1104,6 +1108,20 @@ public class IOSResolver : AssetPostprocessor {
                                     defaultValue: true); }
         set {
             settings.SetBool(PREFERENCE_PODFILE_ADD_USE_FRAMEWORKS, value);
+        }
+    }
+    
+    /// <summary>
+    /// Whether to add "use_modular_headers!" in the Podfile. False by default.
+    /// If true, iOS Resolver adds the following line to Podfile.
+    ///
+    /// use_modular_headers!
+    /// </summary>
+    public static bool PodfileAddUseModularHeaders {
+        get { return settings.GetBool(PREFERENCE_PODFILE_ADD_USE_MODULAR_HEADERS,
+            defaultValue: false); }
+        set {
+            settings.SetBool(PREFERENCE_PODFILE_ADD_USE_MODULAR_HEADERS, value);
         }
     }
 
@@ -2441,6 +2459,10 @@ public class IOSResolver : AssetPostprocessor {
                 file.WriteLine( PodfileStaticLinkFrameworks ?
                         "use_frameworks! :linkage => :static" :
                         "use_frameworks!");
+            }
+            
+            if (PodfileAddUseModularHeaders) {
+                file.WriteLine("use_modular_headers!");
             }
         }
 
