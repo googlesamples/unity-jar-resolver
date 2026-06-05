@@ -165,8 +165,12 @@ namespace GooglePlayServices {
             get {
                 // Check against the Android Gradle plugin version being used, since that can
                 // change between Unity minor versions.
+                // Only apply settingsTemplate approach for Unity 2022.2+ which supports
+                // Custom Gradle Settings Template natively. Unity 2021.x does not have
+                // the settingsTemplate.gradle source file to copy from.
                 return (new Dependency.VersionComparer()).Compare(
-                    "7.0", PlayServicesResolver.AndroidGradlePluginVersion) >= 0;
+                    "7.0", PlayServicesResolver.AndroidGradlePluginVersion) >= 0 &&
+                    VersionHandler.GetUnityVersionMajorMinor() >= 2022.2f;
             }
         }
 
