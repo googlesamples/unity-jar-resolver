@@ -48,6 +48,12 @@ namespace Google {
     public string ReplacesPod { get; set; }
 
     /// <summary>
+    /// Target to add the package to. Defaults to "UnityFramework".
+    /// Use "Unity-iPhone" to add to the Unity-iPhone target instead.
+    /// </summary>
+    public string Target { get; set; } = "UnityFramework";
+
+    /// <summary>
     /// A reference back to the remote package this framework belongs to.
     /// </summary>
     public RemoteSwiftPackage RemotePackage { get; set; }
@@ -131,6 +137,7 @@ namespace Google {
               Name = (string)packageElement.Attribute("name"),
               Weak = trueStrings.Contains(((string)packageElement.Attribute("weak") ?? "").ToLower()),
               ReplacesPod = (string)packageElement.Attribute("replacesPod"),
+              Target = (string)packageElement.Attribute("target") ?? "UnityFramework",
               RemotePackage = remotePackage
             };
 
@@ -200,6 +207,7 @@ namespace Google {
                                                         .SelectMany(rp => rp.Split(','))
                                                         .Select(p => p.Trim())
                                                         .Distinct().ToArray()),
+            Target = group.Value.Any(p => p.Target.ToLower() == "Unity-iPhone") ? "Unity-iPhone" : "UnityFramework",
             RemotePackage = remotePackage
           };
           finalPackages.Add(mergedPackage);
@@ -246,6 +254,7 @@ namespace Google {
       project.ReadFromFile(pbxProjectPath);
 
       string frameworkTargetGuid = project.GetUnityFrameworkTargetGuid();
+      string mainTargetGuid = project.GetUnityMainTargetGuid();
 
       foreach (var remotePackage in resolvedPackages) {
         try {
@@ -262,8 +271,11 @@ namespace Google {
           logger.Log(string.Format("Added SPM package {0} version {1} to project.", remotePackage.Url, remotePackage.Version), level: LogLevel.Info);
 
           foreach (var swiftPackage in remotePackage.Packages) {
-            VersionHandler.InvokeInstanceMethod(project, "AddRemotePackageFrameworkToProject", new object[] { frameworkTargetGuid, swiftPackage.Name, packageGuid, swiftPackage.Weak });
-            logger.Log(string.Format("  - Added framework {0} to project.", swiftPackage.Name), level: LogLevel.Info);
+            string targetGuid = swiftPackage.Target.ToLower() == "Unity-iPhone"
+                ? mainTargetGuid
+                : frameworkTargetGuid;
+            VersionHandler.InvokeInstanceMethod(project, "AddRemotePackageFrameworkToProject", new object[] { targetGuid, swiftPackage.Name, packageGuid, swiftPackage.Weak });
+            logger.Log(string.Format("  - Added framework {0} to {1} target.", swiftPackage.Name, swiftPackage.Target), level: LogLevel.Info);
           }
         } catch (Exception e) {
           logger.Log(string.Format("Failed to add Swift Package {0}. Error: {1}", remotePackage.Url, e.Message), level: LogLevel.Error);
