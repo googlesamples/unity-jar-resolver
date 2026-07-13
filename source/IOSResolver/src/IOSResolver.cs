@@ -1629,21 +1629,13 @@ public class IOSResolver : AssetPostprocessor {
             minVersionAndPodNames;
     }
 
-    // Get the path of an xcode project relative to the specified directory.
-    private static string GetProjectPath(string relativeTo,
-                                         string projectName) {
-        return Path.Combine(relativeTo,
-                            Path.Combine(projectName + ".xcodeproj",
-                                         "project.pbxproj"));
-    }
-
     /// <summary>
     /// Get the generated xcode project path relative to the specified
     /// directory.
     /// </summary>
     /// <param name="relativeTo">Path the project is relative to.</param>
     public static string GetProjectPath(string relativeTo) {
-        return GetProjectPath(relativeTo, PROJECT_NAME);
+        return UnityEditor.iOS.Xcode.PBXProject.GetPBXProjectPath(relativeTo);
     }
 
     /// <summary>
