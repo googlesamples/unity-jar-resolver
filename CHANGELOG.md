@@ -1,4 +1,4 @@
-# Upcoming
+# Version 1.2.188 - Jul 13, 2026
 * iOS Resolver - Change how project path is determined to support the new
   Swift Xcode project type.
 

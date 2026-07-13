@@ -12,7 +12,7 @@ requires:
 *   Android specific libraries (e.g
     [AARs](https://developer.android.com/studio/projects/android-library.html))
 
-*   iOS [CocoaPods](https://cocoapods.org/)
+*   iOS [CocoaPods](https://cocoapods.org/), [Swift Packages](https://www.swift.org/packages/)
 
 *   Version management of transitive dependencies
 
