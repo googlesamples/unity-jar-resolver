@@ -2480,6 +2480,8 @@ class PackageConfiguration(ConfigurationBlock):
     if self.upm_manifest:
       safe_dict_set_value(package_manifest, "unity",
                           safe_dict_get_value(self.upm_manifest, "unity"))
+      safe_dict_set_value(package_manifest, "unityRelease",
+                          safe_dict_get_value(self.upm_manifest, "unityRelease"))
       safe_dict_set_value(package_manifest, "samples",
                           safe_dict_get_value(self.upm_manifest, "samples"))
       dependencies = safe_dict_get_value(
