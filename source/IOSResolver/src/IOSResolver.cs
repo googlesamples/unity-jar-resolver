@@ -2191,6 +2191,17 @@ public class IOSResolver : AssetPostprocessor {
         if (!InjectDependencies() || !SwiftPackageManagerEnabled) {
             return;
         }
+        if (!SwiftPackageManager.IsSupported) {
+            if (spmDependencies.SwiftPackages.Count > 0) {
+                logger.Log(
+                    string.Format(
+                        "Swift Package Manager integration requires Unity {0} or higher. " +
+                        "Skipping SPM resolution; CocoaPods dependencies will not be replaced.",
+                        SwiftPackageManager.MinimumSupportedUnityVersion),
+                    level: LogLevel.Warning);
+            }
+            return;
+        }
         var resolvedPackages = SwiftPackageManager.Resolve(spmDependencies.SwiftPackages, logger);
         SwiftPackageManager.AddPackagesToProject(resolvedPackages, pathToBuiltProject, logger);
         podsToIgnore = SwiftPackageManager.GetReplacedPods(resolvedPackages);
