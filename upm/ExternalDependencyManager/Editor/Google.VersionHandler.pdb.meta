@@ -1,8 +1,8 @@
 fileFormatVersion: 2
-guid: 8a529042701647f3afa9e76ebbb531fc
+guid: 10d04401b9154c1ca83926078b2b905e
 labels:
 - gvh
-- gvh_version-1.2.188
+- gvh_version-1.2.189
 - gvhp_exportpath-ExternalDependencyManager/Editor/Google.VersionHandler.pdb
 timeCreated: 1538009133
 licenseType: Pro
