@@ -51,6 +51,30 @@ namespace Google {
     /// A reference back to the remote package this framework belongs to.
     /// </summary>
     public RemoteSwiftPackage RemotePackage { get; set; }
+
+    /// <summary>
+    /// The name of the native target to link the Swift Package to.
+    /// </summary>
+    public string TargetName { get; set; }
+
+    /// <summary>
+    /// Whether the package should be linked to the Framework target.
+    /// </summary>
+    public bool TargetsFramework =>
+      string.Equals(TargetName, "Framework", StringComparison.OrdinalIgnoreCase) || 
+      string.Equals(TargetName, "All", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the package should be linked to the Main target.
+    /// </summary>
+    public bool TargetsMain =>
+      string.Equals(TargetName, "Main", StringComparison.OrdinalIgnoreCase) || 
+      string.Equals(TargetName, "All", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether the package should be linked to a Custom target.
+    /// </summary>
+    public bool TargetsCustom => !TargetsFramework && !TargetsMain;
   }
 
   /// <summary>
@@ -99,6 +123,17 @@ namespace Google {
     /// </summary>
     public List<RemoteSwiftPackage> SwiftPackages = new List<RemoteSwiftPackage>();
 
+    /// <summary>
+    /// Minimum Unity version that supports adding SPM packages directly via PBXProject.
+    /// </summary>
+    public const float MinimumSupportedUnityVersion = 2021.3f;
+
+    /// <summary>
+    /// Whether the current Unity version supports Swift Package Manager integration.
+    /// </summary>
+    public static bool IsSupported =>
+        VersionHandler.GetUnityVersionMajorMinor() >= MinimumSupportedUnityVersion;
+
     public SwiftPackageManager() {
       dependencyType = "SPM dependencies";
     }
@@ -131,7 +166,8 @@ namespace Google {
               Name = (string)packageElement.Attribute("name"),
               Weak = trueStrings.Contains(((string)packageElement.Attribute("weak") ?? "").ToLower()),
               ReplacesPod = (string)packageElement.Attribute("replacesPod"),
-              RemotePackage = remotePackage
+              RemotePackage = remotePackage,
+              TargetName = ((string)packageElement.Attribute("target") ?? "Framework").Trim()
             };
 
             if (string.IsNullOrEmpty(swiftPackage.Name)) {
@@ -236,8 +272,9 @@ namespace Google {
     /// <param name="projectPath">The path to the Xcode project.</param>
     /// <param name="logger">A logger for reporting messages.</param>
     internal static void AddPackagesToProject(List<RemoteSwiftPackage> resolvedPackages, string projectPath, Logger logger) {
-      if (VersionHandler.GetUnityVersionMajorMinor() < 2021.3f) {
-        logger.Log("Swift Package Manager integration is only supported in Unity 2021.3 and newer. Disabling.", level: LogLevel.Warning);
+      if (!IsSupported) {
+        logger.Log(string.Format("Swift Package Manager integration is only supported in Unity {0} and newer.",
+                                 MinimumSupportedUnityVersion), level: LogLevel.Warning);
         return;
       }
 
@@ -246,6 +283,7 @@ namespace Google {
       project.ReadFromFile(pbxProjectPath);
 
       string frameworkTargetGuid = project.GetUnityFrameworkTargetGuid();
+      string mainTargetGuid = project.GetUnityMainTargetGuid();
 
       foreach (var remotePackage in resolvedPackages) {
         try {
@@ -262,8 +300,23 @@ namespace Google {
           logger.Log(string.Format("Added SPM package {0} version {1} to project.", remotePackage.Url, remotePackage.Version), level: LogLevel.Info);
 
           foreach (var swiftPackage in remotePackage.Packages) {
-            VersionHandler.InvokeInstanceMethod(project, "AddRemotePackageFrameworkToProject", new object[] { frameworkTargetGuid, swiftPackage.Name, packageGuid, swiftPackage.Weak });
-            logger.Log(string.Format("  - Added framework {0} to project.", swiftPackage.Name), level: LogLevel.Info);
+            if (swiftPackage.TargetsFramework) {
+              VersionHandler.InvokeInstanceMethod(project, "AddRemotePackageFrameworkToProject", new object[] { frameworkTargetGuid, swiftPackage.Name, packageGuid, swiftPackage.Weak });
+              logger.Log(string.Format("  - Added framework {0} to project's framework target.", swiftPackage.Name), level: LogLevel.Info);
+            }
+            if (swiftPackage.TargetsMain) {
+              VersionHandler.InvokeInstanceMethod(project, "AddRemotePackageFrameworkToProject", new object[] { mainTargetGuid, swiftPackage.Name, packageGuid, swiftPackage.Weak });
+              logger.Log(string.Format("  - Added framework {0} to project's main target.", swiftPackage.Name), level: LogLevel.Info);
+            }
+            if (swiftPackage.TargetsCustom) {
+              string customTargetGuid = project.TargetGuidByName(swiftPackage.TargetName);
+              if (string.IsNullOrEmpty(customTargetGuid)) {
+                logger.Log(string.Format("Failed to add Swift Package {0}. Unable to find custom target {1}", swiftPackage.Name, swiftPackage.TargetName), level: LogLevel.Error);
+                continue;
+              }
+              VersionHandler.InvokeInstanceMethod(project, "AddRemotePackageFrameworkToProject", new object[] { customTargetGuid, swiftPackage.Name, packageGuid, swiftPackage.Weak });
+              logger.Log(string.Format("  - Added framework {0} to project's custom target {1}.", swiftPackage.Name, swiftPackage.TargetName), level: LogLevel.Info);
+            }
           }
         } catch (Exception e) {
           logger.Log(string.Format("Failed to add Swift Package {0}. Error: {1}", remotePackage.Url, e.Message), level: LogLevel.Error);
