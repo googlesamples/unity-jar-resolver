@@ -3,6 +3,28 @@
 [![openupm](https://img.shields.io/npm/v/com.google.external-dependency-manager?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/com.google.external-dependency-manager/)
 [![openupm](https://img.shields.io/badge/dynamic/json?color=brightgreen&label=downloads&query=%24.downloads&suffix=%2Fmonth&url=https%3A%2F%2Fpackage.openupm.com%2Fdownloads%2Fpoint%2Flast-month%2Fcom.google.external-dependency-manager)](https://openupm.com/packages/com.google.external-dependency-manager/)
 
+## External Dependency Manager for Unity (EDM4U) will be Archived.
+
+**Archive Date:** October 26, 2026
+
+**Status:** Read-only / Unsupported
+
+EDM4U will be archived on **October 26, 2026**, in favor of the newly announced **External Dependency Manager (EDM)** from Unity.
+
+#### Why is this happening?
+
+Over the years, EDM4U (formerly the Unity Jar Resolver) has served as a convenient way for managing Android and iOS native dependency linking in Unity projects. To improve the developer experience and bring dependency management natively into the engine, we have collaborated closely with Unity. Unity has now released an officially supported fork of EDM4U, which uses the same xml format and workflows developers have previously been used to.
+
+#### What does this mean for EDM4U?
+
+After the archive date on **October 26, 2026**, this repository will become read-only. While the original code and previous releases will remain accessible in an archived state, there will be **no future updates, bug fixes, or new feature development from Google**.
+
+#### Next Steps & Recommended Action
+
+We strongly recommend transitioning to Unity's officially supported EDM package. Because Unity's package is built directly on top of the original EDM4U foundation.  The transition is designed to be straightforward and remains fully compatible with your existing XML dependency configurations.
+
+You can evaluate and install Unity's External Dependency Manager directly via the **Unity Package Manager (UPM)** for Unity 2022.3 and later. For installation instructions and migration steps, please refer to the [Unity External Dependency Manager documentation](https://docs.unity3d.com/Packages/com.unity.external-dependency-manager@2.1/manual/get-started-with-edm.html).
+
 ## Overview
 
 The External Dependency Manager for Unity (EDM4U) (formerly Play Services
