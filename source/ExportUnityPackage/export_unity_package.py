@@ -2456,7 +2456,8 @@ class PackageConfiguration(ConfigurationBlock):
       for common_manifest_key, upm_manifest_key in (("display_name",
                                                      "displayName"),
                                                     ("keywords", "keywords"),
-                                                    ("author", "author")):
+                                                    ("author", "author"),
+                                                    ("deprecated", "deprecated")):
         common_manifest_value = safe_dict_get_value(common_manifest,
                                                     common_manifest_key)
         safe_dict_set_value(package_manifest, upm_manifest_key,
