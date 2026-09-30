@@ -38,6 +38,7 @@ public class IOSResolverSettingsDialog : EditorWindow
         internal bool verboseLoggingEnabled;
         internal int cocoapodsIntegrationMenuIndex;
         internal bool podfileAddUseFrameworks;
+        internal bool podfileAddUseModularHeaders;
         internal bool podfileStaticLinkFrameworks;
         internal bool swiftFrameworkSupportWorkaroundEnabled;
         internal string swiftLanguageVersion;
@@ -60,6 +61,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             cocoapodsIntegrationMenuIndex = FindIndexFromCocoapodsIntegrationMethod(
                 IOSResolver.CocoapodsIntegrationMethodPref);
             podfileAddUseFrameworks = IOSResolver.PodfileAddUseFrameworks;
+            podfileAddUseModularHeaders = IOSResolver.PodfileAddUseModularHeaders;
             podfileStaticLinkFrameworks = IOSResolver.PodfileStaticLinkFrameworks;
             swiftFrameworkSupportWorkaroundEnabled =
                 IOSResolver.SwiftFrameworkSupportWorkaroundEnabled;
@@ -84,6 +86,7 @@ public class IOSResolverSettingsDialog : EditorWindow
             IOSResolver.CocoapodsIntegrationMethodPref =
                 integrationMapping[cocoapodsIntegrationMenuIndex];
             IOSResolver.PodfileAddUseFrameworks = podfileAddUseFrameworks;
+            IOSResolver.PodfileAddUseModularHeaders = podfileAddUseModularHeaders;
             IOSResolver.PodfileStaticLinkFrameworks = podfileStaticLinkFrameworks;
             IOSResolver.SwiftFrameworkSupportWorkaroundEnabled =
                 swiftFrameworkSupportWorkaroundEnabled;
@@ -239,7 +242,13 @@ public class IOSResolverSettingsDialog : EditorWindow
             GUILayout.Box("", GUILayout.ExpandWidth(true), GUILayout.Height(1));
             GUILayout.Label("Podfile Configurations", EditorStyles.largeLabel);
             EditorGUILayout.Separator();
-
+            
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Add use_modular_headers! to Podfile", EditorStyles.boldLabel);
+            settings.podfileAddUseModularHeaders =
+                EditorGUILayout.Toggle(settings.podfileAddUseModularHeaders);
+            GUILayout.EndHorizontal();
+            
             GUILayout.BeginHorizontal();
             GUILayout.Label("Add use_frameworks! to Podfile", EditorStyles.boldLabel);
             settings.podfileAddUseFrameworks =
@@ -374,6 +383,9 @@ public class IOSResolverSettingsDialog : EditorWindow
                     new KeyValuePair<string, string>(
                         "podfileAddUseFrameworks",
                         IOSResolver.PodfileAddUseFrameworks.ToString()),
+                    new KeyValuePair<string, string>(
+                        "podfileAddUseModularHeaders",
+                        IOSResolver.PodfileAddUseModularHeaders.ToString()),
                     new KeyValuePair<string, string>(
                         "podfileStaticLinkFrameworks",
                         IOSResolver.PodfileStaticLinkFrameworks.ToString()),
