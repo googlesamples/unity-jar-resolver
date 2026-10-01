@@ -2299,11 +2299,14 @@ public class VersionHandlerImpl : AssetPostprocessor {
     /// and remove files from older manifest files.
     /// </summary>
     static VersionHandlerImpl() {
-        Log("Loaded VersionHandlerImpl", verbose: true);
-        RunOnMainThread.Run(() => {
-                LoadLogPreferences();
-                UpdateVersionedAssetsOnUpdate();
-            }, runNow: false);
+		if (!EditorApplication.isPlayingOrWillChangePlaymode)
+		{
+			Log("Loaded VersionHandlerImpl", verbose: true);
+			RunOnMainThread.Run(() => {
+					LoadLogPreferences();
+					UpdateVersionedAssetsOnUpdate();
+				}, runNow: false);
+		}
     }
 
     static void UpdateVersionedAssetsOnUpdate() {
